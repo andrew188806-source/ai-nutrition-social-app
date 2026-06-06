@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "好廚 AI 營養社交",
+    "slug": "haocu-ai-nutrition-social",
+    "scheme": "haocu",
+    "plugins": ["expo-router"],
+    "web": {
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

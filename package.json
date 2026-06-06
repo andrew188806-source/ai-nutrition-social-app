@@ -1,0 +1,20 @@
+{
+  "name": "ai-nutrition-social-mvp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Phase 1 monorepo foundation for a Taiwan AI healthy eating and social discovery MVP.",
+  "scripts": {
+    "mobile": "cd apps/mobile && npx expo start",
+    "restaurant": "npm --workspace @haocu/restaurant-web run dev",
+    "admin": "npm --workspace @haocu/admin-web run dev",
+    "demo": "node scripts/start-demo.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
