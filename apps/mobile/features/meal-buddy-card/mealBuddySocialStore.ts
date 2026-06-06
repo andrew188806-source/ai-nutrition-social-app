@@ -231,6 +231,7 @@ export function createOrOpenMealSessionChat({
   relatedMeal: string;
   userName: string;
 }) {
+  // Backend integration entry: Meal Session -> shared direct ChatThread.
   const mockThread = getMockChatThreadByName(userName);
   const resolvedChatId = chatThreadId ?? mockThread?.id ?? `chat-session-${userName}`;
   const existingChat = chatPreviews.find((item) => item.id === resolvedChatId);
@@ -258,6 +259,7 @@ export function createOrOpenMealSessionChat({
 }
 
 export function createOrOpenGroupTableChat(tableName = "四人桌", tableId?: string, chatThreadId?: string) {
+  // Backend integration entry: Four-Person Table -> shared GroupChatThread.
   const now = getEffectiveCurrentDate();
   const resolvedTableId = tableId ?? (tableName.includes("清爽日式晚餐") ? japaneseDinnerTableId : undefined);
   const resolvedChatId = chatThreadId ?? (resolvedTableId === japaneseDinnerTableId ? japaneseDinnerChatId : `chat-group-${tableName}`);

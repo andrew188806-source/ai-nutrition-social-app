@@ -346,13 +346,6 @@ export default function MealBuddyHomeScreen() {
   );
 }
 
-function getPendingMatchedCard(pendingMatch: ReturnType<typeof getPendingMatchRequest>, cards: MealBuddyCard[]) {
-  if (!pendingMatch) {
-    return null;
-  }
-  return cards.find((card) => card.createdAt === pendingMatch.cardCreatedAt) ?? null;
-}
-
 function focusElementAfterRender(elementId: string, clearHighlight?: () => void) {
   setTimeout(() => {
     const browserWindow = (globalThis as typeof globalThis & { window?: { document?: { getElementById?: (id: string) => { scrollIntoView?: (options?: { behavior?: ScrollBehavior; block?: ScrollLogicalPosition }) => void } | null } } }).window;

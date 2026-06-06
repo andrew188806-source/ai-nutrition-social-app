@@ -25,6 +25,7 @@ export function createRestaurantFourPersonTable(input: {
   cuisineTags: string[];
   suggestedTime: string;
 }) {
+  // Backend integration entry: Restaurant -> Four-Person Table.
   activeTable = {
     tableId: `table-${safeId(input.restaurantId || input.restaurantName)}`,
     restaurantId: input.restaurantId,

@@ -1,218 +1,93 @@
-# Engineer Handoff
+ï»¿# Engineer Handoff
 
-## Current State
+## Current Demo Architecture
 
-This repo is an investor-demo MVP, not a production app. The experience is mock-only and intentionally avoids real auth, payment, realtime chat, ordering, QR, medical diagnosis, or production AI calls.
+The mobile demo uses Expo Router. Route files in `apps/mobile/app` compose screens; reusable mock rules and state live in `apps/mobile/features`.
 
-User-facing UI copy lives in `lib/i18n/zh-TW.ts`. Keep TypeScript variables, route names, function names, database fields, and API plans in English.
+Core mobile routes:
 
-## Module Boundaries
+- `/meal-photo`: AI analysis entry and planned-dinner helper.
+- `/analysis`: correction/confirmation flow; writes confirmed meals to Today Intake.
+- `/today-intake`: current-day consumed and planned nutrition view.
+- `/meal-log`: unified user-facing Food Diary archive.
+- `/restaurants`: recommendation list and restaurant action entry points.
+- `/meal-buddies`: the social shell for æ‰¾é£¯å‹ / æˆ‘çš„é£¯å‹ / å››äººé¤æ¡Œ / é£¯å±€.
+- `/group-tables`: compatibility redirect into `/meal-buddies?section=tables`; do not build a second table page here.
 
-Keep route files thin. Put feature state, mock business rules, and reusable UI inside feature folders.
+Chat is intentionally centralized inside `æˆ‘çš„é£¯å‹ -> èŠå¤©` on `/meal-buddies`. There is no standalone chat route.
 
-Current important boundaries:
+## Shared Demo Data And Stores
 
-- `apps/mobile/app`: Expo Router route screens.
-- `apps/mobile/components`: shared mobile UI primitives.
-- `apps/mobile/features/analysis`: AI nutrition analysis, correction state, ingredient breakdown, and save-target UI rules.
-- `packages/shared/src/domain`: domain policies that should survive backend replacement.
-- `packages/shared/src/types.ts`: shared TypeScript contracts.
-- `packages/shared/src/mock`: mock data grouped by domain.
-- `lib/i18n/zh-TW.ts`: all Traditional Chinese UI copy.
+`apps/mobile/features/meal-buddy-card/mealBuddyFlowMock.ts` is the shared demo identity/session source:
 
-Target future domains:
+`Community Profile -> Matched Buddy -> Chat Thread -> Meal Session / Four-Person Table`
 
-- `analysis`: AI nutrition analysis, ingredient breakdown, nutrition recalculation, correction logic.
-- `food-memory`: user meal history, reusable nutrition patterns, save/load logic.
-- `restaurant-data`: restaurant nutrition profile, menu nutrition cache, restaurant/location context, reusable restaurant intelligence.
-- `social`: meal buddy matching, direct search, four-person tables, friend list, premium/free visibility.
-- `self-cooked`: personal cooking flow, ingredient training data, personal notes/reviews.
+Stable IDs link records:
 
-## AI Analysis Module
+- `profileId`: community identity.
+- `buddyId`: matched relationship.
+- `chatThreadId`: direct chat.
+- `tableId`: four-person table.
+- `groupChatThreadId`: formed-table group chat.
 
-The analysis screen was cleaned up so future engineers do not have to untangle route UI from correction logic.
+`mealBuddySocialStore.ts` is the single chat/invitation store. Direct chats are canonicalized by `buddyId`; group chats are canonicalized by `tableId`.
 
-Start here:
+Other shared stores:
 
-- `apps/mobile/app/analysis.tsx`: page composition only.
-- `apps/mobile/features/analysis/useAnalysisCorrectionState.ts`: mock local state and transitions.
-- `apps/mobile/features/analysis/AnalysisCorrectionPanels.tsx`: external dining and self-cooked correction UI.
-- `apps/mobile/features/analysis/analysisCorrectionData.ts`: correction section builders and mock recalculation values.
-- `apps/mobile/features/analysis/types.ts`: local analysis types.
+- `mealBuddyCardStore.ts`: active card pool, recommendation request, and demo quota state.
+- `groupTableStore.ts`: one active hosted four-person table.
+- `analysisMealRecordStore.ts`: latest confirmed AI meal used by Today Intake and Food Diary.
+- `plannedMealStore.ts`: planned dinner, confirmed dinner, and mock auto-settlement.
+- `demoUserPlanStore.ts`: shared Free/Premium demo view.
+- `demoTimeStore.ts`: shared mock clock for expiry and next-day behavior.
 
-When replacing mock behavior with a backend, keep the screen API stable and replace the hook/helper internals first.
+## Backend Integration Entry Points
 
-## Data Separation
+Search for `Integration entry` or `Backend integration entry`.
 
-External dining and self-cooked data pipelines must stay separate.
+- Restaurant -> Meal Buddy Card: `restaurants.tsx`, `mealBuddyCardMock.ts`.
+- Restaurant -> Four-Person Table: `restaurants.tsx`, `groupTableStore.ts`.
+- AI Analysis -> Today Intake: `analysis.tsx`, `analysisMealRecordStore.ts`.
+- AI Analysis -> Meal Buddy Card: `analysis.tsx`, `mealBuddyCardMock.ts`.
+- Planned Dinner -> Today Intake: `plannedMealStore.ts`.
+- Meal Session -> ChatThread: `mealBuddySocialStore.ts`.
+- Four-Person Table -> GroupChatThread: `mealBuddySocialStore.ts`.
 
-External dining correction contributes to the user's Food Memory, user meal history, and shared ingredient-recognition intelligence. Consumer-app corrections should not directly mutate restaurant/menu intelligence. Restaurant nutrition profile, restaurant nutrition cache, menu nutrition cache, and restaurant/location context should be updated from restaurant-owned dashboard workflows or future verified review pipelines.
+These are mock/local-state boundaries. Replace their internals with backend calls while keeping page-level call sites stable where possible.
 
-Self-cooked correction contributes to shared ingredient-recognition intelligence and personal nutrition estimation only. Production records may persist to Food Memory, user meal history, the shared AI ingredient analysis training module, and reusable ingredient estimation patterns only.
+## Mock-Only Flows
 
-Never write self-cooked meals into restaurant nutrition profile, restaurant nutrition cache, restaurant/location context, or menu nutrition cache.
+- AI image recognition and nutrition calculation.
+- Meal Buddy ranking, quotas, invitations, and recommendation persistence.
+- Chat messages, ordering, group-chat formation, and expiry.
+- Four-person table creation, replacement, and participant management.
+- Planned dinner estimate and next-day settlement.
+- Restaurant recommendation scoring and restaurant actions.
+- Food Diary retention, sharing, and membership previews.
 
-The shared policy lives in `packages/shared/src/domain/dataBoundaries.ts`. Use `getNutritionCorrectionSaveTargets` and `assertSelfCookedTargetsDoNotUseRestaurantData` as the future server-side contract when wiring Supabase or API writes.
+## Known TODOs
 
-Social matching priority lives in `packages/shared/src/domain/socialMatchingPolicy.ts`. Keep restaurant overlap, health goals, tags, and nearby status as explicit matching signals instead of burying them in UI components.
+- Move mutable demo stores to authenticated backend persistence.
+- Replace localStorage with API/cache adapters.
+- Add realtime chat, notifications, blocking/reporting, and moderation.
+- Add production AI analysis and verified restaurant/menu nutrition data.
+- Replace mock four-person group-chat expiry with scheduled backend cleanup.
+- Split the large `meal-buddies.tsx` route into feature components after product behavior stabilizes; avoid changing behavior during that extraction.
+- Keep user-facing copy in `lib/i18n/zh-TW.ts` when touching related UI.
 
-## Product Flow Rules
+## Safety Notes
 
-Nutrition calculation and social discovery are dual-core pillars.
+- Free and Premium are rendering/limit modes over the same data sources, not separate systems.
+- AI åˆ†æå¡ã€è‡ªè¨‚å¡ã€é¤å»³å¡ share the same Meal Buddy Card model.
+- Normal meal sessions and four-person tables open threads from the shared chat store.
+- `/group-tables` remains only for old links; real table content stays inside `/meal-buddies`.
+- Do not reintroduce standalone chat, recommendation-result, or four-person-table landing pages.
 
-Correct flow:
-
-1. AI analysis.
-2. Meal confirmation.
-3. Food Memory save.
-4. Delayed feedback.
-5. Restaurant recommendation.
-6. Contextual meal buddy matching.
-7. Friend interaction.
-8. Optional four-person table.
-
-Do not make Community Card a generic feed. It is a food-social matching profile.
-
-Direct meal buddy search is allowed as a shortcut, but contextual matching from meal/restaurant data remains the main product story.
-
-## Social Mock Flow
-
-Mock-only flow:
-
-`Community Card -> Nearby Matching -> Send Meal Invite -> Meal Buddy List -> Chat Window -> Plan Meal CTA`
-
-Relevant routes:
-
-- `apps/mobile/app/community-card.tsx`
-- `apps/mobile/app/meal-buddies.tsx`
-- `apps/mobile/app/chat.tsx`
-- `apps/mobile/app/group-tables.tsx`
-
-No realtime backend, WebSocket, friend graph persistence, moderation backend, or notification system exists yet.
-
-## External Dining Cost Control
-
-External dining should stay lightweight by default. Do not run full ingredient breakdown on every restaurant meal.
-
-Default path:
-
-- Restaurant/menu matching.
-- Food Memory and similar meal lookup.
-- Stored nutrition estimates.
-- Restaurant/menu cache.
-- Mock nutrition dataset.
-
-AI-assisted ingredient breakdown is on-demand only after è£œå?é¤é?è³‡æ?, ?°å?é£Ÿæ?, or ä¿®æ­£. Future production should reserve expensive AI breakdown for low-confidence matches, missing menu data, or explicit user correction.
-
-## Mock Data
-
-Mock data should remain grouped by domain under `packages/shared/src/mock`.
-
-Important current mock files:
-
-- `demoData.ts`
-- `tags.ts`
-- `socialDiscovery.ts`
-- `foodMemory.ts`
-- `restaurantPhase4.ts`
-- `precisionIdentification.ts`
-- `phase45Nutrition.ts`
-- `externalDiningFlywheel.ts`
-- `adminGovernance.ts`
-
-Production engineers should replace mock arrays with Supabase queries, server-side authorization, and RLS-backed data access.
-
-## Production Replacement
-
-Replace in this order:
-
-1. Supabase schema and RLS.
-2. Auth and profile onboarding.
-3. Food Memory persistence.
-4. Secure meal analysis and identification Edge Functions.
-5. Restaurant/menu nutrition cache.
-6. Community Card and meal buddy persistence.
-7. Chat, blocking/reporting, moderation, and notifications.
-8. Subscriptions and payment.
-9. Sponsored campaign manager.
-10. Admin audit logs and governance workflows.
-
-## Demo Startup
+## Verification
 
 ```powershell
 cd "D:\haocu app\ai-nutrition-social-mvp"
-npm.cmd run demo
+npm.cmd run typecheck
 ```
 
-## Current Demo Handoff Addendum
-
-### Current Social Page Structure
-
-`apps/mobile/app/meal-buddies.tsx` is the intended social shell. It owns four top sections:
-
-1. §ä¶º¤Í
-2. §Úªº¶º¤Í
-3. ¶º§½
-4. ¥|¤HÀ\®à
-
-¥|¤HÀ\®à intentionally stays inside the ¶º¤Í page top sections. Do not reintroduce an intermediate "enter four-person table" page or route that removes these tabs. `apps/mobile/app/group-tables.tsx` is kept only as a compatibility redirect to `/meal-buddies?section=tables`; the reusable content is exported as `GroupTablesContent`.
-
-### Shared Meal Buddy Card Model
-
-AI ¤ÀªR¥d¡B¦Û­q¥d¡BÀ\ÆU¥d use one shared card store and one shared recommendation/ranking system in `apps/mobile/features/meal-buddy-card`.
-
-- `sourceType` and `cardType` control labels and prefilled fields only.
-- Free/Paid are the same system: membership mode controls limits, masking, avatar/profile visibility, selection behavior, and upgrade prompts.
-- Do not create separate Free/Paid routes or separate card systems.
-
-### Generated Content Rule
-
-Creating, updating, expanding, or generating content should keep the current page stable, reveal the new content, scroll to it, and briefly highlight it where practical. Avoid intermediate pages and avoid hiding unrelated sections.
-
-### Removed Obsolete Route Files
-
-These old route files were removed because the current product structure keeps these behaviors inside `/meal-buddies`:
-
-- `apps/mobile/app/meal-buddy-discovery.tsx`: old independent recommendation result page.
-- `apps/mobile/app/my-meal-buddies.tsx`: old independent My Meal Buddies page.
-- `apps/mobile/app/meal-buddy-chats.tsx`: old independent chat page.
-
-Do not restore these unless the product explicitly returns to separate route-based social flows.
-
-### Food Diary
-
-`apps/mobile/app/meal-log.tsx` is the unified user-facing record section. It replaces the previous user-facing split between À\ÂI¬ö¿ı and Àç¾i¬ö¿ı. AI analysis and Today Intake may show real-time current-day status, but long-term daily cards, meal detail cards, monthly cards, favorite cards, and ranking cards belong in ¬ü­¹¤é°O.
-
-### Current Mock Limitations
-
-The following are still frontend mock/demo behavior: AI image analysis result, recommendations, profile data, fake profile photos, quotas, chat send, table invites, restaurant save, and Food Diary sharing. No production persistence, realtime chat, payment, push notification, moderation, or image upload backend is wired yet.
-
-### Demo Testing Utilities
-
-DEMO ONLY. REMOVE / DISABLE FOR PRODUCTION.
-
-The mobile home page includes a small Demo æ¸¬è©¦å·¥å…· section when `NODE_ENV !== "production"` and `EXPO_PUBLIC_ENABLE_DEMO_TOOLS !== "false"`.
-
-The mock date lives in `apps/mobile/features/demo-time/demoTimeStore.ts`:
-
-- `getEffectiveCurrentDate()` returns the demo clock.
-- `getEffectiveDateKey()` returns the YYYY-MM-DD key used by daily demo calculations.
-- `advanceDemoTimeByDays(1)` powers `æ¨¡æ“¬æ˜å¤©`.
-- `advanceDemoTimeByDays(7)` powers `æ¨¡æ“¬ä¸€é€±å¾Œ`.
-- `resetDemoTime()` powers reset behavior.
-
-Current wired demo effects:
-
-- Meal Buddy daily visible limits reset when `getEffectiveDateKey()` changes.
-- Meal Buddy seen-candidate sets reset when the demo day changes.
-- Meal Buddy pending / declined invitation expiry reads from `getEffectiveCurrentDate()` instead of device time.
-- Meal Buddy active cards and recommendation results use localStorage so page refresh can test persistence.
-- `é‡ç½®æ¸¬è©¦è³‡æ–™` clears Meal Buddy cards, recommendation results, social previews, and mock date.
-
-Production must hide or disable:
-
-- `æ¨¡æ“¬æ˜å¤©`
-- `æ¨¡æ“¬ä¸€é€±å¾Œ`
-- `é‡ç½®æ¸¬è©¦è³‡æ–™`
-
-Future backend integration should move this behind a dev-only flag or remove it entirely.
+Expo was intentionally not started during the handoff cleanup pass.

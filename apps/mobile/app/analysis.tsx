@@ -40,6 +40,7 @@ export default function AnalysisScreen() {
   }, [isAnalysisConfirmed, autoSavedConfirmedMeal]);
 
   function persistMealRecordToTodayIntake() {
+    // Integration entry: AI Analysis -> Today Intake.
     const savedPlan = {
       mealTime: selectedMealPeriod,
       plannedMealName: analysis.mealName,
@@ -84,6 +85,7 @@ export default function AnalysisScreen() {
   }
 
   function createMealBuddyCardFromCurrentRecommendation() {
+    // Integration entry: AI Analysis -> Meal Buddy Card matching pool.
     const card = getAiRecommendationMealBuddyCard();
     resetMealBuddyVisibleQuotaForDemo(demoMode);
     upsertMealBuddyCardWithQuota(card, demoMode);

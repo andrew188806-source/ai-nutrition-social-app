@@ -108,6 +108,7 @@ export default function RestaurantsScreen() {
   }
 
   function startRestaurantMealBuddyCard(restaurant: Restaurant, preferredTime: string) {
+    // Integration entry: Restaurant -> shared Meal Buddy Card pool.
     const restaurantId = `restaurant-${restaurant.name}`;
     const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags[0] ?? "", filters.location, preferredTime);
     upsertMealBuddyCardWithQuota(card, demoMode);
@@ -122,6 +123,7 @@ export default function RestaurantsScreen() {
   }
 
   function openRestaurantTableFlow(action: "find" | "create") {
+    // Integration entry: Restaurant -> existing Four-Person Table module.
     if (!pendingTableRestaurant) {
       return;
     }

@@ -49,6 +49,7 @@ export function getDefaultInteractionPreference(): MealBuddyIntentionType {
 }
 
 export function getAiRecommendationMealBuddyCard(mealPeriod: string = zhTW.mobile.refinedLogic.mealBuddyCard.mealPeriods[2]) {
+  // Backend integration entry: AI Analysis -> Meal Buddy Card.
   const copy = zhTW.mobile.refinedLogic.mealBuddyCard.prefill.aiRecommendation;
   return createMealBuddyCard({
     cardType: "general",
@@ -64,6 +65,7 @@ export function getAiRecommendationMealBuddyCard(mealPeriod: string = zhTW.mobil
 }
 
 export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId: string, foodCategory: string, area: string, preferredTime: string) {
+  // Backend integration entry: Restaurant -> Meal Buddy Card.
   return createMealBuddyCard({
     cardType: "restaurant",
     sourceType: "restaurant_page",

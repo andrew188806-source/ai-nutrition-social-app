@@ -13,6 +13,7 @@ export function getPlannedDinner() {
 }
 
 export function savePlannedDinner(plan: PlannedMeal) {
+  // Backend integration entry: Planned Dinner -> Today Intake estimated values.
   savedPlannedDinner = { ...plan };
 }
 

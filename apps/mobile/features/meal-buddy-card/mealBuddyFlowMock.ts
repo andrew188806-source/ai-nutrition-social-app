@@ -1,5 +1,7 @@
 import type { RankedMealBuddyCandidate } from "./types";
 
+// DEMO DATA FLOW: Community Profile -> Matched Buddy -> Chat Thread -> Meal Session / Four-Person Table.
+// Keep IDs stable so every screen renders the same people and sessions from one source of truth.
 export type MockCommunityProfile = {
   id: string;
   avatar: string;
@@ -63,6 +65,7 @@ export type MockGatheringRecord = {
   matchReasons?: string[];
 };
 
+// Community Profile: the origin record for every demo person.
 export const mockCommunityProfiles: MockCommunityProfile[] = [
   {
     id: "mina",
@@ -157,6 +160,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
   }
 ];
 
+// Matched Buddy: references a Community Profile and exactly one direct Chat Thread.
 export const mockMatchedBuddies: MockMatchedBuddy[] = [
   buildMatchedBuddy("mina", 9, "2026/05/08", "今天", "chat-direct-mina"),
   buildMatchedBuddy("bo", 5, "2026/05/18", "3 天前", "chat-direct-bo"),
@@ -164,6 +168,7 @@ export const mockMatchedBuddies: MockMatchedBuddy[] = [
   buildMatchedBuddy("an", 12, "2026/04/26", "昨天", "chat-direct-an")
 ];
 
+// Chat Thread: direct chats reference buddy/profile IDs; group chats reference table IDs.
 export const mockChatThreads: MockChatThread[] = [
   {
     id: "chat-direct-bo",
@@ -215,6 +220,7 @@ export const mockChatThreads: MockChatThread[] = [
   }
 ];
 
+// Meal Session / Four-Person Table: session records reference their shared chat thread.
 export const mockGatheringRecords = {
   hosting: [
     {

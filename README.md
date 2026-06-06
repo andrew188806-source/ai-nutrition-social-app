@@ -1,46 +1,26 @@
-# 好初 AI 營養社交 MVP
+﻿# 好廚 AI 營養社交 MVP
 
-這是面向台灣市場的投資人 Demo 與工程交接版本。核心產品是 Mobile Consumer App：使用者用餐點照片建立 Food Memory，取得 AI/mock 營養估算、下一餐建議，並透過 Community Card 找附近飲食目標相近的飯友。
+這是一個以 Expo React Native 為主的投資展示 MVP，涵蓋 AI 餐點分析、今日攝取、美食日記、餐廳推薦、飯友配對、聊天與四人餐桌。
 
-## Apps
+## Workspace
 
-- `apps/mobile`: Expo React Native + Expo Router，主要投資人 demo。
-- `apps/restaurant-web`: Next.js 餐廳後台，支援菜單營養揭露、餐廳標籤、驗證與 analytics。
-- `apps/admin-web`: Next.js 平台管理後台，展示審核、ESG、社交安全、標籤治理與 AI 辨識稽核。
-- `packages/shared`: 共用 TypeScript types 與 mock data。
-- `lib/i18n/zh-TW.ts`: 所有使用者可見文案集中管理。
+- `apps/mobile`: Expo Router 消費者端 Demo
+- `apps/restaurant-web`: 餐廳端 Next.js Demo
+- `apps/admin-web`: 管理端 Next.js Demo
+- `apps/mobile/features`: Mobile 共用狀態、mock 規則與可重用元件
+- `packages/shared`: 跨 App 共用型別、domain policy 與 mock 資料
+- `lib/i18n/zh-TW.ts`: 主要繁體中文 UI 文案
 
-## Run
-
-Unified investor demo startup:
+## Commands
 
 ```powershell
 cd "D:\haocu app\ai-nutrition-social-mvp"
+npm.cmd run typecheck
 npm.cmd run demo
 ```
 
-The demo command starts or reuses:
-- Mobile App: `http://localhost:8081`
-- Restaurant Dashboard: `http://localhost:3001`
-- Admin Dashboard: `http://localhost:3002`
+## Engineering Handoff
 
-If a port is already occupied, the script prints a warning and keeps the existing service.
+目前架構、mock 資料來源、後端替換入口與已知 TODO 請見 [`ENGINEER_HANDOFF.md`](./ENGINEER_HANDOFF.md)。
 
-```bash
-npm install
-npm run mobile
-npm run restaurant
-npm run admin
-```
-
-開啟：
-
-- Mobile: `http://localhost:8081`
-- Restaurant Dashboard: `http://localhost:3001`
-- Admin Dashboard: `http://localhost:3002`
-
-## Demo Story
-
-主要流程：首頁 → 餐點照片 → AI/location 餐廳菜單辨識 → Food Memory → 下一餐推薦 → Community Card → 社交配對 → 四人開桌 → 餐廳推薦 → 權限/治理入口。
-
-所有 AI、付款、訂閱、廣告、地圖、穿戴裝置、推播與後端資料均為 mock 或 placeholder。此產品定位為生活化健康飲食與社交探索，不是醫療診斷或治療建議。
+本專案目前是前端 Demo。AI、資料保存、聊天、通知、付款與審核流程尚未連接正式後端。

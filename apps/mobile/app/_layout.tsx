@@ -25,7 +25,6 @@ export default function RootLayout() {
       <Stack.Screen name="community-card" options={{ title: zhTW.mobile.communityCard.title }} />
       <Stack.Screen name="community-card-settings" options={{ title: zhTW.mobile.communityCardSettings.title }} />
       <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
-      <Stack.Screen name="chat" options={{ title: zhTW.mobile.chat.title }} />
     </Stack>
   );
 }
