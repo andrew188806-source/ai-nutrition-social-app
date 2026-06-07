@@ -66,7 +66,9 @@ export function GroupTablesContent({
   const [moduleView, setModuleView] = useState<"tables" | "invite">("tables");
   const [myTableView, setMyTableView] = useState<"card" | "participants" | "communityCard">("card");
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [restaurantSearchDismissed, setRestaurantSearchDismissed] = useState(false);
   const isPremiumMode = demoMode === "premium";
+  const tableSearchContext = restaurantContext?.action === "find" && !restaurantSearchDismissed ? restaurantContext : undefined;
   const communitySettings = getCommunityCardSettings();
   const hostMascot = getSelectedMascot(communitySettings);
   const hostAvatar = getAvatarDisplayLabel({ context: "tableHost", mascot: hostMascot, settings: communitySettings });
@@ -83,8 +85,8 @@ export function GroupTablesContent({
       }
     : hostedTableChatTarget;
   const restaurantTableResults = useMemo(
-    () => restaurantContext?.action === "find" ? rankExistingTablesForRestaurant(restaurantContext) : { exact: [], similar: [], visible: zhTW.mobile.groupTables.tables },
-    [restaurantContext]
+    () => tableSearchContext ? rankExistingTablesForRestaurant(tableSearchContext) : { exact: [], similar: [], visible: zhTW.mobile.groupTables.tables },
+    [tableSearchContext]
   );
   const restaurantTables = restaurantTableResults.visible;
 
@@ -106,10 +108,14 @@ export function GroupTablesContent({
   }, [restaurantContext]);
 
   useEffect(() => {
-    if (restaurantContext?.action === "find") {
+    setRestaurantSearchDismissed(false);
+  }, [restaurantContext?.action, restaurantContext?.restaurantId]);
+
+  useEffect(() => {
+    if (tableSearchContext) {
       focusGroupTableElementAfterRender("available-table-state-area");
     }
-  }, [restaurantContext?.action, restaurantContext?.restaurantId]);
+  }, [tableSearchContext]);
 
   useEffect(() => {
     if (moduleView === "invite") {
@@ -257,9 +263,76 @@ export function GroupTablesContent({
 
       {moduleView === "tables" ? (
         <>
+        {tableSearchContext ? (
+          <View nativeID="available-table-state-area">
+            <Card tone="mint">
+              <SectionTitle title={zhTW.mobile.groupTables.availableTablesTitle} subtitle={zhTW.mobile.groupTables.availableTablesBody} />
+            </Card>
+            <RestaurantTableSearchContextCardWithBack
+              context={tableSearchContext}
+              exactCount={restaurantTableResults.exact.length}
+              similarCount={restaurantTableResults.similar.length}
+              onClear={() => setRestaurantSearchDismissed(true)}
+            />
+            {restaurantTables.map((table) => {
+              const isJoined = joinedTable === table.mealTheme;
+              const isCompleted = table.status === zhTW.mobile.groupTables.completedStatusLabel;
+              const isLockedForFree = !isPremiumMode && table.premiumOnly;
+              const shouldBlurParticipants = !isPremiumMode && !isCompleted;
+
+              return (
+                <Card key={`restaurant-search-${table.mealTheme}`} tone={table.premiumOnly || isPremiumMode ? "premium" : "default"}>
+                  <View style={styles.tableHeader}>
+                    <View style={styles.flex}>
+                      <View style={styles.badgeRow}>
+                        <PremiumBadge label={table.premiumOnly || isPremiumMode ? zhTW.mobile.premiumUi.premiumTables : zhTW.mobile.premiumUi.freeBadge} variant={table.premiumOnly || isPremiumMode ? "premium" : "free"} />
+                        {table.status === zhTW.mobile.groupTables.completedStatusLabel ? <PremiumBadge label={zhTW.mobile.groupTables.completedState} variant="free" /> : null}
+                      </View>
+                      <Text style={styles.restaurant}>{table.restaurantName}</Text>
+                      <Text style={styles.theme}>{table.mealTheme}</Text>
+                    </View>
+                    <Text style={styles.progress}>{table.progress}</Text>
+                  </View>
+
+                  <TagRow tags={table.tags} />
+                  <Text style={styles.reason}>{table.reason}</Text>
+                  <Text style={styles.aaRule}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
+
+                  <View style={styles.participants}>
+                    {[0, 1, 2, 3].map((item) => {
+                      const isHiddenParticipant = shouldBlurParticipants && item > 1;
+                      return (
+                        <View key={item} style={[styles.participant, isHiddenParticipant && styles.lockedParticipant]}>
+                          <Text style={[styles.participantText, isHiddenParticipant && styles.blurredParticipantText]}>{isHiddenParticipant ? "..." : "OK"}</Text>
+                          {isHiddenParticipant ? <View style={styles.participantBlur} /> : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {isLockedForFree ? <LockNotice title={zhTW.mobile.premiumUi.upgradeCompatibilityTitle} body={zhTW.mobile.groupTables.lockedCompatibility} /> : null}
+                  {!isCompleted && !isPremiumMode ? <Text style={styles.premiumLock}>{zhTW.mobile.groupTables.premiumVisibility}</Text> : null}
+
+                  <Pressable disabled={isCompleted} style={[styles.joinButton, isCompleted && styles.disabledButton]} onPress={() => setJoinedTable(table.mealTheme)}>
+                    <Text style={styles.joinButtonText}>{isCompleted ? zhTW.mobile.groupTables.completedState : isJoined ? zhTW.mobile.groupTables.joinedState : zhTW.common.join}</Text>
+                  </Pressable>
+                  <Pressable style={styles.inviteButton} onPress={() => setModuleView("invite")}>
+                    <Text style={styles.joinButtonText}>{zhTW.mobile.correctedFlow.oneTapInvite}</Text>
+                  </Pressable>
+                </Card>
+              );
+            })}
+            {restaurantTables.length === 0 ? (
+              <Card tone="mint">
+                <SectionTitle title={tableSearchContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
+              </Card>
+            ) : null}
+          </View>
+        ) : null}
+        <View nativeID="my-table-state-area">
         {isPremiumMode ? (
           <>
-            <View nativeID="my-table-state-area">
+            <View>
             {myTableView === "card" ? (
               <MyTableOverview
                 activeTable={activeTable}
@@ -310,12 +383,19 @@ export function GroupTablesContent({
             </View>
           </>
         ) : null}
+        </View>
+        {!tableSearchContext ? (
         <View nativeID="available-table-state-area">
           <Card tone="mint">
             <SectionTitle title={zhTW.mobile.groupTables.availableTablesTitle} subtitle={zhTW.mobile.groupTables.availableTablesBody} />
           </Card>
-          {restaurantContext?.action === "find" ? (
-            <RestaurantTableContextCard context={restaurantContext} exactCount={restaurantTableResults.exact.length} similarCount={restaurantTableResults.similar.length} />
+          {tableSearchContext ? (
+            <RestaurantTableSearchContextCardWithBack
+              context={tableSearchContext}
+              exactCount={restaurantTableResults.exact.length}
+              similarCount={restaurantTableResults.similar.length}
+              onClear={() => setRestaurantSearchDismissed(true)}
+            />
           ) : null}
           {restaurantTables.map((table) => {
           const isJoined = joinedTable === table.mealTheme;
@@ -365,12 +445,18 @@ export function GroupTablesContent({
             </Card>
           );
           })}
-          {restaurantContext?.action === "find" && restaurantTables.length === 0 ? (
+          {tableSearchContext && restaurantTables.length === 0 ? (
             <Card tone="mint">
-              <SectionTitle title={restaurantContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
+              <SectionTitle title={tableSearchContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
+            </Card>
+          ) : null}
+          {false && tableSearchContext && restaurantTables.length === 0 ? (
+            <Card tone="mint">
+              <SectionTitle title={tableSearchContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
             </Card>
           ) : null}
         </View>
+        ) : null}
         </>
       ) : null}
 
@@ -413,11 +499,12 @@ type InviteCandidate = {
 };
 
 function focusGroupTableElementAfterRender(elementId: string) {
-  setTimeout(() => {
+  const focus = () => {
     const browserWindow = (globalThis as typeof globalThis & { window?: { document?: { getElementById?: (id: string) => { scrollIntoView?: (options?: { behavior?: ScrollBehavior; block?: ScrollLogicalPosition }) => void } | null } } }).window;
     const element = browserWindow?.document?.getElementById?.(elementId);
     element?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-  }, 120);
+  };
+  [80, 220, 520].forEach((delay) => setTimeout(focus, delay));
 }
 
 type TableParticipant = InviteCandidate & {
@@ -519,6 +606,53 @@ function RestaurantTableContextCard({ context, exactCount, similarCount }: { con
         subtitle={exactCount > 0 ? `優先顯示 ${exactCount} 個同餐廳餐桌。` : similarCount > 0 ? `目前沒有同餐廳餐桌，顯示 ${similarCount} 個相似類型餐桌。` : "目前沒有符合的餐桌。"}
       />
       <TagRow tags={context.restaurantTags.slice(0, 3)} />
+    </Card>
+  );
+}
+
+function RestaurantTableSearchContextCard({ context, exactCount, similarCount }: { context: RestaurantTableContext; exactCount: number; similarCount: number }) {
+  const subtitle =
+    exactCount > 0
+      ? `優先顯示同餐廳四人桌，共 ${exactCount} 桌。`
+      : similarCount > 0
+        ? `這間餐廳暫無可加入桌，先顯示 ${similarCount} 桌相似料理。`
+        : "目前這間餐廳還沒有可加入的四人桌，可以建立一桌。";
+
+  return (
+    <Card tone="mint">
+      <PremiumBadge label="餐廳搜尋" variant="free" />
+      <SectionTitle title={`正在尋找：${context.restaurantName}`} subtitle={subtitle} />
+      <TagRow tags={context.restaurantTags.slice(0, 3)} />
+    </Card>
+  );
+}
+
+function RestaurantTableSearchContextCardWithBack({
+  context,
+  exactCount,
+  onClear,
+  similarCount
+}: {
+  context: RestaurantTableContext;
+  exactCount: number;
+  onClear: () => void;
+  similarCount: number;
+}) {
+  const subtitle =
+    exactCount > 0
+      ? `優先顯示同餐廳四人桌，共 ${exactCount} 桌。`
+      : similarCount > 0
+        ? `這間餐廳暫無可加入桌，先顯示 ${similarCount} 桌相似料理。`
+        : "目前這間餐廳還沒有可加入的四人桌，可以建立一桌。";
+
+  return (
+    <Card tone="mint">
+      <PremiumBadge label="餐廳搜尋" variant="free" />
+      <SectionTitle title={`正在尋找：${context.restaurantName}`} subtitle={subtitle} />
+      <TagRow tags={context.restaurantTags.slice(0, 3)} />
+      <Pressable style={styles.secondaryInviteButton} onPress={onClear}>
+        <Text style={styles.secondaryInviteButtonText}>返回四人餐桌</Text>
+      </Pressable>
     </Card>
   );
 }

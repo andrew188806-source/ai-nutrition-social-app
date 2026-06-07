@@ -110,12 +110,13 @@ export default function RestaurantsScreen() {
   function startRestaurantMealBuddyCard(restaurant: Restaurant, preferredTime: string) {
     // Integration entry: Restaurant -> shared Meal Buddy Card pool.
     const restaurantId = `restaurant-${restaurant.name}`;
-    const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags[0] ?? "", filters.location, preferredTime);
+    const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags.join("、"), filters.location, preferredTime);
     upsertMealBuddyCardWithQuota(card, demoMode);
     setPendingRestaurant(null);
     router.push({
       pathname: "/meal-buddies",
       params: {
+        restaurantActionType: "createMealBuddyCard",
         highlightCardCreatedAt: card.createdAt,
         section: "discover"
       }
@@ -130,6 +131,7 @@ export default function RestaurantsScreen() {
     router.push({
       pathname: "/meal-buddies",
       params: {
+        restaurantActionType: action === "create" ? "createFourPersonTable" : "findFourPersonTable",
         restaurantId: `restaurant-${pendingTableRestaurant.name}`,
         restaurantLocation: filters.location,
         restaurantName: pendingTableRestaurant.name,
@@ -221,7 +223,7 @@ export default function RestaurantsScreen() {
         </Card>
       ) : null}
 
-      <RestaurantTableChoiceModal
+      <RestaurantTableActionModal
         restaurant={pendingTableRestaurant}
         onClose={() => setPendingTableRestaurant(null)}
         onCreate={() => openRestaurantTableFlow("create")}
@@ -464,6 +466,40 @@ function RestaurantTableChoiceModal({
             </Pressable>
           </View>
           <Text style={styles.privacyNote}>{restaurant?.name}｜選擇想進行的方式</Text>
+          <Pressable accessibilityRole="button" style={styles.socialButton} onPress={onFind}>
+            <Text style={styles.socialButtonText}>尋找餐桌</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={[styles.socialButton, styles.secondarySocialButton]} onPress={onCreate}>
+            <Text style={styles.socialButtonText}>建立餐桌</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function RestaurantTableActionModal({
+  onClose,
+  onCreate,
+  onFind,
+  restaurant
+}: {
+  onClose: () => void;
+  onCreate: () => void;
+  onFind: () => void;
+  restaurant: Restaurant | null;
+}) {
+  return (
+    <Modal transparent animationType="fade" visible={Boolean(restaurant)} onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>四人餐桌</Text>
+            <Pressable accessibilityRole="button" onPress={onClose}>
+              <Text style={styles.closeText}>取消</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.privacyNote}>{restaurant?.name} 可以尋找現有四人桌，也可以用這間餐廳建立一桌。</Text>
           <Pressable accessibilityRole="button" style={styles.socialButton} onPress={onFind}>
             <Text style={styles.socialButtonText}>尋找餐桌</Text>
           </Pressable>

@@ -64,6 +64,48 @@ type RecommendationGroup = {
 
 const recommendationStorageKey = "haocu.mealBuddy.recommendationGroups.v1";
 
+function parseMealBuddySection(section?: string): MealBuddySection {
+  if (section === "friends" || section === "gatherings" || section === "tables") {
+    return section;
+  }
+  return "discover";
+}
+
+function getVisibleMatchedFriends(invites: ReturnType<typeof getMealBuddyInvites>): MatchedFriend[] {
+  const acceptedBuddyIds = new Set(invites.filter((invite) => invite.status === "accepted").map(profileIdFromInvitation));
+  const baseFriends = mockMatchedBuddies.filter((friend) => friend.id !== "ivy" || acceptedBuddyIds.has("ivy"));
+  const existingIds = new Set(baseFriends.map((friend) => friend.id));
+  const acceptedInviteFriends = invites
+    .filter((invite) => invite.status === "accepted" && (invite.type === "chat" || invite.type === "meal"))
+    .map(createMatchedBuddyFromInvitation)
+    .filter((friend) => !existingIds.has(friend.id));
+  return [...baseFriends, ...acceptedInviteFriends];
+}
+
+function profileIdFromInvitation(invite: ReturnType<typeof getMealBuddyInvites>[number]) {
+  return invite.candidateUserId.replace("demo-", "").toLowerCase();
+}
+
+function createMatchedBuddyFromInvitation(invite: ReturnType<typeof getMealBuddyInvites>[number]): MatchedFriend {
+  const profileId = profileIdFromInvitation(invite);
+  return {
+    id: profileId,
+    profileId,
+    avatar: invite.userName.slice(0, 1),
+    name: invite.userName,
+    verified: true,
+    tags: [invite.inviterCard.foodCategory, invite.inviterCard.area, invite.type === "chat" ? "先聊聊" : "可約飯"].filter(Boolean),
+    recentMealStatus: invite.mealName,
+    mealCount: 1,
+    knownSince: "2026/06/04",
+    lastTable: invite.time,
+    commonInterests: [invite.mealName, invite.inviterCard.foodCategory].filter(Boolean),
+    areas: [invite.area],
+    intro: "由邀請接受後加入的飯友測試資料。",
+    chatThreadId: `chat-direct-${profileId}`
+  };
+}
+
 function mealBuddyCardKey(card: MealBuddyCard) {
   return `${card.cardType}-${card.createdAt}`;
 }
@@ -97,12 +139,12 @@ function safelyParseRecommendationGroups(raw: string): RecommendationGroup[] {
 type MatchedFriend = MockMatchedBuddy;
 type GatheringRecord = MockGatheringRecord;
 
-const matchedFriends = mockMatchedBuddies;
 const gatheringRecords = mockGatheringRecords;
 
 export default function MealBuddyHomeScreen() {
   const params = useLocalSearchParams<{
     highlightCardCreatedAt?: string;
+    restaurantActionType?: string;
     restaurantId?: string;
     restaurantLocation?: string;
     restaurantName?: string;
@@ -114,7 +156,7 @@ export default function MealBuddyHomeScreen() {
   const pendingMatch = getPendingMatchRequest();
   const initialCards = getActiveMealBuddyCards();
   const [demoMode, setDemoMode] = useDemoUserPlan();
-  const [activeSection, setActiveSection] = useState<MealBuddySection>(() => (params.section === "tables" ? "tables" : "discover"));
+  const [activeSection, setActiveSection] = useState<MealBuddySection>(() => parseMealBuddySection(params.section));
   const [activeCards, setActiveCards] = useState<MealBuddyCard[]>(() => initialCards);
   const [showFreeQuotaModal, setShowFreeQuotaModal] = useState(false);
   const [paidQuotaMessage, setPaidQuotaMessage] = useState("");
@@ -128,6 +170,7 @@ export default function MealBuddyHomeScreen() {
   const cardUsage = getActiveCardUsage(demoMode);
   const chats = getMealBuddyChats();
   const invites = getMealBuddyInvites();
+  const matchedFriends = getVisibleMatchedFriends(invites);
 
   // Meal Buddy is one shared system: Free/Paid only changes limits, masking, and upgrade prompts.
   // AI/manual/restaurant cards share the same card list; source only controls the small visual label.
@@ -139,9 +182,7 @@ export default function MealBuddyHomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (params.section === "tables") {
-      setActiveSection("tables");
-    }
+    setActiveSection(parseMealBuddySection(params.section));
   }, [params.section]);
 
   useEffect(() => {
@@ -323,7 +364,7 @@ export default function MealBuddyHomeScreen() {
           restaurantContext={
             params.restaurantName
               ? {
-                  action: params.tableAction === "create" ? "create" : "find",
+                  action: params.restaurantActionType === "createFourPersonTable" || params.tableAction === "create" ? "create" : "find",
                   restaurantId: params.restaurantId ?? `restaurant-${params.restaurantName}`,
                   restaurantLocation: params.restaurantLocation ?? "",
                   restaurantName: params.restaurantName,
@@ -993,18 +1034,31 @@ function MyFriendsSection({
       return;
     }
     setMode("list");
-  }, [chats, focusedChatId, focusedChatName, friends, initialTab]);
+  }, [focusedChatId, focusedChatName, initialTab]);
 
   const sortedFriends = [...friends].sort((a, b) => {
     if (sort === "飯局數") return b.mealCount - a.mealCount;
     if (sort === "認識時間") return b.knownSince.localeCompare(a.knownSince);
     return b.lastTable.localeCompare(a.lastTable);
   });
+  const sortedChats = activeTab === "chats" ? getMealBuddyChats() : chats;
   const visibleInvites = invites.filter((invite) => invite.status === "pending" || invite.direction === "sent");
 
   if (mode === "chat") {
     const chat = selectedChat ?? chats.find((item) => item.buddyId === selectedFriend.id || item.userName.includes(selectedFriend.name.split(" ")[0]));
-    return <FriendChatMode friend={selectedFriend} isPremium={isPremium} chat={chat} onBack={() => setMode("list")} onChatUpdated={onChatUpdated} />;
+    return (
+      <FriendChatMode
+        friend={selectedFriend}
+        isPremium={isPremium}
+        chat={chat}
+        onBack={() => {
+          setActiveTab("chats");
+          setSelectedChat(null);
+          setMode("list");
+          onChatUpdated();
+        }}
+      />
+    );
   }
 
   if (mode === "card") {
@@ -1142,7 +1196,7 @@ function MyFriendsSection({
 
       {activeTab === "chats" ? (
         <View style={styles.cardList}>
-          {chats.map((chat) => (
+          {sortedChats.map((chat) => (
             <View key={chat.id} style={styles.previewCard}>
               <Text style={styles.meta}>{chat.unread ? "新訊息" : "聊天"}</Text>
               <Text style={styles.name}>{chat.userName}</Text>
@@ -1267,53 +1321,40 @@ function FriendChatMode({
   chat,
   friend,
   isPremium,
-  onBack,
-  onChatUpdated
+  onBack
 }: {
   chat?: ReturnType<typeof getMealBuddyChats>[number] | null;
   friend: MatchedFriend;
   isPremium: boolean;
   onBack: () => void;
-  onChatUpdated: () => void;
 }) {
   const [draftMessage, setDraftMessage] = useState("");
-  const [sentMessage, setSentMessage] = useState("");
+  const [localChatVersion, setLocalChatVersion] = useState(0);
   const profile = matchedFriendDisplayProfile(friend, isPremium);
   const isGroupChat = Boolean(chat?.id.includes("group"));
-  const title = chat?.userName || profile.displayName;
+  const liveChat = chat?.id ? getMealBuddyChats().find((item) => item.id === chat.id) ?? chat : chat;
+  const title = liveChat?.userName || profile.displayName;
   const subtitle = isGroupChat ? "四人桌成桌後的群聊，用來確認集合時間與餐廳細節。" : "先輕鬆聊聊這餐，聊得來再決定要不要一起吃飯。";
+  const threadMessages = liveChat?.messages?.length ? liveChat.messages : [{ id: `preview-${localChatVersion}`, text: liveChat?.lastMessage ?? `我也想吃${friend.commonInterests[0]}，要聊聊嗎？`, sender: "buddy" as const }];
 
   return (
     <Card tone="mint">
       <SectionTitle title={`${title} 的聊天`} subtitle={subtitle} />
-      <View style={styles.chatBubble}>
-        <Text style={styles.message}>{chat?.lastMessage ?? `我也想吃${friend.commonInterests[0]}，要聊聊嗎？`}</Text>
-      </View>
-      {isGroupChat ? (
-        <View style={styles.chatBubble}>
-          <Text style={styles.message}>Mina：我想點烤魚定食，19:00 到店可以嗎？</Text>
-          <Text style={styles.message}>Bo：可以，我會選清湯或豆腐類。</Text>
-          <Text style={styles.message}>小安：我也到，大家 AA 制就好。</Text>
+      <Text style={styles.meta}>{liveChat?.relatedMeal ?? friend.commonInterests[0]} · {liveChat?.time ?? "剛剛"}</Text>
+      {threadMessages.map((message) => (
+        <View key={message.id} style={[styles.chatBubble, message.sender === "me" && styles.myChatBubble]}>
+          <Text style={styles.message}>{message.text}</Text>
         </View>
-      ) : null}
-      <View style={styles.chatBubble}>
-        <Text style={styles.meta}>{chat?.relatedMeal ?? friend.commonInterests[0]} · {chat?.time ?? "剛剛"}</Text>
-      </View>
-      {sentMessage ? (
-        <View style={[styles.chatBubble, styles.myChatBubble]}>
-          <Text style={styles.message}>{sentMessage}</Text>
-        </View>
-      ) : null}
+      ))}
       <View style={styles.inputRow}>
         <TextInput placeholder="輸入訊息" placeholderTextColor={colors.muted} style={styles.input} value={draftMessage} onChangeText={setDraftMessage} />
         <Pressable
           style={styles.primaryButton}
           onPress={() => {
             const message = draftMessage.trim() || "想一起聊聊這餐嗎？";
-            setSentMessage(message);
             if (chat?.id) {
               addMealBuddyChatMessage(chat.id, message);
-              onChatUpdated();
+              setLocalChatVersion((version) => version + 1);
             }
             setDraftMessage("");
           }}
@@ -1322,7 +1363,7 @@ function FriendChatMode({
         </Pressable>
       </View>
       <Pressable style={styles.secondaryButtonWide} onPress={onBack}>
-        <Text style={styles.secondaryButtonText}>返回我的飯友</Text>
+        <Text style={styles.secondaryButtonText}>← 返回聊天列表</Text>
       </Pressable>
     </Card>
   );
@@ -1434,6 +1475,9 @@ function GatheringsSection({
   const [cancelTarget, setCancelTarget] = useState<GatheringRecord | null>(null);
   const incomingMealInvites = invites.filter((invite) => (invite.type === "meal" || invite.type === "table") && invite.direction === "received" && invite.status === "pending");
   const sentMealInvites = invites.filter((invite) => (invite.type === "meal" || invite.type === "table") && invite.direction === "sent");
+  const acceptedReceivedMealInvites = invites.filter((invite) => (invite.type === "meal" || invite.type === "table") && invite.direction === "received" && invite.status === "accepted");
+  const joinedInviteRecords = acceptedReceivedMealInvites.map(mealEventFromInvite);
+  const selectedRecordInvite = selectedRecord ? acceptedReceivedMealInvites.find((invite) => `accepted-${invite.id}` === selectedRecord.id) ?? null : null;
 
   useEffect(() => {
     if (!acceptedInvite) {
@@ -1476,14 +1520,14 @@ function GatheringsSection({
           />
           <GatheringCategory
             title="我加入的飯局"
-            records={acceptedInvite ? [mealEventFromInvite(acceptedInvite), ...gatheringRecords.joined] : gatheringRecords.joined}
+            records={[...joinedInviteRecords, ...gatheringRecords.joined]}
             selectedRecord={selectedRecord}
-            sourceInvite={acceptedInvite}
+            sourceInvite={selectedRecordInvite}
             onClose={() => setSelectedRecord(null)}
             onOpen={setSelectedRecord}
             onOpenChat={onOpenChat}
             onCancel={setCancelTarget}
-            onViewInviteDetail={() => acceptedInvite ? setDetailInvite(acceptedInvite) : null}
+            onViewInviteDetail={() => selectedRecordInvite ? setDetailInvite(selectedRecordInvite) : null}
           />
         </>
       ) : null}

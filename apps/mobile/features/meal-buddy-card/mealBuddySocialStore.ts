@@ -6,6 +6,7 @@ export type MealBuddyChatPreview = {
   id: string;
   userName: string;
   lastMessage: string;
+  messages?: MealBuddyChatMessage[];
   relatedMeal: string;
   time: string;
   unread: boolean;
@@ -17,6 +18,13 @@ export type MealBuddyChatPreview = {
   threadType?: "direct" | "group";
   lastMessageAt?: string;
   updatedAt?: string;
+};
+
+export type MealBuddyChatMessage = {
+  id: string;
+  text: string;
+  sender: "me" | "buddy" | "system";
+  createdAt: string;
 };
 
 export type MealBuddyInvitePreview = {
@@ -54,7 +62,8 @@ const japaneseDinnerChatId = "chat-group-table-japanese-dinner";
 const japaneseDinnerTableName = "四人桌｜清爽日式晚餐";
 
 function buildDefaultChats(): MealBuddyChatPreview[] {
-  return mockChatThreads.map((thread, index) => ({
+  // Demo Chat Thread data: one shared thread per matched buddy or formed group table.
+  return mockChatThreads.filter((thread) => thread.buddyId !== "ivy").map((thread, index) => ({
     id: thread.id,
     userName: thread.title,
     lastMessage: thread.lastMessage,
@@ -67,7 +76,15 @@ function buildDefaultChats(): MealBuddyChatPreview[] {
     tableId: thread.tableId,
     threadType: thread.type,
     updatedAt: defaultChatUpdatedAt(index),
-    lastMessageAt: defaultChatUpdatedAt(index)
+    lastMessageAt: defaultChatUpdatedAt(index),
+    messages: [
+      {
+        id: `${thread.id}-seed`,
+        text: thread.lastMessage,
+        sender: thread.type === "group" ? "system" : "buddy",
+        createdAt: defaultChatUpdatedAt(index)
+      }
+    ]
   }));
 }
 
@@ -119,6 +136,24 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
     preferredTime: "今天 12:20",
     nutritionGoal: "蛋白質補足"
   });
+  const ivySushiCard = buildInviteCard({
+    sourceType: "manual",
+    preferredFoodName: "壽司晚餐",
+    restaurantName: "青葉壽司",
+    foodCategory: "日式",
+    area: "台北中山",
+    preferredTime: "明天 18:30",
+    nutritionGoal: "清爽、油脂適中"
+  });
+  const mySushiCard = buildInviteCard({
+    sourceType: "ai_recommendation",
+    preferredFoodName: "清爽壽司",
+    restaurantName: "青葉壽司",
+    foodCategory: "日式",
+    area: "台北中山",
+    preferredTime: "明天 18:30",
+    nutritionGoal: "晚餐控制熱量"
+  });
 
   return [
     {
@@ -148,6 +183,27 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       currentParticipants: 3,
       requiredParticipants: 4,
       tableStatus: "pending"
+    },
+    {
+      id: "invite-demo-ivy-sushi-meal",
+      type: "meal",
+      status: "pending",
+      direction: "received",
+      candidateUserId: "demo-ivy",
+      sourceCardKey: mealBuddyCardKey(mySushiCard),
+      inviterUser: "Ivy",
+      inviteeUser: "我",
+      userName: "Ivy",
+      mealName: "壽司晚餐",
+      time: "明天 18:30",
+      inviterCard: ivySushiCard,
+      matchedInviteeCard: mySushiCard,
+      matchReasons: ["都想吃日式", "晚餐時間接近", "想吃清爽一點"],
+      createdAt: "2026-06-04T11:00:00.000Z",
+      expiresAt: "2026-06-05T11:00:00.000Z",
+      demoLabel: "Demo Invitation 測試資料",
+      area: "台北中山",
+      distanceKm: 1.1
     },
     {
       id: "invite-demo-mina-meal",
@@ -201,8 +257,9 @@ let invitePreviews: MealBuddyInvitePreview[] = mergeMissingDefaultInvites(stored
 export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
   const mockThread = getMockChatThreadByName(candidate.displayName);
   const now = currentTimestamp();
+  const fallbackChatId = `chat-direct-${candidate.userId}`;
   const chat: MealBuddyChatPreview = {
-    id: mockThread?.id ?? `chat-${candidate.userId}`,
+    id: mockThread?.id ?? fallbackChatId,
     userName: mockThread?.title ?? candidate.displayName,
     lastMessage: `想聊聊 ${candidate.preferredFoodName} 嗎？`,
     relatedMeal: candidate.preferredFoodName,
@@ -213,7 +270,15 @@ export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
     participantProfileId: mockThread?.participantProfileId ?? candidate.userId,
     threadType: "direct",
     updatedAt: now,
-    lastMessageAt: now
+    lastMessageAt: now,
+    messages: [
+      {
+        id: `${mockThread?.id ?? fallbackChatId}-seed`,
+        text: `先聊聊 ${candidate.preferredFoodName} 嗎？`,
+        sender: "buddy",
+        createdAt: now
+      }
+    ]
   };
   chatPreviews = sortChatsByActivity([chat, ...chatPreviews.filter((item) => item.id !== chat.id)]);
   persistSocialState();
@@ -251,7 +316,15 @@ export function createOrOpenMealSessionChat({
     participantProfileId: mockThread?.participantProfileId,
     threadType: "direct",
     updatedAt: now,
-    lastMessageAt: now
+    lastMessageAt: now,
+    messages: [
+      {
+        id: `${resolvedChatId}-seed`,
+        text: `這是關於「${relatedMeal}」的飯局聊天室。`,
+        sender: "system",
+        createdAt: now
+      }
+    ]
   };
   chatPreviews = sortChatsByActivity([chat, ...chatPreviews.filter((item) => item.id !== chat.id)]);
   persistSocialState();
@@ -279,6 +352,14 @@ export function createOrOpenGroupTableChat(tableName = "四人桌", tableId?: st
     threadType: "group",
     updatedAt: now.toISOString(),
     lastMessageAt: now.toISOString(),
+    messages: [
+      {
+        id: `${resolvedChatId}-seed`,
+        text: "四人桌已成團，可以在這裡確認時間與餐廳細節。",
+        sender: "system",
+        createdAt: now.toISOString()
+      }
+    ],
     // TODO: Replace this mock expiry with backend scheduled cleanup after real meal-session end time is stored.
     expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
   };
@@ -288,7 +369,7 @@ export function createOrOpenGroupTableChat(tableName = "四人桌", tableId?: st
 }
 
 export function addMealBuddyChatMessage(chatId: string, message: string) {
-  touchChat(chatId, message, "剛剛");
+  touchChat(chatId, message, "剛剛", "me");
 }
 
 export function addMealBuddyChatSystemMessage({
@@ -308,13 +389,13 @@ export function addMealBuddyChatSystemMessage({
 
   if (groupTableName) {
     const groupChat = createOrOpenGroupTableChat(groupTableName);
-    touchChat(groupChat.id, message, "剛剛");
+    touchChat(groupChat.id, message, "剛剛", "system");
     return;
   }
 
   const existingChat = chatPreviews.find((item) => chatUserName && item.userName.includes(chatUserName));
   if (existingChat) {
-    touchChat(existingChat.id, message, "剛剛");
+    touchChat(existingChat.id, message, "剛剛", "system");
     return;
   }
 
@@ -330,7 +411,15 @@ export function addMealBuddyChatSystemMessage({
     demoLabel: "系統提醒",
     threadType: "direct",
     updatedAt: now,
-    lastMessageAt: now
+    lastMessageAt: now,
+    messages: [
+      {
+        id: `chat-cancel-${fallbackName}-seed`,
+        text: message,
+        sender: "system",
+        createdAt: now
+      }
+    ]
   };
   chatPreviews = sortChatsByActivity([fallbackChat, ...chatPreviews.filter((item) => item.id !== fallbackChat.id)]);
   persistSocialState();
@@ -376,8 +465,9 @@ export function acceptMealBuddyInvite(invite: MealBuddyInvitePreview) {
   }
 
   invitePreviews = invitePreviews.map((item) => (item.id === invite.id ? { ...item, status: "accepted" } : item));
-  createOrOpenMealBuddyChat({
-    userId: invite.direction === "sent" ? invite.inviteeUser : invite.inviterUser,
+  const acceptedProfileId = profileIdFromInvitation(invite);
+  const chat = createOrOpenMealBuddyChat({
+    userId: acceptedProfileId,
     displayName: invite.userName,
     restaurantId: invite.inviterCard.restaurantId,
     restaurantName: invite.inviterCard.restaurantName,
@@ -396,6 +486,7 @@ export function acceptMealBuddyInvite(invite: MealBuddyInvitePreview) {
     rankScore: 88,
     matchReasons: invite.matchReasons
   });
+  touchChat(chat.id, invite.type === "chat" ? `你已接受 ${invite.userName} 的聊天邀請。` : `你已接受 ${invite.userName} 的飯局邀請。`, "剛剛", "system");
   persistSocialState();
 }
 
@@ -424,7 +515,12 @@ export function getMealBuddyChats() {
   const now = getEffectiveCurrentDate().getTime();
   chatPreviews = sortChatsByActivity(mergeMissingDefaultChats(chatPreviews));
   persistSocialState();
-  return chatPreviews.filter((item) => !item.expiresAt || new Date(item.expiresAt).getTime() > now);
+  return chatPreviews.filter((item) => {
+    if (item.buddyId === "ivy" && !hasAcceptedInviteForBuddy("ivy")) {
+      return false;
+    }
+    return !item.expiresAt || new Date(item.expiresAt).getTime() > now;
+  });
 }
 
 export function getMealBuddyInvites() {
@@ -463,20 +559,29 @@ function acceptFourPersonTableInvite(invite: MealBuddyInvitePreview) {
 
   if (isFormed) {
     const groupChat = createOrOpenGroupTableChat(invite.tableName ?? japaneseDinnerTableName, invite.tableId ?? japaneseDinnerTableId);
-    touchChat(groupChat.id, "四人飯局已成團，飯局聊天室已開啟。", "剛剛");
+    touchChat(groupChat.id, "四人飯局已成團，飯局聊天室已開啟。", "剛剛", "system");
   } else {
     persistSocialState();
   }
 }
 
-function touchChat(chatId: string, lastMessage: string, time: string) {
-  const now = currentTimestamp();
+function touchChat(chatId: string, lastMessage: string, time: string, sender: MealBuddyChatMessage["sender"] = "system") {
+  const now = nextActivityTimestamp();
   chatPreviews = sortChatsByActivity(
     chatPreviews.map((item) =>
       item.id === chatId
         ? {
             ...item,
             lastMessage,
+            messages: [
+              ...(item.messages ?? []),
+              {
+                id: `${chatId}-${now}-${(item.messages ?? []).length}`,
+                text: lastMessage,
+                sender,
+                createdAt: now
+              }
+            ],
             time,
             unread: true,
             updatedAt: now,
@@ -550,6 +655,14 @@ function mergeMissingDefaultInvites(currentInvites: MealBuddyInvitePreview[]) {
   return [...mergedById.values()];
 }
 
+function hasAcceptedInviteForBuddy(buddyId: string) {
+  return invitePreviews.some((invite) => invite.status === "accepted" && profileIdFromInvitation(invite) === buddyId);
+}
+
+function profileIdFromInvitation(invite: MealBuddyInvitePreview) {
+  return invite.candidateUserId.replace("demo-", "").toLowerCase();
+}
+
 function normalizeMergedChat(base: MealBuddyChatPreview, current: MealBuddyChatPreview, override: Partial<MealBuddyChatPreview>) {
   return normalizeChatTimestamp({ ...base, ...current, ...override });
 }
@@ -587,6 +700,12 @@ function activityTime(chat: MealBuddyChatPreview) {
 
 function currentTimestamp() {
   return getEffectiveCurrentDate().toISOString();
+}
+
+function nextActivityTimestamp() {
+  const current = new Date(currentTimestamp()).getTime();
+  const latest = chatPreviews.reduce((max, chat) => Math.max(max, activityTime(chat)), 0);
+  return new Date(Math.max(current, latest + 1)).toISOString();
 }
 
 function defaultChatUpdatedAt(index: number) {

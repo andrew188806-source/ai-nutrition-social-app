@@ -76,7 +76,7 @@ export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId:
     area,
     preferredFoodName: foodCategory,
     preferredTime,
-    nutritionGoal: zhTW.mobile.refinedLogic.mealBuddyCard.defaultNutritionGoal
+    nutritionGoal: "想在這間餐廳找飯友"
   });
 }
 
