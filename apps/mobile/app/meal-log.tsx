@@ -53,6 +53,8 @@ export default function MealLogScreen() {
   const selectedDaily = diary.dailyCards.find((card) => card.id === selectedDailyId);
   const selectedMonth = diary.monthlyCards.find((card) => card.id === selectedMonthId) ?? diary.monthlyCards[0];
   const isPaid = mode === "paid";
+  const latestDaily = diary.dailyCards[0];
+  const recentMeals = diary.dailyCards.slice(0, 3).flatMap((card) => card.thumbnails).slice(0, 5);
 
   // Food Diary is the unified user-facing archive for nutrition records, meal cards,
   // monthly score cards, favorites, and highest-score cards.
@@ -121,7 +123,7 @@ export default function MealLogScreen() {
   return (
     <PlaceholderScreen title={zhTW.mobile.mealLogTitle} subtitle={zhTW.mobile.mealLogSubtitle} primaryAction={{ href: "/meal-photo", label: zhTW.mobile.primaryNav.analysis }} secondaryAction={{ href: "/recommendation", label: zhTW.mobile.nextMealTitle }}>
         <Card tone="mint">
-        <SectionTitle title={diary.unifiedTitle} subtitle={diary.overviewNote} />
+        <SectionTitle title={diary.unifiedTitle} subtitle="每日紀錄、月評分、收藏與最高分美食都收在這裡。" />
         <Text style={styles.modeHint}>{diary.demoModeHint}</Text>
         <View style={styles.modeToggle}>
           <Pressable style={[styles.modeButton, mode === "free" && styles.modeButtonActive]} onPress={() => setMode("free")}>
@@ -136,9 +138,11 @@ export default function MealLogScreen() {
         </View>
       </Card>
 
+      {latestDaily ? <DiaryOverviewSummaryCard daily={latestDaily} monthly={selectedMonth} recentMeals={recentMeals} /> : null}
+
       {savedMeal ? (
         <Card tone="amber">
-          <SectionTitle title={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord} subtitle={`${savedMeal.date} · ${savedMeal.mealPeriod}`} />
+          <SectionTitle title="最新加入今日飲食" subtitle={`${savedMeal.date} · ${savedMeal.mealPeriod}`} />
           <Text style={styles.cardTitle}>{savedMeal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
           <Text style={styles.cardMeta}>{savedMeal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
           <Text style={styles.bigValue}>{savedMeal.calories} kcal</Text>
@@ -148,19 +152,19 @@ export default function MealLogScreen() {
       ) : null}
 
       <Card>
-        <SectionTitle title={diary.dailyDiaryTitle} subtitle={diary.dailyDiaryBody} />
-        <View nativeID="favorite-food-cards" style={styles.stack}>
+        <SectionTitle title="最近 3 天飲食日記" subtitle="快速回看最近吃了什麼，點日期可以查看當天餐點詳情。" />
+        <View nativeID="recent-daily-records" style={styles.stack}>
           {diary.dailyCards.slice(0, 3).map((card) => (
             <DailyOverviewCard card={card} detailCta={diary.detailCta} key={card.id} onPress={() => selectDaily(card.id)} />
           ))}
         </View>
         <Pressable style={styles.primaryButton} onPress={() => setIsMonthlyModalOpen(true)}>
-          <Text style={styles.primaryButtonText}>{diary.viewMonthlyRecordsCta}</Text>
+          <Text style={styles.primaryButtonText}>查看本月所有日記</Text>
         </Pressable>
       </Card>
 
       <Card tone="premium">
-        <SectionTitle title={diary.monthlyScoreTitle} subtitle={diary.monthlyScoreBody} />
+        <SectionTitle title="本月飲食進度" subtitle="月底會整理成可分享的月評分卡，幫你看見長期飲食節奏。" />
         <Text style={styles.filterTitle}>{diary.monthSelectorTitle}</Text>
         <View style={styles.chipRow}>
           {getAvailableMonths(diary.monthlyCards, isPaid).map((card) => (
@@ -179,9 +183,23 @@ export default function MealLogScreen() {
         <View nativeID="monthly-score-card">{selectedMonth ? <MonthlyScoreCard card={selectedMonth} onMockAction={setMockMessage} shareCta={diary.shareCta} /> : null}</View>
       </Card>
 
+      <Card tone="amber">
+        <SectionTitle title="快速找到值得再吃的餐點" subtitle="收藏是你主動保存的私人口袋名單；最高分卡由系統幫你整理。" />
+        <View style={styles.quickAccessGrid}>
+          <Pressable style={styles.quickAccessCard} onPress={() => focusMealLogElementAfterRender("favorite-food-cards")}>
+            <Text style={styles.quickAccessTitle}>收藏美食</Text>
+            <Text style={styles.quickAccessBody}>{diary.favoriteCards[0]?.title ?? "查看最近收藏"}</Text>
+          </Pressable>
+          <Pressable style={styles.quickAccessCard} onPress={() => focusMealLogElementAfterRender("highest-score-entry")}>
+            <Text style={styles.quickAccessTitle}>最高分美食</Text>
+            <Text style={styles.quickAccessBody}>{diary.rankingCards[0]?.title ?? "查看排行榜"}</Text>
+          </Pressable>
+        </View>
+      </Card>
+
       <Card tone="mint">
-        <SectionTitle title={diary.favoritesTitle} subtitle={isPaid ? diary.paidLimits[2] : diary.freeLimits[2]} />
-        <View style={styles.stack}>
+        <SectionTitle title="收藏美食卡" subtitle={`私人口袋名單 · ${isPaid ? diary.paidLimits[2] : diary.freeLimits[2]}`} />
+        <View nativeID="favorite-food-cards" style={styles.stack}>
           {diary.favoriteCards.slice(0, 3).map((card) => (
             <FavoriteFoodCard
               card={card}
@@ -208,7 +226,8 @@ export default function MealLogScreen() {
       </Card>
 
       <Card>
-        <SectionTitle title={diary.highestScoreTitle} subtitle={diary.highestScoreBody} />
+        <View nativeID="highest-score-entry" />
+        <SectionTitle title="各類最高分美食卡" subtitle="先選類型、地區或餐廳，再看對應排行榜，避免一次顯示太多資料。" />
         <HighestScoreExplorer
           isPaid={isPaid}
           selectedGroup={selectedRankingGroup}
@@ -227,7 +246,7 @@ export default function MealLogScreen() {
       </Card>
 
       <Card>
-        <SectionTitle title={diary.sharingTitle} subtitle={diary.sharingBody} />
+        <SectionTitle title="分享日記卡" subtitle="日記卡、月報告與收藏卡都可以分享給好友或好友牆。" />
         <TagRow tags={diary.sharingOptions} />
         <Text style={styles.note}>{diary.instagramUnlimited}</Text>
       </Card>
@@ -294,6 +313,41 @@ function focusMealLogElementAfterRender(elementId: string) {
     const element = browserWindow?.document?.getElementById?.(elementId);
     element?.scrollIntoView?.({ behavior: "smooth", block: "center" });
   }, 120);
+}
+
+function DiaryOverviewSummaryCard({ daily, monthly, recentMeals }: { daily: DailyCard; monthly?: MonthlyCard; recentMeals: string[] }) {
+  return (
+    <Card tone="premium">
+      <SectionTitle title="今天的營養狀態" subtitle={daily.comment} />
+      <View style={styles.heroSummaryGrid}>
+        <View style={styles.heroSummaryMain}>
+          <Text style={styles.heroSummaryLabel}>今日評分</Text>
+          <Text style={styles.heroSummaryValue}>{daily.score}</Text>
+          <Text style={styles.heroSummaryMeta}>{daily.status}</Text>
+        </View>
+        <View style={styles.heroSummarySide}>
+          <SummaryStat label="今日熱量" value={daily.calories} />
+          <SummaryStat label="營養狀態" value={daily.macros} />
+          <SummaryStat label="本月進度" value={monthly ? `${monthly.month} · ${monthly.score}` : "尚未選擇月份"} />
+        </View>
+      </View>
+      {recentMeals.length ? (
+        <>
+          <Text style={styles.filterTitle}>最近記錄</Text>
+          <TagRow tags={recentMeals} />
+        </>
+      ) : null}
+    </Card>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.summaryStat}>
+      <Text style={styles.summaryStatLabel}>{label}</Text>
+      <Text style={styles.summaryStatValue}>{value}</Text>
+    </View>
+  );
 }
 
 function DailyOverviewCard({ card, detailCta, onPress }: { card: DailyCard; detailCta: string; onPress: () => void }) {
@@ -606,6 +660,79 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: colors.ink
+  },
+  heroSummaryGrid: {
+    gap: 12,
+    marginTop: 16
+  },
+  heroSummaryMain: {
+    borderColor: "#f0c987",
+    borderRadius: 24,
+    borderWidth: 1,
+    backgroundColor: "#fff8e6",
+    padding: 18
+  },
+  heroSummaryLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  heroSummaryValue: {
+    color: colors.ink,
+    fontSize: 36,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  heroSummaryMeta: {
+    color: colors.teal,
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 6
+  },
+  heroSummarySide: {
+    gap: 8
+  },
+  summaryStat: {
+    borderColor: colors.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: "#ffffff",
+    padding: 12
+  },
+  summaryStatLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  summaryStatValue: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 20,
+    marginTop: 3
+  },
+  quickAccessGrid: {
+    gap: 10,
+    marginTop: 14
+  },
+  quickAccessCard: {
+    borderColor: colors.line,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: "#ffffff",
+    padding: 14
+  },
+  quickAccessTitle: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  quickAccessBody: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 19,
+    marginTop: 5
   },
   innerCard: {
     gap: 9,
