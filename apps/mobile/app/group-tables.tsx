@@ -445,16 +445,6 @@ export function GroupTablesContent({
             </Card>
           );
           })}
-          {tableSearchContext && restaurantTables.length === 0 ? (
-            <Card tone="mint">
-              <SectionTitle title={tableSearchContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
-            </Card>
-          ) : null}
-          {false && tableSearchContext && restaurantTables.length === 0 ? (
-            <Card tone="mint">
-              <SectionTitle title={tableSearchContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
-            </Card>
-          ) : null}
         </View>
         ) : null}
         </>

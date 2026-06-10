@@ -1,9 +1,10 @@
+import { storage } from "../../lib/storage";
 import { getEffectiveCurrentDate } from "../demo-time";
 import { getMockChatThreadByName, mockChatThreads } from "./mealBuddyFlowMock";
-import type { MealBuddyCard, RankedMealBuddyCandidate } from "./types";
+import { getMealBuddyCardId, type CardId, type ChatId, type MatchId, type MealBuddyCard, type RankedMealBuddyCandidate, type TableId, type UserId } from "./types";
 
 export type MealBuddyChatPreview = {
-  id: string;
+  id: ChatId;
   userName: string;
   lastMessage: string;
   messages?: MealBuddyChatMessage[];
@@ -12,9 +13,9 @@ export type MealBuddyChatPreview = {
   unread: boolean;
   demoLabel?: string;
   expiresAt?: string;
-  buddyId?: string;
-  participantProfileId?: string;
-  tableId?: string;
+  buddyId?: UserId;
+  participantProfileId?: UserId;
+  tableId?: TableId;
   threadType?: "direct" | "group";
   lastMessageAt?: string;
   updatedAt?: string;
@@ -28,12 +29,12 @@ export type MealBuddyChatMessage = {
 };
 
 export type MealBuddyInvitePreview = {
-  id: string;
+  id: MatchId;
   type: "chat" | "meal" | "table";
   status: "pending" | "accepted" | "declined" | "expired";
   direction: "sent" | "received";
-  candidateUserId: string;
-  sourceCardKey: string;
+  candidateUserId: UserId;
+  sourceCardKey: CardId;
   inviterUser: string;
   inviteeUser: string;
   userName: string;
@@ -47,7 +48,7 @@ export type MealBuddyInvitePreview = {
   demoLabel: string;
   area: string;
   distanceKm: number;
-  tableId?: string;
+  tableId?: TableId;
   tableName?: string;
   hostName?: string;
   restaurantName?: string;
@@ -162,7 +163,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       status: "pending",
       direction: "received",
       candidateUserId: japaneseDinnerTableId,
-      sourceCardKey: mealBuddyCardKey(tableInviteCard),
+      sourceCardKey: getMealBuddyCardId(tableInviteCard),
       inviterUser: "Mina",
       inviteeUser: "我",
       userName: "Mina",
@@ -190,7 +191,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       status: "pending",
       direction: "received",
       candidateUserId: "demo-ivy",
-      sourceCardKey: mealBuddyCardKey(mySushiCard),
+      sourceCardKey: getMealBuddyCardId(mySushiCard),
       inviterUser: "Ivy",
       inviteeUser: "我",
       userName: "Ivy",
@@ -211,7 +212,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       status: "pending",
       direction: "received",
       candidateUserId: "demo-mina",
-      sourceCardKey: mealBuddyCardKey(myDinnerCard),
+      sourceCardKey: getMealBuddyCardId(myDinnerCard),
       inviterUser: "Mina",
       inviteeUser: "我",
       userName: "Mina",
@@ -232,7 +233,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       status: "pending",
       direction: "received",
       candidateUserId: "demo-leo",
-      sourceCardKey: mealBuddyCardKey(myLunchCard),
+      sourceCardKey: getMealBuddyCardId(myLunchCard),
       inviterUser: "Leo",
       inviteeUser: "我",
       userName: "Leo",
@@ -426,7 +427,7 @@ export function addMealBuddyChatSystemMessage({
 }
 
 export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type: "chat" | "meal" | "table" = "meal", inviterCard?: MealBuddyCard) {
-  const sourceCardKey = inviterCard ? mealBuddyCardKey(inviterCard) : `candidate-${candidate.userId}`;
+  const sourceCardKey = inviterCard ? getMealBuddyCardId(inviterCard) : `candidate-${candidate.userId}`;
   const existingPending = getPendingInviteForCandidate(candidate.userId, sourceCardKey);
   if (existingPending) {
     return existingPending;
@@ -605,12 +606,8 @@ function candidateToCardInput(candidate: RankedMealBuddyCandidate, sourceType: M
   };
 }
 
-function mealBuddyCardKey(card: MealBuddyCard) {
-  return `${card.cardType}-${card.createdAt}`;
-}
-
 function persistSocialState() {
-  getStorage()?.setItem(socialStorageKey, JSON.stringify({ chats: chatPreviews, invites: invitePreviews }));
+  storage.setItem(socialStorageKey, JSON.stringify({ chats: chatPreviews, invites: invitePreviews }));
 }
 
 function mergeMissingDefaultChats(currentChats: MealBuddyChatPreview[]) {
@@ -713,7 +710,7 @@ function defaultChatUpdatedAt(index: number) {
 }
 
 function readStoredSocialState() {
-  const raw = getStorage()?.getItem(socialStorageKey);
+  const raw = storage.getItem(socialStorageKey);
   if (!raw) {
     return null;
   }
@@ -726,10 +723,6 @@ function readStoredSocialState() {
   } catch {
     return null;
   }
-}
-
-function getStorage() {
-  return (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
 }
 
 function buildInviteCard(input: Partial<MealBuddyCard>): MealBuddyCard {

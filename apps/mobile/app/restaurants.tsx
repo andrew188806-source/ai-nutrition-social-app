@@ -67,7 +67,7 @@ export default function RestaurantsScreen() {
   const [savedRestaurants, setSavedRestaurants] = useState<string[]>([]);
 
   const selectedCityDistricts = Object.keys(locationTree[draftFilters.city]) as Array<District<typeof draftFilters.city>>;
-  const selectedPlaces = locationTree[draftFilters.city][draftFilters.district as District<typeof draftFilters.city>] ?? [];
+  const selectedPlaces = (locationTree[draftFilters.city] as Record<string, readonly string[]>)[draftFilters.district] ?? [];
 
   const recommendedRestaurants = useMemo(() => {
     return [...zhTW.mobile.restaurants.list].sort((a, b) => restaurantScore(b, filters) - restaurantScore(a, filters));

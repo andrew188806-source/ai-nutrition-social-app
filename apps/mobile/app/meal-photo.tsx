@@ -11,7 +11,7 @@ type DinnerEstimate = { name: string; calories: number; protein: number; carbs: 
 type PlannedDinnerType = (typeof zhTW.mobile.plannedDinnerHelper.mealTypes)[number];
 
 const helperCopy = zhTW.mobile.plannedDinnerHelper;
-const plannedDinnerTypes = helperCopy.mealTypes as PlannedDinnerType[];
+const plannedDinnerTypes: readonly PlannedDinnerType[] = helperCopy.mealTypes;
 
 const mockDinnerOptions: Record<PlannedDinnerType, DinnerEstimate[]> = {
   火鍋: [
@@ -394,7 +394,7 @@ function ImageSourceSheet({ visible, onClose, onCamera, onUpload }: { visible: b
             <Text style={styles.sheetButtonText}>{zhTW.mobile.refinedLogic.aiEntry.uploadOption}</Text>
           </Pressable>
           <Pressable style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>{zhTW.common.cancel}</Text>
+            <Text style={styles.closeButtonText}>{zhTW.common.close}</Text>
           </Pressable>
         </View>
       </View>

@@ -1,4 +1,4 @@
-import type { RankedMealBuddyCandidate } from "./types";
+import type { ChatId, RankedMealBuddyCandidate, TableId, UserId } from "./types";
 
 // DEMO DATA FLOW: Community Profile -> Matched Buddy -> Chat Thread -> Meal Session / Four-Person Table.
 // Keep IDs stable so every screen renders the same people and sessions from one source of truth.
@@ -17,8 +17,8 @@ export type MockCommunityProfile = {
 };
 
 export type MockMatchedBuddy = {
-  id: string;
-  profileId: string;
+  id: UserId;
+  profileId: UserId;
   avatar: string;
   name: string;
   verified: boolean;
@@ -30,15 +30,15 @@ export type MockMatchedBuddy = {
   commonInterests: string[];
   areas: string[];
   intro: string;
-  chatThreadId: string;
+  chatThreadId: ChatId;
 };
 
 export type MockChatThread = {
-  id: string;
+  id: ChatId;
   type: "direct" | "group";
-  buddyId?: string;
-  participantProfileId?: string;
-  tableId?: string;
+  buddyId?: UserId;
+  participantProfileId?: UserId;
+  tableId?: TableId;
   title: string;
   lastMessage: string;
   relatedMeal: string;
@@ -57,9 +57,9 @@ export type MockGatheringRecord = {
   payment: string;
   source: "飯友邀請" | "四人桌";
   withPerson: string;
-  buddyId?: string;
-  tableId?: string;
-  chatThreadId: string;
+  buddyId?: UserId;
+  tableId?: TableId;
+  chatThreadId: ChatId;
   chatName: string;
   notes?: string;
   matchReasons?: string[];

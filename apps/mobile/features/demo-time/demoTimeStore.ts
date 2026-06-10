@@ -2,6 +2,8 @@
 // REMOVE / DISABLE FOR PRODUCTION.
 // This mock clock lets MVP testers verify daily reset, expiry, and settlement flows without changing device time.
 
+import { storage } from "../../lib/storage";
+
 const dayMs = 24 * 60 * 60 * 1000;
 const storageKey = "haocu.demo.mockCurrentDate.v1";
 
@@ -33,14 +35,9 @@ export function isDemoTestingEnabled() {
 }
 
 function readStoredDate() {
-  const storage = getStorage();
-  return storage?.getItem(storageKey) ?? new Date().toISOString();
+  return storage.getItem(storageKey) ?? new Date().toISOString();
 }
 
 function writeStoredDate(value: string) {
-  getStorage()?.setItem(storageKey, value);
-}
-
-function getStorage() {
-  return (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
+  storage.setItem(storageKey, value);
 }

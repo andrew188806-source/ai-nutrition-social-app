@@ -24,6 +24,7 @@ import {
   getCandidateDisplayProfile,
   getDailyVisibleUsage,
   getMealBuddyCandidates,
+  getMealBuddyCardId,
   getMealBuddyChats,
   getMealBuddyInvites,
   getMockTableParticipantCandidates,
@@ -44,6 +45,7 @@ import {
 } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { advanceDemoTimeByDays, getEffectiveDateKey, isDemoTestingEnabled, resetDemoTime } from "../features/demo-time";
+import { storage } from "../lib/storage";
 import { GroupTablesContent } from "./group-tables";
 
 type MealBuddySection = "discover" | "friends" | "gatherings" | "tables";
@@ -106,25 +108,19 @@ function createMatchedBuddyFromInvitation(invite: ReturnType<typeof getMealBuddy
   };
 }
 
-function mealBuddyCardKey(card: MealBuddyCard) {
-  return `${card.cardType}-${card.createdAt}`;
-}
-
 function readPersistedRecommendationGroups(_activeCards: MealBuddyCard[]) {
-  const activeCardIds = new Set(_activeCards.map(mealBuddyCardKey));
+  const activeCardIds = new Set(_activeCards.map(getMealBuddyCardId));
   const memoryFallback = (globalThis as typeof globalThis & { __mealBuddyRecommendationGroups?: RecommendationGroup[] }).__mealBuddyRecommendationGroups ?? [];
-  const storage = (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
-  const raw = storage?.getItem(recommendationStorageKey);
+  const raw = storage.getItem(recommendationStorageKey);
   const parsed = raw ? safelyParseRecommendationGroups(raw) : memoryFallback;
   return parsed
-    .filter((group) => activeCardIds.has(group.sourceCardId ?? mealBuddyCardKey(group.card)))
+    .filter((group) => activeCardIds.has(group.sourceCardId ?? getMealBuddyCardId(group.card)))
     .map((group) => ({ ...group, highlight: false }));
 }
 
 function persistRecommendationGroups(groups: RecommendationGroup[]) {
   (globalThis as typeof globalThis & { __mealBuddyRecommendationGroups?: RecommendationGroup[] }).__mealBuddyRecommendationGroups = groups;
-  const storage = (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
-  storage?.setItem(recommendationStorageKey, JSON.stringify(groups));
+  storage.setItem(recommendationStorageKey, JSON.stringify(groups));
 }
 
 function safelyParseRecommendationGroups(raw: string): RecommendationGroup[] {
@@ -233,7 +229,7 @@ export default function MealBuddyHomeScreen() {
           onDeleteCard={(card) => {
             deleteMealBuddyCard(card);
             setActiveCards(getActiveMealBuddyCards());
-            setRecommendationGroups((groups) => groups.filter((group) => group.sourceCardId !== mealBuddyCardKey(card)));
+            setRecommendationGroups((groups) => groups.filter((group) => group.sourceCardId !== getMealBuddyCardId(card)));
           }}
           onInviteEat={(candidate, card) => {
             createMealBuddyInvite(candidate, "meal", card);
@@ -274,7 +270,7 @@ export default function MealBuddyHomeScreen() {
               id: `${card.createdAt}-${Date.now()}`,
               items: draw.items,
               quotaFull: false,
-              sourceCardId: mealBuddyCardKey(card),
+              sourceCardId: getMealBuddyCardId(card),
               sourceCardName: card.preferredFoodName || card.restaurantName || "飯友卡",
               sourceCardType: card.cardType
             };
@@ -574,7 +570,7 @@ function DiscoverSection({
                   onChat={(candidate) => onOpenChat(candidate, group.card)}
                   onEatTogether={(candidate) => onInviteEat(candidate, group.card)}
                   onInviteTable={(candidate) => onInviteTable(candidate, group.card)}
-                  pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, mealBuddyCardKey(group.card))?.type ?? null}
+                  pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, getMealBuddyCardId(group.card))?.type ?? null}
                   onViewCard={(candidate) => {
                     setPreviewCandidate(candidate);
                     setPreviewCard(group.card);
@@ -687,7 +683,7 @@ function MealBuddyCardGroup({
         ) : (
           <View style={styles.cardList}>
             {cards.map((card) => (
-              <MealBuddyCardEntry key={`${card.cardType}-${card.createdAt}`} card={card} highlighted={highlightCardId === card.createdAt} onDelete={() => onDelete(card)} onEdit={() => onEdit(card)} onUse={() => onUse(card)} />
+              <MealBuddyCardEntry key={getMealBuddyCardId(card)} card={card} highlighted={highlightCardId === card.createdAt} onDelete={() => onDelete(card)} onEdit={() => onEdit(card)} onUse={() => onUse(card)} />
             ))}
           </View>
         )
@@ -851,7 +847,7 @@ function CandidateCommunityModal({
   const compatibility = Math.max(62, Math.min(96, candidate.rankScore));
   const introText = candidate.socialNote || communitySettings.intro || profile.shortBio || modalCopy.defaultIntro;
   const healthGoalTags = communitySettings.selectedHealthTags.length ? communitySettings.selectedHealthTags : [profile.nutritionGoal];
-  const foodMemoryTags = [candidate.recentMealStyle, ...communitySettings.selectedEatingTags].filter(Boolean).slice(0, 4);
+  const foodMemoryTags = [candidate.foodCategory, ...communitySettings.selectedEatingTags].filter(Boolean).slice(0, 4);
   const nutritionSummaryTags = [profile.nutritionGoal, candidate.foodCategory, candidate.preferredTime].filter(Boolean);
   const lifestyleTags = [communitySettings.gatheringStyle, communitySettings.paymentPreference, communitySettings.spicePreference].filter(Boolean);
 
@@ -1395,8 +1391,10 @@ function createDirectChatFromMatchedBuddy(friend: MatchedFriend): ReturnType<typ
 }
 
 function createFriendFromChat(chat: ReturnType<typeof getMealBuddyChats>[number]): MatchedFriend {
+  const id = chat.buddyId ?? chat.tableId ?? chat.id;
   return {
-    id: chat.buddyId ?? chat.tableId ?? chat.id,
+    id,
+    profileId: id,
     avatar: chat.threadType === "group" ? "桌" : chat.userName.slice(0, 1),
     name: chat.userName,
     verified: chat.threadType === "group",
@@ -2046,6 +2044,12 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1
   },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4
+  },
   friendHeader: {
     alignItems: "center",
     flexDirection: "row",
@@ -2165,7 +2169,7 @@ const styles = StyleSheet.create({
     padding: 16
   },
   modalPanel: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.paper,
     borderColor: colors.line,
     borderRadius: 28,
     borderWidth: 1,

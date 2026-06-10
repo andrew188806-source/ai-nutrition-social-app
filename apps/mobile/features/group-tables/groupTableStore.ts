@@ -1,14 +1,17 @@
+import { storage } from "../../lib/storage";
+import type { ChatId, TableId, UserId } from "../meal-buddy-card/types";
+
 export type ActiveFourPersonTable = {
-  tableId: string;
+  tableId: TableId;
   restaurantId: string;
   restaurantName: string;
   location: string;
   cuisineTags: string[];
   suggestedTime: string;
   maxParticipants: 4 | 6 | 8;
-  participantIds: string[];
+  participantIds: UserId[];
   status: "招募中" | "已成團";
-  groupChatThreadId?: string;
+  groupChatThreadId?: ChatId;
 };
 
 const activeTableStorageKey = "haocu.fourPersonTable.active.v1";
@@ -52,11 +55,11 @@ export function updateActiveFourPersonTable(update: Partial<ActiveFourPersonTabl
 
 export function clearActiveFourPersonTable() {
   activeTable = null;
-  getStorage()?.removeItem(activeTableStorageKey);
+  storage.removeItem(activeTableStorageKey);
 }
 
 function readStoredActiveTable(): ActiveFourPersonTable | null {
-  const raw = getStorage()?.getItem(activeTableStorageKey);
+  const raw = storage.getItem(activeTableStorageKey);
   if (!raw) {
     return null;
   }
@@ -69,16 +72,12 @@ function readStoredActiveTable(): ActiveFourPersonTable | null {
 
 function persistActiveTable() {
   if (!activeTable) {
-    getStorage()?.removeItem(activeTableStorageKey);
+    storage.removeItem(activeTableStorageKey);
     return;
   }
-  getStorage()?.setItem(activeTableStorageKey, JSON.stringify(activeTable));
+  storage.setItem(activeTableStorageKey, JSON.stringify(activeTable));
 }
 
 function safeId(value: string) {
   return encodeURIComponent(value).replace(/%/g, "").toLowerCase();
-}
-
-function getStorage() {
-  return (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
 }

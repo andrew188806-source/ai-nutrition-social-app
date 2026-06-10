@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { DemoMode } from "../../components/DemoUi";
+import { storage } from "../../lib/storage";
 
 const storageKey = "haocu.demoUserPlan.v1";
 let memoryPlan: DemoMode = readStoredPlan();
@@ -11,7 +12,7 @@ export function getDemoUserPlan(): DemoMode {
 
 export function setDemoUserPlan(plan: DemoMode) {
   memoryPlan = plan;
-  getStorage()?.setItem(storageKey, plan);
+  storage.setItem(storageKey, plan);
   listeners.forEach((listener) => listener());
 }
 
@@ -26,10 +27,6 @@ function subscribe(listener: () => void) {
 }
 
 function readStoredPlan(): DemoMode {
-  const stored = getStorage()?.getItem(storageKey);
+  const stored = storage.getItem(storageKey);
   return stored === "premium" ? "premium" : "free";
-}
-
-function getStorage() {
-  return (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
 }

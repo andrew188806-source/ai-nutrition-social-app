@@ -1,6 +1,7 @@
 import type { DemoMode } from "../../components/DemoUi";
+import { storage } from "../../lib/storage";
 import { getEffectiveDateKey } from "../demo-time";
-import type { MealBuddyCard, MealBuddyCardType, RankedMealBuddyCandidate } from "./types";
+import { getMealBuddyCardId, type MealBuddyCard, type MealBuddyCardType, type RankedMealBuddyCandidate } from "./types";
 
 const activeCardsStorageKey = "haocu.mealBuddy.activeCards.v1";
 const dailyStateStorageKey = "haocu.mealBuddy.dailyState.v1";
@@ -100,7 +101,7 @@ export function getActiveCardUsage(mode: DemoMode) {
 }
 
 export function deleteMealBuddyCard(card: MealBuddyCard) {
-  activeCards = activeCards.filter((item) => mealBuddyCardId(item) !== mealBuddyCardId(card));
+  activeCards = activeCards.filter((item) => getMealBuddyCardId(item) !== getMealBuddyCardId(card));
   persistActiveCards();
 }
 
@@ -151,8 +152,8 @@ export function resetAllMealBuddyDemoState() {
   seenCandidateIds = { free: new Set<string>(), premium: new Set<string>() };
   lastReplacementNotice = false;
   pendingMatchRequest = null;
-  getStorage()?.removeItem(activeCardsStorageKey);
-  getStorage()?.removeItem(dailyStateStorageKey);
+  storage.removeItem(activeCardsStorageKey);
+  storage.removeItem(dailyStateStorageKey);
 }
 
 function ensureDailyStateForEffectiveDate() {
@@ -167,7 +168,7 @@ function ensureDailyStateForEffectiveDate() {
 }
 
 function restoreDailyState() {
-  const raw = getStorage()?.getItem(dailyStateStorageKey);
+  const raw = storage.getItem(dailyStateStorageKey);
   if (!raw) {
     return;
   }
@@ -190,7 +191,7 @@ function restoreDailyState() {
 }
 
 function persistDailyState() {
-  getStorage()?.setItem(
+  storage.setItem(
     dailyStateStorageKey,
     JSON.stringify({
       dateKey: dailyStateDateKey,
@@ -204,7 +205,7 @@ function persistDailyState() {
 }
 
 function readStoredActiveCards() {
-  const raw = getStorage()?.getItem(activeCardsStorageKey);
+  const raw = storage.getItem(activeCardsStorageKey);
   if (!raw) {
     return [];
   }
@@ -217,13 +218,5 @@ function readStoredActiveCards() {
 }
 
 function persistActiveCards() {
-  getStorage()?.setItem(activeCardsStorageKey, JSON.stringify(activeCards));
-}
-
-function mealBuddyCardId(card: MealBuddyCard) {
-  return `${card.cardType}-${card.createdAt}`;
-}
-
-function getStorage() {
-  return (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
+  storage.setItem(activeCardsStorageKey, JSON.stringify(activeCards));
 }

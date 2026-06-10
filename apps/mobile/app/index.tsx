@@ -4,8 +4,10 @@ import { useRouter } from "expo-router";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { resetMealRecords } from "../features/analysis/analysisMealRecordStore";
 import { advanceDemoTimeByDays, getEffectiveDateKey, isDemoTestingEnabled, resetDemoTime } from "../features/demo-time";
 import { resetAllMealBuddyDemoState, resetMealBuddySocialDemoState } from "../features/meal-buddy-card";
+import { storage } from "../lib/storage";
 
 const profilePhotos = [
   require("../assets/profiles/profile-01.png"),
@@ -26,8 +28,8 @@ export default function LandingScreen() {
     resetDemoTime();
     resetAllMealBuddyDemoState();
     resetMealBuddySocialDemoState();
-    const storage = (globalThis as typeof globalThis & { window?: { localStorage?: Storage }; localStorage?: Storage }).window?.localStorage ?? (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
-    storage?.removeItem("haocu.mealBuddy.recommendationGroups.v1");
+    resetMealRecords();
+    storage.removeItem("haocu.mealBuddy.recommendationGroups.v1");
     setDemoDateKey(getEffectiveDateKey());
   }
 

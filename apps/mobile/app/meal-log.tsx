@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { getLatestCorrectedMealRecord } from "../features/analysis/analysisMealRecordStore";
+import { getLatestCorrectedMealRecord, getMealRecords } from "../features/analysis/analysisMealRecordStore";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 
 type RankingGroupId = "category" | "location" | "restaurant";
@@ -25,20 +25,19 @@ type RankingCard = (typeof zhTW.mobile.mealLog.foodDiary.rankingCards)[number];
 
 export default function MealLogScreen() {
   const diary = zhTW.mobile.mealLog.foodDiary;
+  const mealRecords = getMealRecords();
   const savedMeal = getLatestCorrectedMealRecord();
-  const correctedMealCard = savedMeal
-    ? {
-        id: "corrected-meal",
-        slot: savedMeal.mealPeriod,
-        name: savedMeal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField,
-        source: `${zhTW.mobile.finalUx.restaurantNameLabel}｜${savedMeal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}`,
-        calories: `${savedMeal.calories} kcal`,
-        macros: `${zhTW.mobile.analysis.protein} ${savedMeal.protein}g｜${zhTW.mobile.analysis.carbs} ${savedMeal.carbohydrates}g｜${zhTW.mobile.analysis.fat} ${savedMeal.fat}g`,
-        rating: zhTW.mobile.mealLog.foodDiary.editRatingCta,
-        review: `${savedMeal.ingredients}｜${savedMeal.portion}`,
-        photoLabel: zhTW.mobile.mealLog.foodDiary.mealDetailTitle
-      }
-    : null;
+  const correctedMealCards = mealRecords.map((meal, index) => ({
+    id: `corrected-meal-${index}`,
+    slot: meal.mealPeriod,
+    name: meal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField,
+    source: `${zhTW.mobile.finalUx.restaurantNameLabel}｜${meal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}`,
+    calories: `${meal.calories} kcal`,
+    macros: `${zhTW.mobile.analysis.protein} ${meal.protein}g｜${zhTW.mobile.analysis.carbs} ${meal.carbohydrates}g｜${zhTW.mobile.analysis.fat} ${meal.fat}g`,
+    rating: zhTW.mobile.mealLog.foodDiary.editRatingCta,
+    review: `${meal.ingredients}｜${meal.portion}`,
+    photoLabel: zhTW.mobile.mealLog.foodDiary.mealDetailTitle
+  }));
   const [demoUserPlan, setDemoUserPlan] = useDemoUserPlan();
   const mode = demoUserPlan === "premium" ? "paid" : "free";
   const setMode = (nextMode: "free" | "paid") => setDemoUserPlan(nextMode === "paid" ? "premium" : "free");
@@ -86,7 +85,7 @@ export default function MealLogScreen() {
         <Card tone="sky">
           <SectionTitle title={diary.mealDetailTitle} subtitle={diary.mealDetailBody} />
           <View style={styles.stack}>
-            {[...(correctedMealCard ? [correctedMealCard] : []), ...diary.mealCards].map((meal) => (
+            {[...correctedMealCards, ...diary.mealCards].map((meal) => (
               <MealFoodCard
                 favoriteLabel={diary.favoriteCta}
                 favoritedLabel={diary.favoritedCta}

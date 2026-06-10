@@ -3,29 +3,29 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { getLatestCorrectedMealRecord } from "../features/analysis/analysisMealRecordStore";
+import { getMealRecords } from "../features/analysis/analysisMealRecordStore";
 import { getAutoSettledPlannedDinnerRecord, getConfirmedDinnerRecord, getPlannedDinner } from "../features/planned-meal";
 
 export default function TodayIntakeScreen() {
   const router = useRouter();
   const intake = zhTW.mobile.analysis.savedIntake;
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
-  const savedMeal = getLatestCorrectedMealRecord();
+  const mealRecords = getMealRecords();
   const plannedDinner = getPlannedDinner();
   const confirmedDinner = getConfirmedDinnerRecord();
   const autoSettledDinner = getAutoSettledPlannedDinnerRecord();
   const dinnerPlanForDisplay = confirmedDinner ?? plannedDinner ?? autoSettledDinner;
   const plannedEstimate = plannedDinner;
   const plannedSuffix = plannedEstimate ? "（含今晚預定）" : "";
-  const actualCalories = savedMeal?.calories ?? 0;
-  const actualProtein = savedMeal?.protein ?? 0;
-  const actualCarbs = savedMeal?.carbohydrates ?? 0;
-  const actualFat = savedMeal?.fat ?? 0;
+  const actualCalories = mealRecords.reduce((sum, meal) => sum + meal.calories, 0);
+  const actualProtein = mealRecords.reduce((sum, meal) => sum + meal.protein, 0);
+  const actualCarbs = mealRecords.reduce((sum, meal) => sum + meal.carbohydrates, 0);
+  const actualFat = mealRecords.reduce((sum, meal) => sum + meal.fat, 0);
   const plannedCalories = parseNutritionValue(plannedEstimate?.calories);
   const plannedProtein = parseNutritionValue(plannedEstimate?.protein);
   const plannedCarbs = parseNutritionValue(plannedEstimate?.carbs);
   const plannedFat = parseNutritionValue(plannedEstimate?.fat);
-  const hasSummaryEstimate = Boolean(savedMeal || plannedEstimate);
+  const hasSummaryEstimate = mealRecords.length > 0 || Boolean(plannedEstimate);
   const summaryItems = [
     { label: intake.caloriesTitle, value: hasSummaryEstimate ? `${actualCalories + plannedCalories} kcal${plannedSuffix}` : intake.caloriesValue },
     { label: intake.proteinTitle, value: hasSummaryEstimate ? `${actualProtein + plannedProtein}g${plannedSuffix}` : intake.proteinValue },
@@ -79,19 +79,19 @@ export default function TodayIntakeScreen() {
               <TagRow tags={meal.tags} />
             </View>
           ))}
-          {savedMeal ? (
-            <View style={styles.mealCard}>
+          {mealRecords.map((meal, index) => (
+            <View key={`corrected-meal-${index}`} style={styles.mealCard}>
               <View style={styles.mealHeader}>
-                <Text style={styles.mealTime}>{savedMeal.mealPeriod}</Text>
-                <Text style={styles.mealCalories}>{savedMeal.calories} kcal</Text>
+                <Text style={styles.mealTime}>{meal.mealPeriod}</Text>
+                <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
               </View>
-              <Text style={styles.mealTitle}>{savedMeal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
+              <Text style={styles.mealTitle}>{meal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
               <Text style={styles.mealNote}>
-                {savedMeal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}｜{savedMeal.ingredients}｜{savedMeal.portion}
+                {meal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}｜{meal.ingredients}｜{meal.portion}
               </Text>
               <TagRow tags={["已吃", "AI 分析確認", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
             </View>
-          ) : null}
+          ))}
         </View>
       </Card>
 

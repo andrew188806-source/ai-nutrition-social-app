@@ -6,8 +6,16 @@ export type MealBuddyVisibilityStatus = "active" | "matched" | "expired";
 
 export type MealBuddyCardType = "general" | "restaurant";
 
+// Shared identifier types used across Meal Buddy, Group Table, and Chat
+// mock/store models so the same kind of id is referenced consistently.
+export type UserId = string;
+export type CardId = string;
+export type MatchId = string;
+export type ChatId = string;
+export type TableId = string;
+
 export type MealBuddyCard = {
-  userId: string;
+  userId: UserId;
   cardType: MealBuddyCardType;
   sourceType: MealBuddyCardSourceType;
   intentionType: MealBuddyIntentionType;
@@ -27,7 +35,7 @@ export type MealBuddyCard = {
 };
 
 export type MealBuddyCandidate = {
-  userId: string;
+  userId: UserId;
   displayName: string;
   restaurantId: string;
   restaurantName: string;
@@ -49,3 +57,10 @@ export type RankedMealBuddyCandidate = MealBuddyCandidate & {
   rankScore: number;
   matchReasons: string[];
 };
+
+// Canonical card identifier, derived the same way everywhere a Meal Buddy
+// Card needs to be referenced (active card lists, recommendation groups,
+// invites, and chats).
+export function getMealBuddyCardId(card: MealBuddyCard): CardId {
+  return `${card.cardType}-${card.createdAt}`;
+}
