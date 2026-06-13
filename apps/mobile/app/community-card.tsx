@@ -169,8 +169,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   intentPillActive: {
-    borderColor: "#f4c56f",
-    backgroundColor: "#fff3d9"
+    borderColor: "#EEDAC2",
+    backgroundColor: "#F9F2EA"
   },
   intentText: {
     color: colors.muted,
@@ -188,16 +188,16 @@ const styles = StyleSheet.create({
   previewShell: {
     flexDirection: "row",
     gap: 16,
-    borderColor: "#efe0ce",
+    borderColor: colors.line,
     borderRadius: 28,
     borderWidth: 1,
-    backgroundColor: "#fff8ee",
+    backgroundColor: colors.paper,
     marginTop: 14,
     padding: 16
   },
   previewShellPremium: {
-    borderColor: "#efc378",
-    backgroundColor: "#fff4d8"
+    borderColor: colors.amber,
+    backgroundColor: "#F9F2EA"
   },
   avatar: {
     alignItems: "center",
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 }
   },
   lockedAvatar: {
-    backgroundColor: "#b9b0a8"
+    backgroundColor: "#AEA498"
   },
   avatarText: {
     color: "#ffffff",

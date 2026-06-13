@@ -1,22 +1,26 @@
-import { type Href, useRouter } from "expo-router";
+import { type Href, usePathname, useRouter } from "expo-router";
 import { ReactNode, useEffect, useRef } from "react";
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
+import { Icon, type IconName } from "../theme/icons";
+import { fonts, hexA, radius, shadows, snowPalette } from "../theme/tokens";
 
+// Bright White / Warm Minimal ("snow") palette, re-exported under the legacy
+// key names so existing screens keep working while picking up the new look.
 export const colors = {
-  ink: "#2d2823",
-  muted: "#7e746a",
-  line: "#eee2d2",
-  paper: "#fff8ee",
-  card: "#fffdf9",
-  teal: "#4f9f82",
-  mint: "#e6f7ed",
-  amber: "#f8c977",
-  coral: "#f28f7a",
-  sky: "#e8f0ff",
-  blush: "#ffe8df",
-  cream: "#fff3df",
-  lilac: "#f2edff"
+  ink: snowPalette.ink,
+  muted: snowPalette.sub,
+  line: snowPalette.line,
+  paper: snowPalette.bg,
+  card: snowPalette.card,
+  teal: snowPalette.ai,
+  mint: "#EAF2EC",
+  amber: snowPalette.amber,
+  coral: snowPalette.primary,
+  sky: snowPalette.aiSoft,
+  blush: snowPalette.blush,
+  cream: snowPalette.bg2,
+  lilac: "#EFEAF2"
 };
 
 export type DemoMode = "free" | "premium";
@@ -24,34 +28,31 @@ export type DemoMode = "free" | "premium";
 const styles = StyleSheet.create({
   card: {
     borderColor: colors.line,
-    borderRadius: 28,
+    borderRadius: radius.base,
     borderWidth: 1,
     backgroundColor: colors.card,
     padding: 20,
-    shadowColor: "#9a6b45",
-    shadowOpacity: 0.1,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 }
+    ...shadows.soft
   },
   mintCard: {
-    borderColor: "#d4eadc",
+    borderColor: hexA(snowPalette.green, 0.28),
     backgroundColor: colors.mint
   },
   amberCard: {
-    borderColor: "#f3ddb3",
-    backgroundColor: colors.cream
+    borderColor: hexA(colors.amber, 0.35),
+    backgroundColor: hexA(colors.amber, 0.12)
   },
   skyCard: {
-    borderColor: "#d7e3fa",
+    borderColor: hexA(colors.teal, 0.2),
     backgroundColor: colors.sky
   },
   premiumCard: {
-    borderColor: "#f0c987",
-    backgroundColor: "#fff1cf",
-    shadowColor: "#d89c39",
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 }
+    borderColor: hexA(colors.amber, 0.4),
+    backgroundColor: hexA(colors.amber, 0.14),
+    shadowColor: colors.amber,
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 }
   },
   sectionHeader: {
     gap: 7
@@ -59,35 +60,36 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.ink,
     fontSize: 21,
+    fontFamily: fonts.black,
     fontWeight: "900",
     lineHeight: 28
   },
   sectionSubtitle: {
     color: colors.muted,
     fontSize: 14,
-    lineHeight: 21
+    lineHeight: 21,
+    fontFamily: fonts.body
   },
   metricCard: {
     flexGrow: 1,
     flexBasis: 145,
-    borderRadius: 22,
-    backgroundColor: "#ffffff",
+    borderRadius: radius.base,
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderWidth: 1,
     padding: 16,
-    shadowColor: "#b58a61",
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 }
+    ...shadows.soft
   },
   metricLabel: {
     color: colors.muted,
     fontSize: 12,
+    fontFamily: fonts.medium,
     fontWeight: "700"
   },
   metricValue: {
     color: colors.ink,
     fontSize: 23,
+    fontFamily: fonts.numeral,
     fontWeight: "900",
     marginTop: 5
   },
@@ -95,7 +97,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     lineHeight: 17,
-    marginTop: 4
+    marginTop: 4,
+    fontFamily: fonts.body
   },
   tags: {
     flexDirection: "row",
@@ -103,57 +106,62 @@ const styles = StyleSheet.create({
     gap: 8
   },
   tag: {
-    borderRadius: 999,
-    backgroundColor: "#fff7ed",
-    borderColor: "#f3dcc3",
+    borderRadius: radius.pill,
+    backgroundColor: snowPalette.bg2,
+    borderColor: colors.line,
     borderWidth: 1,
-    color: "#7a6a2b",
+    color: colors.muted,
     fontSize: 12,
-    fontWeight: "900",
+    fontFamily: fonts.medium,
+    fontWeight: "700",
     paddingHorizontal: 11,
     paddingVertical: 7
   },
   premiumBadge: {
     alignSelf: "flex-start",
     overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: "#6f4a19",
-    color: "#fff7df",
+    borderRadius: radius.pill,
+    backgroundColor: colors.amber,
+    color: "#ffffff",
     fontSize: 11,
+    fontFamily: fonts.bold,
     fontWeight: "900",
     paddingHorizontal: 10,
     paddingVertical: 6
   },
   freeBadge: {
     alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: "#fffaf3",
-    borderColor: "#eadbc7",
+    borderRadius: radius.pill,
+    backgroundColor: colors.card,
+    borderColor: colors.line,
     borderWidth: 1,
     color: colors.muted,
     fontSize: 11,
+    fontFamily: fonts.bold,
     fontWeight: "900",
     paddingHorizontal: 10,
     paddingVertical: 6
   },
   lockNotice: {
     gap: 8,
-    borderColor: "#f4c56f",
-    borderRadius: 22,
+    borderColor: hexA(colors.amber, 0.4),
+    borderRadius: radius.base,
     borderWidth: 1,
-    backgroundColor: "#fff9e8",
+    backgroundColor: hexA(colors.amber, 0.12),
     marginTop: 12,
     padding: 12
   },
   lockNoticeTitle: {
     color: colors.ink,
     fontSize: 14,
+    fontFamily: fonts.bold,
     fontWeight: "900"
   },
   lockNoticeBody: {
     color: colors.muted,
     fontSize: 13,
-    lineHeight: 18
+    lineHeight: 18,
+    fontFamily: fonts.body
   },
   comparison: {
     flexDirection: "row",
@@ -165,59 +173,63 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 138,
     gap: 8,
-    borderRadius: 16,
+    borderRadius: radius.sm,
     borderWidth: 1,
     padding: 12
   },
   freeColumn: {
     borderColor: colors.line,
-    backgroundColor: "#ffffff"
+    backgroundColor: colors.card
   },
   premiumColumn: {
-    borderColor: "#f4c56f",
-    backgroundColor: "#fff5d6"
+    borderColor: hexA(colors.amber, 0.4),
+    backgroundColor: hexA(colors.amber, 0.14)
   },
   comparisonTitle: {
     color: colors.ink,
     fontSize: 13,
+    fontFamily: fonts.bold,
     fontWeight: "900"
   },
   comparisonItem: {
     color: colors.muted,
     fontSize: 12,
-    lineHeight: 17
+    lineHeight: 17,
+    fontFamily: fonts.body
   },
   modalBackdrop: {
     flex: 1,
     justifyContent: "center",
-    backgroundColor: "rgba(32,26,20,0.42)",
+    backgroundColor: hexA(snowPalette.ink, 0.4),
     padding: 22
   },
   modalCard: {
     gap: 14,
-    borderColor: "#f0c987",
-    borderRadius: 30,
+    borderColor: hexA(colors.amber, 0.4),
+    borderRadius: radius.lg,
     borderWidth: 1,
-    backgroundColor: "#fff4d8",
+    backgroundColor: hexA(colors.amber, 0.14),
     padding: 22,
-    shadowColor: "#3f2d12",
-    shadowOpacity: 0.24,
-    shadowRadius: 32,
-    shadowOffset: { width: 0, height: 18 }
+    shadowColor: snowPalette.ink,
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 }
   },
   modalTitle: {
     color: colors.ink,
     fontSize: 20,
+    fontFamily: fonts.black,
     fontWeight: "900"
   },
   modalBody: {
     color: colors.muted,
     fontSize: 14,
-    lineHeight: 21
+    lineHeight: 21,
+    fontFamily: fonts.body
   },
   modalButton: {
     alignItems: "center",
-    borderRadius: 999,
+    borderRadius: radius.pill,
     backgroundColor: colors.coral,
     marginTop: 6,
     paddingHorizontal: 16,
@@ -226,19 +238,21 @@ const styles = StyleSheet.create({
   modalButtonText: {
     color: "#ffffff",
     fontSize: 14,
+    fontFamily: fonts.bold,
     fontWeight: "900"
   },
   modeShell: {
     gap: 10,
     borderColor: colors.line,
-    borderRadius: 24,
+    borderRadius: radius.base,
     borderWidth: 1,
-    backgroundColor: "#fffdf9",
+    backgroundColor: colors.card,
     padding: 14
   },
   modeCurrent: {
     color: colors.ink,
     fontSize: 14,
+    fontFamily: fonts.bold,
     fontWeight: "900"
   },
   modeToggle: {
@@ -249,22 +263,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     borderColor: colors.line,
-    borderRadius: 18,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
     paddingHorizontal: 10,
     paddingVertical: 10
   },
   modeOptionActiveFree: {
-    backgroundColor: "#f9f4ee"
+    backgroundColor: snowPalette.bg2
   },
   modeOptionActivePremium: {
-    borderColor: "#f4c56f",
-    backgroundColor: "#fff3d9"
+    borderColor: hexA(colors.amber, 0.4),
+    backgroundColor: hexA(colors.amber, 0.16)
   },
   modeOptionText: {
     color: colors.muted,
     fontSize: 13,
+    fontFamily: fonts.bold,
     fontWeight: "900",
     textAlign: "center"
   },
@@ -274,56 +289,58 @@ const styles = StyleSheet.create({
   iconBubble: {
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: "#f28f7a",
+    borderRadius: radius.sm,
+    backgroundColor: colors.coral,
     height: 46,
     width: 46
   },
   iconText: {
     color: "#ffffff",
     fontSize: 20,
+    fontFamily: fonts.bold,
     fontWeight: "900"
   },
   bottomNav: {
     flexDirection: "row",
     gap: 6,
-    borderColor: colors.line,
-    borderRadius: 28,
+    borderColor: snowPalette.line,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    backgroundColor: "#fffdf9",
+    backgroundColor: snowPalette.card,
     marginTop: 8,
     padding: 10,
-    shadowColor: "#9a6b45",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 }
+    ...shadows.card
   },
   navItem: {
     alignItems: "center",
     flex: 1,
-    gap: 5,
-    borderRadius: 18,
+    gap: 4,
+    borderRadius: radius.sm,
     paddingVertical: 9
   },
-  navIcon: {
-    color: "#f28f7a",
-    fontSize: 18,
-    fontWeight: "900"
+  navItemActive: {
+    backgroundColor: snowPalette.primarySoft
   },
   navLabel: {
-    color: colors.ink,
+    color: snowPalette.sub,
     fontSize: 11,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  navLabelActive: {
+    color: snowPalette.primaryDeep,
+    fontFamily: fonts.bold,
     fontWeight: "800"
   },
   scanTrack: {
     height: 9,
     overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: "#f7decf"
+    borderRadius: radius.pill,
+    backgroundColor: hexA(colors.coral, 0.16)
   },
   scanFill: {
     height: 9,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     backgroundColor: colors.coral
   }
 });
@@ -469,22 +486,37 @@ export function IconBubble({ icon }: { icon: string }) {
 
 export function BottomNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const items = [
-    { label: zhTW.mobile.primaryNav.home, icon: "H", href: "/" },
-    { label: zhTW.mobile.primaryNav.analysis, icon: "AI", href: "/meal-photo" },
-    { label: zhTW.mobile.primaryNav.friends, icon: "F", href: "/meal-buddies" },
-    { label: zhTW.mobile.primaryNav.explore, icon: "E", href: "/restaurants" },
-    { label: zhTW.mobile.primaryNav.profile, icon: "M", href: "/permissions" }
-  ] satisfies Array<{ label: string; icon: string; href: Href }>;
+    { label: zhTW.mobile.primaryNav.home, icon: "home", href: "/", match: ["/"] },
+    {
+      label: zhTW.mobile.primaryNav.analysis,
+      icon: "chart",
+      href: "/meal-photo",
+      match: ["/meal-photo", "/analysis", "/today-intake", "/meal-log", "/recommendation", "/health-goal-plan"]
+    },
+    {
+      label: zhTW.mobile.primaryNav.friends,
+      icon: "buddies",
+      href: "/meal-buddies",
+      match: ["/meal-buddies", "/social", "/group-tables", "/community-card", "/community-card-settings"]
+    },
+    { label: zhTW.mobile.primaryNav.explore, icon: "plate", href: "/restaurants", match: ["/restaurants"] },
+    { label: zhTW.mobile.primaryNav.profile, icon: "user", href: "/me", match: ["/me", "/permissions"] }
+  ] satisfies Array<{ label: string; icon: IconName; href: Href; match: string[] }>;
 
   return (
     <View style={styles.bottomNav}>
-      {items.map((item) => (
-        <Pressable key={item.href} onPress={() => router.push(item.href)} style={styles.navItem}>
-          <Text style={styles.navIcon}>{item.icon}</Text>
-          <Text style={styles.navLabel}>{item.label}</Text>
-        </Pressable>
-      ))}
+      {items.map((item) => {
+        const active = item.match.some((path) => (path === "/" ? pathname === "/" : pathname.startsWith(path)));
+
+        return (
+          <Pressable key={item.href} onPress={() => router.push(item.href)} style={[styles.navItem, active && styles.navItemActive]}>
+            <Icon name={item.icon} size={20} color={active ? snowPalette.primaryDeep : snowPalette.sub} strokeWidth={active ? 2.4 : 2} />
+            <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

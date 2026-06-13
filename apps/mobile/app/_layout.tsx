@@ -1,13 +1,30 @@
+import { NotoSansTC_400Regular, NotoSansTC_500Medium, NotoSansTC_700Bold, NotoSansTC_900Black } from "@expo-google-fonts/noto-sans-tc";
+import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { Stack } from "expo-router";
+import { useFonts } from "expo-font";
 import { zhTW } from "../../../lib/i18n/zh-TW";
+import { snowPalette } from "../theme/tokens";
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    NotoSansTC_400Regular,
+    NotoSansTC_500Medium,
+    NotoSansTC_700Bold,
+    NotoSansTC_900Black,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_700Bold
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: "#f7f3ea" },
-        headerTintColor: "#1f2933",
-        contentStyle: { backgroundColor: "#fffaf0" }
+        headerStyle: { backgroundColor: snowPalette.card },
+        headerTintColor: snowPalette.ink,
+        contentStyle: { backgroundColor: snowPalette.bg }
       }}
     >
       <Stack.Screen name="index" options={{ title: zhTW.common.appName }} />
@@ -20,6 +37,7 @@ export default function RootLayout() {
       <Stack.Screen name="social" options={{ title: zhTW.mobile.socialTitle }} />
       <Stack.Screen name="restaurants" options={{ title: zhTW.mobile.primaryNav.explore }} />
       <Stack.Screen name="permissions" options={{ title: zhTW.mobile.primaryNav.profile }} />
+      <Stack.Screen name="me" options={{ title: zhTW.mobile.primaryNav.profile }} />
       <Stack.Screen name="group-tables" options={{ title: zhTW.mobile.groupTablesTitle }} />
       <Stack.Screen name="health-goal-plan" options={{ title: zhTW.mobile.healthGoalPlan.title }} />
       <Stack.Screen name="community-card" options={{ title: zhTW.mobile.communityCard.title }} />

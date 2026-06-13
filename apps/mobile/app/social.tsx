@@ -226,9 +226,9 @@ const styles = StyleSheet.create({
   },
   lockedAvatar: {
     overflow: "hidden",
-    borderColor: "#f4c56f",
+    borderColor: "#EEDAC2",
     borderWidth: 2,
-    backgroundColor: "#9ca3af"
+    backgroundColor: "#AEA498"
   },
   blurOverlay: {
     position: "absolute",
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: "center",
     borderRadius: 14,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.coral,
     marginTop: 14,
     paddingHorizontal: 16,
     paddingVertical: 12
@@ -305,10 +305,10 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     alignItems: "center",
-    borderColor: "#f4c56f",
+    borderColor: "#EEDAC2",
     borderRadius: 14,
     borderWidth: 1,
-    backgroundColor: "#fff9e8",
+    backgroundColor: "#F9F2EA",
     paddingHorizontal: 14,
     paddingVertical: 11
   },

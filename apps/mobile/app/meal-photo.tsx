@@ -458,10 +458,10 @@ const styles = StyleSheet.create({
   },
   estimateBox: {
     gap: 5,
-    borderColor: "#f0dcc2",
+    borderColor: colors.line,
     borderRadius: 14,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     padding: 10
   },
   formPanel: {
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
   helperGhostButton: {
     alignItems: "center",
     borderRadius: 999,
-    backgroundColor: "#f5eadc",
+    backgroundColor: colors.cream,
     flexGrow: 1,
     paddingHorizontal: 14,
     paddingVertical: 11
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 22,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     marginTop: 14,
     padding: 14
   },
@@ -621,10 +621,10 @@ const styles = StyleSheet.create({
   },
   plannedHelper: {
     gap: 10,
-    borderColor: "#f0dcc2",
+    borderColor: colors.line,
     borderRadius: 18,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     marginTop: 12,
     padding: 12
   },
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    backgroundColor: "#fff8ee",
+    backgroundColor: colors.paper,
     padding: 22,
     shadowColor: "#2d2823",
     shadowOpacity: 0.18,
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   sheetHandle: {
     alignSelf: "center",
     borderRadius: 999,
-    backgroundColor: "#e3d1bd",
+    backgroundColor: colors.line,
     height: 5,
     marginBottom: 8,
     width: 44
@@ -686,10 +686,10 @@ const styles = StyleSheet.create({
   },
   slotPanel: {
     gap: 10,
-    borderColor: "#f0dcc2",
+    borderColor: colors.line,
     borderRadius: 18,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     marginTop: 14,
     padding: 12
   },
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.coral
   },
   sparkGreen: {
-    backgroundColor: colors.teal
+    backgroundColor: "#8AAE97"
   },
   sparkRow: {
     flexDirection: "row",

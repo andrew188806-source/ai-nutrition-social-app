@@ -2,38 +2,21 @@ import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { NutritionDetailReport } from "../components/NutritionDetailReport";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { getMealRecords } from "../features/analysis/analysisMealRecordStore";
+import { calculateTodayNutritionSummary, getTodayMealRecords } from "../features/analysis/nutritionSummary";
 import { getAutoSettledPlannedDinnerRecord, getConfirmedDinnerRecord, getPlannedDinner } from "../features/planned-meal";
 
 export default function TodayIntakeScreen() {
   const router = useRouter();
   const intake = zhTW.mobile.analysis.savedIntake;
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
-  const mealRecords = getMealRecords();
+  const mealRecords = getTodayMealRecords();
+  const summary = calculateTodayNutritionSummary(mealRecords);
   const plannedDinner = getPlannedDinner();
   const confirmedDinner = getConfirmedDinnerRecord();
   const autoSettledDinner = getAutoSettledPlannedDinnerRecord();
   const dinnerPlanForDisplay = confirmedDinner ?? plannedDinner ?? autoSettledDinner;
-  const plannedEstimate = plannedDinner;
-  const plannedSuffix = plannedEstimate ? "（含今晚預定）" : "";
-  const actualCalories = mealRecords.reduce((sum, meal) => sum + meal.calories, 0);
-  const actualProtein = mealRecords.reduce((sum, meal) => sum + meal.protein, 0);
-  const actualCarbs = mealRecords.reduce((sum, meal) => sum + meal.carbohydrates, 0);
-  const actualFat = mealRecords.reduce((sum, meal) => sum + meal.fat, 0);
-  const plannedCalories = parseNutritionValue(plannedEstimate?.calories);
-  const plannedProtein = parseNutritionValue(plannedEstimate?.protein);
-  const plannedCarbs = parseNutritionValue(plannedEstimate?.carbs);
-  const plannedFat = parseNutritionValue(plannedEstimate?.fat);
-  const hasSummaryEstimate = mealRecords.length > 0 || Boolean(plannedEstimate);
-  const summaryItems = [
-    { label: intake.caloriesTitle, value: hasSummaryEstimate ? `${actualCalories + plannedCalories} kcal${plannedSuffix}` : intake.caloriesValue },
-    { label: intake.proteinTitle, value: hasSummaryEstimate ? `${actualProtein + plannedProtein}g${plannedSuffix}` : intake.proteinValue },
-    { label: intake.carbsTitle, value: hasSummaryEstimate ? `${actualCarbs + plannedCarbs}g${plannedSuffix}` : intake.carbsValue },
-    { label: intake.fatTitle, value: hasSummaryEstimate ? `${actualFat + plannedFat}g${plannedSuffix}` : intake.fatValue },
-    { label: intake.balanceTitle, value: intake.balanceValue },
-    { label: intake.remainingTitle, value: intake.remainingValue }
-  ];
 
   return (
     <PlaceholderScreen
@@ -56,29 +39,11 @@ export default function TodayIntakeScreen() {
         </View>
       </Card>
 
-      <View style={styles.summaryGrid}>
-        {summaryItems.map((item) => (
-          <View key={item.label} style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>{item.label}</Text>
-            <Text style={styles.summaryValue}>{item.value}</Text>
-          </View>
-        ))}
-      </View>
+      <NutritionDetailReport summary={summary} />
 
       <Card>
         <SectionTitle title={daily.mealRecordsTitle} />
         <View style={styles.mealList}>
-          {daily.mealRecords.map((meal) => (
-            <View key={`${meal.time}-${meal.title}`} style={styles.mealCard}>
-              <View style={styles.mealHeader}>
-                <Text style={styles.mealTime}>{meal.time}</Text>
-                <Text style={styles.mealCalories}>{meal.calories}</Text>
-              </View>
-              <Text style={styles.mealTitle}>{meal.title}</Text>
-              <Text style={styles.mealNote}>{meal.note}</Text>
-              <TagRow tags={meal.tags} />
-            </View>
-          ))}
           {mealRecords.map((meal, index) => (
             <View key={`corrected-meal-${index}`} style={styles.mealCard}>
               <View style={styles.mealHeader}>
@@ -139,14 +104,6 @@ export default function TodayIntakeScreen() {
       </Card>
     </PlaceholderScreen>
   );
-}
-
-function parseNutritionValue(value?: string) {
-  if (!value) {
-    return 0;
-  }
-  const parsed = Number.parseInt(value.replace(/[^\d]/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function getPlannedDinnerStatus(isConfirmed: boolean, isAutoSettled: boolean) {
@@ -228,10 +185,10 @@ const styles = StyleSheet.create({
   },
   mealCard: {
     gap: 8,
-    borderColor: "#f0dcc2",
+    borderColor: colors.line,
     borderRadius: 22,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     padding: 14
   },
   mealHeader: {
@@ -332,29 +289,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
-  summaryCard: {
-    borderColor: "#f0dcc2",
-    borderRadius: 22,
-    borderWidth: 1,
-    backgroundColor: "#fffdf9",
-    flexBasis: 145,
-    flexGrow: 1,
-    padding: 16
-  },
-  summaryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  summaryLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  summaryValue: {
-    color: colors.ink,
-    fontSize: 20,
-    fontWeight: "900",
-    marginTop: 6
-  }
 });

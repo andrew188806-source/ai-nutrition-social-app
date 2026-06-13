@@ -993,9 +993,9 @@ const styles = StyleSheet.create({
   },
   lockedParticipant: {
     overflow: "hidden",
-    borderColor: "#f4c56f",
+    borderColor: "#EEDAC2",
     borderWidth: 1,
-    backgroundColor: "#a7b0aa"
+    backgroundColor: "#AEA498"
   },
   participantBlur: {
     position: "absolute",
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   joinButton: {
     alignItems: "center",
     borderRadius: 14,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.coral,
     marginTop: 14,
     paddingHorizontal: 16,
     paddingVertical: 12
@@ -1183,7 +1183,7 @@ const styles = StyleSheet.create({
   joinButtonCompact: {
     alignItems: "center",
     borderRadius: 999,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.coral,
     paddingHorizontal: 12,
     paddingVertical: 10
   },
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
   },
   sortButtonActive: {
     borderColor: colors.teal,
-    backgroundColor: "#ddf5e7"
+    backgroundColor: colors.mint
   },
   sortButtonText: {
     color: colors.muted,
@@ -1271,7 +1271,7 @@ const styles = StyleSheet.create({
   selectionPill: {
     overflow: "hidden",
     borderRadius: 999,
-    backgroundColor: "#fff3df",
+    backgroundColor: "#F9F2EA",
     color: colors.ink,
     fontSize: 11,
     fontWeight: "900",
@@ -1297,12 +1297,12 @@ const styles = StyleSheet.create({
   },
   completeButton: {
     borderRadius: 999,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.coral,
     paddingHorizontal: 14,
     paddingVertical: 10
   },
   disabledCompleteButton: {
-    backgroundColor: "#b9c8bf"
+    backgroundColor: "#AEA498"
   },
   completeButtonText: {
     color: "#ffffff",

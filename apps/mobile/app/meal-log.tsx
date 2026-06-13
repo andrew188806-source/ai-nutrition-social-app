@@ -613,8 +613,8 @@ const styles = StyleSheet.create({
     paddingVertical: 11
   },
   modeButtonActive: {
-    borderColor: "#f0c987",
-    backgroundColor: "#fff3df"
+    borderColor: "#EEDAC2",
+    backgroundColor: "#F9F2EA"
   },
   modeButtonText: {
     color: colors.muted,
@@ -649,8 +649,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9
   },
   chipButtonActive: {
-    borderColor: "#f0c987",
-    backgroundColor: "#fff3df"
+    borderColor: "#EEDAC2",
+    backgroundColor: "#F9F2EA"
   },
   chipText: {
     color: colors.muted,
@@ -665,10 +665,10 @@ const styles = StyleSheet.create({
     marginTop: 16
   },
   heroSummaryMain: {
-    borderColor: "#f0c987",
+    borderColor: "#EEDAC2",
     borderRadius: 24,
     borderWidth: 1,
-    backgroundColor: "#fff8e6",
+    backgroundColor: "#F9F2EA",
     padding: 18
   },
   heroSummaryLabel: {
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
   linkButton: {
     overflow: "hidden",
     borderRadius: 999,
-    backgroundColor: "#fff3df",
+    backgroundColor: "#F9F2EA",
     color: colors.ink,
     fontSize: 12,
     fontWeight: "900",
@@ -847,10 +847,10 @@ const styles = StyleSheet.create({
   },
   upgradeBox: {
     gap: 10,
-    borderColor: "#f0c987",
+    borderColor: "#EEDAC2",
     borderRadius: 20,
     borderWidth: 1,
-    backgroundColor: "#fff8e6",
+    backgroundColor: "#F9F2EA",
     padding: 12
   },
   noticeText: {
@@ -869,8 +869,8 @@ const styles = StyleSheet.create({
     padding: 14
   },
   planPremium: {
-    borderColor: "#f0c987",
-    backgroundColor: "#fff8e6"
+    borderColor: "#EEDAC2",
+    backgroundColor: "#F9F2EA"
   },
   planItem: {
     color: colors.muted,
@@ -886,7 +886,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: "center",
     borderRadius: 16,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.coral,
     marginTop: 14,
     paddingHorizontal: 16,
     paddingVertical: 13

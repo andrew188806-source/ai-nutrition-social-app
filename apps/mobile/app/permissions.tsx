@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 999,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     color: colors.ink,
     fontSize: 12,
     fontWeight: "900",

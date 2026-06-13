@@ -2,6 +2,7 @@ import { type Href, useRouter } from "expo-router";
 import { ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
+import { fonts, radius, shadows } from "../theme/tokens";
 import { BottomNav, colors } from "./DemoUi";
 
 interface ActionLink {
@@ -62,7 +63,7 @@ function ActionButton({ action, variant }: { action: ActionLink; variant: "prima
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-    backgroundColor: "#fbf5ec"
+    backgroundColor: colors.paper
   },
   container: {
     gap: 22,
@@ -71,16 +72,13 @@ const styles = StyleSheet.create({
   },
   hero: {
     overflow: "hidden",
-    borderColor: "#f1dfc9",
-    borderRadius: 38,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    backgroundColor: "#fff7eb",
+    backgroundColor: colors.card,
     gap: 15,
-    padding: 26,
-    shadowColor: "#b98558",
-    shadowOpacity: 0.14,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 18 }
+    padding: 24,
+    ...shadows.card
   },
   heroTop: {
     alignItems: "center",
@@ -90,30 +88,34 @@ const styles = StyleSheet.create({
   },
   badge: {
     alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: "#ffffff",
-    color: colors.coral,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+    color: colors.muted,
     fontSize: 13,
+    fontFamily: fonts.medium,
     fontWeight: "800",
     paddingHorizontal: 12,
     paddingVertical: 7
   },
   platformLabel: {
-    color: colors.teal,
+    color: colors.muted,
     fontSize: 12,
+    fontFamily: fonts.bold,
     fontWeight: "900",
     letterSpacing: 0
   },
   title: {
     color: colors.ink,
-    fontSize: 34,
+    fontSize: 32,
+    fontFamily: fonts.black,
     fontWeight: "900",
-    lineHeight: 41
+    lineHeight: 39
   },
   subtitle: {
     color: colors.muted,
     fontSize: 15,
-    lineHeight: 23
+    lineHeight: 23,
+    fontFamily: fonts.body
   },
   content: {
     gap: 16
@@ -121,12 +123,14 @@ const styles = StyleSheet.create({
   panelText: {
     color: colors.ink,
     fontSize: 16,
-    lineHeight: 24
+    lineHeight: 24,
+    fontFamily: fonts.body
   },
   disclaimer: {
     color: colors.muted,
     fontSize: 12,
-    lineHeight: 18
+    lineHeight: 18,
+    fontFamily: fonts.body
   },
   actions: {
     flexDirection: "row",
@@ -135,19 +139,20 @@ const styles = StyleSheet.create({
   },
   button: {
     alignItems: "center",
-    borderRadius: 999,
+    borderRadius: radius.pill,
     backgroundColor: colors.coral,
     paddingHorizontal: 18,
     paddingVertical: 13
   },
   secondaryButton: {
-    backgroundColor: "#ffffff",
-    borderColor: "#eadbc7",
+    backgroundColor: colors.card,
+    borderColor: colors.line,
     borderWidth: 1
   },
   buttonText: {
     color: "#ffffff",
     fontSize: 15,
+    fontFamily: fonts.bold,
     fontWeight: "900"
   },
   secondaryButtonText: {

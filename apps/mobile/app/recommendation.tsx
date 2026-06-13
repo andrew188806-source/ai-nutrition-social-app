@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   groupButton: {
     alignItems: "center",
     borderRadius: 14,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.coral,
     marginTop: 14,
     paddingHorizontal: 16,
     paddingVertical: 12

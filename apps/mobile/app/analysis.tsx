@@ -1,15 +1,19 @@
 ﻿import { type ReactNode, useState } from "react";
 import { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, DemoModeToggle, MetricCard, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { Card, DemoModeToggle, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, useAnalysisCorrectionState } from "../features/analysis";
 import { saveCorrectedMealRecord } from "../features/analysis/analysisMealRecordStore";
 import { getAiRecommendationMealBuddyCard, resetMealBuddyVisibleQuotaForDemo, setPendingMatchRequest, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
+import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
+import { Icon, type IconName } from "../theme/icons";
+import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
 
 export default function AnalysisScreen() {
   const router = useRouter();
@@ -97,6 +101,13 @@ export default function AnalysisScreen() {
     }, 650);
   }
 
+  const quickShortcuts: { label: string; icon: IconName; onPress: () => void }[] = [
+    { label: zhTW.mobile.todayNutritionSummary.cardTitle, icon: "target", onPress: () => router.push("/") },
+    { label: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealRecordsTitle, icon: "plate", onPress: () => router.push("/today-intake") },
+    { label: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.plannedMealTitle, icon: "star", onPress: () => router.push("/today-intake") },
+    { label: zhTW.mobile.nextMealTitle, icon: "spark", onPress: () => router.push("/recommendation") }
+  ];
+
   return (
     <PlaceholderScreen
       title={zhTW.mobile.analysisTitle}
@@ -111,39 +122,82 @@ export default function AnalysisScreen() {
         visible={showMealBuddyConfirm}
       />
       <MealBuddySuccessToast visible={showMealBuddySuccess} />
+      {!mealSaved ? (
+        <View style={styles.quickChipsRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickChipsContent}>
+            {quickShortcuts.map((item) => (
+              <Pressable key={item.label} style={styles.quickChip} onPress={item.onPress}>
+                <Icon name={item.icon} size={14} color={snow.primaryDeep} />
+                <Text style={styles.quickChipText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
       {mealSaved ? (
         <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
       ) : (
         <>
-          <Card tone="premium">
-            <PremiumBadge label={zhTW.mobile.correctedFlow.nutritionCoreTitle} />
-            <SectionTitle title={zhTW.mobile.correctedFlow.mealResultTitle} subtitle={zhTW.mobile.correctedFlow.mealResultBody} />
-          </Card>
+          <SnowCard tone="primary">
+            <SnowSectionHeader title={zhTW.mobile.correctedFlow.mealResultTitle} subtitle={zhTW.mobile.correctedFlow.mealResultBody} />
+            <View style={[styles.photoArea, isAnalysisConfirmed && styles.photoAreaConfirmed]}>
+              {isAnalysisConfirmed ? (
+                <>
+                  <LinearGradient colors={[snow.heroFrom, snow.heroTo]} style={styles.photoGradient} />
+                  <View style={styles.photoConfidenceBadge}>
+                    <Icon name="spark" size={12} color={snow.primaryDeep} />
+                    <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.confidenceLevels[1]}</Text>
+                  </View>
+                  <View style={styles.photoIconLarge}>
+                    <Icon name="plate" size={26} color={snow.primaryDeep} />
+                  </View>
+                  <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text>
+                  <View style={styles.photoCaptionBadge}>
+                    <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.imageLabel}</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.photoBadge}>
+                    <Icon name="spark" size={12} color={snow.primaryDeep} />
+                    <Text style={styles.photoBadgeText}>{zhTW.mobile.nav.analysis}</Text>
+                  </View>
+                  <View style={styles.photoIcon}>
+                    <Icon name="camera" size={22} color={snow.primaryDeep} />
+                  </View>
+                  <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text>
+                </>
+              )}
+              <SecondaryButton icon="camera" label={zhTW.mobile.refinedLogic.homeFocus.photoAnalysis} onPress={() => router.push("/meal-photo")} />
+            </View>
+          </SnowCard>
 
-          <Card>
-            <SectionTitle title={zhTW.mobile.analysis.modeTitle} />
-            <Text style={styles.formLabel}>這是第幾餐？</Text>
-            <View style={styles.modeRow}>
+          <SnowCard>
+            <SnowSectionHeader title={zhTW.mobile.analysis.modeTitle} subtitle="這是第幾餐？" />
+            <View style={styles.chipRow}>
               {zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions.map((period) => (
-                <Pressable key={period} style={[styles.mealPeriodButton, selectedMealPeriod === period && styles.activeMode]} onPress={() => setSelectedMealPeriod(period)}>
-                  <Text style={[styles.modeText, selectedMealPeriod === period && styles.activeModeText]}>{period}</Text>
-                </Pressable>
+                <Chip key={period} label={period} active={selectedMealPeriod === period} onPress={() => setSelectedMealPeriod(period)} />
               ))}
             </View>
-            <View style={styles.modeRow}>
-              <Pressable style={[styles.modeButton, !analysis.isSelfCooked && styles.activeMode]} onPress={() => analysis.setMode("restaurant")}>
-                <Text style={[styles.modeText, !analysis.isSelfCooked && styles.activeModeText]}>{zhTW.mobile.analysis.restaurantMode}</Text>
+            <View style={styles.segmentTrack}>
+              <Pressable style={[styles.segmentOption, !analysis.isSelfCooked && styles.segmentOptionActive]} onPress={() => analysis.setMode("restaurant")}>
+                <Text style={[styles.segmentText, !analysis.isSelfCooked && styles.segmentTextActive]}>{zhTW.mobile.analysis.restaurantMode}</Text>
               </Pressable>
-              <Pressable style={[styles.modeButton, analysis.isSelfCooked && styles.activeMode]} onPress={() => analysis.setMode("selfCooked")}>
-                <Text style={[styles.modeText, analysis.isSelfCooked && styles.activeModeText]}>{zhTW.mobile.analysis.selfCookedMode}</Text>
+              <Pressable style={[styles.segmentOption, analysis.isSelfCooked && styles.segmentOptionActive]} onPress={() => analysis.setMode("selfCooked")}>
+                <Text style={[styles.segmentText, analysis.isSelfCooked && styles.segmentTextActive]}>{zhTW.mobile.analysis.selfCookedMode}</Text>
               </Pressable>
             </View>
-          </Card>
+          </SnowCard>
 
           {analysis.isSelfCooked ? (
-            <SelfCookedIntro />
+            <SelfCookedIntro nutritionSummary={analysis.nutritionSummary} />
           ) : isAnalysisConfirmed ? (
-            <CompletedAnalysisHero onFindBuddy={confirmCreateMealBuddyCard} onOpenMealLog={saveMealRecordToMockDatabase} onOpenNutritionRecord={() => router.push("/meal-log")} />
+            <CompletedAnalysisHero
+              nutritionSummary={analysis.nutritionSummary}
+              onFindBuddy={confirmCreateMealBuddyCard}
+              onOpenMealLog={saveMealRecordToMockDatabase}
+              onOpenNutritionRecord={() => router.push("/meal-log")}
+            />
           ) : (
             <ExternalDiningAnalysis analysis={analysis} renderSuccessActions={renderSuccessActions} />
           )}
@@ -151,17 +205,32 @@ export default function AnalysisScreen() {
           {!analysis.isSelfCooked && analysis.matchState === "editing" ? <CandidateCorrectionList analysis={analysis} renderSuccessActions={renderSuccessActions} /> : null}
 
           {!isAnalysisConfirmed ? (
-            <>
-              <SectionTitle title={zhTW.mobile.analysis.summary} />
-              <View style={styles.metricGrid}>
-                <MetricCard label={zhTW.mobile.analysis.calories} value={`${analysis.nutritionSummary.calories}`} note="kcal" />
-                <MetricCard label={zhTW.mobile.analysis.protein} value={`${analysis.nutritionSummary.protein}g`} note={zhTW.mobile.analysis.nutritionCards[1].note} />
-                <MetricCard label={zhTW.mobile.analysis.carbs} value={`${analysis.nutritionSummary.carbohydrates}g`} note={zhTW.mobile.analysis.nutritionCards[2].note} />
-                <MetricCard label={zhTW.mobile.analysis.fat} value={`${analysis.nutritionSummary.fat}g`} note={zhTW.mobile.analysis.nutritionCards[3].note} />
-                <MetricCard label={zhTW.mobile.finalUx.mealRecordFields[3]} value={analysis.nutritionSummary.portion} note={analysis.nutritionSummary.ingredientSummary} />
-                <MetricCard label={zhTW.mobile.analysis.balanceScore} value={`${analysis.nutritionSummary.balanceScore}`} note={zhTW.mobile.analysis.nutritionCards[5].note} />
+            <SnowCard>
+              <SnowSectionHeader title={zhTW.mobile.analysis.summary} />
+              <View style={styles.statGrid}>
+                <StatCard icon="flame" label={zhTW.mobile.analysis.calories} value={`${analysis.nutritionSummary.calories} kcal`} tone="primary" />
+                <StatCard icon="leaf" label={zhTW.mobile.analysis.protein} value={`${analysis.nutritionSummary.protein}g`} />
+                <StatCard icon="target" label={zhTW.mobile.analysis.carbs} value={`${analysis.nutritionSummary.carbohydrates}g`} tone="ai" />
+                <StatCard icon="star" label={zhTW.mobile.analysis.fat} value={`${analysis.nutritionSummary.fat}g`} />
+                <StatCard icon="bookmark" label={zhTW.mobile.finalUx.mealRecordFields[3]} value={analysis.nutritionSummary.portion} />
+                <StatCard icon="check" label={zhTW.mobile.analysis.balanceScore} value={`${analysis.nutritionSummary.balanceScore}`} tone="primary" />
               </View>
-            </>
+              <View style={styles.ingredientSection}>
+                <Text style={styles.ingredientLabel}>{zhTW.mobile.finalUx.ingredientCorrectionTitle}</Text>
+                <View style={styles.ingredientList}>
+                  {analysis.nutritionSummary.ingredientSummary
+                    .split(/[、,，]/)
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                    .map((item, index) => (
+                      <View key={item} style={styles.ingredientRow}>
+                        <View style={[styles.ingredientDot, [styles.ingredientDotPrimary, styles.ingredientDotAccent, styles.ingredientDotAmber, styles.ingredientDotGreen][index % 4]]} />
+                        <Text style={styles.ingredientName}>{item}</Text>
+                      </View>
+                    ))}
+                </View>
+              </View>
+            </SnowCard>
           ) : null}
 
           {analysis.isSelfCooked ? (
@@ -186,24 +255,32 @@ export default function AnalysisScreen() {
           ) : null}
 
           {!isAnalysisConfirmed ? (
-          <Card tone="amber">
-            <SectionTitle title={zhTW.mobile.nextMealTitle} subtitle={zhTW.mobile.analysis.recommendation} />
-            <Text style={styles.stateText}>{zhTW.mobile.refinedLogic.analysisFlow.bridgeBody}</Text>
-          </Card>
+            <SnowCard tone="ai">
+              <SnowSectionHeader title={zhTW.mobile.nextMealTitle} subtitle={zhTW.mobile.analysis.recommendation} />
+              <Text style={styles.stateText}>{zhTW.mobile.refinedLogic.analysisFlow.bridgeBody}</Text>
+            </SnowCard>
           ) : null}
 
           {!isAnalysisConfirmed ? (
-          <Card>
-            <SectionTitle title={zhTW.mobile.analysis.mealTagsTitle} />
-            <TagRow tags={analysis.isSelfCooked ? zhTW.mobile.analysis.selfCookedTags : zhTW.mobile.analysis.mealTags} />
-          </Card>
+            <SnowCard>
+              <SnowSectionHeader title={zhTW.mobile.analysis.mealTagsTitle} />
+              <View style={styles.chipRow}>
+                {(analysis.isSelfCooked ? zhTW.mobile.analysis.selfCookedTags : zhTW.mobile.analysis.mealTags).map((tag) => (
+                  <Chip key={tag} label={tag} />
+                ))}
+              </View>
+            </SnowCard>
           ) : null}
 
           {!isAnalysisConfirmed ? (
-          <Card>
-            <SectionTitle title={zhTW.mobile.analysis.goalTagsTitle} />
-            <TagRow tags={zhTW.mobile.analysis.goalTags} />
-          </Card>
+            <SnowCard>
+              <SnowSectionHeader title={zhTW.mobile.analysis.goalTagsTitle} />
+              <View style={styles.chipRow}>
+                {zhTW.mobile.analysis.goalTags.map((tag) => (
+                  <Chip key={tag} label={tag} tone="ai" />
+                ))}
+              </View>
+            </SnowCard>
           ) : null}
         </>
       )}
@@ -243,55 +320,93 @@ function MealBuddySuccessToast({ visible }: { visible: boolean }) {
   );
 }
 
-function SelfCookedIntro() {
+function MacroChipsRow({ nutritionSummary }: { nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"] }) {
+  const items: { label: string; value: string; unit: string; chipStyle: object; valueStyle: object }[] = [
+    { label: zhTW.mobile.analysis.calories, value: `${nutritionSummary.calories}`, unit: "kcal", chipStyle: styles.macroChipPrimary, valueStyle: styles.macroValuePrimary },
+    { label: zhTW.mobile.analysis.protein, value: `${nutritionSummary.protein}`, unit: "g", chipStyle: styles.macroChipPrimary, valueStyle: styles.macroValuePrimary },
+    { label: zhTW.mobile.analysis.carbs, value: `${nutritionSummary.carbohydrates}`, unit: "g", chipStyle: styles.macroChipAccent, valueStyle: styles.macroValueAccent },
+    { label: zhTW.mobile.analysis.fat, value: `${nutritionSummary.fat}`, unit: "g", chipStyle: styles.macroChipAmber, valueStyle: styles.macroValueAmber }
+  ];
+
   return (
-    <Card tone="amber">
-      <SectionTitle title={zhTW.mobile.analysis.selfCookedTitle} subtitle={zhTW.mobile.analysis.selfCookedBody} />
+    <View style={styles.macroRow}>
+      {items.map((item) => (
+        <View key={item.label} style={[styles.macroChip, item.chipStyle]}>
+          <Text style={[styles.macroChipValue, item.valueStyle]}>
+            {item.value}
+            <Text style={styles.macroChipUnit}> {item.unit}</Text>
+          </Text>
+          <Text style={styles.macroChipLabel}>{item.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SelfCookedIntro({ nutritionSummary }: { nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"] }) {
+  return (
+    <SnowCard tone="primary">
+      <SnowSectionHeader title={zhTW.mobile.analysis.selfCookedTitle} subtitle={zhTW.mobile.analysis.selfCookedBody} />
+      <MacroChipsRow nutritionSummary={nutritionSummary} />
       <Text style={styles.disclaimer}>{zhTW.mobile.analysis.nutritionDisclaimer}</Text>
       <EstimatePreview title={zhTW.mobile.analysis.estimatedIngredientsTitle} items={zhTW.mobile.analysis.estimatedIngredients} />
       <EstimatePreview title={zhTW.mobile.analysis.estimatedPortionsTitle} items={zhTW.mobile.analysis.estimatedPortions} />
       <EstimatePreview title={zhTW.mobile.analysis.estimatedCookingTitle} items={zhTW.mobile.analysis.estimatedCooking} />
       <Text style={styles.confidence}>{zhTW.mobile.analysis.confidenceLevels[1]}</Text>
       <Text style={styles.stateText}>{zhTW.mobile.analysis.selfCookedSaved}</Text>
-      <TagRow tags={zhTW.mobile.analysis.selfCookedTags} />
-    </Card>
+      <View style={styles.chipRow}>
+        {zhTW.mobile.analysis.selfCookedTags.map((tag) => (
+          <Chip key={tag} label={tag} tone="primary" />
+        ))}
+      </View>
+    </SnowCard>
   );
 }
 
-function CompletedAnalysisHero({ onFindBuddy, onOpenMealLog, onOpenNutritionRecord }: { onFindBuddy: () => void; onOpenMealLog: () => void; onOpenNutritionRecord: () => void }) {
+function CompletedAnalysisHero({
+  nutritionSummary,
+  onFindBuddy,
+  onOpenMealLog,
+  onOpenNutritionRecord
+}: {
+  nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"];
+  onFindBuddy: () => void;
+  onOpenMealLog: () => void;
+  onOpenNutritionRecord: () => void;
+}) {
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
 
   return (
-    <Card tone="mint">
+    <SnowCard tone="primary">
       <View style={styles.completedHeroVisual}>
         <View style={styles.completedCheck}>
-          <Text style={styles.completedCheckText}>OK</Text>
-        </View>
-        <View style={styles.completedSparkRow}>
-          <View style={[styles.foodDot, styles.foodDotGreen]} />
-          <View style={[styles.foodDot, styles.foodDotAmber]} />
-          <View style={[styles.foodDot, styles.foodDotCoral]} />
+          <Icon name="check" size={36} color="#FFFFFF" />
         </View>
       </View>
-      <SectionTitle title={zhTW.mobile.refinedLogic.analysisFlow.bridgeTitle} subtitle={zhTW.mobile.refinedLogic.analysisFlow.bridgeBody} />
+      <SnowSectionHeader title={zhTW.mobile.refinedLogic.analysisFlow.bridgeTitle} subtitle={zhTW.mobile.refinedLogic.analysisFlow.bridgeBody} />
+      <MacroChipsRow nutritionSummary={nutritionSummary} />
       <View style={styles.nextMealPanel}>
         <Text style={styles.nextMealEyebrow}>{daily.nextMealSocialTitle}</Text>
         <Text style={styles.nextMealTitle}>{daily.nextMealRecommendation}</Text>
         <Text style={styles.nextMealBody}>{daily.nextMealReason}</Text>
-        <TagRow tags={daily.plannedMeal.tags} />
+        <View style={styles.chipRow}>
+          {daily.plannedMeal.tags.map((tag) => (
+            <Chip key={tag} label={tag} tone="primary" />
+          ))}
+        </View>
       </View>
-      <View style={styles.buttonRow}>
-        <Pressable style={styles.confirmButton} onPress={onFindBuddy}>
-          <Text style={styles.confirmButtonText}>{zhTW.mobile.refinedLogic.mealBuddyCard.findPeopleCta}</Text>
-        </Pressable>
-        <Pressable style={styles.editButton} onPress={onOpenMealLog}>
-          <Text style={styles.editButtonText}>{zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord}</Text>
-        </Pressable>
-        <Pressable style={styles.editButton} onPress={onOpenNutritionRecord}>
-          <Text style={styles.editButtonText}>{zhTW.mobile.refinedLogic.analysisFlow.viewNutritionRecord}</Text>
-        </Pressable>
+      <View style={styles.ctaColumn}>
+        <PrimaryButton icon="buddies" label={zhTW.mobile.refinedLogic.mealBuddyCard.findPeopleCta} onPress={onFindBuddy} />
+        <View style={styles.ctaRow2}>
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="check" label={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord} onPress={onOpenMealLog} />
+          </View>
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="chart" label={zhTW.mobile.refinedLogic.analysisFlow.viewNutritionRecord} onPress={onOpenNutritionRecord} />
+          </View>
+        </View>
       </View>
-    </Card>
+    </SnowCard>
   );
 }
 
@@ -303,20 +418,14 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
   const plannedDinnerCalories = currentPlannedDinner?.calories ?? daily.plannedMeal.calories;
   const plannedDinnerNote = currentPlannedDinner ? `${currentPlannedDinner.restaurantName}｜預計，尚未算作已吃` : daily.plannedMeal.note;
   const plannedDinnerTags = currentPlannedDinner ? [currentPlannedDinner.mealType, "預計", "營養估算"] : daily.plannedMeal.tags;
-  const summaryItems = [
-    { label: intake.caloriesTitle, value: intake.caloriesValue },
-    { label: intake.proteinTitle, value: intake.proteinValue },
-    { label: intake.carbsTitle, value: intake.carbsValue },
-    { label: intake.fatTitle, value: intake.fatValue },
-    { label: intake.balanceTitle, value: intake.balanceValue },
-    { label: intake.remainingTitle, value: intake.remainingValue }
-  ];
 
   return (
     <>
-      <Card tone="premium">
-        <Text style={styles.savedBadge}>{intake.savedMessage}</Text>
-        <SectionTitle title={intake.title} subtitle={intake.body} />
+      <SnowCard tone="primary">
+        <View style={styles.chipRow}>
+          <Chip label={intake.savedMessage} />
+        </View>
+        <SnowSectionHeader title={intake.title} subtitle={intake.body} />
         <View style={styles.intakeHero}>
           <View style={styles.intakeScore}>
             <Text style={styles.intakeScoreText}>82</Text>
@@ -327,19 +436,18 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
             <Text style={styles.intakeAdvice}>{intake.balanceNote}</Text>
           </View>
         </View>
-      </Card>
+        <View style={styles.statGrid}>
+          <StatCard icon="flame" label={intake.caloriesTitle} value={intake.caloriesValue} tone="primary" />
+          <StatCard icon="leaf" label={intake.proteinTitle} value={intake.proteinValue} />
+          <StatCard icon="target" label={intake.carbsTitle} value={intake.carbsValue} tone="ai" />
+          <StatCard icon="star" label={intake.fatTitle} value={intake.fatValue} />
+          <StatCard icon="check" label={intake.balanceTitle} value={intake.balanceValue} tone="primary" />
+          <StatCard icon="bookmark" label={intake.remainingTitle} value={intake.remainingValue} />
+        </View>
+      </SnowCard>
 
-      <View style={styles.intakeGrid}>
-        {summaryItems.map((item) => (
-          <View key={item.label} style={styles.intakeItem}>
-            <Text style={styles.intakeLabel}>{item.label}</Text>
-            <Text style={styles.intakeValue}>{item.value}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Card>
-        <SectionTitle title={daily.mealRecordsTitle} />
+      <SnowCard>
+        <SnowSectionHeader title={daily.mealRecordsTitle} />
         <View style={styles.mealRecordList}>
           {daily.mealRecords.map((meal) => (
             <View key={`${meal.time}-${meal.title}`} style={styles.mealRecordCard}>
@@ -353,10 +461,10 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
             </View>
           ))}
         </View>
-      </Card>
+      </SnowCard>
 
-      <Card tone="mint">
-        <SectionTitle title={zhTW.mobile.plannedDinner.lunchRecommendationLabel} subtitle={zhTW.mobile.plannedDinner.lunchAdvice[0]} />
+      <SnowCard tone="ai">
+        <SnowSectionHeader title={zhTW.mobile.plannedDinner.lunchRecommendationLabel} subtitle={zhTW.mobile.plannedDinner.lunchAdvice[0]} />
         <View style={styles.currentMealCard}>
           <View style={styles.mealRecordHeader}>
             <Text style={styles.mealTimePill}>{daily.mealRecords[1].time}</Text>
@@ -366,10 +474,10 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
           <Text style={styles.mealRecordNote}>{daily.mealRecords[1].note}</Text>
           <TagRow tags={daily.mealRecords[1].tags} />
         </View>
-      </Card>
+      </SnowCard>
 
-      <Card tone="amber">
-        <SectionTitle title={daily.plannedMealTitle} />
+      <SnowCard tone="primary">
+        <SnowSectionHeader title={daily.plannedMealTitle} />
         <View style={styles.plannedMealCard}>
           <Text style={styles.mealRecordTitle}>{plannedDinnerTitle}</Text>
           <Text style={styles.mealRecordCalories}>{plannedDinnerCalories}</Text>
@@ -377,22 +485,22 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
           <Text style={styles.balanceHint}>{zhTW.mobile.plannedDinner.lunchAdvice[1]}</Text>
           <TagRow tags={plannedDinnerTags} />
         </View>
-      </Card>
+      </SnowCard>
 
-      <Card tone="mint">
-        <SectionTitle title={intake.nextActionsTitle} />
-        <View style={styles.buttonRow}>
-          <Pressable style={styles.confirmButton} onPress={onFindBuddy}>
-            <Text style={styles.confirmButtonText}>{intake.findBuddy}</Text>
-          </Pressable>
-          <Pressable style={styles.editButton} onPress={onOpenMealLog}>
-            <Text style={styles.editButtonText}>{intake.viewLog}</Text>
-          </Pressable>
-          <Pressable style={styles.editButton} onPress={onNextMeal}>
-            <Text style={styles.editButtonText}>{intake.nextMeal}</Text>
-          </Pressable>
+      <SnowCard tone="primary">
+        <SnowSectionHeader title={intake.nextActionsTitle} />
+        <View style={styles.ctaColumn}>
+          <PrimaryButton icon="buddies" label={intake.findBuddy} onPress={onFindBuddy} />
+          <View style={styles.ctaRow2}>
+            <View style={styles.ctaItem}>
+              <SecondaryButton icon="chart" label={intake.viewLog} onPress={onOpenMealLog} />
+            </View>
+            <View style={styles.ctaItem}>
+              <SecondaryButton icon="clock" label={intake.nextMeal} onPress={onNextMeal} />
+            </View>
+          </View>
         </View>
-      </Card>
+      </SnowCard>
     </>
   );
 }
@@ -401,32 +509,31 @@ function ExternalDiningAnalysis({ analysis, renderSuccessActions }: { analysis: 
   const [showDetails, setShowDetails] = useState(false);
 
   return (
-    <Card tone="mint">
-      <SectionTitle title={zhTW.mobile.analysis.precisionTitle} subtitle={zhTW.mobile.analysis.precisionBody} />
-      <Text style={styles.location}>{zhTW.mobile.analysis.locationLabel}</Text>
+    <SnowCard tone="ai">
+      <SnowSectionHeader title={zhTW.mobile.analysis.precisionTitle} subtitle={zhTW.mobile.analysis.precisionBody} />
+      <View style={styles.chipRow}>
+        <Chip label={zhTW.mobile.analysis.locationLabel} />
+        <Chip label={zhTW.mobile.analysis.topMatchTitle} />
+        <Chip label={zhTW.mobile.analysis.confidenceLabel} />
+      </View>
       <View style={styles.restaurantSummary}>
         <Text style={styles.summaryLabel}>{zhTW.mobile.finalUx.restaurantNameLabel}</Text>
         <Text style={styles.summaryValue}>{zhTW.mobile.analysis.candidates[0].restaurant}</Text>
         <Text style={styles.summaryLabel}>{zhTW.mobile.finalUx.mealNameLabel}</Text>
         <Text style={styles.summaryValue}>{zhTW.mobile.analysis.candidates[0].meal}</Text>
-        <Text style={styles.summaryLabel}>{zhTW.mobile.finalUx.nutritionSummaryLabel}</Text>
-        <Text style={styles.summaryValue}>
-          {analysis.nutritionSummary.calories} kcal / {analysis.nutritionSummary.protein}g / {analysis.nutritionSummary.carbohydrates}g / {analysis.nutritionSummary.fat}g
-        </Text>
       </View>
-      <Text style={styles.topMatch}>{zhTW.mobile.analysis.topMatchTitle}</Text>
-      <Text style={styles.confidence}>{zhTW.mobile.analysis.confidenceLabel}</Text>
-      <Pressable style={styles.detailToggle} onPress={() => setShowDetails((current) => !current)}>
-        <Text style={styles.detailToggleText}>{showDetails ? zhTW.mobile.refinedLogic.aiEntry.detailToggleClose : zhTW.mobile.refinedLogic.aiEntry.detailToggleOpen}</Text>
-      </Pressable>
+      <MacroChipsRow nutritionSummary={analysis.nutritionSummary} />
+      <SecondaryButton
+        icon="chevron"
+        label={showDetails ? zhTW.mobile.refinedLogic.aiEntry.detailToggleClose : zhTW.mobile.refinedLogic.aiEntry.detailToggleOpen}
+        onPress={() => setShowDetails((current) => !current)}
+      />
       {showDetails ? (
         <>
           <Text style={styles.costHint}>{zhTW.mobile.finalUx.aiCostControlHint}</Text>
-          <View style={styles.sourceList}>
+          <View style={styles.chipRow}>
             {zhTW.mobile.finalUx.databaseMatchSources.map((source) => (
-              <Text key={source} style={styles.sourcePill}>
-                {source}
-              </Text>
+              <Chip key={source} label={source} />
             ))}
           </View>
           <View style={styles.reasonList}>
@@ -438,13 +545,13 @@ function ExternalDiningAnalysis({ analysis, renderSuccessActions }: { analysis: 
           </View>
         </>
       ) : null}
-      <View style={styles.buttonRow}>
-        <Pressable style={styles.confirmButton} onPress={() => analysis.setMatchState("confirmed")}>
-          <Text style={styles.confirmButtonText}>{zhTW.mobile.analysis.confirmMatch}</Text>
-        </Pressable>
-        <Pressable style={styles.editButton} onPress={() => analysis.setMatchState("editing")}>
-          <Text style={styles.editButtonText}>{zhTW.mobile.analysis.notThis}</Text>
-        </Pressable>
+      <View style={styles.ctaRow2}>
+        <View style={styles.ctaItem}>
+          <PrimaryButton icon="check" label={zhTW.mobile.analysis.confirmMatch} onPress={() => analysis.setMatchState("confirmed")} />
+        </View>
+        <View style={styles.ctaItem}>
+          <SecondaryButton icon="edit" label={zhTW.mobile.analysis.notThis} onPress={() => analysis.setMatchState("editing")} />
+        </View>
       </View>
       {analysis.matchState === "confirmed" ? <Text style={styles.stateText}>{zhTW.mobile.analysis.confirmedMatch}</Text> : null}
       {analysis.matchState === "editing" ? (
@@ -453,21 +560,27 @@ function ExternalDiningAnalysis({ analysis, renderSuccessActions }: { analysis: 
           <Text style={styles.stateText}>{zhTW.mobile.analysis.futureLearning}</Text>
         </>
       ) : null}
-    </Card>
+    </SnowCard>
   );
 }
 
 function CandidateCorrectionList({ analysis, renderSuccessActions }: { analysis: ReturnType<typeof useAnalysisCorrectionState>; renderSuccessActions: () => ReactNode }) {
   return (
-    <Card>
-      <SectionTitle title={zhTW.mobile.finalUx.notThisMenuTitle} subtitle={zhTW.mobile.finalUx.notThisMenuBody} />
+    <SnowCard>
+      <SnowSectionHeader title={zhTW.mobile.finalUx.notThisMenuTitle} subtitle={zhTW.mobile.finalUx.notThisMenuBody} />
       <View style={styles.candidateList}>
         {zhTW.mobile.analysis.candidates.map((candidate) => (
           <Pressable key={`${candidate.restaurant}-${candidate.meal}`} style={styles.candidate} onPress={() => analysis.setMatchState("confirmed")}>
-            <Text style={styles.candidateTitle}>{candidate.restaurant}</Text>
-            <Text style={styles.candidateBody}>
-              {candidate.meal} | {candidate.confidence}
-            </Text>
+            <View style={styles.candidateHeader}>
+              <View style={styles.flex}>
+                <Text style={styles.candidateTitle}>{candidate.restaurant}</Text>
+                <Text style={styles.candidateBody}>{candidate.meal}</Text>
+              </View>
+              <View style={styles.candidateConfidence}>
+                <Icon name="check" size={14} color={snow.primaryDeep} />
+                <Text style={styles.candidateConfidenceText}>{candidate.confidence}</Text>
+              </View>
+            </View>
             <TagRow tags={candidate.tags} />
             <Text style={styles.optionCta}>{zhTW.mobile.finalUx.candidateOptionCta}</Text>
           </Pressable>
@@ -499,7 +612,7 @@ function CandidateCorrectionList({ analysis, renderSuccessActions }: { analysis:
         />
       ) : null}
       {analysis.correctionCompleted ? renderSuccessActions() : null}
-    </Card>
+    </SnowCard>
   );
 }
 
@@ -525,11 +638,12 @@ const styles = StyleSheet.create({
   },
   candidate: {
     gap: 8,
-    borderColor: colors.line,
-    borderRadius: 16,
+    borderColor: snow.line,
+    borderRadius: radius.base,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
-    padding: 12
+    backgroundColor: snow.card,
+    padding: 14,
+    ...shadows.soft
   },
   candidateBody: {
     color: colors.muted,
@@ -545,13 +659,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900"
   },
+  candidateHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  candidateConfidence: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: radius.pill,
+    backgroundColor: snow.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  candidateConfidenceText: {
+    color: snow.primaryDeep,
+    fontSize: 11.5,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
   optionCta: {
     alignSelf: "flex-start",
-    borderColor: colors.line,
-    borderRadius: 999,
+    borderColor: hexA(snow.primary, 0.2),
+    borderRadius: radius.pill,
     borderWidth: 1,
-    backgroundColor: colors.mint,
-    color: colors.teal,
+    backgroundColor: snow.primarySoft,
+    color: snow.primaryDeep,
     fontSize: 12,
     fontWeight: "900",
     marginTop: 2,
@@ -570,7 +705,7 @@ const styles = StyleSheet.create({
     borderColor: "#ffffff",
     borderRadius: 54,
     borderWidth: 7,
-    backgroundColor: colors.teal,
+    backgroundColor: "#8AAE97",
     height: 108,
     shadowColor: "#2d6b52",
     shadowOpacity: 0.2,
@@ -639,7 +774,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 999,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     color: colors.ink,
     fontSize: 12,
     fontWeight: "900",
@@ -670,7 +805,7 @@ const styles = StyleSheet.create({
   },
   detailToggle: {
     alignSelf: "flex-start",
-    borderColor: "#f0dcc2",
+    borderColor: colors.line,
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: "#ffffff",
@@ -755,10 +890,10 @@ const styles = StyleSheet.create({
     lineHeight: 24
   },
   intakeItem: {
-    borderColor: "#f0dcc2",
+    borderColor: colors.line,
     borderRadius: 22,
     borderWidth: 1,
-    backgroundColor: "#fffdf9",
+    backgroundColor: colors.card,
     flexGrow: 1,
     flexBasis: 145,
     padding: 16
@@ -774,9 +909,9 @@ const styles = StyleSheet.create({
     borderColor: "#ffffff",
     borderRadius: 42,
     borderWidth: 5,
-    backgroundColor: colors.teal,
+    backgroundColor: snow.primary,
     height: 82,
-    shadowColor: "#2d6b52",
+    shadowColor: snow.primaryDeep,
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -795,14 +930,15 @@ const styles = StyleSheet.create({
   },
   mealRecordCard: {
     gap: 8,
-    borderColor: "#f0dcc2",
-    borderRadius: 22,
+    borderColor: snow.line,
+    borderRadius: radius.base,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
-    padding: 14
+    backgroundColor: snow.card,
+    padding: 14,
+    ...shadows.soft
   },
   mealRecordCalories: {
-    color: colors.teal,
+    color: snow.primaryDeep,
     fontSize: 13,
     fontWeight: "900"
   },
@@ -829,9 +965,9 @@ const styles = StyleSheet.create({
   },
   mealTimePill: {
     alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: colors.mint,
-    color: colors.teal,
+    borderRadius: radius.pill,
+    backgroundColor: snow.primarySoft,
+    color: snow.primaryDeep,
     fontSize: 12,
     fontWeight: "900",
     paddingHorizontal: 10,
@@ -861,7 +997,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.coral
   },
   foodDotGreen: {
-    backgroundColor: colors.teal
+    backgroundColor: "#8AAE97"
   },
   foodDotAmber: {
     backgroundColor: colors.amber
@@ -937,10 +1073,10 @@ const styles = StyleSheet.create({
   },
   confirmModalCard: {
     gap: 16,
-    borderColor: "#f0c987",
+    borderColor: "#EEDAC2",
     borderRadius: 28,
     borderWidth: 1,
-    backgroundColor: "#fff8ee",
+    backgroundColor: colors.paper,
     maxWidth: 440,
     padding: 20,
     shadowColor: "#3f2d12",
@@ -1118,7 +1254,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 20,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     padding: 14
   },
   conditionGroup: {
@@ -1136,8 +1272,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6
   },
   supplementalCandidate: {
-    borderColor: colors.teal,
-    backgroundColor: colors.mint
+    borderColor: hexA(snow.ai, 0.18),
+    backgroundColor: snow.aiSoft
   },
   stateText: {
     color: colors.ink,
@@ -1155,6 +1291,56 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 15,
     fontWeight: "900"
+  },
+  macroRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14
+  },
+  macroChip: {
+    flexGrow: 1,
+    flexBasis: "22%",
+    alignItems: "center",
+    borderRadius: radius.base,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 2
+  },
+  macroChipPrimary: {
+    backgroundColor: hexA(snow.primary, 0.12)
+  },
+  macroChipAccent: {
+    backgroundColor: hexA(snow.accent, 0.12)
+  },
+  macroChipAmber: {
+    backgroundColor: hexA(snow.amber, 0.14)
+  },
+  macroChipValue: {
+    color: snow.ink,
+    fontSize: 16,
+    fontFamily: fonts.numeral,
+    fontWeight: "800"
+  },
+  macroValuePrimary: {
+    color: snow.primaryDeep
+  },
+  macroValueAccent: {
+    color: snow.accent
+  },
+  macroValueAmber: {
+    color: snow.amber
+  },
+  macroChipUnit: {
+    color: snow.sub,
+    fontSize: 10,
+    fontFamily: fonts.body
+  },
+  macroChipLabel: {
+    color: snow.sub,
+    fontSize: 11,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
   },
   todayIntakeButton: {
     alignItems: "center",
@@ -1193,6 +1379,217 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: "900",
     marginTop: 14
+  },
+  photoArea: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: hexA(snow.primary, 0.24),
+    borderStyle: "dashed",
+    backgroundColor: snow.card,
+    minHeight: 160,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    position: "relative",
+    overflow: "hidden"
+  },
+  photoAreaConfirmed: {
+    borderStyle: "solid",
+    borderColor: hexA(snow.primary, 0.12)
+  },
+  photoGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
+  },
+  photoBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: radius.pill,
+    backgroundColor: snow.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  photoConfidenceBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  photoCaptionBadge: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  photoBadgeText: {
+    color: snow.primaryDeep,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  photoIconLarge: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.7)"
+  },
+  photoIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: snow.primarySoft
+  },
+  photoAreaText: {
+    color: snow.sub,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12
+  },
+  quickChipsRow: {
+    marginTop: 4
+  },
+  quickChipsContent: {
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 2
+  },
+  quickChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: hexA(snow.primary, 0.18),
+    backgroundColor: snow.card,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    ...shadows.soft
+  },
+  quickChipText: {
+    color: snow.ink,
+    fontSize: 12.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  segmentTrack: {
+    flexDirection: "row",
+    gap: 6,
+    borderRadius: radius.pill,
+    backgroundColor: snow.bg2,
+    padding: 4,
+    marginTop: 14
+  },
+  segmentOption: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: radius.pill,
+    paddingVertical: 10
+  },
+  segmentOptionActive: {
+    backgroundColor: snow.card,
+    ...shadows.soft
+  },
+  segmentText: {
+    color: snow.sub,
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  segmentTextActive: {
+    color: snow.ink
+  },
+  statGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14
+  },
+  ingredientSection: {
+    marginTop: 16
+  },
+  ingredientLabel: {
+    color: snow.ink,
+    fontSize: 14,
+    fontFamily: fonts.bold,
+    fontWeight: "800",
+    marginBottom: 8
+  },
+  ingredientList: {
+    gap: 8
+  },
+  ingredientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: snow.line,
+    backgroundColor: snow.card,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  ingredientDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4
+  },
+  ingredientDotPrimary: {
+    backgroundColor: snow.primary
+  },
+  ingredientDotAccent: {
+    backgroundColor: snow.accent
+  },
+  ingredientDotAmber: {
+    backgroundColor: snow.amber
+  },
+  ingredientDotGreen: {
+    backgroundColor: snow.green
+  },
+  ingredientName: {
+    color: snow.ink,
+    fontSize: 13.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  ctaColumn: {
+    gap: 10,
+    marginTop: 16
+  },
+  ctaRow2: {
+    flexDirection: "row",
+    gap: 10
+  },
+  ctaItem: {
+    flex: 1
   }
 });
 

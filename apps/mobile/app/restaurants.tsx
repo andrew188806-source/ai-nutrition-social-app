@@ -3,9 +3,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { useRouter } from "expo-router";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { PremiumBadge, colors } from "../components/DemoUi";
 import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
+import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
+import { Icon } from "../theme/icons";
+import { fonts, radius, shadows, snowPalette as snow } from "../theme/tokens";
 
 const diningGoals = ["都可以", "均衡餐", "高蛋白", "低熱量", "低碳水", "清爽型", "飽足型", "蔬食", "放縱餐"];
 const cuisineTypes = ["都可以", "日式", "中式", "韓式", "美式", "義式", "泰式", "港式", "火鍋", "燒肉", "咖啡廳", "早午餐"];
@@ -80,6 +83,10 @@ export default function RestaurantsScreen() {
     setRecommendationModalVisible(true);
   }
 
+  function updateQuickFilter(key: "diningGoal" | "cuisineType", value: string) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
   function updateRecommendations() {
     const location = draftFilters.locationScope === "自訂地點" ? formatLocation(draftFilters) : draftFilters.locationScope;
     setFilters({ ...draftFilters, location });
@@ -150,77 +157,102 @@ export default function RestaurantsScreen() {
       subtitle="依據今日營養需求、飲食習慣與附近餐廳智慧推薦。"
       primaryAction={{ href: "/permissions", label: zhTW.mobile.home.profileCta }}
     >
-      <Card tone="amber">
-        <SectionTitle title="餐廳智慧推薦" subtitle="餐廳清單會依目前位置、今日營養缺口、歷史飲食習慣與附近社交機會排序。" />
-        <Text style={styles.aiSummary}>AI 會綜合今日已吃內容、剩餘營養需求、熱門度、飯友機會與四人桌機會，先幫你排出適合今天的餐廳。</Text>
-        <View style={styles.filterChipRow}>
+      <SnowCard tone="primary">
+        <SnowSectionHeader title="餐廳智慧推薦" subtitle="AI 會綜合今日已吃內容、剩餘營養需求、熱門度、飯友機會與四人桌機會，先幫你排出適合今天的餐廳。" />
+        <View style={styles.heroLocationRow}>
+          <View style={styles.heroLocationIcon}>
+            <Icon name="target" size={18} color={snow.primaryDeep} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.heroLocationLabel}>目前條件</Text>
+            <Text style={styles.heroLocationValue}>{filters.mode === "ai" ? "AI 智慧推薦 · 目前位置" : filters.location}</Text>
+          </View>
+        </View>
+        <View style={styles.snowChipRow}>
           {getActiveFilterLabels(filters).map((label) => (
-            <Text key={label} style={styles.filterChip}>{label}</Text>
+            <Chip key={label} label={label} />
           ))}
         </View>
-        <Pressable accessibilityRole="button" style={styles.socialButton} onPress={openRecommendationModal}>
-          <Text style={styles.socialButtonText}>調整推薦條件</Text>
-        </Pressable>
-      </Card>
+        <PrimaryButton icon="target" label="調整推薦條件" onPress={openRecommendationModal} />
+      </SnowCard>
 
+      <SnowSectionHeader title="飲食目標" subtitle="快速調整這次想吃的方向，餐廳排序會立即更新。" />
+      <View style={styles.snowChipRow}>
+        {diningGoals.map((goal) => (
+          <Chip key={goal} label={goal} active={filters.diningGoal === goal} onPress={() => updateQuickFilter("diningGoal", goal)} />
+        ))}
+      </View>
+
+      <SnowSectionHeader title="料理種類" />
+      <View style={styles.snowChipRow}>
+        {cuisineTypes.map((type) => (
+          <Chip key={type} label={type} tone="ai" active={filters.cuisineType === type} onPress={() => updateQuickFilter("cuisineType", type)} />
+        ))}
+      </View>
+
+      <SnowSectionHeader title="推薦餐廳" subtitle={`共 ${recommendedRestaurants.length} 間餐廳，依符合度排序`} />
       <View style={styles.cardList}>
         {recommendedRestaurants.map((restaurant) => {
           const reasons = getRecommendationReasons(restaurant, filters);
+          const saved = savedRestaurants.includes(restaurant.name);
           return (
-            <Card key={restaurant.name}>
-              <View style={styles.restaurantTop}>
+            <SnowCard key={restaurant.name}>
+              <View style={styles.restaurantHeaderRow}>
                 <View style={styles.flex}>
-                  <Text style={styles.restaurantName}>{restaurant.name}</Text>
-                  <Text style={styles.meta}>{zhTW.common.verified}｜{restaurant.distance}</Text>
+                  <Text style={styles.restaurantNameSnow}>{restaurant.name}</Text>
+                  <Text style={styles.restaurantMetaSnow}>{zhTW.common.verified}｜{restaurant.distance}</Text>
                 </View>
-                <View style={styles.scoreBlock}>
-                  <Text style={styles.score}>{restaurant.score}</Text>
-                  <Text style={styles.scoreLabel}>符合度</Text>
+                <View style={styles.scoreBadge}>
+                  <Text style={styles.scoreBadgeValue}>{restaurant.score}</Text>
+                  <Text style={styles.scoreBadgeLabel}>符合度</Text>
                 </View>
               </View>
-              <Text style={styles.reasonTitle}>推薦原因：</Text>
-              <View style={styles.reasonList}>
+              <View style={styles.cardReasonList}>
                 {reasons.map((reason) => (
-                  <Text key={reason} style={styles.reasonItem}>• {reason}</Text>
+                  <Text key={reason} style={styles.cardReasonItem}>· {reason}</Text>
                 ))}
               </View>
-              <Text style={styles.socialHint}>{getSocialHint(restaurant)}</Text>
-              <TagRow tags={restaurant.tags} />
-              <View style={styles.saveRow}>
+              <View style={styles.snowChipRow}>
+                <Chip label={getSocialHint(restaurant)} tone="ai" />
+                {restaurant.tags.map((tag) => (
+                  <Chip key={tag} label={tag} />
+                ))}
+              </View>
+              <View style={styles.cardFooterRow}>
                 <Pressable
                   accessibilityRole="button"
+                  style={styles.saveButton}
                   onPress={() =>
                     setSavedRestaurants((current) => (current.includes(restaurant.name) ? current.filter((name) => name !== restaurant.name) : [...current, restaurant.name]))
                   }
                 >
-                  <Text style={styles.save}>{savedRestaurants.includes(restaurant.name) ? "已收藏" : zhTW.common.save}</Text>
+                  <Icon name="bookmark" size={16} color={snow.primaryDeep} />
+                  <Text style={styles.saveButtonText}>{saved ? "已收藏" : zhTW.common.save}</Text>
                 </Pressable>
               </View>
-              <Pressable accessibilityRole="button" style={styles.socialButton} onPress={() => setPendingRestaurant(restaurant)}>
-                <Text style={styles.socialButtonText}>{zhTW.mobile.refinedLogic.mealBuddyCard.createRestaurantCardCta}</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" style={[styles.socialButton, styles.secondarySocialButton]} onPress={() => setPendingTableRestaurant(restaurant)}>
-                <Text style={styles.socialButtonText}>{zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta}</Text>
-              </Pressable>
-            </Card>
+              <View style={styles.ctaRow2}>
+                <View style={styles.ctaItem}>
+                  <PrimaryButton icon="buddies" label={zhTW.mobile.refinedLogic.mealBuddyCard.createRestaurantCardCta} onPress={() => setPendingRestaurant(restaurant)} />
+                </View>
+                <View style={styles.ctaItem}>
+                  <SecondaryButton icon="table4" label={zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta} onPress={() => setPendingTableRestaurant(restaurant)} />
+                </View>
+              </View>
+            </SnowCard>
           );
         })}
       </View>
 
       {pendingRestaurant ? (
-        <Card tone="mint">
-          <SectionTitle title={zhTW.mobile.refinedLogic.mealBuddyCard.diningTimeQuestion} subtitle={pendingRestaurant.name} />
-          <View style={styles.optionRow}>
+        <SnowCard tone="primary">
+          <SnowSectionHeader title={zhTW.mobile.refinedLogic.mealBuddyCard.diningTimeQuestion} subtitle={pendingRestaurant.name} />
+          <View style={styles.snowChipRow}>
             {zhTW.mobile.refinedLogic.mealBuddyCard.mealPeriods.map((period) => (
-              <Pressable accessibilityRole="button" key={period} style={styles.optionPill} onPress={() => startRestaurantMealBuddyCard(pendingRestaurant, period)}>
-                <Text style={styles.optionPillText}>{period}</Text>
-              </Pressable>
+              <Chip key={period} label={period} onPress={() => startRestaurantMealBuddyCard(pendingRestaurant, period)} />
             ))}
           </View>
-          <Pressable accessibilityRole="button" style={styles.secondaryButtonWide} onPress={() => setPendingRestaurant(null)}>
-            <Text style={styles.secondaryButtonText}>取消</Text>
-          </Pressable>
-        </Card>
+          <SecondaryButton label="取消" onPress={() => setPendingRestaurant(null)} />
+        </SnowCard>
       ) : null}
 
       <RestaurantTableActionModal
@@ -230,30 +262,32 @@ export default function RestaurantsScreen() {
         onFind={() => openRestaurantTableFlow("find")}
       />
 
-      <Card tone="amber">
-        <SectionTitle title={zhTW.mobile.restaurants.sponsoredTitle} subtitle={zhTW.mobile.restaurants.sponsoredBody} />
-        <Text style={styles.sponsored}>{zhTW.common.sponsored}</Text>
-      </Card>
+      <SnowCard tone="primary">
+        <SnowSectionHeader title={zhTW.mobile.restaurants.sponsoredTitle} subtitle={zhTW.mobile.restaurants.sponsoredBody} />
+        <View style={styles.snowChipRow}>
+          <Chip label={zhTW.common.sponsored} />
+        </View>
+      </SnowCard>
 
-      <Card tone="mint">
-        <SectionTitle title={zhTW.mobile.restaurants.socialMatchTitle} subtitle={zhTW.mobile.restaurants.socialMatchBody} />
+      <SnowCard tone="ai">
+        <SnowSectionHeader title={zhTW.mobile.restaurants.socialMatchTitle} subtitle={zhTW.mobile.restaurants.socialMatchBody} />
         <Text style={styles.privacyNote}>{zhTW.mobile.restaurants.socialPrivacyNote}</Text>
-        <Pressable accessibilityRole="button" style={styles.socialButton} onPress={() => router.push("/social")}>
-          <Text style={styles.socialButtonText}>{zhTW.mobile.restaurants.socialMatchCta}</Text>
-        </Pressable>
-      </Card>
+        <SecondaryButton icon="buddies" label={zhTW.mobile.restaurants.socialMatchCta} onPress={() => router.push("/social")} />
+      </SnowCard>
 
-      <Card tone="premium">
+      <SnowCard tone="primary">
         <PremiumBadge label={zhTW.mobile.premiumUi.premiumTables} />
-        <SectionTitle title={zhTW.mobile.restaurants.groupTableTitle} subtitle={zhTW.mobile.restaurants.groupTableBody} />
-        <Text style={styles.aaRule}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
-        <Pressable accessibilityRole="button" style={styles.groupButton} onPress={() => router.push("/meal-buddies?section=tables")}>
-          <Text style={styles.groupButtonText}>{zhTW.mobile.correctedFlow.createGroupTable}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" style={[styles.groupButton, styles.secondaryGroupButton]} onPress={() => router.push("/meal-buddies?section=tables")}>
-          <Text style={styles.groupButtonText}>{zhTW.mobile.correctedFlow.viewTonightTable}</Text>
-        </Pressable>
-      </Card>
+        <SnowSectionHeader title={zhTW.mobile.restaurants.groupTableTitle} subtitle={zhTW.mobile.restaurants.groupTableBody} />
+        <Text style={styles.privacyNote}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
+        <View style={styles.ctaRow2}>
+          <View style={styles.ctaItem}>
+            <PrimaryButton icon="table4" label={zhTW.mobile.correctedFlow.createGroupTable} onPress={() => router.push("/meal-buddies?section=tables")} />
+          </View>
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="table4" label={zhTW.mobile.correctedFlow.viewTonightTable} onPress={() => router.push("/meal-buddies?section=tables")} />
+          </View>
+        </View>
+      </SnowCard>
 
       <RestaurantRecommendationModal
         customLocationEditing={customLocationEditing}
@@ -606,28 +640,14 @@ function getSituationBoost(restaurant: Restaurant, situation: string) {
 }
 
 const styles = StyleSheet.create({
-  aaRule: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: "900",
-    lineHeight: 19,
-    marginTop: 12
-  },
   aiModeCard: {
     borderColor: colors.line,
     borderRadius: 18,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     gap: 6,
     marginTop: 14,
     padding: 14
-  },
-  aiSummary: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 19,
-    marginTop: 10
   },
   cancelButton: {
     alignItems: "center",
@@ -644,13 +664,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  cardFooterRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 10
+  },
   cardList: {
     gap: 12
+  },
+  cardReasonItem: {
+    color: snow.sub,
+    fontSize: 12.5,
+    fontFamily: fonts.body,
+    lineHeight: 18
+  },
+  cardReasonList: {
+    gap: 4,
+    marginTop: 12
   },
   closeText: {
     color: colors.coral,
     fontSize: 14,
     fontWeight: "900"
+  },
+  ctaItem: {
+    flex: 1
+  },
+  ctaRow2: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12
   },
   customFields: {
     gap: 4,
@@ -660,7 +703,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 18,
     borderWidth: 1,
-    backgroundColor: "#fffdf8",
+    backgroundColor: colors.card,
     marginTop: 10,
     padding: 12
   },
@@ -717,23 +760,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
-  filterChip: {
-    backgroundColor: "#ffffff",
-    borderColor: colors.line,
-    borderRadius: 999,
-    borderWidth: 1,
-    color: colors.ink,
-    fontSize: 12,
-    fontWeight: "900",
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  filterChipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 14
-  },
   flex: {
     flex: 1,
     gap: 5
@@ -744,28 +770,36 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 14
   },
-  groupButton: {
+  heroLocationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
     alignItems: "center",
-    borderRadius: 14,
-    backgroundColor: colors.teal,
-    marginTop: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12
+    justifyContent: "center",
+    backgroundColor: snow.primarySoft
   },
-  groupButtonText: {
-    color: "#ffffff",
+  heroLocationLabel: {
+    color: snow.sub,
+    fontSize: 11.5,
+    fontFamily: fonts.body
+  },
+  heroLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 14
+  },
+  heroLocationValue: {
+    color: snow.ink,
     fontSize: 14,
-    fontWeight: "900"
+    fontFamily: fonts.bold,
+    fontWeight: "800",
+    marginTop: 2
   },
   locationActionRow: {
     flexDirection: "row",
     gap: 10,
     marginTop: 12
-  },
-  meta: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "700"
   },
   modalActions: {
     flexDirection: "row",
@@ -779,14 +813,15 @@ const styles = StyleSheet.create({
     paddingBottom: 6
   },
   modalCard: {
-    backgroundColor: colors.cream,
+    backgroundColor: colors.card,
     borderColor: colors.line,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     borderWidth: 1,
     maxHeight: "88%",
     maxWidth: 520,
     padding: 18,
-    width: "92%"
+    width: "92%",
+    ...shadows.lift
   },
   modalHeader: {
     alignItems: "center",
@@ -804,25 +839,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 20,
     fontWeight: "900"
-  },
-  optionPill: {
-    borderColor: colors.line,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 10,
-    paddingVertical: 7
-  },
-  optionPillText: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  optionRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12
   },
   privacyNote: {
     color: colors.muted,
@@ -871,78 +887,74 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 19
   },
-  reasonList: {
-    gap: 3,
-    marginBottom: 10,
-    marginTop: 4
-  },
   reasonTitle: {
     color: colors.ink,
     fontSize: 13,
     fontWeight: "900",
     marginTop: 6
   },
-  restaurantName: {
-    color: colors.ink,
-    fontSize: 19,
-    fontWeight: "900"
-  },
-  restaurantTop: {
-    alignItems: "center",
+  restaurantHeaderRow: {
     flexDirection: "row",
-    gap: 14,
-    marginBottom: 10
+    alignItems: "flex-start",
+    gap: 12
   },
-  save: {
-    color: colors.teal,
-    fontSize: 13,
-    fontWeight: "900"
+  restaurantMetaSnow: {
+    color: snow.sub,
+    fontSize: 12.5,
+    fontFamily: fonts.body,
+    marginTop: 2
   },
-  saveRow: {
-    alignItems: "flex-end",
-    marginTop: 12
+  restaurantNameSnow: {
+    color: snow.ink,
+    fontSize: 17,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
-  score: {
-    color: colors.teal,
-    fontSize: 22,
-    fontWeight: "900",
-    textAlign: "right"
-  },
-  scoreBlock: {
-    alignItems: "flex-end"
-  },
-  scoreLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "900"
-  },
-  secondaryButtonText: {
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900"
-  },
-  secondaryButtonWide: {
+  saveButton: {
+    flexDirection: "row",
     alignItems: "center",
-    borderColor: colors.line,
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    marginTop: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12
+    gap: 6
   },
-  secondaryGroupButton: {
-    backgroundColor: colors.ink,
-    marginTop: 10
+  saveButtonText: {
+    color: snow.primaryDeep,
+    fontSize: 12.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  scoreBadge: {
+    alignItems: "center",
+    borderRadius: radius.base,
+    backgroundColor: snow.primarySoft,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 68
+  },
+  scoreBadgeLabel: {
+    color: snow.sub,
+    fontSize: 10.5,
+    fontFamily: fonts.body,
+    marginTop: 2
+  },
+  scoreBadgeValue: {
+    color: snow.primaryDeep,
+    fontSize: 18,
+    fontFamily: fonts.numeral,
+    fontWeight: "800"
   },
   secondarySocialButton: {
     backgroundColor: colors.teal,
     marginTop: 10
   },
+  snowChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12
+  },
   socialButton: {
     alignItems: "center",
     borderRadius: 14,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.coral,
     marginTop: 14,
     paddingHorizontal: 16,
     paddingVertical: 12
@@ -952,32 +964,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
-  socialHint: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: colors.mint,
-    color: colors.teal,
-    fontSize: 12,
-    fontWeight: "900",
-    marginBottom: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  sponsored: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: "#ffffff",
-    color: colors.coral,
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
   updateButton: {
     alignItems: "center",
     borderRadius: 14,
-    backgroundColor: colors.ink,
+    backgroundColor: colors.coral,
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12
