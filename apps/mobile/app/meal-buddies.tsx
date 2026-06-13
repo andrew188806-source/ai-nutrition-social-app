@@ -5,7 +5,7 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, DemoModeToggle, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
-import { Icon } from "../theme/icons";
+import { Icon, type IconName } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
 import { getAvatarDisplayLabel, getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
 import {
@@ -198,6 +198,31 @@ export default function MealBuddyHomeScreen() {
     return () => clearTimeout(timer);
   }, [recommendationGroups]);
 
+  function goToMatchedBuddies() {
+    setFriendInitialTab("matched");
+    setActiveSection("friends");
+  }
+
+  function goToPendingInvites() {
+    setFriendInitialTab("invitations");
+    setActiveSection("friends");
+  }
+
+  function goToChats() {
+    setFocusedChatId("");
+    setFocusedChatName("");
+    setFriendInitialTab("chats");
+    setActiveSection("friends");
+  }
+
+  function goToMealTables() {
+    setActiveSection("gatherings");
+  }
+
+  function goToFourSeatTableCreation() {
+    setActiveSection("tables");
+  }
+
   return (
     <PlaceholderScreen
       title={zhTW.mobile.mainSections.friendsTitle}
@@ -218,17 +243,26 @@ export default function MealBuddyHomeScreen() {
         }}
       />
       <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
-      <TopSectionTabs activeSection={activeSection} onChange={setActiveSection} />
+
+      {activeSection !== "discover" ? <SecondaryButton icon="home" label="回到找飯友" onPress={() => setActiveSection("discover")} /> : null}
 
       {activeSection === "discover" ? (
         <DiscoverSection
           activeCards={activeCards}
           cardUsage={cardUsage}
+          chats={chats}
           dailyUsage={dailyUsage}
+          invites={invites}
           isPremium={demoMode === "premium"}
           highlightCardCreatedAt={params.highlightCardCreatedAt}
+          matchedFriendsCount={matchedFriends.length}
           recommendationGroups={recommendationGroups}
           onCardsChanged={() => setActiveCards(getActiveMealBuddyCards())}
+          onGoToChats={goToChats}
+          onGoToFourSeatTableCreation={goToFourSeatTableCreation}
+          onGoToMatchedBuddies={goToMatchedBuddies}
+          onGoToMealTables={goToMealTables}
+          onGoToPendingInvites={goToPendingInvites}
           onDeleteCard={(card) => {
             deleteMealBuddyCard(card);
             setActiveCards(getActiveMealBuddyCards());
@@ -403,35 +437,37 @@ function recommendationGroupElementId(groupId: string) {
   return `meal-buddy-recommendations-${groupId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
-function TopSectionTabs({ activeSection, onChange }: { activeSection: MealBuddySection; onChange: (section: MealBuddySection) => void }) {
-  const items: Array<{ id: MealBuddySection; label: string }> = [
-    { id: "discover", label: "找飯友" },
-    { id: "friends", label: "我的飯友" },
-    { id: "tables", label: "四人餐桌" },
-    { id: "gatherings", label: "飯局" }
-  ];
-
+function StatusEntry({ icon, label, value, dot = false, onPress }: { icon: IconName; label: string; value: string; dot?: boolean; onPress?: () => void }) {
   return (
-    <SnowCard>
-      <View style={styles.snowChipRow}>
-        {items.map((item) => (
-          <Chip key={item.id} label={item.label} active={activeSection === item.id} onPress={() => onChange(item.id)} />
-        ))}
+    <Pressable style={styles.statusEntry} onPress={onPress}>
+      <View style={styles.statusEntryIconWrap}>
+        <Icon name={icon} size={18} color={snow.primaryDeep} />
+        {dot ? <View style={styles.statusEntryDot} /> : null}
       </View>
-    </SnowCard>
+      <Text style={styles.statusEntryValue}>{value}</Text>
+      <Text style={styles.statusEntryLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
 function DiscoverSection({
   activeCards,
   cardUsage,
+  chats,
   dailyUsage,
+  invites,
   highlightCardCreatedAt,
   isPremium,
+  matchedFriendsCount,
   paidQuotaMessage,
   recommendationGroups,
   onCardsChanged,
   onDeleteCard,
+  onGoToChats,
+  onGoToFourSeatTableCreation,
+  onGoToMatchedBuddies,
+  onGoToMealTables,
+  onGoToPendingInvites,
   onInviteEat,
   onInviteTable,
   onOpenChat,
@@ -441,13 +477,21 @@ function DiscoverSection({
 }: {
   activeCards: MealBuddyCard[];
   cardUsage: ReturnType<typeof getActiveCardUsage>;
+  chats: ReturnType<typeof getMealBuddyChats>;
   dailyUsage: ReturnType<typeof getDailyVisibleUsage>;
+  invites: ReturnType<typeof getMealBuddyInvites>;
   highlightCardCreatedAt?: string;
   isPremium: boolean;
+  matchedFriendsCount: number;
   paidQuotaMessage: string;
   recommendationGroups: RecommendationGroup[];
   onCardsChanged: () => void;
   onDeleteCard: (card: MealBuddyCard) => void;
+  onGoToChats: () => void;
+  onGoToFourSeatTableCreation: () => void;
+  onGoToMatchedBuddies: () => void;
+  onGoToMealTables: () => void;
+  onGoToPendingInvites: () => void;
   onInviteEat: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onInviteTable: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenChat: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
@@ -472,6 +516,10 @@ function DiscoverSection({
           .includes(normalizedQuery)
       )
     : activeCards;
+  const sentInvitesCount = invites.filter((invite) => invite.direction === "sent" && invite.status === "pending").length;
+  const receivedInvitesCount = invites.filter((invite) => invite.direction === "received" && invite.status === "pending").length;
+  const hasUnreadChats = chats.some((chat) => chat.unread);
+  const totalCardCount = cardUsage.general.count + cardUsage.restaurant.count;
 
   useEffect(() => {
     const targetCard = activeCards.find((card) => card.createdAt === highlightCardCreatedAt) ?? activeCards.find((card) => card.sourceType === "ai_recommendation");
@@ -534,37 +582,62 @@ function DiscoverSection({
         />
       </SnowCard>
 
-      <SnowCard tone="primary">
-        <SnowSectionHeader title="我的飯友卡" subtitle="你建立並放進配對池的飯友卡都在這裡管理。" />
-        <View style={styles.statGrid}>
-          <StatCard icon="buddies" label="一般飯友卡" value={`${cardUsage.general.count}/${cardUsage.general.limit}`} tone="primary" />
-          <StatCard icon="table4" label="餐廳飯友卡" value={`${cardUsage.restaurant.count}/${cardUsage.restaurant.limit}`} />
-          <StatCard icon="spark" label="今日可看飯友" value={`${dailyUsage.used}/${dailyUsage.limit}`} tone="ai" />
+      <SnowCard>
+        <SnowSectionHeader title="狀態" subtitle="快速查看配對進度，前往聊天、邀請、飯友桌與四人餐桌。" />
+        <View style={styles.statusGrid}>
+          <StatusEntry icon="buddies" label="我的卡" value={`${totalCardCount}`} onPress={() => focusElementAfterRender("meal-buddy-my-cards-section")} />
+          <StatusEntry icon="heart" label="已配對" value={`${matchedFriendsCount}`} onPress={onGoToMatchedBuddies} />
+          <StatusEntry icon="invite" label="邀請中" value={`${sentInvitesCount}`} dot={receivedInvitesCount > 0} onPress={onGoToPendingInvites} />
+          <StatusEntry icon="chat" label="聊天" value={`${chats.length}`} dot={hasUnreadChats} onPress={onGoToChats} />
         </View>
         <View style={styles.ctaRow2}>
           <View style={styles.ctaItem}>
-            <PrimaryButton icon="plus" label="建立飯友卡" onPress={() => requestCreateCard("general")} />
+            <PrimaryButton icon="table4" label="飯友桌" onPress={onGoToMealTables} />
           </View>
           <View style={styles.ctaItem}>
-            <SecondaryButton icon="plate" label="建立餐廳卡" onPress={() => requestCreateCard("restaurant")} />
+            <SecondaryButton icon="plus" label="建立飯友卡" onPress={() => requestCreateCard("general")} />
           </View>
         </View>
-        {cardQuotaMessage ? <Text style={styles.message}>{cardQuotaMessage}</Text> : null}
-        {formTarget ? <InlineMealBuddyCardForm card={formTarget.card} cardType={formTarget.cardType} mode={formTarget.mode} onCancel={() => setFormTarget(null)} onSave={saveInlineCard} /> : null}
-        <MealBuddyCardGroup
-          cards={filteredCards}
-          emptyBody={normalizedQuery ? "找不到符合搜尋條件的飯友卡。" : "目前還沒有飯友卡。可以先建立一張，或從 AI 分析、餐廳頁快速產生。"}
-          emptyTitle={normalizedQuery ? "沒有符合的飯友卡" : "尚未建立飯友卡"}
-          expanded={expandedGroups.all}
-          highlightCardId={highlightCardId}
-          label="卡片列表"
-          onCreate={() => requestCreateCard("general")}
-          onDelete={onDeleteCard}
-          onEdit={(card) => setFormTarget({ card, cardType: card.cardType, mode: "edit" })}
-          onToggle={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}
-          onUse={onUseCard}
-        />
+        <View style={styles.ctaRow2}>
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="table4" label="四人餐桌" onPress={onGoToFourSeatTableCreation} />
+          </View>
+        </View>
       </SnowCard>
+
+      <View nativeID="meal-buddy-my-cards-section">
+        <SnowCard tone="primary">
+          <SnowSectionHeader title="我的飯友卡" subtitle="你建立並放進配對池的飯友卡都在這裡管理。" />
+          <View style={styles.statGrid}>
+            <StatCard icon="buddies" label="一般飯友卡" value={`${cardUsage.general.count}/${cardUsage.general.limit}`} tone="primary" />
+            <StatCard icon="table4" label="餐廳飯友卡" value={`${cardUsage.restaurant.count}/${cardUsage.restaurant.limit}`} />
+            <StatCard icon="spark" label="今日可看飯友" value={`${dailyUsage.used}/${dailyUsage.limit}`} tone="ai" />
+          </View>
+          <View style={styles.ctaRow2}>
+            <View style={styles.ctaItem}>
+              <PrimaryButton icon="plus" label="建立飯友卡" onPress={() => requestCreateCard("general")} />
+            </View>
+            <View style={styles.ctaItem}>
+              <SecondaryButton icon="plate" label="建立餐廳卡" onPress={() => requestCreateCard("restaurant")} />
+            </View>
+          </View>
+          {cardQuotaMessage ? <Text style={styles.message}>{cardQuotaMessage}</Text> : null}
+          {formTarget ? <InlineMealBuddyCardForm card={formTarget.card} cardType={formTarget.cardType} mode={formTarget.mode} onCancel={() => setFormTarget(null)} onSave={saveInlineCard} /> : null}
+          <MealBuddyCardGroup
+            cards={filteredCards}
+            emptyBody={normalizedQuery ? "找不到符合搜尋條件的飯友卡。" : "目前還沒有飯友卡。可以先建立一張，或從 AI 分析、餐廳頁快速產生。"}
+            emptyTitle={normalizedQuery ? "沒有符合的飯友卡" : "尚未建立飯友卡"}
+            expanded={expandedGroups.all}
+            highlightCardId={highlightCardId}
+            label="卡片列表"
+            onCreate={() => requestCreateCard("general")}
+            onDelete={onDeleteCard}
+            onEdit={(card) => setFormTarget({ card, cardType: card.cardType, mode: "edit" })}
+            onToggle={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}
+            onUse={onUseCard}
+          />
+        </SnowCard>
+      </View>
 
       <SnowSectionHeader title="今日推薦飯友" subtitle={`${isPremium ? "依你選擇的飯友卡推薦" : "免費版推薦"} · 今日已看 ${dailyUsage.used}/${dailyUsage.limit}`} />
 
@@ -641,11 +714,32 @@ function DiscoverSection({
       />
 
       <SnowCard tone="primary">
-        <SnowSectionHeader
-          title={isPremium ? "Premium 已啟用" : "升級看更多飯友"}
-          subtitle={isPremium ? "Premium 每日最多可看 10 張飯友卡，並可用進階條件找更適合的人。" : "免費版每日可看 3 張飯友卡。升級後可查看更多推薦與完整社群卡。"}
-        />
-        {!isPremium ? <PrimaryButton icon="lock" label="了解升級" onPress={onOpenPremium} /> : null}
+        <SnowSectionHeader title="匿名卡 vs 真人卡" subtitle="飯友卡會依身份顯示不同的頭像與資訊，配對前可以先了解差異。" />
+        <View style={styles.compareRow}>
+          <View style={styles.compareIconWrap}>
+            <Icon name="user" size={18} color={snow.primaryDeep} />
+          </View>
+          <View style={styles.compareTextWrap}>
+            <Text style={styles.compareTitle}>匿名卡</Text>
+            <Text style={styles.compareDesc}>顯示匿名頭像與基本喜好，免費與 Premium 用戶皆可配對。</Text>
+          </View>
+          <Icon name="check" size={18} color={snow.green} />
+        </View>
+        <View style={[styles.compareRow, styles.compareRowDivider]}>
+          <View style={styles.compareIconWrap}>
+            <Icon name="star" size={18} color={snow.primaryDeep} />
+          </View>
+          <View style={styles.compareTextWrap}>
+            <Text style={styles.compareTitle}>真人卡</Text>
+            <Text style={styles.compareDesc}>顯示真實頭像與完整社群卡，Premium 用戶可查看更多真人飯友配對。</Text>
+          </View>
+          {isPremium ? <Icon name="check" size={18} color={snow.green} /> : <Icon name="lock" size={18} color={snow.faint} />}
+        </View>
+        {!isPremium ? (
+          <View style={styles.compareCta}>
+            <PrimaryButton icon="lock" label="升級解鎖真人卡配對" onPress={onOpenPremium} />
+          </View>
+        ) : null}
       </SnowCard>
     </>
   );
@@ -1077,24 +1171,18 @@ function MyFriendsSection({
     return <FriendCommunityCard friend={selectedFriend} isPremium={isPremium} onBack={() => setMode("list")} />;
   }
 
+  const friendsTabHeader: Record<MyFriendsTab, { title: string; subtitle: string }> = {
+    matched: { title: "已配對", subtitle: "這裡只放已成功配對的飯友，不包含待回覆邀請。" },
+    invitations: { title: "邀請中", subtitle: "顯示你送出與收到的待回覆邀請，未接受的邀請不會出現在聊天列表。" },
+    chats: { title: "聊天", subtitle: "顯示目前已建立的聊天室列表。" }
+  };
+
   return (
     <>
-      <SnowCard tone="ai">
-        <SnowSectionHeader title="我的飯友" subtitle="已配對、配對中與聊天會分開管理，未接受的邀請不會混進聊天列表。" />
-        <View style={styles.snowChipRow}>
-          {([
-            { id: "matched", label: "已配對" },
-            { id: "invitations", label: "配對中" },
-            { id: "chats", label: "聊天" }
-          ] as Array<{ id: MyFriendsTab; label: string }>).map((item) => (
-            <Chip key={item.id} label={item.label} active={activeTab === item.id} tone="ai" onPress={() => setActiveTab(item.id)} />
-          ))}
-        </View>
-      </SnowCard>
+      <SnowSectionHeader title={friendsTabHeader[activeTab].title} subtitle={friendsTabHeader[activeTab].subtitle} />
 
       {activeTab === "matched" ? (
         <>
-          <SnowSectionHeader title="已配對" subtitle="這裡只放已成功配對的飯友，不包含待回覆邀請。" />
           <View style={styles.snowChipRow}>
             {(["飯局數", "認識時間", "最近同桌"] as FriendSort[]).map((item) => (
               <Chip key={item} label={item} active={sort === item} onPress={() => setSort(item)} />
@@ -1500,7 +1588,7 @@ function GatheringsSection({
   return (
     <>
       <SnowCard tone="primary">
-        <SnowSectionHeader title="飯局" subtitle="進行中、邀請中與已結束分開管理，讓每個飯局狀態更清楚。" />
+        <SnowSectionHeader title="飯友桌" subtitle="配對好還沒吃的飯局（進行中）與已經吃完的飯局（已結束）分開管理，邀請中的飯局也能在這裡追蹤。" />
         <View style={styles.snowChipRow}>
           {([
             { id: "ongoing", label: "進行中" },
@@ -2565,6 +2653,93 @@ const styles = StyleSheet.create({
   },
   ctaItem: {
     flex: 1
+  },
+  statusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14
+  },
+  statusEntry: {
+    flex: 1,
+    minWidth: 70,
+    alignItems: "center",
+    gap: 6,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: snow.line,
+    backgroundColor: snow.card,
+    paddingVertical: 12,
+    ...shadows.soft
+  },
+  statusEntryIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: snow.primarySoft
+  },
+  statusEntryDot: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: snow.accent,
+    borderWidth: 1.5,
+    borderColor: snow.card
+  },
+  statusEntryValue: {
+    color: snow.ink,
+    fontSize: 16,
+    fontFamily: fonts.numeral,
+    fontWeight: "800"
+  },
+  statusEntryLabel: {
+    color: snow.sub,
+    fontSize: 11.5,
+    fontFamily: fonts.body
+  },
+  compareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 14
+  },
+  compareRowDivider: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: snow.line
+  },
+  compareIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: snow.primarySoft
+  },
+  compareTextWrap: {
+    flex: 1,
+    gap: 2
+  },
+  compareTitle: {
+    color: snow.ink,
+    fontSize: 14,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  compareDesc: {
+    color: snow.sub,
+    fontSize: 12,
+    fontFamily: fonts.body,
+    lineHeight: 17
+  },
+  compareCta: {
+    marginTop: 14
   },
   groupHeaderRow: {
     flexDirection: "row",

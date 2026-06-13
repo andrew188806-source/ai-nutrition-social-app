@@ -26,7 +26,9 @@ export type IconName =
   | "table4"
   | "invite"
   | "arrowUp"
-  | "chat";
+  | "chat"
+  | "pin"
+  | "search";
 
 type IconProps = {
   name: IconName;
@@ -197,6 +199,20 @@ function renderIcon(name: IconName, shared: { stroke: string; strokeWidth: numbe
       );
     case "chat":
       return <Path d="M20.5 11.5c0 4.7-3.8 8.5-8.5 8.5-1.2 0-2.3-.2-3.4-.7L3.5 21l1.2-4.1A8.4 8.4 0 0 1 3.5 11.5C3.5 6.8 7.3 3 12 3s8.5 3.8 8.5 8.5Z" {...shared} />;
+    case "pin":
+      return (
+        <>
+          <Path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z" {...shared} />
+          <Circle cx="12" cy="10" r="2.4" {...shared} />
+        </>
+      );
+    case "search":
+      return (
+        <>
+          <Circle cx="11" cy="11" r="6.5" {...shared} />
+          <Path d="M16 16l4.5 4.5" {...shared} />
+        </>
+      );
     default:
       return <Circle cx="12" cy="12" r="9" {...shared} />;
   }

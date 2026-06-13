@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { PremiumBadge, colors } from "../components/DemoUi";
@@ -8,7 +9,7 @@ import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../fea
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
-import { fonts, radius, shadows, snowPalette as snow } from "../theme/tokens";
+import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
 
 const diningGoals = ["都可以", "均衡餐", "高蛋白", "低熱量", "低碳水", "清爽型", "飽足型", "蔬食", "放縱餐"];
 const cuisineTypes = ["都可以", "日式", "中式", "韓式", "美式", "義式", "泰式", "港式", "火鍋", "燒肉", "咖啡廳", "早午餐"];
@@ -30,6 +31,28 @@ const locationTree = {
 type City = keyof typeof locationTree;
 type District<C extends City = City> = keyof (typeof locationTree)[C];
 type Restaurant = (typeof zhTW.mobile.restaurants.list)[number];
+
+// RestaurantDish / restaurantDishes hold ONLY restaurant-owned menu items (source
+// "restaurant_menu" or "ai_user_uploaded" attached to this restaurant's restaurantId).
+// A user's own homemade / manually logged dishes ("我做的料理") are a separate concept
+// tracked in apps/mobile/features/self-made-dishes (SelfMadeDish, keyed by userId) and
+// must never be added to restaurantDishes or shown in a restaurant's "均衡推薦" list.
+type DishSource = "restaurant_menu" | "ai_user_uploaded";
+type DishVerificationStatus = "restaurant_verified" | "ai_estimated" | "pending_review";
+type RestaurantDish = {
+  id: string;
+  restaurantId: string;
+  name: string;
+  calories: number;
+  nutritionTags: string[];
+  mealType?: string;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  fiber?: number;
+  source: DishSource;
+  verificationStatus: DishVerificationStatus;
+};
 type RecommendationMode = "ai" | "custom";
 type DropdownKey = "locationScope" | "city" | "district" | "place" | "diningGoal" | "cuisineType" | "diningSituation" | null;
 
@@ -57,6 +80,149 @@ const defaultFilters: RestaurantFilters = {
   place: "市府商圈"
 };
 
+// Mock restaurant-owned menu data. Each dish belongs to exactly one restaurant via restaurantId
+// ("restaurant-<name>", matching the id format used for Meal Buddy Card / four-person table flows).
+const restaurantDishes: RestaurantDish[] = [
+  {
+    id: "dish-haochu-1",
+    restaurantId: "restaurant-好初健康碗",
+    name: "雞胸高蛋白碗",
+    calories: 620,
+    nutritionTags: ["高蛋白", "熱量管理"],
+    mealType: "午餐",
+    protein: 38,
+    carbs: 55,
+    fat: 14,
+    fiber: 5,
+    source: "restaurant_menu",
+    verificationStatus: "restaurant_verified"
+  },
+  {
+    id: "dish-haochu-2",
+    restaurantId: "restaurant-好初健康碗",
+    name: "高纖蔬食碗",
+    calories: 480,
+    nutritionTags: ["高纖飲食", "蔬食選項", "低卡選項"],
+    mealType: "午餐",
+    protein: 16,
+    carbs: 64,
+    fat: 12,
+    fiber: 11,
+    source: "restaurant_menu",
+    verificationStatus: "restaurant_verified"
+  },
+  {
+    id: "dish-haochu-3",
+    restaurantId: "restaurant-好初健康碗",
+    name: "雞胸溫沙拉早餐盒",
+    calories: 390,
+    nutritionTags: ["高蛋白", "低卡選項"],
+    mealType: "早餐",
+    protein: 24,
+    carbs: 30,
+    fat: 14,
+    fiber: 6,
+    source: "ai_user_uploaded",
+    verificationStatus: "pending_review"
+  },
+  {
+    id: "dish-mori-1",
+    restaurantId: "restaurant-森日蔬食廚房",
+    name: "蔬食咖哩飯",
+    calories: 540,
+    nutritionTags: ["蔬食選項", "高纖飲食"],
+    mealType: "午餐",
+    protein: 14,
+    carbs: 78,
+    fat: 16,
+    fiber: 9,
+    source: "restaurant_menu",
+    verificationStatus: "ai_estimated"
+  },
+  {
+    id: "dish-mori-2",
+    restaurantId: "restaurant-森日蔬食廚房",
+    name: "豆腐蕈菇湯麵",
+    calories: 460,
+    nutritionTags: ["低卡選項", "蔬食選項"],
+    mealType: "晚餐",
+    protein: 17,
+    carbs: 58,
+    fat: 12,
+    fiber: 8,
+    source: "restaurant_menu",
+    verificationStatus: "ai_estimated"
+  },
+  {
+    id: "dish-mori-3",
+    restaurantId: "restaurant-森日蔬食廚房",
+    name: "蔬食歐姆蛋早餐盤",
+    calories: 410,
+    nutritionTags: ["蔬食選項", "高蛋白"],
+    mealType: "早餐",
+    protein: 19,
+    carbs: 34,
+    fat: 18,
+    fiber: 6,
+    source: "ai_user_uploaded",
+    verificationStatus: "ai_estimated"
+  },
+  {
+    id: "dish-mountain-1",
+    restaurantId: "restaurant-山線蛋白餐盒",
+    name: "瘦蛋白便當",
+    calories: 560,
+    nutritionTags: ["高蛋白菜單", "適合增肌"],
+    mealType: "晚餐",
+    protein: 46,
+    carbs: 52,
+    fat: 11,
+    fiber: 6,
+    source: "restaurant_menu",
+    verificationStatus: "ai_estimated"
+  },
+  {
+    id: "dish-mountain-2",
+    restaurantId: "restaurant-山線蛋白餐盒",
+    name: "雙重雞胸蛋白盤",
+    calories: 590,
+    nutritionTags: ["高蛋白菜單", "熱量管理"],
+    mealType: "午餐",
+    protein: 52,
+    carbs: 40,
+    fat: 12,
+    fiber: 5,
+    source: "restaurant_menu",
+    verificationStatus: "ai_estimated"
+  },
+  {
+    id: "dish-mountain-3",
+    restaurantId: "restaurant-山線蛋白餐盒",
+    name: "蛋白魚塊餐盒",
+    calories: 530,
+    nutritionTags: ["高蛋白菜單", "適合減脂"],
+    mealType: "晚餐",
+    protein: 44,
+    carbs: 45,
+    fat: 13,
+    fiber: 5,
+    source: "ai_user_uploaded",
+    verificationStatus: "pending_review"
+  }
+];
+
+function getRestaurantDishes(restaurant: Restaurant) {
+  const restaurantId = `restaurant-${restaurant.name}`;
+  return restaurantDishes.filter((dish) => dish.restaurantId === restaurantId);
+}
+
+function getDishStatusLabel(dish: RestaurantDish) {
+  if (dish.source === "ai_user_uploaded") {
+    return dish.verificationStatus === "pending_review" ? "使用者拍照上傳・待確認" : "使用者拍照上傳・AI 估算";
+  }
+  return dish.verificationStatus === "ai_estimated" ? "AI 估算營養值" : null;
+}
+
 export default function RestaurantsScreen() {
   const router = useRouter();
   const [demoMode] = useDemoUserPlan();
@@ -68,6 +234,8 @@ export default function RestaurantsScreen() {
   const [pendingRestaurant, setPendingRestaurant] = useState<Restaurant | null>(null);
   const [pendingTableRestaurant, setPendingTableRestaurant] = useState<Restaurant | null>(null);
   const [savedRestaurants, setSavedRestaurants] = useState<string[]>([]);
+  const [createdRestaurantNames, setCreatedRestaurantNames] = useState<string[]>([]);
+  const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
 
   const selectedCityDistricts = Object.keys(locationTree[draftFilters.city]) as Array<District<typeof draftFilters.city>>;
   const selectedPlaces = (locationTree[draftFilters.city] as Record<string, readonly string[]>)[draftFilters.district] ?? [];
@@ -120,6 +288,8 @@ export default function RestaurantsScreen() {
     const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags.join("、"), filters.location, preferredTime);
     upsertMealBuddyCardWithQuota(card, demoMode);
     setPendingRestaurant(null);
+    setCreatedRestaurantNames((current) => (current.includes(restaurant.name) ? current : [...current, restaurant.name]));
+    setDetailRestaurant(null);
     router.push({
       pathname: "/meal-buddies",
       params: {
@@ -128,6 +298,24 @@ export default function RestaurantsScreen() {
         section: "discover"
       }
     });
+  }
+
+  function openRestaurantDetail(restaurant: Restaurant) {
+    setDetailRestaurant(restaurant);
+  }
+
+  function closeRestaurantDetail() {
+    setDetailRestaurant(null);
+  }
+
+  function startCreateFromDetail(restaurant: Restaurant) {
+    setDetailRestaurant(null);
+    setPendingRestaurant(restaurant);
+  }
+
+  function startTableFromDetail(restaurant: Restaurant) {
+    setDetailRestaurant(null);
+    setPendingTableRestaurant(restaurant);
   }
 
   function openRestaurantTableFlow(action: "find" | "create") {
@@ -157,17 +345,19 @@ export default function RestaurantsScreen() {
       subtitle="依據今日營養需求、飲食習慣與附近餐廳智慧推薦。"
       primaryAction={{ href: "/permissions", label: zhTW.mobile.home.profileCta }}
     >
+      <Pressable accessibilityRole="button" style={styles.locationRow} onPress={openRecommendationModal}>
+        <Icon name="pin" size={18} color={snow.primaryDeep} />
+        <Text style={styles.locationRowText} numberOfLines={1}>
+          {filters.mode === "ai" ? "AI 智慧推薦 · 目前位置" : filters.location}
+        </Text>
+        <View style={styles.locationRowAction}>
+          <Icon name="search" size={15} color={snow.primary} />
+          <Text style={styles.locationRowActionText}>搜尋</Text>
+        </View>
+      </Pressable>
+
       <SnowCard tone="primary">
         <SnowSectionHeader title="餐廳智慧推薦" subtitle="AI 會綜合今日已吃內容、剩餘營養需求、熱門度、飯友機會與四人桌機會，先幫你排出適合今天的餐廳。" />
-        <View style={styles.heroLocationRow}>
-          <View style={styles.heroLocationIcon}>
-            <Icon name="target" size={18} color={snow.primaryDeep} />
-          </View>
-          <View style={styles.flex}>
-            <Text style={styles.heroLocationLabel}>目前條件</Text>
-            <Text style={styles.heroLocationValue}>{filters.mode === "ai" ? "AI 智慧推薦 · 目前位置" : filters.location}</Text>
-          </View>
-        </View>
         <View style={styles.snowChipRow}>
           {getActiveFilterLabels(filters).map((label) => (
             <Chip key={label} label={label} />
@@ -176,18 +366,21 @@ export default function RestaurantsScreen() {
         <PrimaryButton icon="target" label="調整推薦條件" onPress={openRecommendationModal} />
       </SnowCard>
 
-      <SnowSectionHeader title="飲食目標" subtitle="快速調整這次想吃的方向，餐廳排序會立即更新。" />
-      <View style={styles.snowChipRow}>
-        {diningGoals.map((goal) => (
-          <Chip key={goal} label={goal} active={filters.diningGoal === goal} onPress={() => updateQuickFilter("diningGoal", goal)} />
-        ))}
+      <View style={styles.filterRow}>
+        <Text style={styles.filterRowLabel}>目標</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowScroll}>
+          {diningGoals.map((goal) => (
+            <Chip key={goal} label={goal} active={filters.diningGoal === goal} onPress={() => updateQuickFilter("diningGoal", goal)} />
+          ))}
+        </ScrollView>
       </View>
-
-      <SnowSectionHeader title="料理種類" />
-      <View style={styles.snowChipRow}>
-        {cuisineTypes.map((type) => (
-          <Chip key={type} label={type} tone="ai" active={filters.cuisineType === type} onPress={() => updateQuickFilter("cuisineType", type)} />
-        ))}
+      <View style={styles.filterRow}>
+        <Text style={styles.filterRowLabel}>種類</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowScroll}>
+          {cuisineTypes.map((type) => (
+            <Chip key={type} label={type} tone="ai" active={filters.cuisineType === type} onPress={() => updateQuickFilter("cuisineType", type)} />
+          ))}
+        </ScrollView>
       </View>
 
       <SnowSectionHeader title="推薦餐廳" subtitle={`共 ${recommendedRestaurants.length} 間餐廳，依符合度排序`} />
@@ -195,47 +388,77 @@ export default function RestaurantsScreen() {
         {recommendedRestaurants.map((restaurant) => {
           const reasons = getRecommendationReasons(restaurant, filters);
           const saved = savedRestaurants.includes(restaurant.name);
+          const verified = isRestaurantVerified(restaurant);
+          const created = createdRestaurantNames.includes(restaurant.name);
           return (
-            <SnowCard key={restaurant.name}>
-              <View style={styles.restaurantHeaderRow}>
-                <View style={styles.flex}>
-                  <Text style={styles.restaurantNameSnow}>{restaurant.name}</Text>
-                  <Text style={styles.restaurantMetaSnow}>{zhTW.common.verified}｜{restaurant.distance}</Text>
+            <SnowCard key={restaurant.name} style={styles.restaurantCard}>
+              <Pressable accessibilityRole="button" style={styles.restaurantCardTouchable} onPress={() => openRestaurantDetail(restaurant)}>
+                <View style={styles.restaurantHero}>
+                  <LinearGradient colors={[snow.heroFrom, snow.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                  <Icon name="plate" size={30} color={hexA(snow.primaryDeep, 0.55)} />
                 </View>
-                <View style={styles.scoreBadge}>
-                  <Text style={styles.scoreBadgeValue}>{restaurant.score}</Text>
-                  <Text style={styles.scoreBadgeLabel}>符合度</Text>
+                <View style={styles.restaurantContent}>
+                  <View style={styles.restaurantTitleRow}>
+                    <View style={styles.restaurantNameGroup}>
+                      <Text style={styles.restaurantNameSnow} numberOfLines={1}>{restaurant.name}</Text>
+                      {verified ? <Icon name="check" size={13} color={snow.green} /> : null}
+                    </View>
+                    <View style={styles.scoreBadge}>
+                      <Text style={styles.scoreBadgeValue}>{restaurant.score}</Text>
+                      <Text style={styles.scoreBadgeLabel}>符合度</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.restaurantMetaSnow}>{inferCuisineType(restaurant)} · {restaurant.distance}</Text>
+                  <View style={styles.restaurantTagsRow}>
+                    {restaurant.tags.map((tag) => (
+                      <View key={tag} style={styles.restaurantTagChip}>
+                        <Text style={styles.restaurantTagChipText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              </View>
-              <View style={styles.cardReasonList}>
-                {reasons.map((reason) => (
-                  <Text key={reason} style={styles.cardReasonItem}>· {reason}</Text>
-                ))}
-              </View>
-              <View style={styles.snowChipRow}>
-                <Chip label={getSocialHint(restaurant)} tone="ai" />
-                {restaurant.tags.map((tag) => (
-                  <Chip key={tag} label={tag} />
-                ))}
-              </View>
-              <View style={styles.cardFooterRow}>
-                <Pressable
-                  accessibilityRole="button"
-                  style={styles.saveButton}
-                  onPress={() =>
-                    setSavedRestaurants((current) => (current.includes(restaurant.name) ? current.filter((name) => name !== restaurant.name) : [...current, restaurant.name]))
-                  }
-                >
-                  <Icon name="bookmark" size={16} color={snow.primaryDeep} />
-                  <Text style={styles.saveButtonText}>{saved ? "已收藏" : zhTW.common.save}</Text>
-                </Pressable>
-              </View>
-              <View style={styles.ctaRow2}>
-                <View style={styles.ctaItem}>
-                  <PrimaryButton icon="buddies" label={zhTW.mobile.refinedLogic.mealBuddyCard.createRestaurantCardCta} onPress={() => setPendingRestaurant(restaurant)} />
+              </Pressable>
+
+              <View style={styles.restaurantFooter}>
+                <View style={styles.cardReasonList}>
+                  {reasons.map((reason) => (
+                    <Text key={reason} style={styles.cardReasonItem}>· {reason}</Text>
+                  ))}
                 </View>
-                <View style={styles.ctaItem}>
-                  <SecondaryButton icon="table4" label={zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta} onPress={() => setPendingTableRestaurant(restaurant)} />
+
+                <View style={styles.cardFooterRow}>
+                  <Pressable accessibilityRole="button" style={styles.detailLink} onPress={() => openRestaurantDetail(restaurant)}>
+                    <Icon name="leaf" size={14} color={snow.primary} />
+                    <Text style={styles.detailLinkText}>營養詳情</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={created}
+                    style={[styles.createCardPill, created && styles.createCardPillDone]}
+                    onPress={() => setPendingRestaurant(restaurant)}
+                  >
+                    <Icon name={created ? "check" : "invite"} size={14} color={created ? snow.green : snow.primaryDeep} />
+                    <Text style={[styles.createCardPillText, created && styles.createCardPillTextDone]}>
+                      {created ? "已建立" : zhTW.mobile.refinedLogic.mealBuddyCard.createRestaurantCardCta}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <View style={styles.cardActionsRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={styles.saveButton}
+                    onPress={() =>
+                      setSavedRestaurants((current) => (current.includes(restaurant.name) ? current.filter((name) => name !== restaurant.name) : [...current, restaurant.name]))
+                    }
+                  >
+                    <Icon name="bookmark" size={16} color={snow.primaryDeep} />
+                    <Text style={styles.saveButtonText}>{saved ? "已收藏" : zhTW.common.save}</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" style={styles.tablePill} onPress={() => setPendingTableRestaurant(restaurant)}>
+                    <Icon name="table4" size={14} color={snow.sub} />
+                    <Text style={styles.tablePillText}>{zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta}</Text>
+                  </Pressable>
                 </View>
               </View>
             </SnowCard>
@@ -303,6 +526,14 @@ export default function RestaurantsScreen() {
         setCustomLocationEditing={setCustomLocationEditing}
         setDraftFilters={setDraftFilters}
         visible={recommendationModalVisible}
+      />
+
+      <RestaurantDetailModal
+        created={detailRestaurant ? createdRestaurantNames.includes(detailRestaurant.name) : false}
+        onClose={closeRestaurantDetail}
+        onCreateCard={startCreateFromDetail}
+        onCreateTable={startTableFromDetail}
+        restaurant={detailRestaurant}
       />
     </PlaceholderScreen>
   );
@@ -546,6 +777,122 @@ function RestaurantTableActionModal({
   );
 }
 
+function RestaurantDetailModal({
+  created,
+  onClose,
+  onCreateCard,
+  onCreateTable,
+  restaurant
+}: {
+  created: boolean;
+  onClose: () => void;
+  onCreateCard: (restaurant: Restaurant) => void;
+  onCreateTable: (restaurant: Restaurant) => void;
+  restaurant: Restaurant | null;
+}) {
+  const verified = restaurant ? isRestaurantVerified(restaurant) : false;
+  const dishes = restaurant ? getRestaurantDishes(restaurant) : [];
+
+  return (
+    <Modal transparent animationType="fade" visible={Boolean(restaurant)} onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.detailModalCard}>
+          {restaurant ? (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.detailHero}>
+                <LinearGradient colors={[snow.heroFrom, snow.heroTo]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                <Icon name="plate" size={36} color={hexA(snow.primaryDeep, 0.5)} />
+                <View style={styles.detailHeroBadge}>
+                  <Icon name="star" size={13} color={snow.primaryDeep} filled />
+                  <Text style={styles.detailHeroBadgeText}>{restaurant.score}</Text>
+                </View>
+                <Pressable accessibilityRole="button" style={styles.detailCloseButton} onPress={onClose}>
+                  <Text style={styles.detailCloseButtonText}>✕</Text>
+                </Pressable>
+              </View>
+              <View style={styles.detailBody}>
+                <View style={styles.detailNameRow}>
+                  <Text style={styles.detailName}>{restaurant.name}</Text>
+                  {verified ? (
+                    <View style={styles.verifiedDot}>
+                      <Icon name="check" size={11} color="#ffffff" />
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.restaurantMetaSnow}>
+                  {inferCuisineType(restaurant)} · {restaurant.distance} · 符合度 {restaurant.score}
+                </Text>
+
+                <View style={[styles.nutritionInfoBox, verified && styles.nutritionInfoBoxVerified]}>
+                  <Icon name={verified ? "shield" : "leaf"} size={16} color={verified ? snow.green : snow.sub} />
+                  <View style={styles.nutritionInfoTextGroup}>
+                    <Text style={styles.nutritionInfoTitle}>{verified ? "營養標示已驗證" : "營養標示估算中"}</Text>
+                    <Text style={styles.nutritionInfoBody}>
+                      {verified ? "本店菜單熱量與營養已由豪食友核實，外食也能安心均衡。" : "尚未核實，數值為 AI 估算，僅供參考。"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.restaurantTagsRow}>
+                  {restaurant.tags.map((tag) => (
+                    <View key={tag} style={styles.restaurantTagChip}>
+                      <Text style={styles.restaurantTagChipText}>{tag}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <Text style={styles.detailSectionLabel}>均衡推薦</Text>
+                {dishes.length > 0 ? (
+                  <View style={styles.dishList}>
+                    {dishes.map((dish) => {
+                      const statusLabel = getDishStatusLabel(dish);
+                      return (
+                        <View key={dish.id} style={styles.dishRow}>
+                          <View style={styles.dishIconBox}>
+                            <Icon name="plate" size={16} color={snow.primaryDeep} />
+                          </View>
+                          <View style={styles.dishContent}>
+                            <View style={styles.dishMainRow}>
+                              <Text style={styles.dishName}>{dish.name}</Text>
+                              {dish.nutritionTags[0] ? (
+                                <View style={styles.dishTag}>
+                                  <Text style={styles.dishTagText}>{dish.nutritionTags[0]}</Text>
+                                </View>
+                              ) : null}
+                              <Text style={styles.dishCalories}>{dish.calories} kcal</Text>
+                            </View>
+                            {statusLabel ? <Text style={styles.dishStatusNote}>{statusLabel}</Text> : null}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.dishEmptyState}>
+                    <Text style={styles.dishEmptyTitle}>目前尚無可推薦菜色</Text>
+                    <Text style={styles.dishEmptyBody}>等餐廳上架菜單或使用者拍照補充後會出現在這裡</Text>
+                  </View>
+                )}
+
+                <View style={styles.detailCtaGroup}>
+                  <PrimaryButton
+                    icon={created ? "check" : "invite"}
+                    label={created ? "已建立飯友卡" : zhTW.mobile.refinedLogic.mealBuddyCard.createRestaurantCardCta}
+                    onPress={() => onCreateCard(restaurant)}
+                  />
+                  <View style={styles.detailSecondaryCta}>
+                    <SecondaryButton icon="table4" label={zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta} onPress={() => onCreateTable(restaurant)} />
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function DropdownField({ label, onOpen, onSelect, open, options, value }: { label: string; onOpen: () => void; onSelect: (value: string) => void; open: boolean; options: string[]; value: string }) {
   return (
     <View style={styles.dropdownField}>
@@ -625,6 +972,11 @@ function getSocialHint(restaurant: Restaurant) {
   return "附近有人收藏過這家店";
 }
 
+function isRestaurantVerified(restaurant: Restaurant) {
+  const tags: readonly string[] = restaurant.tags;
+  return tags.includes(zhTW.common.verified);
+}
+
 function inferCuisineType(restaurant: Restaurant) {
   if (restaurant.name.includes("蔬食")) return "蔬食 咖啡廳";
   if (restaurant.name.includes("健康碗") || restaurant.name.includes("蛋白")) return "日式 早午餐";
@@ -664,9 +1016,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
-  cardFooterRow: {
+  cardActionsRow: {
+    alignItems: "center",
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    marginTop: 8
+  },
+  cardFooterRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 10
   },
   cardList: {
@@ -687,6 +1046,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  createCardPill: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: hexA(snow.primary, 0.2),
+    backgroundColor: snow.primarySoft,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  createCardPillDone: {
+    borderColor: snow.line,
+    backgroundColor: snow.bg2
+  },
+  createCardPillText: {
+    color: snow.primaryDeep,
+    fontSize: 12.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  createCardPillTextDone: {
+    color: snow.green
+  },
   ctaItem: {
     flex: 1
   },
@@ -706,6 +1089,177 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     marginTop: 10,
     padding: 12
+  },
+  detailBody: {
+    padding: 18
+  },
+  detailCloseButton: {
+    alignItems: "center",
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    height: 32,
+    justifyContent: "center",
+    position: "absolute",
+    right: 14,
+    top: 14,
+    width: 32
+  },
+  detailCloseButtonText: {
+    color: snow.ink,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  detailCtaGroup: {
+    marginTop: 18
+  },
+  detailHero: {
+    alignItems: "center",
+    height: 128,
+    justifyContent: "center"
+  },
+  detailHeroBadge: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    flexDirection: "row",
+    gap: 4,
+    left: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    position: "absolute",
+    top: 12
+  },
+  detailHeroBadgeText: {
+    color: snow.primaryDeep,
+    fontSize: 12.5,
+    fontFamily: fonts.numeralMedium,
+    fontWeight: "800"
+  },
+  detailLink: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  detailLinkText: {
+    color: snow.primary,
+    fontSize: 12.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  detailModalCard: {
+    backgroundColor: snow.card,
+    borderRadius: radius.lg,
+    maxHeight: "86%",
+    maxWidth: 520,
+    overflow: "hidden",
+    width: "92%",
+    ...shadows.lift
+  },
+  detailName: {
+    color: snow.ink,
+    flexShrink: 1,
+    fontSize: 20,
+    fontFamily: fonts.black,
+    fontWeight: "800"
+  },
+  detailNameRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  detailSecondaryCta: {
+    marginTop: 10
+  },
+  detailSectionLabel: {
+    color: snow.sub,
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    fontWeight: "700",
+    marginBottom: 4,
+    marginTop: 14
+  },
+  dishCalories: {
+    color: snow.primaryDeep,
+    fontFamily: fonts.numeralMedium,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  dishContent: {
+    flex: 1,
+    gap: 4
+  },
+  dishEmptyBody: {
+    color: snow.sub,
+    fontSize: 12,
+    fontFamily: fonts.body,
+    textAlign: "center"
+  },
+  dishEmptyState: {
+    alignItems: "center",
+    backgroundColor: snow.bg2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: hexA(snow.line, 0.8),
+    gap: 4,
+    marginTop: 8,
+    padding: 14
+  },
+  dishEmptyTitle: {
+    color: snow.ink,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  dishIconBox: {
+    alignItems: "center",
+    backgroundColor: snow.primarySoft,
+    borderRadius: 11,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  dishList: {
+    gap: 8,
+    marginTop: 8
+  },
+  dishMainRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  dishName: {
+    color: snow.ink,
+    flex: 1,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  dishRow: {
+    alignItems: "flex-start",
+    backgroundColor: snow.card,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: hexA(snow.line, 0.8),
+    flexDirection: "row",
+    gap: 10,
+    padding: 10
+  },
+  dishStatusNote: {
+    color: snow.sub,
+    fontFamily: fonts.body,
+    fontSize: 11
+  },
+  dishTag: {
+    backgroundColor: hexA(snow.green, 0.16),
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3
+  },
+  dishTagText: {
+    color: snow.green,
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    fontWeight: "700"
   },
   dropdownArrow: {
     color: colors.teal,
@@ -760,6 +1314,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  filterRow: {
+    gap: 6,
+    marginTop: 4
+  },
+  filterRowLabel: {
+    color: snow.sub,
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  filterRowScroll: {
+    flexDirection: "row",
+    gap: 8,
+    paddingRight: 4
+  },
   flex: {
     flex: 1,
     gap: 5
@@ -770,36 +1339,44 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 14
   },
-  heroLocationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: snow.primarySoft
-  },
-  heroLocationLabel: {
-    color: snow.sub,
-    fontSize: 11.5,
-    fontFamily: fonts.body
-  },
-  heroLocationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 14
-  },
-  heroLocationValue: {
-    color: snow.ink,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-    fontWeight: "800",
-    marginTop: 2
-  },
   locationActionRow: {
     flexDirection: "row",
     gap: 10,
     marginTop: 12
+  },
+  locationRow: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: snow.line,
+    backgroundColor: snow.card,
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    ...shadows.soft
+  },
+  locationRowAction: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    backgroundColor: snow.primarySoft,
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  locationRowActionText: {
+    color: snow.primaryDeep,
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  locationRowText: {
+    color: snow.ink,
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
   modalActions: {
     flexDirection: "row",
@@ -839,6 +1416,36 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 20,
     fontWeight: "900"
+  },
+  nutritionInfoBox: {
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: hexA(snow.line, 0.9),
+    backgroundColor: snow.bg2,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+    padding: 13
+  },
+  nutritionInfoBoxVerified: {
+    borderColor: hexA(snow.green, 0.3),
+    backgroundColor: hexA(snow.green, 0.1)
+  },
+  nutritionInfoBody: {
+    color: snow.sub,
+    fontSize: 11.5,
+    fontFamily: fonts.body,
+    lineHeight: 17,
+    marginTop: 2
+  },
+  nutritionInfoTextGroup: {
+    flex: 1
+  },
+  nutritionInfoTitle: {
+    color: snow.ink,
+    fontSize: 12.5,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
   privacyNote: {
     color: colors.muted,
@@ -893,10 +1500,22 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 6
   },
-  restaurantHeaderRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12
+  restaurantCard: {
+    overflow: "hidden",
+    padding: 0
+  },
+  restaurantCardTouchable: {},
+  restaurantContent: {
+    padding: 16
+  },
+  restaurantFooter: {
+    paddingBottom: 16,
+    paddingHorizontal: 16
+  },
+  restaurantHero: {
+    alignItems: "center",
+    height: 84,
+    justifyContent: "center"
   },
   restaurantMetaSnow: {
     color: snow.sub,
@@ -904,11 +1523,42 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     marginTop: 2
   },
+  restaurantNameGroup: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: 6
+  },
   restaurantNameSnow: {
     color: snow.ink,
+    flexShrink: 1,
     fontSize: 17,
     fontFamily: fonts.bold,
     fontWeight: "800"
+  },
+  restaurantTagChip: {
+    borderRadius: radius.pill,
+    backgroundColor: snow.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4
+  },
+  restaurantTagChipText: {
+    color: snow.primaryDeep,
+    fontSize: 11.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  restaurantTagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8
+  },
+  restaurantTitleRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between"
   },
   saveButton: {
     flexDirection: "row",
@@ -964,6 +1614,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  tablePill: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: snow.line,
+    backgroundColor: snow.card,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  tablePillText: {
+    color: snow.sub,
+    fontSize: 12.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
   updateButton: {
     alignItems: "center",
     borderRadius: 14,
@@ -976,5 +1643,13 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 14,
     fontWeight: "900"
+  },
+  verifiedDot: {
+    alignItems: "center",
+    borderRadius: radius.pill,
+    backgroundColor: snow.green,
+    height: 18,
+    justifyContent: "center",
+    width: 18
   }
 });
