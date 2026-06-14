@@ -1,9 +1,10 @@
 import { useRouter } from "expo-router";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav, DemoModeToggle, PremiumBadge } from "../components/DemoUi";
 import { useDemoUserPlan } from "../features/demo-user-plan";
-import { Card, Chip, CompactRow, PersonAvatar, SectionHeader, StatCard } from "../theme/components";
+import { getSelfMadeDishes } from "../features/self-made-dishes";
+import { Card, Chip, CompactRow, IconButton, PersonAvatar, SectionHeader, StatCard } from "../theme/components";
 import type { IconName } from "../theme/icons";
 import { fonts, snowPalette as colors } from "../theme/tokens";
 
@@ -23,10 +24,13 @@ export default function MeScreen() {
   const diary = zhTW.mobile.mealLog.foodDiary;
   const settings = zhTW.mobile.communityCardSettings;
   const premiumUi = zhTW.mobile.premiumUi;
+  const todayNutrition = zhTW.mobile.todayNutritionSummary;
   const latestMonth = diary.monthlyCards[0];
+  const selfMadeDishes = getSelfMadeDishes("demo-user");
 
   const diaryItems: ProfileRowItem[] = [
     { icon: "leaf", title: diary.dailyDiaryTitle, subtitle: diary.dailyDiaryBody, onPress: () => router.push("/meal-log") },
+    { icon: "chart", title: todayNutrition.cardTitle, subtitle: todayNutrition.cardSubtitle, onPress: () => router.push("/today-intake") },
     { icon: "heart", title: diary.favoritesTitle, subtitle: diary.favoritesBody, onPress: () => router.push("/meal-log") },
     { icon: "bookmark", title: diary.highestScoreTitle, subtitle: diary.highestScoreBody, onPress: () => router.push("/meal-log") }
   ];
@@ -58,24 +62,29 @@ export default function MeScreen() {
           <Text style={styles.subtitle}>{profile.subtitle}</Text>
         </View>
 
+        {/* 1. Profile summary card */}
         <Card tone="primary">
           <View style={styles.profileRow}>
             <PersonAvatar type="real" initial={settings.nicknameValue.slice(0, 1)} size={56} />
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{settings.nicknameValue}</Text>
+              <View style={styles.profileNameRow}>
+                <Text style={styles.profileName}>{settings.nicknameValue}</Text>
+                {isPremium ? <Chip label={premiumUi.premiumBadge} active tone="primary" /> : null}
+              </View>
               <Text style={styles.profileIntro} numberOfLines={2}>
                 {settings.introValue}
               </Text>
             </View>
+            <IconButton icon="edit" tone="primary" onPress={() => router.push("/community-card-settings")} />
           </View>
-          <View style={styles.planRow}>
-            <Chip label={isPremium ? premiumUi.premiumBadge : premiumUi.freeBadge} active={isPremium} tone="primary" />
-            <Pressable onPress={() => router.push("/permissions")}>
-              <Text style={styles.manageLink}>{zhTW.mobile.home.profileCta}</Text>
-            </Pressable>
+          <View style={styles.statGrid}>
+            <StatCard icon="star" label="本月評分" value={latestMonth.score.replace("月評分：", "")} tone="primary" />
+            <StatCard icon="heart" label="收藏餐點" value={`${diary.favoriteCards.length} 道`} />
+            <StatCard icon="leaf" label="蛋白質達標" value={latestMonth.proteinDays.replace("蛋白質達標 ", "")} tone="ai" />
           </View>
         </Card>
 
+        {/* 2. Premium status card */}
         <Card tone="primary">
           <View style={styles.premiumBadgeRow}>
             <PremiumBadge label={isPremium ? premiumUi.premiumBadge : premiumUi.freeBadge} variant={isPremium ? "premium" : "free"} />
@@ -90,19 +99,15 @@ export default function MeScreen() {
           </View>
         </Card>
 
+        {/* 3. Food/nutrition record entries */}
         <Card tone="blush">
           <SectionHeader title={diary.monthlyScoreTitle} subtitle={`${latestMonth.month} · ${diary.monthlyScoreBody}`} />
-          <View style={styles.statGrid}>
-            <StatCard icon="star" label="本月評分" value={latestMonth.score.replace("月評分：", "")} tone="primary" />
-            <StatCard icon="flame" label="平均熱量" value={latestMonth.averageCalories.replace("平均每日 ", "")} />
-            <StatCard icon="leaf" label="蛋白質達標" value={latestMonth.proteinDays.replace("蛋白質達標 ", "")} tone="ai" />
-          </View>
           <View style={styles.scoreDetailList}>
+            <Text style={styles.scoreDetailItem}>· {latestMonth.averageCalories}</Text>
             <Text style={styles.scoreDetailItem}>· {latestMonth.vegetableDays}</Text>
             <Text style={styles.scoreDetailItem}>· {latestMonth.highFrequency}</Text>
             <Text style={styles.scoreDetailItem}>· {latestMonth.suggestion}</Text>
           </View>
-          <CompactRow icon="chart" iconTone="primary" title={diary.unifiedTitle} subtitle="查看每日紀錄卡、歷史月評分與收藏美食卡" onPress={() => router.push("/meal-log")} />
         </Card>
 
         <View style={styles.section}>
@@ -114,6 +119,7 @@ export default function MeScreen() {
           </View>
         </View>
 
+        {/* 4. Social record entries */}
         <View style={styles.section}>
           <SectionHeader title="飯友與餐桌紀錄" subtitle="快速回到你的飯友配對、四人餐桌與飯局狀態。" />
           <View style={styles.rowList}>
@@ -123,6 +129,20 @@ export default function MeScreen() {
           </View>
         </View>
 
+        {/* 5. 我做的料理 — self-made dishes, kept separate from restaurant menu dishes */}
+        <View style={styles.section}>
+          <SectionHeader title="我做的料理" subtitle="自己煮的餐點與用 AI 拍照記錄的家常菜，與餐廳菜單分開保存。" />
+          <CompactRow
+            icon="plate"
+            iconTone="primary"
+            title="我做的料理"
+            subtitle={selfMadeDishes.length > 0 ? `已記錄 ${selfMadeDishes.length} 道自煮料理` : "尚未新增自煮料理"}
+            value={zhTW.common.comingSoon}
+            onPress={() => Alert.alert("我做的料理", "完整的自煮料理收藏頁面即將推出，敬請期待。")}
+          />
+        </View>
+
+        {/* 6. Settings/privacy entries */}
         <View style={styles.section}>
           <SectionHeader title={profile.accountSettingsTitle} />
           <View style={styles.rowList}>
@@ -173,6 +193,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4
   },
+  profileNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
   profileName: {
     color: colors.ink,
     fontSize: 18,
@@ -184,18 +209,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     fontFamily: fonts.body
-  },
-  planRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 14
-  },
-  manageLink: {
-    color: colors.primaryDeep,
-    fontSize: 13,
-    fontFamily: fonts.bold,
-    fontWeight: "800"
   },
   premiumBadgeRow: {
     marginBottom: 8

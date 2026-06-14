@@ -1,10 +1,17 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
-import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
+import { BottomNav, DemoModeToggle, PremiumBadge } from "../components/DemoUi";
+import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCard";
 import { getLatestCorrectedMealRecord, getMealRecords } from "../features/analysis/analysisMealRecordStore";
+import { calculateTodayNutritionSummary, getTodayMealRecords } from "../features/analysis/nutritionSummary";
+import type { SavedMealRecord } from "../features/analysis/types";
 import { useDemoUserPlan } from "../features/demo-user-plan";
+import { getSelfMadeDishes, type SelfMadeDish } from "../features/self-made-dishes";
+import { Card, Chip, CompactRow, SecondaryButton, SectionHeader } from "../theme/components";
+import { Icon } from "../theme/icons";
+import { fonts, hexA, radius, shadows, snowPalette as colors } from "../theme/tokens";
 
 type RankingGroupId = "category" | "location" | "restaurant";
 type DailyCard = (typeof zhTW.mobile.mealLog.foodDiary.dailyCards)[number];
@@ -23,24 +30,30 @@ type MonthlyCard = (typeof zhTW.mobile.mealLog.foodDiary.monthlyCards)[number];
 type FavoriteCard = (typeof zhTW.mobile.mealLog.foodDiary.favoriteCards)[number];
 type RankingCard = (typeof zhTW.mobile.mealLog.foodDiary.rankingCards)[number];
 
+const emptyField = zhTW.mobile.refinedLogic.mealBuddyCard.emptyField;
+
 export default function MealLogScreen() {
+  const router = useRouter();
   const diary = zhTW.mobile.mealLog.foodDiary;
   const mealRecords = getMealRecords();
   const savedMeal = getLatestCorrectedMealRecord();
-  const correctedMealCards = mealRecords.map((meal, index) => ({
+  const todaySummary = calculateTodayNutritionSummary(getTodayMealRecords());
+  const selfMadeDishes = getSelfMadeDishes("demo-user");
+  const mealRecordGroups = groupMealRecordsByDate(mealRecords);
+  const correctedMealCards: MealCard[] = mealRecords.map((meal, index) => ({
     id: `corrected-meal-${index}`,
     slot: meal.mealPeriod,
-    name: meal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField,
-    source: `${zhTW.mobile.finalUx.restaurantNameLabel}｜${meal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}`,
+    name: meal.mealName || emptyField,
+    source: `${zhTW.mobile.finalUx.restaurantNameLabel}｜${meal.restaurantName || emptyField}`,
     calories: `${meal.calories} kcal`,
     macros: `${zhTW.mobile.analysis.protein} ${meal.protein}g｜${zhTW.mobile.analysis.carbs} ${meal.carbohydrates}g｜${zhTW.mobile.analysis.fat} ${meal.fat}g`,
-    rating: zhTW.mobile.mealLog.foodDiary.editRatingCta,
+    rating: diary.editRatingCta,
     review: `${meal.ingredients}｜${meal.portion}`,
-    photoLabel: zhTW.mobile.mealLog.foodDiary.mealDetailTitle
+    photoLabel: diary.mealDetailTitle
   }));
+
   const [demoUserPlan, setDemoUserPlan] = useDemoUserPlan();
-  const mode = demoUserPlan === "premium" ? "paid" : "free";
-  const setMode = (nextMode: "free" | "paid") => setDemoUserPlan(nextMode === "paid" ? "premium" : "free");
+  const isPaid = demoUserPlan === "premium";
   const [selectedDailyId, setSelectedDailyId] = useState<string | null>(null);
   const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
   const [selectedMonthId, setSelectedMonthId] = useState<string>(diary.monthlyCards[0]?.id ?? "");
@@ -51,9 +64,7 @@ export default function MealLogScreen() {
 
   const selectedDaily = diary.dailyCards.find((card) => card.id === selectedDailyId);
   const selectedMonth = diary.monthlyCards.find((card) => card.id === selectedMonthId) ?? diary.monthlyCards[0];
-  const isPaid = mode === "paid";
   const latestDaily = diary.dailyCards[0];
-  const recentMeals = diary.dailyCards.slice(0, 3).flatMap((card) => card.thumbnails).slice(0, 5);
 
   // Food Diary is the unified user-facing archive for nutrition records, meal cards,
   // monthly score cards, favorites, and highest-score cards.
@@ -74,196 +85,252 @@ export default function MealLogScreen() {
 
   if (selectedDaily) {
     return (
-      <PlaceholderScreen title={selectedDaily.date} subtitle={diary.mealDetailBody} primaryAction={{ href: "/meal-photo", label: zhTW.mobile.primaryNav.analysis }}>
-        <View nativeID="daily-detail-view" />
-        <Pressable style={styles.backButton} onPress={() => setSelectedDailyId(null)}>
-          <Text style={styles.backButtonText}>{diary.backToDailyRecords}</Text>
-        </Pressable>
+      <View style={styles.shell}>
+        <ScrollView contentContainerStyle={styles.container}>
+          <View nativeID="daily-detail-view" />
+          <Pressable style={styles.backButton} onPress={() => setSelectedDailyId(null)}>
+            <Text style={styles.backButtonText}>{diary.backToDailyRecords}</Text>
+          </Pressable>
 
-        <DailySummaryCard card={selectedDaily} />
+          <Card tone="primary">
+            <SectionHeader title={selectedDaily.date} subtitle={selectedDaily.comment} />
+            <View style={styles.summaryChipsRow}>
+              <Chip label={selectedDaily.score} active />
+              <Chip label={selectedDaily.calories} />
+              <Chip label={selectedDaily.macros} />
+            </View>
+            <View style={styles.tagsRow}>
+              {selectedDaily.thumbnails.map((tag) => (
+                <Chip key={tag} label={tag} tone="ai" />
+              ))}
+            </View>
+          </Card>
 
-        <Card tone="sky">
-          <SectionTitle title={diary.mealDetailTitle} subtitle={diary.mealDetailBody} />
-          <View style={styles.stack}>
-            {[...correctedMealCards, ...diary.mealCards].map((meal) => (
-              <MealFoodCard
-                favoriteLabel={diary.favoriteCta}
-                favoritedLabel={diary.favoritedCta}
-                isFavorited={favoriteIds.includes(meal.id)}
-                key={meal.id}
-                meal={meal}
-                onToggleFavorite={() => toggleFavorite(meal.id, favoriteIds, setFavoriteIds)}
-                onMockAction={setMockMessage}
-                shareCta={diary.shareCta}
-                editRatingCta={diary.editRatingCta}
-              />
-            ))}
-          </View>
-        </Card>
+          <Card>
+            <SectionHeader title={diary.mealDetailTitle} subtitle={diary.mealDetailBody} />
+            <View style={styles.stack}>
+              {[...correctedMealCards, ...diary.mealCards].map((meal) => (
+                <MealFoodCard
+                  favoriteLabel={diary.favoriteCta}
+                  favoritedLabel={diary.favoritedCta}
+                  isFavorited={favoriteIds.includes(meal.id)}
+                  key={meal.id}
+                  meal={meal}
+                  onToggleFavorite={() => toggleFavorite(meal.id, favoriteIds, setFavoriteIds)}
+                  onMockAction={setMockMessage}
+                  shareCta={diary.shareCta}
+                  editRatingCta={diary.editRatingCta}
+                />
+              ))}
+            </View>
+          </Card>
 
-        <Card>
-          <SectionTitle title={diary.sharingTitle} subtitle={diary.sharingBody} />
-          <View style={styles.actionRow}>
-            <Pressable onPress={() => setMockMessage("已產生日記分享卡")}>
-              <Text style={styles.linkButton}>{diary.shareDailyCta}</Text>
-            </Pressable>
-            {diary.sharingOptions.map((option) => (
-              <Pressable key={option} onPress={() => setMockMessage(`${option} 已送出`)}>
-                <Text style={styles.linkButton}>{option}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Text style={styles.note}>{diary.instagramUnlimited}</Text>
-        </Card>
-      </PlaceholderScreen>
+          <Card tone="blush">
+            <SectionHeader title={diary.sharingTitle} subtitle={diary.sharingBody} />
+            <View style={styles.shareButtonsRow}>
+              <SecondaryButton icon="share" label={diary.shareDailyCta} onPress={() => setMockMessage("已產生日記分享卡")} />
+              {diary.sharingOptions.map((option) => (
+                <SecondaryButton key={option} label={option} onPress={() => setMockMessage(`${option} 已送出`)} />
+              ))}
+            </View>
+            <Text style={styles.note}>{diary.instagramUnlimited}</Text>
+            {mockMessage ? <Text style={styles.noticeText}>{mockMessage}</Text> : null}
+          </Card>
+
+          <BottomNav />
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <PlaceholderScreen title={zhTW.mobile.mealLogTitle} subtitle={zhTW.mobile.mealLogSubtitle} primaryAction={{ href: "/meal-photo", label: zhTW.mobile.primaryNav.analysis }} secondaryAction={{ href: "/recommendation", label: zhTW.mobile.nextMealTitle }}>
-        <Card tone="mint">
-        <SectionTitle title={diary.unifiedTitle} subtitle="每日紀錄、月評分、收藏與最高分美食都收在這裡。" />
-        <Text style={styles.modeHint}>{diary.demoModeHint}</Text>
-        <View style={styles.modeToggle}>
-          <Pressable style={[styles.modeButton, mode === "free" && styles.modeButtonActive]} onPress={() => setMode("free")}>
-            <Text style={[styles.modeButtonText, mode === "free" && styles.modeButtonTextActive]}>{diary.freeToggle}</Text>
-          </Pressable>
-          <Pressable style={[styles.modeButton, mode === "paid" && styles.modeButtonActive]} onPress={() => setMode("paid")}>
-            <Text style={[styles.modeButtonText, mode === "paid" && styles.modeButtonTextActive]}>{diary.paidToggle}</Text>
-          </Pressable>
+    <View style={styles.shell}>
+      <ScrollView contentContainerStyle={styles.container}>
+        {/* 1. Screen header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>{diary.unifiedTitle}</Text>
+          <Text style={styles.subtitle}>{zhTW.mobile.mealLogSubtitle}</Text>
         </View>
-        <View style={styles.searchBox}>
-          <Text style={styles.searchText}>{diary.searchPlaceholder}</Text>
+
+        {/* Daily nutrition summary (part 1): diary-style daily score note */}
+        {latestDaily ? (
+          <Card tone="blush">
+            <SectionHeader title={latestDaily.date} subtitle={latestDaily.comment} />
+            <View style={styles.summaryChipsRow}>
+              <Chip label={latestDaily.score} active />
+              <Chip label={latestDaily.calories} />
+              <Chip label={latestDaily.macros} />
+            </View>
+            <Text style={styles.note}>{latestDaily.status}</Text>
+          </Card>
+        ) : null}
+
+        {/* Daily nutrition summary (part 2): shared meal-record totals vs today's goals */}
+        <TodayNutritionSummaryCard summary={todaySummary} onViewDetail={() => router.push("/today-intake")} />
+
+        {/* 2. Recent meal records — grouped by day, with source badges */}
+        <View style={styles.section}>
+          <SectionHeader title={diary.dailyDiaryTitle} subtitle={diary.dailyDiaryBody} />
+
+          <CompactRow
+            icon="search"
+            title={diary.searchPlaceholder}
+            subtitle={diary.demoModeHint}
+            onPress={() => setMockMessage(diary.demoModeHint)}
+          />
+
+          {savedMeal ? (
+            <View style={styles.latestMealHighlight}>
+              <Text style={styles.latestMealLabel}>最新加入今日飲食</Text>
+              <RecentMealCard meal={savedMeal} />
+            </View>
+          ) : null}
+
+          {mealRecordGroups.length > 0 ? (
+            <View style={styles.stack}>
+              {mealRecordGroups.map((group) => (
+                <View key={group.date} style={styles.dayGroup}>
+                  <Text style={styles.dayGroupDate}>{group.date}</Text>
+                  {group.meals.map((meal, index) => (
+                    <RecentMealCard key={`${group.date}-${index}`} meal={meal} />
+                  ))}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <Text style={styles.subSectionTitle}>最近 3 天飲食日記</Text>
+          <View nativeID="recent-daily-records" style={styles.stack}>
+            {diary.dailyCards.slice(0, 3).map((card) => (
+              <DailyOverviewCard card={card} detailCta={diary.detailCta} key={card.id} onPress={() => selectDaily(card.id)} />
+            ))}
+          </View>
+          <SecondaryButton label={diary.viewMonthlyRecordsCta} onPress={() => setIsMonthlyModalOpen(true)} />
         </View>
-      </Card>
 
-      {latestDaily ? <DiaryOverviewSummaryCard daily={latestDaily} monthly={selectedMonth} recentMeals={recentMeals} /> : null}
-
-      {savedMeal ? (
-        <Card tone="amber">
-          <SectionTitle title="最新加入今日飲食" subtitle={`${savedMeal.date} · ${savedMeal.mealPeriod}`} />
-          <Text style={styles.cardTitle}>{savedMeal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
-          <Text style={styles.cardMeta}>{savedMeal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
-          <Text style={styles.bigValue}>{savedMeal.calories} kcal</Text>
-          <Text style={styles.cardBody}>{zhTW.mobile.analysis.protein} {savedMeal.protein}g｜{zhTW.mobile.analysis.carbs} {savedMeal.carbohydrates}g｜{zhTW.mobile.analysis.fat} {savedMeal.fat}g</Text>
-          <TagRow tags={[savedMeal.ingredients, savedMeal.portion]} />
+        {/* 3. Monthly score / 月評分 entry */}
+        <Card tone="primary">
+          <SectionHeader title={diary.monthlyScoreTitle} subtitle={`${selectedMonth?.month ?? ""} · ${diary.monthlyScoreBody}`} />
+          <Text style={styles.filterTitle}>{diary.monthSelectorTitle}</Text>
+          <View style={styles.chipRow}>
+            {getAvailableMonths(diary.monthlyCards, isPaid).map((card) => (
+              <Chip key={card.id} label={card.month} active={selectedMonthId === card.id} onPress={() => setSelectedMonthId(card.id)} />
+            ))}
+          </View>
+          <View nativeID="monthly-score-card">
+            {selectedMonth ? <MonthlyScoreCard card={selectedMonth} onMockAction={setMockMessage} shareCta={diary.shareCta} /> : null}
+          </View>
         </Card>
-      ) : null}
 
-      <Card>
-        <SectionTitle title="最近 3 天飲食日記" subtitle="快速回看最近吃了什麼，點日期可以查看當天餐點詳情。" />
-        <View nativeID="recent-daily-records" style={styles.stack}>
-          {diary.dailyCards.slice(0, 3).map((card) => (
-            <DailyOverviewCard card={card} detailCta={diary.detailCta} key={card.id} onPress={() => selectDaily(card.id)} />
-          ))}
-        </View>
-        <Pressable style={styles.primaryButton} onPress={() => setIsMonthlyModalOpen(true)}>
-          <Text style={styles.primaryButtonText}>查看本月所有日記</Text>
-        </Pressable>
-      </Card>
+        {/* 4. Favorites / 收藏餐點 entry */}
+        <View style={styles.section}>
+          <SectionHeader title={diary.favoritesTitle} subtitle={diary.favoritesBody} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoritesRow} nativeID="favorite-food-cards">
+            {diary.favoriteCards.map((card) => (
+              <FavoriteFoodCard
+                card={card}
+                favoriteLabel={diary.favoriteCta}
+                favoritedLabel={diary.favoritedCta}
+                isFavorited={favoriteIds.includes(card.id)}
+                key={card.id}
+                onToggleFavorite={() => toggleFavorite(card.id, favoriteIds, setFavoriteIds)}
+                onMockAction={setMockMessage}
+                shareCta={diary.shareCta}
+              />
+            ))}
+          </ScrollView>
+          {!isPaid ? <Text style={styles.note}>{diary.favoriteLimitReached}</Text> : null}
+          <SecondaryButton label={diary.viewAllFavoritesCta} onPress={() => setMockMessage(diary.viewAllFavoritesCta)} />
 
-      <Card tone="premium">
-        <SectionTitle title="本月飲食進度" subtitle="月底會整理成可分享的月評分卡，幫你看見長期飲食節奏。" />
-        <Text style={styles.filterTitle}>{diary.monthSelectorTitle}</Text>
-        <View style={styles.chipRow}>
-          {getAvailableMonths(diary.monthlyCards, isPaid).map((card) => (
-            <Pressable
-              key={card.id}
-              style={[styles.chipButton, selectedMonthId === card.id && styles.chipButtonActive]}
-              onPress={() => {
-                setSelectedMonthId(card.id);
-                focusMealLogElementAfterRender("monthly-score-card");
+          <View nativeID="highest-score-entry" style={styles.highestScoreBlock}>
+            <SectionHeader title={diary.highestScoreTitle} subtitle={diary.highestScoreBody} />
+            <HighestScoreExplorer
+              isPaid={isPaid}
+              selectedGroup={selectedRankingGroup}
+              selectedOption={selectedRankingOption}
+              onSelectGroup={(group) => {
+                setSelectedRankingGroup(group);
+                setSelectedRankingOption(null);
               }}
-            >
-              <Text style={[styles.chipText, selectedMonthId === card.id && styles.chipTextActive]}>{card.month}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <View nativeID="monthly-score-card">{selectedMonth ? <MonthlyScoreCard card={selectedMonth} onMockAction={setMockMessage} shareCta={diary.shareCta} /> : null}</View>
-      </Card>
-
-      <Card tone="amber">
-        <SectionTitle title="快速找到值得再吃的餐點" subtitle="收藏是你主動保存的私人口袋名單；最高分卡由系統幫你整理。" />
-        <View style={styles.quickAccessGrid}>
-          <Pressable style={styles.quickAccessCard} onPress={() => focusMealLogElementAfterRender("favorite-food-cards")}>
-            <Text style={styles.quickAccessTitle}>收藏美食</Text>
-            <Text style={styles.quickAccessBody}>{diary.favoriteCards[0]?.title ?? "查看最近收藏"}</Text>
-          </Pressable>
-          <Pressable style={styles.quickAccessCard} onPress={() => focusMealLogElementAfterRender("highest-score-entry")}>
-            <Text style={styles.quickAccessTitle}>最高分美食</Text>
-            <Text style={styles.quickAccessBody}>{diary.rankingCards[0]?.title ?? "查看排行榜"}</Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      <Card tone="mint">
-        <SectionTitle title="收藏美食卡" subtitle={`私人口袋名單 · ${isPaid ? diary.paidLimits[2] : diary.freeLimits[2]}`} />
-        <View nativeID="favorite-food-cards" style={styles.stack}>
-          {diary.favoriteCards.slice(0, 3).map((card) => (
-            <FavoriteFoodCard
-              card={card}
-              favoriteLabel={diary.favoriteCta}
-              favoritedLabel={diary.favoritedCta}
-              isFavorited={favoriteIds.includes(card.id)}
-              key={card.id}
-              onToggleFavorite={() => toggleFavorite(card.id, favoriteIds, setFavoriteIds)}
+              onSelectOption={setSelectedRankingOption}
+              onCollapse={() => {
+                setSelectedRankingGroup(null);
+                setSelectedRankingOption(null);
+              }}
               onMockAction={setMockMessage}
-              shareCta={diary.shareCta}
             />
-          ))}
+          </View>
         </View>
-        {!isPaid ? <Text style={styles.note}>{diary.favoriteLimitReached}</Text> : null}
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => {
-            setMockMessage(diary.viewAllFavoritesCta);
-            focusMealLogElementAfterRender("favorite-food-cards");
-          }}
-        >
-          <Text style={styles.secondaryButtonText}>{diary.viewAllFavoritesCta}</Text>
-        </Pressable>
-      </Card>
 
-      <Card>
-        <View nativeID="highest-score-entry" />
-        <SectionTitle title="各類最高分美食卡" subtitle="先選類型、地區或餐廳，再看對應排行榜，避免一次顯示太多資料。" />
-        <HighestScoreExplorer
-          isPaid={isPaid}
-          selectedGroup={selectedRankingGroup}
-          selectedOption={selectedRankingOption}
-          onSelectGroup={(group) => {
-            setSelectedRankingGroup(group);
-            setSelectedRankingOption(null);
-          }}
-          onSelectOption={setSelectedRankingOption}
-          onCollapse={() => {
-            setSelectedRankingGroup(null);
-            setSelectedRankingOption(null);
-          }}
-          onMockAction={setMockMessage}
-        />
-      </Card>
+        {/* 5. 我做的料理 — self-made dishes, kept separate from restaurant meal records */}
+        <View style={styles.section}>
+          <SectionHeader title="我做的料理" subtitle="自己煮的餐點與用 AI 拍照記錄的家常菜，與餐廳菜單分開保存，但會在飲食日記中標示來源。" />
+          <View style={styles.stack}>
+            {selfMadeDishes.map((dish) => (
+              <SelfMadeDishCard key={dish.id} dish={dish} />
+            ))}
+          </View>
+        </View>
 
-      <Card>
-        <SectionTitle title="分享日記卡" subtitle="日記卡、月報告與收藏卡都可以分享給好友或好友牆。" />
-        <TagRow tags={diary.sharingOptions} />
-        <Text style={styles.note}>{diary.instagramUnlimited}</Text>
-      </Card>
-      {mockMessage ? (
-        <Card tone="mint">
-          <Text style={styles.noticeText}>{mockMessage}</Text>
+        {/* 6. Sharing entry */}
+        <Card>
+          <SectionHeader title={diary.sharingTitle} subtitle={diary.sharingBody} />
+          <View style={styles.shareButtonsRow}>
+            <SecondaryButton icon="share" label={diary.shareDailyCta} onPress={() => setMockMessage("已產生日記分享卡")} />
+            {diary.sharingOptions.map((option) => (
+              <SecondaryButton key={option} label={option} onPress={() => setMockMessage(`${option} 已送出`)} />
+            ))}
+          </View>
+          <Text style={styles.note}>{diary.instagramUnlimited}</Text>
         </Card>
-      ) : null}
 
-      <Card tone="premium">
-        <PremiumBadge />
-        <SectionTitle title={diary.membershipTitle} subtitle={diary.dataSeparationNote} />
-        <PlanLimitCard title={isPaid ? diary.paidPlanTitle : diary.freePlanTitle} items={isPaid ? diary.paidLimits : diary.freeLimits} variant={isPaid ? "premium" : "free"} />
-      </Card>
+        {mockMessage ? (
+          <Card tone="ai">
+            <Text style={styles.noticeText}>{mockMessage}</Text>
+          </Card>
+        ) : null}
+
+        {/* Membership / save-retention plan (preserved existing flow) */}
+        <Card tone="primary">
+          <View style={styles.premiumBadgeRow}>
+            <PremiumBadge label={isPaid ? diary.paidPlanTitle : diary.freePlanTitle} variant={isPaid ? "premium" : "free"} />
+          </View>
+          <SectionHeader title={diary.membershipTitle} subtitle={diary.dataSeparationNote} />
+          <View style={styles.rowList}>
+            {(isPaid ? diary.paidLimits : diary.freeLimits).map((item) => (
+              <Text key={item} style={styles.planItem}>
+                · {item}
+              </Text>
+            ))}
+          </View>
+          <View style={styles.demoToggleWrap}>
+            <DemoModeToggle mode={demoUserPlan} onChange={setDemoUserPlan} />
+          </View>
+        </Card>
+
+        <BottomNav />
+      </ScrollView>
 
       <MonthlyRecordModal visible={isMonthlyModalOpen} onClose={() => setIsMonthlyModalOpen(false)} onSelectDaily={selectDaily} />
-    </PlaceholderScreen>
+    </View>
   );
+}
+
+function groupMealRecordsByDate(records: SavedMealRecord[]): { date: string; meals: SavedMealRecord[] }[] {
+  const groups: { date: string; meals: SavedMealRecord[] }[] = [];
+  for (const record of records) {
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.date === record.date) {
+      lastGroup.meals.push(record);
+    } else {
+      groups.push({ date: record.date, meals: [record] });
+    }
+  }
+  return groups;
+}
+
+function isSelfMadeMeal(meal: SavedMealRecord): boolean {
+  return meal.source === "self_made" || meal.source === "manual" || meal.source === "ai_estimated";
 }
 
 function toggleFavorite(id: string, favoriteIds: string[], setFavoriteIds: (ids: string[]) => void) {
@@ -314,98 +381,90 @@ function focusMealLogElementAfterRender(elementId: string) {
   }, 120);
 }
 
-function DiaryOverviewSummaryCard({ daily, monthly, recentMeals }: { daily: DailyCard; monthly?: MonthlyCard; recentMeals: string[] }) {
+function RecentMealCard({ meal }: { meal: SavedMealRecord }) {
+  const diary = zhTW.mobile.mealLog.foodDiary;
+  const selfMade = isSelfMadeMeal(meal);
+  const sourceLabel = selfMade ? "我做的料理 · 自煮" : `${zhTW.mobile.finalUx.restaurantNameLabel}｜${meal.restaurantName || emptyField}`;
+
   return (
-    <Card tone="premium">
-      <SectionTitle title="今天的營養狀態" subtitle={daily.comment} />
-      <View style={styles.heroSummaryGrid}>
-        <View style={styles.heroSummaryMain}>
-          <Text style={styles.heroSummaryLabel}>今日評分</Text>
-          <Text style={styles.heroSummaryValue}>{daily.score}</Text>
-          <Text style={styles.heroSummaryMeta}>{daily.status}</Text>
-        </View>
-        <View style={styles.heroSummarySide}>
-          <SummaryStat label="今日熱量" value={daily.calories} />
-          <SummaryStat label="營養狀態" value={daily.macros} />
-          <SummaryStat label="本月進度" value={monthly ? `${monthly.month} · ${monthly.score}` : "尚未選擇月份"} />
-        </View>
+    <View style={styles.recentMealCard}>
+      <View style={styles.recentMealHeader}>
+        <Text style={styles.recentMealSlot}>{meal.mealPeriod}</Text>
+        <Text style={styles.recentMealCalories}>{meal.calories} kcal</Text>
       </View>
-      {recentMeals.length ? (
-        <>
-          <Text style={styles.filterTitle}>最近記錄</Text>
-          <TagRow tags={recentMeals} />
-        </>
-      ) : null}
-    </Card>
+      <Text style={styles.recentMealName}>{meal.mealName || emptyField}</Text>
+      <View style={styles.recentMealTagsRow}>
+        <Chip label={sourceLabel} active={selfMade} tone={selfMade ? "primary" : "ai"} />
+        <Chip label={`${zhTW.mobile.analysis.protein} ${meal.protein}g｜${zhTW.mobile.analysis.carbs} ${meal.carbohydrates}g｜${zhTW.mobile.analysis.fat} ${meal.fat}g`} />
+      </View>
+      <Text style={styles.cardMeta}>
+        {meal.date} · {diary.editRatingCta}
+      </Text>
+    </View>
   );
 }
 
-function SummaryStat({ label, value }: { label: string; value: string }) {
+function SelfMadeDishCard({ dish }: { dish: SelfMadeDish }) {
+  const sourceLabel = dish.source === "ai_estimated" ? "AI 拍照估算" : dish.source === "manual" ? "手動記錄" : "我做的料理 · 自煮";
+
   return (
-    <View style={styles.summaryStat}>
-      <Text style={styles.summaryStatLabel}>{label}</Text>
-      <Text style={styles.summaryStatValue}>{value}</Text>
+    <View style={styles.recentMealCard}>
+      <View style={styles.recentMealHeader}>
+        <Text style={styles.recentMealSlot}>{dish.mealType ?? "自煮料理"}</Text>
+        {dish.calories ? <Text style={styles.recentMealCalories}>{dish.calories} kcal</Text> : null}
+      </View>
+      <Text style={styles.recentMealName}>{dish.name}</Text>
+      <View style={styles.recentMealTagsRow}>
+        <Chip label={sourceLabel} active tone="primary" />
+        {(dish.nutritionTags ?? []).map((tag) => (
+          <Chip key={tag} label={tag} />
+        ))}
+      </View>
     </View>
   );
 }
 
 function DailyOverviewCard({ card, detailCta, onPress }: { card: DailyCard; detailCta: string; onPress: () => void }) {
   return (
-    <Pressable style={styles.innerCard} onPress={onPress}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardTitleGroup}>
-          <Text style={styles.cardTitle}>{card.date}</Text>
-          <Text style={styles.cardMeta}>{card.score}</Text>
-        </View>
-        <Text style={styles.statusPill}>{card.status}</Text>
+    <Pressable style={styles.dailyOverviewCard} onPress={onPress}>
+      <View style={styles.dailyOverviewHeader}>
+        <Text style={styles.dailyOverviewDate}>{card.date}</Text>
+        <Chip label={card.score} active />
       </View>
-      <Text style={styles.bigValue}>{card.calories}</Text>
-      <Text style={styles.cardBody}>{card.macros}</Text>
-      <TagRow tags={card.thumbnails} />
-      <Text style={styles.linkButton}>{detailCta}</Text>
+      <Text style={styles.dailyOverviewCalories}>{card.calories}</Text>
+      <Text style={styles.dailyOverviewMacros}>{card.macros}</Text>
+      <View style={styles.recentMealTagsRow}>
+        {card.thumbnails.map((tag) => (
+          <Chip key={tag} label={tag} tone="ai" />
+        ))}
+      </View>
+      <Text style={styles.linkText}>{detailCta} ›</Text>
     </Pressable>
-  );
-}
-
-function DailySummaryCard({ card }: { card: DailyCard }) {
-  return (
-    <Card>
-      <SectionTitle title={card.date} subtitle={card.comment} />
-      <View style={styles.summaryGrid}>
-        <Text style={styles.summaryItem}>{card.score}</Text>
-        <Text style={styles.summaryItem}>{card.calories}</Text>
-        <Text style={styles.summaryItem}>{card.macros}</Text>
-      </View>
-      <TagRow tags={card.thumbnails} />
-    </Card>
   );
 }
 
 function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorited, meal, onMockAction, onToggleFavorite, shareCta }: { editRatingCta: string; favoriteLabel: string; favoritedLabel: string; isFavorited: boolean; meal: MealCard; onMockAction: (message: string) => void; onToggleFavorite: () => void; shareCta: string }) {
   return (
-    <View style={styles.mealCard}>
-      <View style={styles.photoTile}>
-        <Text style={styles.photoText}>{meal.photoLabel}</Text>
+    <View style={styles.innerCard}>
+      <View style={styles.dailyOverviewHeader}>
+        <Chip label={meal.slot} active />
+        <Text style={styles.recentMealCalories}>{meal.calories}</Text>
       </View>
-      <View style={styles.mealContent}>
-        <Text style={styles.slotLabel}>{meal.slot}</Text>
-        <Text style={styles.cardTitle}>{meal.name}</Text>
-        <Text style={styles.cardMeta}>{meal.source}</Text>
-        <Text style={styles.bigValue}>{meal.calories}</Text>
-        <Text style={styles.cardBody}>{meal.macros}</Text>
-        <Text style={styles.cardBody}>{meal.rating}</Text>
-        <Text style={styles.cardBody}>{meal.review}</Text>
-        <View style={styles.actionRow}>
-          <Pressable onPress={() => onMockAction("已開啟餐點評分編輯")}>
-            <Text style={styles.linkButton}>{editRatingCta}</Text>
-          </Pressable>
-          <Pressable onPress={onToggleFavorite}>
-            <Text style={styles.linkButton}>{isFavorited ? favoritedLabel : favoriteLabel}</Text>
-          </Pressable>
-          <Pressable onPress={() => onMockAction("已產生餐點分享卡")}>
-            <Text style={styles.linkButton}>{shareCta}</Text>
-          </Pressable>
-        </View>
+      <Text style={styles.cardTitle}>{meal.name}</Text>
+      <Text style={styles.cardMeta}>{meal.source}</Text>
+      <Text style={styles.cardBody}>{meal.macros}</Text>
+      <Text style={styles.cardBody}>{meal.rating}</Text>
+      <Text style={styles.cardBody}>{meal.review}</Text>
+      <View style={styles.actionRow}>
+        <Pressable onPress={() => onMockAction("已開啟餐點評分編輯")}>
+          <Text style={styles.linkText}>{editRatingCta}</Text>
+        </Pressable>
+        <Pressable onPress={onToggleFavorite}>
+          <Text style={styles.linkText}>{isFavorited ? favoritedLabel : favoriteLabel}</Text>
+        </Pressable>
+        <Pressable onPress={() => onMockAction("已產生餐點分享卡")}>
+          <Text style={styles.linkText}>{shareCta}</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -413,36 +472,49 @@ function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorite
 
 function MonthlyScoreCard({ card, onMockAction, shareCta }: { card: MonthlyCard; onMockAction: (message: string) => void; shareCta: string }) {
   return (
-    <View style={styles.innerCard}>
-      <Text style={styles.cardTitle}>{card.month}</Text>
-      <Text style={styles.bigValue}>{card.score}</Text>
-      <Text style={styles.cardBody}>{card.averageCalories}</Text>
-      <Text style={styles.cardBody}>{card.proteinDays}</Text>
-      <Text style={styles.cardBody}>{card.vegetableDays}</Text>
-      <Text style={styles.cardBody}>{card.highFrequency}</Text>
-      <Text style={styles.cardBody}>{card.commonTypes}</Text>
-      <Text style={styles.cardBody}>{card.suggestion}</Text>
-      <Pressable onPress={() => onMockAction("已產生月報分享卡")}>
-        <Text style={styles.linkButton}>{shareCta}</Text>
-      </Pressable>
+    <View style={styles.monthlyScoreCard}>
+      <View style={styles.monthlyScoreBadge}>
+        <Text style={styles.monthlyScoreBadgeText}>{card.score.replace("月評分：", "")}</Text>
+      </View>
+      <View style={styles.monthlyScoreInfo}>
+        <Text style={styles.cardTitle}>{card.month}</Text>
+        <Text style={styles.cardBody}>{card.averageCalories}</Text>
+        <Text style={styles.cardBody}>{card.proteinDays}</Text>
+        <Text style={styles.cardBody}>{card.vegetableDays}</Text>
+        <Text style={styles.cardBody}>{card.highFrequency}</Text>
+        <Text style={styles.cardBody}>{card.commonTypes}</Text>
+        <Text style={styles.cardBody}>{card.suggestion}</Text>
+        <Pressable onPress={() => onMockAction("已產生月報分享卡")}>
+          <Text style={styles.linkText}>{shareCta}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 function FavoriteFoodCard({ card, favoriteLabel, favoritedLabel, isFavorited, onMockAction, onToggleFavorite, shareCta }: { card: FavoriteCard; favoriteLabel: string; favoritedLabel: string; isFavorited: boolean; onMockAction: (message: string) => void; onToggleFavorite: () => void; shareCta: string }) {
   return (
-    <View style={styles.innerCard}>
-      <Text style={styles.cardTitle}>{card.title}</Text>
-      <Text style={styles.cardMeta}>{card.meta}</Text>
-      <TagRow tags={card.tags} />
-      <View style={styles.actionRow}>
-        <Pressable onPress={onToggleFavorite}>
-          <Text style={styles.linkButton}>{isFavorited ? favoritedLabel : favoriteLabel}</Text>
-        </Pressable>
-        <Pressable onPress={() => onMockAction("已產生收藏美食分享卡")}>
-          <Text style={styles.linkButton}>{shareCta}</Text>
+    <View style={styles.favoriteCard}>
+      <View style={styles.favoriteHero}>
+        <Icon name="plate" size={26} color={colors.primaryDeep} />
+        <Pressable style={styles.favoriteHeartBadge} onPress={onToggleFavorite}>
+          <Icon name="heart" size={14} color={isFavorited ? colors.primary : colors.faint} filled={isFavorited} />
         </Pressable>
       </View>
+      <Text style={styles.cardTitle} numberOfLines={1}>
+        {card.title}
+      </Text>
+      <Text style={styles.cardMeta} numberOfLines={1}>
+        {card.meta}
+      </Text>
+      <View style={styles.recentMealTagsRow}>
+        {card.tags.slice(0, 2).map((tag) => (
+          <Chip key={tag} label={tag} />
+        ))}
+      </View>
+      <Pressable onPress={() => onMockAction("已產生收藏美食分享卡")}>
+        <Text style={styles.linkText}>{isFavorited ? favoritedLabel : favoriteLabel} · {shareCta}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -456,9 +528,7 @@ function HighestScoreExplorer({ isPaid, onCollapse, onMockAction, onSelectGroup,
         <Text style={styles.filterTitle}>{diary.rankGroupTitle}</Text>
         <View style={styles.chipRow}>
           {diary.rankingGroups.map((group) => (
-            <Pressable key={group.id} style={styles.chipButton} onPress={() => onSelectGroup(group.id as RankingGroupId)}>
-              <Text style={styles.chipText}>{group.label}</Text>
-            </Pressable>
+            <Chip key={group.id} label={group.label} onPress={() => onSelectGroup(group.id as RankingGroupId)} />
           ))}
         </View>
       </View>
@@ -473,14 +543,10 @@ function HighestScoreExplorer({ isPaid, onCollapse, onMockAction, onSelectGroup,
         <Text style={styles.filterTitle}>{diary.rankOptionTitle}</Text>
         <View style={styles.chipRow}>
           {options.map((option) => (
-            <Pressable key={option} style={styles.chipButton} onPress={() => onSelectOption(option)}>
-              <Text style={styles.chipText}>{option}</Text>
-            </Pressable>
+            <Chip key={option} label={option} onPress={() => onSelectOption(option)} />
           ))}
         </View>
-        <Pressable style={styles.secondaryButton} onPress={onCollapse}>
-          <Text style={styles.secondaryButtonText}>{diary.collapseRankingCta}</Text>
-        </Pressable>
+        <SecondaryButton label={diary.collapseRankingCta} onPress={onCollapse} />
       </View>
     );
   }
@@ -498,13 +564,11 @@ function HighestScoreExplorer({ isPaid, onCollapse, onMockAction, onSelectGroup,
         <View style={styles.upgradeBox}>
           <Text style={styles.noticeText}>{getRankingUpgradeMessage(selectedGroup)}</Text>
           <Pressable onPress={() => onMockAction(getRankingUpgradeMessage(selectedGroup))}>
-            <Text style={styles.linkButton}>{diary.viewMoreCta}</Text>
+            <Text style={styles.linkText}>{diary.viewMoreCta}</Text>
           </Pressable>
         </View>
       ) : null}
-      <Pressable style={styles.secondaryButton} onPress={onCollapse}>
-        <Text style={styles.secondaryButtonText}>{diary.collapseRankingCta}</Text>
-      </Pressable>
+      <SecondaryButton label={diary.collapseRankingCta} onPress={onCollapse} />
     </View>
   );
 }
@@ -514,20 +578,11 @@ function RankingFoodCard({ card }: { card: RankingCard }) {
     <View style={styles.innerCard}>
       <Text style={styles.cardTitle}>{card.title}</Text>
       <Text style={styles.cardMeta}>{card.meta}</Text>
-      <TagRow tags={card.tags} />
-    </View>
-  );
-}
-
-function PlanLimitCard({ items, title, variant }: { items: readonly string[]; title: string; variant: "free" | "premium" }) {
-  return (
-    <View style={[styles.planCard, variant === "premium" && styles.planPremium]}>
-      <PremiumBadge label={title} variant={variant === "premium" ? "premium" : "free"} />
-      {items.map((item) => (
-        <Text key={item} style={styles.planItem}>
-          {item}
-        </Text>
-      ))}
+      <View style={styles.recentMealTagsRow}>
+        {card.tags.map((tag) => (
+          <Chip key={tag} label={tag} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -539,7 +594,7 @@ function MonthlyRecordModal({ onClose, onSelectDaily, visible }: { onClose: () =
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
-          <SectionTitle title={diary.monthlyListTitle} subtitle={diary.monthlyListBody} />
+          <SectionHeader title={diary.monthlyListTitle} subtitle={diary.monthlyListBody} />
           <View style={styles.monthlyHeader}>
             {diary.monthlyListHeader.map((label) => (
               <Text key={label} style={styles.monthlyHeaderText}>
@@ -547,16 +602,16 @@ function MonthlyRecordModal({ onClose, onSelectDaily, visible }: { onClose: () =
               </Text>
             ))}
           </View>
-          {diary.dailyCards.map((card) => (
-            <Pressable key={card.id} style={styles.monthlyRow} onPress={() => onSelectDaily(card.id)}>
-              <Text style={styles.monthlyCell}>{card.date}</Text>
-              <Text style={styles.monthlyCell}>{card.score}</Text>
-              <Text style={styles.monthlyCell}>{card.calories}</Text>
-            </Pressable>
-          ))}
-          <Pressable style={styles.secondaryButton} onPress={onClose}>
-            <Text style={styles.secondaryButtonText}>{zhTW.common.close}</Text>
-          </Pressable>
+          <ScrollView style={styles.monthlyList}>
+            {diary.dailyCards.map((card) => (
+              <Pressable key={card.id} style={styles.monthlyRow} onPress={() => onSelectDaily(card.id)}>
+                <Text style={styles.monthlyCell}>{card.date}</Text>
+                <Text style={styles.monthlyCell}>{card.score}</Text>
+                <Text style={styles.monthlyCell}>{card.calories}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <SecondaryButton label={zhTW.common.close} onPress={onClose} />
         </View>
       </View>
     </Modal>
@@ -564,75 +619,40 @@ function MonthlyRecordModal({ onClose, onSelectDaily, visible }: { onClose: () =
 }
 
 const styles = StyleSheet.create({
-  backButton: {
-    alignSelf: "flex-start",
-    borderColor: colors.line,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 14,
-    paddingVertical: 10
-  },
-  backButtonText: {
-    color: colors.ink,
-    fontSize: 13,
-    fontWeight: "900"
-  },
-  searchBox: {
-    borderColor: colors.line,
-    borderRadius: 18,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    marginTop: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 13
-  },
-  searchText: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "800"
-  },
-  modeHint: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: 14
-  },
-  modeToggle: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8
-  },
-  modeButton: {
-    alignItems: "center",
+  shell: {
     flex: 1,
-    borderColor: colors.line,
-    borderRadius: 18,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    paddingVertical: 11
+    backgroundColor: colors.bg
   },
-  modeButtonActive: {
-    borderColor: "#EEDAC2",
-    backgroundColor: "#F9F2EA"
+  container: {
+    padding: 16,
+    paddingBottom: 32,
+    gap: 22
   },
-  modeButtonText: {
-    color: colors.muted,
-    fontSize: 13,
+  header: {
+    gap: 6,
+    paddingTop: 8
+  },
+  title: {
+    color: colors.ink,
+    fontSize: 30,
+    fontFamily: fonts.black,
     fontWeight: "900"
   },
-  modeButtonTextActive: {
-    color: colors.ink
+  subtitle: {
+    color: colors.sub,
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontFamily: fonts.body
   },
-  filterTitle: {
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900",
-    marginTop: 14
+  section: {
+    gap: 12
   },
   stack: {
-    gap: 12,
-    marginTop: 16
+    gap: 12
+  },
+  rowList: {
+    gap: 6,
+    marginTop: 10
   },
   chipRow: {
     flexDirection: "row",
@@ -640,315 +660,323 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10
   },
-  chipButton: {
-    borderColor: colors.line,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 12,
-    paddingVertical: 9
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10
   },
-  chipButtonActive: {
-    borderColor: "#EEDAC2",
-    backgroundColor: "#F9F2EA"
+  summaryChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12
   },
-  chipText: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  chipTextActive: {
-    color: colors.ink
-  },
-  heroSummaryGrid: {
-    gap: 12,
-    marginTop: 16
-  },
-  heroSummaryMain: {
-    borderColor: "#EEDAC2",
-    borderRadius: 24,
-    borderWidth: 1,
-    backgroundColor: "#F9F2EA",
-    padding: 18
-  },
-  heroSummaryLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  heroSummaryValue: {
+  filterTitle: {
     color: colors.ink,
-    fontSize: 36,
-    fontWeight: "900",
-    marginTop: 4
-  },
-  heroSummaryMeta: {
-    color: colors.teal,
-    fontSize: 14,
-    fontWeight: "900",
-    marginTop: 6
-  },
-  heroSummarySide: {
-    gap: 8
-  },
-  summaryStat: {
-    borderColor: colors.line,
-    borderRadius: 18,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    padding: 12
-  },
-  summaryStatLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "900"
-  },
-  summaryStatValue: {
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900",
-    lineHeight: 20,
-    marginTop: 3
-  },
-  quickAccessGrid: {
-    gap: 10,
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: "800",
     marginTop: 14
   },
-  quickAccessCard: {
-    borderColor: colors.line,
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    padding: 14
-  },
-  quickAccessTitle: {
-    color: colors.ink,
-    fontSize: 15,
-    fontWeight: "900"
-  },
-  quickAccessBody: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "800",
+  note: {
+    color: colors.sub,
+    fontSize: 12.5,
     lineHeight: 19,
-    marginTop: 5
+    fontFamily: fonts.body,
+    marginTop: 10
   },
-  innerCard: {
-    gap: 9,
-    borderColor: colors.line,
-    borderRadius: 22,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    padding: 16
+  noticeText: {
+    color: colors.sub,
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontFamily: fonts.body
   },
-  cardHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "space-between"
-  },
-  cardTitleGroup: {
-    flex: 1,
-    gap: 4
+  linkText: {
+    color: colors.primaryDeep,
+    fontSize: 12.5,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
   cardTitle: {
     color: colors.ink,
-    fontSize: 17,
-    fontWeight: "900",
-    lineHeight: 23
+    fontSize: 15,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
   cardMeta: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 18
-  },
-  statusPill: {
-    overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: colors.mint,
-    color: colors.teal,
-    fontSize: 11,
-    fontWeight: "900",
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  bigValue: {
-    color: colors.ink,
-    fontSize: 20,
-    fontWeight: "900"
+    color: colors.sub,
+    fontSize: 12,
+    fontFamily: fonts.body,
+    marginTop: 2
   },
   cardBody: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 20
+    color: colors.sub,
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontFamily: fonts.body,
+    marginTop: 4
   },
-  summaryGrid: {
-    gap: 8,
-    marginTop: 14
-  },
-  summaryItem: {
-    borderColor: colors.line,
-    borderRadius: 16,
+  innerCard: {
+    gap: 6,
+    borderRadius: radius.base,
     borderWidth: 1,
-    backgroundColor: "#ffffff",
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900",
-    padding: 12
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    padding: 14,
+    ...shadows.soft
   },
   actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 14,
+    marginTop: 8
+  },
+  dayGroup: {
+    gap: 8
+  },
+  dayGroupDate: {
+    color: colors.ink,
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  recentMealCard: {
+    gap: 6,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    padding: 12,
+    ...shadows.soft
+  },
+  recentMealHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  recentMealSlot: {
+    color: colors.primaryDeep,
+    fontSize: 12,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  recentMealCalories: {
+    color: colors.sub,
+    fontSize: 12.5,
+    fontFamily: fonts.numeralMedium,
+    fontWeight: "700"
+  },
+  recentMealName: {
+    color: colors.ink,
+    fontSize: 14.5,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  recentMealTagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 2
+  },
+  latestMealHighlight: {
+    gap: 8
+  },
+  latestMealLabel: {
+    color: colors.primaryDeep,
+    fontSize: 12,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  subSectionTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontFamily: fonts.bold,
+    fontWeight: "800",
     marginTop: 4
   },
-  linkButton: {
-    overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: "#F9F2EA",
-    color: colors.ink,
-    fontSize: 12,
-    fontWeight: "900",
-    paddingHorizontal: 11,
-    paddingVertical: 7
+  dailyOverviewCard: {
+    gap: 6,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    padding: 14,
+    ...shadows.soft
   },
-  mealCard: {
+  dailyOverviewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  dailyOverviewDate: {
+    color: colors.ink,
+    fontSize: 14,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  dailyOverviewCalories: {
+    color: colors.ink,
+    fontSize: 18,
+    fontFamily: fonts.numeral,
+    fontWeight: "800",
+    marginTop: 2
+  },
+  dailyOverviewMacros: {
+    color: colors.sub,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontFamily: fonts.body
+  },
+  monthlyScoreCard: {
     flexDirection: "row",
     gap: 14,
-    borderColor: colors.line,
-    borderRadius: 22,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    padding: 14
+    marginTop: 14
   },
-  photoTile: {
+  monthlyScoreBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
-    backgroundColor: colors.cream,
-    minHeight: 96,
-    width: 92
+    backgroundColor: colors.primary
   },
-  photoText: {
-    color: colors.coral,
-    fontSize: 12,
-    fontWeight: "900",
-    textAlign: "center"
+  monthlyScoreBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: fonts.numeral,
+    fontWeight: "800"
   },
-  mealContent: {
+  monthlyScoreInfo: {
     flex: 1,
-    gap: 6
+    gap: 2
   },
-  slotLabel: {
-    color: colors.teal,
-    fontSize: 12,
-    fontWeight: "900"
+  favoritesRow: {
+    gap: 12,
+    paddingVertical: 4,
+    paddingRight: 4
+  },
+  favoriteCard: {
+    width: 160,
+    gap: 6,
+    borderRadius: radius.base,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    padding: 12,
+    ...shadows.soft
+  },
+  favoriteHero: {
+    height: 64,
+    borderRadius: radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primarySoft
+  },
+  favoriteHeartBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF"
+  },
+  highestScoreBlock: {
+    gap: 10,
+    marginTop: 18,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: colors.line
   },
   upgradeBox: {
-    gap: 10,
-    borderColor: "#EEDAC2",
-    borderRadius: 20,
+    gap: 6,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    backgroundColor: "#F9F2EA",
+    borderColor: hexA(colors.amber, 0.35),
+    backgroundColor: hexA(colors.amber, 0.12),
     padding: 12
   },
-  noticeText: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 19
+  premiumBadgeRow: {
+    marginBottom: 8
   },
-  planCard: {
-    gap: 9,
-    borderColor: colors.line,
-    borderRadius: 22,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    marginTop: 16,
-    padding: 14
-  },
-  planPremium: {
-    borderColor: "#EEDAC2",
-    backgroundColor: "#F9F2EA"
+  demoToggleWrap: {
+    marginTop: 14
   },
   planItem: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 19
+    color: colors.sub,
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontFamily: fonts.body
   },
-  note: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 20,
+  shareButtonsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
     marginTop: 12
   },
-  primaryButton: {
-    alignItems: "center",
-    borderRadius: 16,
-    backgroundColor: colors.coral,
-    marginTop: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 13
-  },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "900"
-  },
-  secondaryButton: {
-    alignItems: "center",
-    borderColor: colors.line,
-    borderRadius: 16,
+  backButton: {
+    alignSelf: "flex-start",
+    borderRadius: radius.pill,
     borderWidth: 1,
-    backgroundColor: "#ffffff",
-    marginTop: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    paddingHorizontal: 14,
+    paddingVertical: 10
   },
-  secondaryButtonText: {
+  backButtonText: {
     color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900"
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
   modalBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(32,26,20,0.36)"
+    backgroundColor: "rgba(44,39,34,0.36)"
   },
   modalCard: {
     gap: 12,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: colors.paper,
-    padding: 20
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    backgroundColor: colors.bg,
+    padding: 20,
+    maxHeight: "75%"
   },
   monthlyHeader: {
     flexDirection: "row",
     gap: 8,
-    borderBottomColor: colors.line,
     borderBottomWidth: 1,
+    borderBottomColor: colors.line,
     paddingBottom: 8
   },
   monthlyHeaderText: {
     flex: 1,
     color: colors.ink,
     fontSize: 12,
-    fontWeight: "900"
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  monthlyList: {
+    maxHeight: 320
   },
   monthlyRow: {
     flexDirection: "row",
     gap: 8,
-    borderColor: colors.line,
-    borderRadius: 16,
+    borderRadius: radius.sm,
     borderWidth: 1,
-    backgroundColor: "#ffffff",
-    padding: 12
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+    padding: 12,
+    marginTop: 8
   },
   monthlyCell: {
     flex: 1,
-    color: colors.muted,
+    color: colors.sub,
     fontSize: 12,
-    fontWeight: "800"
+    fontFamily: fonts.medium,
+    fontWeight: "700"
   }
 });
