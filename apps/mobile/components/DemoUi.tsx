@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.base,
     borderWidth: 1,
     backgroundColor: colors.card,
-    padding: 20,
+    padding: 18,
     ...shadows.soft
   },
   mintCard: {
@@ -55,19 +55,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 }
   },
   sectionHeader: {
-    gap: 7
+    gap: 4
   },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 21,
-    fontFamily: fonts.black,
-    fontWeight: "900",
-    lineHeight: 28
+    fontSize: 17,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
   },
   sectionSubtitle: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12.5,
+    lineHeight: 18,
     fontFamily: fonts.body
   },
   metricCard: {
@@ -77,7 +76,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderColor: colors.line,
     borderWidth: 1,
-    padding: 16,
+    padding: 14,
     ...shadows.soft
   },
   metricLabel: {
@@ -107,15 +106,15 @@ const styles = StyleSheet.create({
   },
   tag: {
     borderRadius: radius.pill,
-    backgroundColor: snowPalette.bg2,
+    backgroundColor: colors.card,
     borderColor: colors.line,
     borderWidth: 1,
     color: colors.muted,
-    fontSize: 12,
+    fontSize: 12.5,
     fontFamily: fonts.medium,
     fontWeight: "700",
-    paddingHorizontal: 11,
-    paddingVertical: 7
+    paddingHorizontal: 14,
+    paddingVertical: 8
   },
   premiumBadge: {
     alignSelf: "flex-start",

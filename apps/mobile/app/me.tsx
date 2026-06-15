@@ -35,12 +35,6 @@ export default function MeScreen() {
     { icon: "bookmark", title: diary.highestScoreTitle, subtitle: diary.highestScoreBody, onPress: () => router.push("/meal-log") }
   ];
 
-  const socialItems: ProfileRowItem[] = [
-    { icon: "buddies", title: "我的飯友", subtitle: "已配對、配對中與聊天記錄", onPress: () => router.push("/meal-buddies?section=friends") },
-    { icon: "table4", title: "四人餐桌", subtitle: "建立或加入的四人餐桌進度", onPress: () => router.push("/meal-buddies?section=tables") },
-    { icon: "chat", title: "飯局紀錄", subtitle: "進行中、邀請中與已結束的飯局", onPress: () => router.push("/meal-buddies?section=gatherings") }
-  ];
-
   const settingsItems: ProfileRowItem[] = [
     { icon: "target", title: profile.healthGoalTitle, subtitle: profile.healthGoalBody, onPress: () => router.push("/health-goal-plan") },
     { icon: "edit", title: settings.openFromProfile, subtitle: settings.openFromProfileBody, onPress: () => router.push("/community-card-settings") },
@@ -119,17 +113,7 @@ export default function MeScreen() {
           </View>
         </View>
 
-        {/* 4. Social record entries */}
-        <View style={styles.section}>
-          <SectionHeader title="飯友與餐桌紀錄" subtitle="快速回到你的飯友配對、四人餐桌與飯局狀態。" />
-          <View style={styles.rowList}>
-            {socialItems.map((item) => (
-              <CompactRow key={item.title} icon={item.icon} iconTone="ai" title={item.title} subtitle={item.subtitle} onPress={item.onPress} />
-            ))}
-          </View>
-        </View>
-
-        {/* 5. 我做的料理 — self-made dishes, kept separate from restaurant menu dishes */}
+        {/* 4. 我做的料理 — self-made dishes, kept separate from restaurant menu dishes */}
         <View style={styles.section}>
           <SectionHeader title="我做的料理" subtitle="自己煮的餐點與用 AI 拍照記錄的家常菜，與餐廳菜單分開保存。" />
           <CompactRow
@@ -142,7 +126,7 @@ export default function MeScreen() {
           />
         </View>
 
-        {/* 6. Settings/privacy entries */}
+        {/* 5. Settings/privacy entries */}
         <View style={styles.section}>
           <SectionHeader title={profile.accountSettingsTitle} />
           <View style={styles.rowList}>

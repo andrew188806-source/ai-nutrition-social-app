@@ -1,6 +1,10 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import type { PlannedMeal } from "./types";
 
+// TODO(engineering):
+// - Current state: planned and confirmed dinners live in module memory for the demo.
+// - Intended future integration: use a planned-meal API plus scheduled settlement for unconfirmed plans.
+// - Related feature: Planned Dinner -> Today Nutrition.
 let savedPlannedDinner: PlannedMeal | null = null;
 let confirmedDinnerRecord: PlannedMeal | null = null;
 

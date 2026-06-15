@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -37,8 +37,6 @@ import {
   mockGatheringRecords,
   mockMatchedBuddies,
   rankMealBuddyRecommendations,
-  resetAllMealBuddyDemoState,
-  resetMealBuddySocialDemoState,
   upsertMealBuddyCardWithQuota,
   type MealBuddyCard,
   type MealBuddyCardType,
@@ -47,7 +45,6 @@ import {
   type RankedMealBuddyCandidate
 } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
-import { advanceDemoTimeByDays, getEffectiveDateKey, isDemoTestingEnabled, resetDemoTime } from "../features/demo-time";
 import { storage } from "../lib/storage";
 import { GroupTablesContent } from "./group-tables";
 
@@ -163,7 +160,7 @@ export default function MealBuddyHomeScreen() {
   const [friendInitialTab, setFriendInitialTab] = useState<MyFriendsTab>("matched");
   const [focusedChatId, setFocusedChatId] = useState("");
   const [focusedChatName, setFocusedChatName] = useState("");
-  const [socialVersion, setSocialVersion] = useState(0);
+  const [, setSocialVersion] = useState(0);
   const [acceptedMealInvite, setAcceptedMealInvite] = useState<ReturnType<typeof getMealBuddyInvites>[number] | null>(null);
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
@@ -1312,21 +1309,19 @@ function MyFriendsSection({
         </View>
       ) : null}
 
-      <InvitationDetailModal invite={selectedInvite} isPremium={isPremium} onAccept={onAcceptInvite} onClose={() => setSelectedInvite(null)} onDecline={onDeclineInvite} onDelete={onDeleteInvite} />
+      <InvitationDetailModal invite={selectedInvite} onAccept={onAcceptInvite} onClose={() => setSelectedInvite(null)} onDecline={onDeclineInvite} onDelete={onDeleteInvite} />
     </>
   );
 }
 
 function InvitationDetailModal({
   invite,
-  isPremium,
   onAccept,
   onClose,
   onDecline,
   onDelete
 }: {
   invite: ReturnType<typeof getMealBuddyInvites>[number] | null;
-  isPremium: boolean;
   onAccept: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
   onClose: () => void;
   onDecline: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
@@ -1674,7 +1669,6 @@ function GatheringsSection({
 
       <InvitationDetailModal
         invite={detailInvite}
-        isPremium
         onAccept={(invite) => {
           onAcceptInvite(invite);
           setDetailInvite(null);
@@ -1732,7 +1726,6 @@ function GatheringCategory({
       <SectionTitle title={title} subtitle={title === "我開的飯局" ? "你建立或管理中的飯局。" : "你已加入或被邀請成功的飯局。"} />
       <View style={styles.cardList}>
         {records.map((record) => {
-          const isGroupTable = record.source === "四人桌" || record.people.includes("4");
           return selectedRecord?.id === record.id ? (
             <View key={record.id} nativeID={mealEventElementId(record.id)}>
               <MealEventDetail invite={sourceInvite?.id === record.id.replace("accepted-", "") ? sourceInvite : sourceInvite && record.id.startsWith("accepted-") ? sourceInvite : null} record={record} onBack={onClose} onCancel={() => onCancel(record)} onOpenChat={onOpenChat} onViewInviteDetail={onViewInviteDetail} />
@@ -2810,4 +2803,3 @@ const styles = StyleSheet.create({
     marginTop: 12
   }
 });
-

@@ -709,40 +709,6 @@ function RestaurantRecommendationModal({
   );
 }
 
-function RestaurantTableChoiceModal({
-  onClose,
-  onCreate,
-  onFind,
-  restaurant
-}: {
-  onClose: () => void;
-  onCreate: () => void;
-  onFind: () => void;
-  restaurant: Restaurant | null;
-}) {
-  return (
-    <Modal transparent animationType="fade" visible={Boolean(restaurant)} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>四人餐桌</Text>
-            <Pressable accessibilityRole="button" onPress={onClose}>
-              <Text style={styles.closeText}>取消</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.privacyNote}>{restaurant?.name}｜選擇想進行的方式</Text>
-          <Pressable accessibilityRole="button" style={styles.socialButton} onPress={onFind}>
-            <Text style={styles.socialButtonText}>尋找餐桌</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={[styles.socialButton, styles.secondarySocialButton]} onPress={onCreate}>
-            <Text style={styles.socialButtonText}>建立餐桌</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 function RestaurantTableActionModal({
   onClose,
   onCreate,

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";

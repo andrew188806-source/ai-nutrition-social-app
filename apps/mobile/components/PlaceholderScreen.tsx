@@ -1,9 +1,10 @@
 import { type Href, useRouter } from "expo-router";
 import { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { fonts, radius, shadows } from "../theme/tokens";
-import { BottomNav, colors } from "./DemoUi";
+import { PrimaryButton, SecondaryButton } from "../theme/components";
+import { fonts, snowPalette as colors } from "../theme/tokens";
+import { BottomNav } from "./DemoUi";
 
 interface ActionLink {
   href: Href;
@@ -13,34 +14,34 @@ interface ActionLink {
 interface PlaceholderScreenProps {
   title: string;
   subtitle: string;
-  eyebrow?: string;
   children?: ReactNode;
   primaryAction?: ActionLink;
   secondaryAction?: ActionLink;
 }
 
-export function PlaceholderScreen({
-  title,
-  subtitle,
-  eyebrow = zhTW.common.phaseBadge,
-  children,
-  primaryAction,
-  secondaryAction
-}: PlaceholderScreenProps) {
+export function PlaceholderScreen({ title, subtitle, children, primaryAction, secondaryAction }: PlaceholderScreenProps) {
+  const router = useRouter();
+
   return (
     <View style={styles.shell}>
       <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.hero}>
-          <View style={styles.heroTop}>
-            <Text style={styles.platformLabel}>{zhTW.mobile.demoAccess.platformConsumer}</Text>
-            <Text style={styles.badge}>{eyebrow}</Text>
-          </View>
+        <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
-          <View style={styles.actions}>
-            {primaryAction ? <ActionButton action={primaryAction} variant="primary" /> : null}
-            {secondaryAction ? <ActionButton action={secondaryAction} variant="secondary" /> : null}
-          </View>
+          {primaryAction || secondaryAction ? (
+            <View style={styles.actions}>
+              {primaryAction ? (
+                <View style={styles.actionPrimary}>
+                  <PrimaryButton label={primaryAction.label} onPress={() => router.push(primaryAction.href)} />
+                </View>
+              ) : null}
+              {secondaryAction ? (
+                <View style={styles.actionSecondary}>
+                  <SecondaryButton label={secondaryAction.label} onPress={() => router.push(secondaryAction.href)} />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
         <View style={styles.content}>{children ?? <Text style={styles.panelText}>{zhTW.common.demoOnly}</Text>}</View>
         <Text style={styles.disclaimer}>{zhTW.common.notMedical}</Text>
@@ -50,72 +51,42 @@ export function PlaceholderScreen({
   );
 }
 
-function ActionButton({ action, variant }: { action: ActionLink; variant: "primary" | "secondary" }) {
-  const router = useRouter();
-
-  return (
-    <Pressable onPress={() => router.push(action.href)} style={[styles.button, variant === "secondary" && styles.secondaryButton]}>
-      <Text style={[styles.buttonText, variant === "secondary" && styles.secondaryButtonText]}>{action.label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-    backgroundColor: colors.paper
+    backgroundColor: colors.bg
   },
   container: {
-    gap: 22,
     padding: 16,
-    paddingBottom: 32
+    paddingBottom: 32,
+    gap: 22
   },
-  hero: {
-    overflow: "hidden",
-    borderColor: colors.line,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    backgroundColor: colors.card,
-    gap: 15,
-    padding: 24,
-    ...shadows.card
-  },
-  heroTop: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12
-  },
-  badge: {
-    alignSelf: "flex-start",
-    borderRadius: radius.pill,
-    backgroundColor: colors.cream,
-    color: colors.muted,
-    fontSize: 13,
-    fontFamily: fonts.medium,
-    fontWeight: "800",
-    paddingHorizontal: 12,
-    paddingVertical: 7
-  },
-  platformLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontFamily: fonts.bold,
-    fontWeight: "900",
-    letterSpacing: 0
+  header: {
+    gap: 10,
+    paddingTop: 8
   },
   title: {
     color: colors.ink,
-    fontSize: 32,
+    fontSize: 28,
     fontFamily: fonts.black,
-    fontWeight: "900",
-    lineHeight: 39
+    fontWeight: "900"
   },
   subtitle: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 23,
+    color: colors.sub,
+    fontSize: 13.5,
+    lineHeight: 20,
     fontFamily: fonts.body
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4
+  },
+  actionPrimary: {
+    flex: 1.25
+  },
+  actionSecondary: {
+    flex: 1
   },
   content: {
     gap: 16
@@ -127,35 +98,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body
   },
   disclaimer: {
-    color: colors.muted,
+    color: colors.sub,
     fontSize: 12,
     lineHeight: 18,
     fontFamily: fonts.body
-  },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  button: {
-    alignItems: "center",
-    borderRadius: radius.pill,
-    backgroundColor: colors.coral,
-    paddingHorizontal: 18,
-    paddingVertical: 13
-  },
-  secondaryButton: {
-    backgroundColor: colors.card,
-    borderColor: colors.line,
-    borderWidth: 1
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontFamily: fonts.bold,
-    fontWeight: "900"
-  },
-  secondaryButtonText: {
-    color: colors.ink
   }
 });

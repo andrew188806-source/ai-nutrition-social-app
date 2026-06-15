@@ -14,6 +14,10 @@ export type ActiveFourPersonTable = {
   groupChatThreadId?: ChatId;
 };
 
+// TODO(engineering):
+// - Current state: the demo persists one active hosted table through the shared storage adapter.
+// - Intended future integration: replace with group-table APIs and realtime participant updates.
+// - Related feature: Restaurants -> Four-Person Tables -> Group Chat.
 const activeTableStorageKey = "haocu.fourPersonTable.active.v1";
 let activeTable = readStoredActiveTable();
 

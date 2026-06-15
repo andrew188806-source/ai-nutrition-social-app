@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, ComparisonPreview, LockNotice, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
+import { GroupCalorieSharingCard, GroupTableCalorieUpload, getLatestGroupCalorieShare, type GroupCalorieShare } from "../features/calorie-sharing";
 import { getAvatarDisplayLabel, getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { createRestaurantFourPersonTable, getActiveFourPersonTable, updateActiveFourPersonTable, type ActiveFourPersonTable } from "../features/group-tables";
@@ -48,7 +49,7 @@ export function GroupTablesContent({
   onOpenChat?: (target: GroupTableChatTarget) => void;
   restaurantContext?: RestaurantTableContext;
 }) {
-  const [demoMode, setDemoMode] = useDemoUserPlan();
+  const [demoMode] = useDemoUserPlan();
   const [joinedTable, setJoinedTable] = useState<string | null>(null);
   const [showCreateUpgrade, setShowCreateUpgrade] = useState(false);
   const [showInviteUpgrade, setShowInviteUpgrade] = useState(false);
@@ -67,6 +68,8 @@ export function GroupTablesContent({
   const [myTableView, setMyTableView] = useState<"card" | "participants" | "communityCard">("card");
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [restaurantSearchDismissed, setRestaurantSearchDismissed] = useState(false);
+  const [isGroupCalorieUploadOpen, setIsGroupCalorieUploadOpen] = useState(false);
+  const [groupCalorieShare, setGroupCalorieShare] = useState<GroupCalorieShare | null>(null);
   const isPremiumMode = demoMode === "premium";
   const tableSearchContext = restaurantContext?.action === "find" && !restaurantSearchDismissed ? restaurantContext : undefined;
   const communitySettings = getCommunityCardSettings();
@@ -84,6 +87,9 @@ export function GroupTablesContent({
         tableName: `四人桌｜${activeTable.restaurantName}`
       }
     : hostedTableChatTarget;
+  useEffect(() => {
+    setGroupCalorieShare(getLatestGroupCalorieShare(activeTableChatTarget.tableId));
+  }, [activeTableChatTarget.tableId]);
   const restaurantTableResults = useMemo(
     () => tableSearchContext ? rankExistingTablesForRestaurant(tableSearchContext) : { exact: [], similar: [], visible: zhTW.mobile.groupTables.tables },
     [tableSearchContext]
@@ -148,6 +154,17 @@ export function GroupTablesContent({
       <UpgradePromptModal visible={showCreateUpgrade} title={zhTW.mobile.correctedFlow.myTableTitle} body={zhTW.mobile.correctedFlow.activeTableLimitReached} actionLabel={zhTW.common.close} onClose={() => setShowCreateUpgrade(false)} />
       <UpgradePromptModal visible={showInviteUpgrade} title={zhTW.mobile.refinedLogic.mealPartner.premiumModalTitle} body={zhTW.mobile.correctedFlow.freeInviteAllUpgrade} actionLabel={zhTW.common.close} onClose={() => setShowInviteUpgrade(false)} />
       <UpgradePromptModal visible={showCapacityWarning} title={zhTW.mobile.correctedFlow.upgradeCapacity} body={zhTW.mobile.correctedFlow.capacityNotReady} actionLabel={zhTW.common.close} onClose={() => setShowCapacityWarning(false)} />
+      <GroupTableCalorieUpload
+        visible={isGroupCalorieUploadOpen}
+        onClose={() => setIsGroupCalorieUploadOpen(false)}
+        groupTableId={activeTableChatTarget.tableId}
+        hostUserId="demo-user"
+        defaultPeopleCount={tableParticipantCount}
+        onGenerated={(share) => {
+          setGroupCalorieShare(share);
+          setIsGroupCalorieUploadOpen(false);
+        }}
+      />
       <ReplaceActiveTableModal
         visible={showReplaceTableConfirm}
         onCancel={() => setShowReplaceTableConfirm(false)}
@@ -363,11 +380,14 @@ export function GroupTablesContent({
                 }}
                 tableCapacity={tableCapacity}
                 tableParticipantCount={tableParticipantCount}
+                onRecordCalories={() => setIsGroupCalorieUploadOpen(true)}
+                groupCalorieShare={groupCalorieShare}
               />
             ) : null}
             {myTableView === "participants" ? (
               <ParticipantsMode
                 activeTable={activeTable}
+                groupCalorieShare={groupCalorieShare}
                 participants={participants}
                 onBack={() => setMyTableView("card")}
                 onOpenChat={() => onOpenChat?.(activeTableChatTarget)}
@@ -587,36 +607,6 @@ function ReplaceActiveTableModal({ onCancel, onReplace, visible }: { onCancel: (
   );
 }
 
-function RestaurantTableContextCard({ context, exactCount, similarCount }: { context: RestaurantTableContext; exactCount: number; similarCount: number }) {
-  return (
-    <Card tone="mint">
-      <PremiumBadge label="餐廳篩選" variant="free" />
-      <SectionTitle
-        title={`正在尋找：${context.restaurantName}`}
-        subtitle={exactCount > 0 ? `優先顯示 ${exactCount} 個同餐廳餐桌。` : similarCount > 0 ? `目前沒有同餐廳餐桌，顯示 ${similarCount} 個相似類型餐桌。` : "目前沒有符合的餐桌。"}
-      />
-      <TagRow tags={context.restaurantTags.slice(0, 3)} />
-    </Card>
-  );
-}
-
-function RestaurantTableSearchContextCard({ context, exactCount, similarCount }: { context: RestaurantTableContext; exactCount: number; similarCount: number }) {
-  const subtitle =
-    exactCount > 0
-      ? `優先顯示同餐廳四人桌，共 ${exactCount} 桌。`
-      : similarCount > 0
-        ? `這間餐廳暫無可加入桌，先顯示 ${similarCount} 桌相似料理。`
-        : "目前這間餐廳還沒有可加入的四人桌，可以建立一桌。";
-
-  return (
-    <Card tone="mint">
-      <PremiumBadge label="餐廳搜尋" variant="free" />
-      <SectionTitle title={`正在尋找：${context.restaurantName}`} subtitle={subtitle} />
-      <TagRow tags={context.restaurantTags.slice(0, 3)} />
-    </Card>
-  );
-}
-
 function RestaurantTableSearchContextCardWithBack({
   context,
   exactCount,
@@ -647,7 +637,7 @@ function RestaurantTableSearchContextCardWithBack({
   );
 }
 
-function MyTableOverview({ activeTable, onCreate, onInvite, onManage, onOpen, onOpenChat, onUpgradeCapacity, tableCapacity, tableParticipantCount }: { activeTable: ActiveFourPersonTable | null; onCreate: () => void; onInvite: () => void; onManage: () => void; onOpen: () => void; onOpenChat: () => void; onUpgradeCapacity: () => void; tableCapacity: 4 | 6 | 8; tableParticipantCount: 3 | 4 }) {
+function MyTableOverview({ activeTable, groupCalorieShare, onCreate, onInvite, onManage, onOpen, onOpenChat, onRecordCalories, onUpgradeCapacity, tableCapacity, tableParticipantCount }: { activeTable: ActiveFourPersonTable | null; groupCalorieShare: GroupCalorieShare | null; onCreate: () => void; onInvite: () => void; onManage: () => void; onOpen: () => void; onOpenChat: () => void; onRecordCalories: () => void; onUpgradeCapacity: () => void; tableCapacity: 4 | 6 | 8; tableParticipantCount: 3 | 4 }) {
   return (
     <Card tone="premium">
       <PremiumBadge label={zhTW.mobile.correctedFlow.myTableTitle} />
@@ -660,13 +650,20 @@ function MyTableOverview({ activeTable, onCreate, onInvite, onManage, onOpen, on
           </Pressable>
         </>
       ) : (
-        <HostedTableCard activeTable={activeTable} onInvite={onInvite} onManage={onManage} onOpen={onOpen} onOpenChat={onOpenChat} onUpgradeCapacity={onUpgradeCapacity} tableCapacity={tableCapacity} tableParticipantCount={tableParticipantCount} />
+        <>
+          <HostedTableCard activeTable={activeTable} onInvite={onInvite} onManage={onManage} onOpen={onOpen} onOpenChat={onOpenChat} onRecordCalories={onRecordCalories} onUpgradeCapacity={onUpgradeCapacity} tableCapacity={tableCapacity} tableParticipantCount={tableParticipantCount} />
+          {groupCalorieShare ? (
+            <View style={styles.groupCalorieCardWrap}>
+              <GroupCalorieSharingCard share={groupCalorieShare} currentUserId="demo-user" restaurantName={activeTable.restaurantName} />
+            </View>
+          ) : null}
+        </>
       )}
     </Card>
   );
 }
 
-function HostedTableCard({ activeTable, onInvite, onManage, onOpen, onOpenChat, onUpgradeCapacity, tableCapacity, tableParticipantCount }: { activeTable: ActiveFourPersonTable; onInvite: () => void; onManage: () => void; onOpen?: () => void; onOpenChat?: () => void; onUpgradeCapacity: () => void; tableCapacity: 4 | 6 | 8; tableParticipantCount: 3 | 4 }) {
+function HostedTableCard({ activeTable, onInvite, onManage, onOpen, onOpenChat, onRecordCalories, onUpgradeCapacity, tableCapacity, tableParticipantCount }: { activeTable: ActiveFourPersonTable; onInvite: () => void; onManage: () => void; onOpen?: () => void; onOpenChat?: () => void; onRecordCalories?: () => void; onUpgradeCapacity: () => void; tableCapacity: 4 | 6 | 8; tableParticipantCount: 3 | 4 }) {
   return (
     <View style={styles.hostedTableCard}>
       <Pressable style={styles.hostedTableInfo} onPress={onOpen ?? onManage}>
@@ -691,12 +688,17 @@ function HostedTableCard({ activeTable, onInvite, onManage, onOpen, onOpenChat, 
             <Text style={styles.tableTertiaryActionText}>飯局聊天室</Text>
           </Pressable>
         ) : null}
+        {onRecordCalories ? (
+          <Pressable style={styles.tableTertiaryAction} onPress={onRecordCalories}>
+            <Text style={styles.tableTertiaryActionText}>{zhTW.mobile.calorieSharing.groupUploadCta}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
-function ParticipantsMode({ activeTable, onBack, onOpenChat, onOpenParticipant, participants }: { activeTable: ActiveFourPersonTable | null; onBack: () => void; onOpenChat: () => void; onOpenParticipant: (id: string) => void; participants: TableParticipant[] }) {
+function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, onOpenParticipant, participants }: { activeTable: ActiveFourPersonTable | null; groupCalorieShare: GroupCalorieShare | null; onBack: () => void; onOpenChat: () => void; onOpenParticipant: (id: string) => void; participants: TableParticipant[] }) {
   const table = activeTable ?? {
     restaurantName: zhTW.mobile.correctedFlow.hostedTable.name,
     location: zhTW.mobile.correctedFlow.hostedTable.place,
@@ -715,6 +717,11 @@ function ParticipantsMode({ activeTable, onBack, onOpenChat, onOpenParticipant, 
         <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tablePeopleLabel}: {table.participantIds.length}/{table.maxParticipants}</Text>
         <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tableStatusLabel}: {table.status}</Text>
       </View>
+      {groupCalorieShare ? (
+        <View style={styles.groupCalorieCardWrap}>
+          <GroupCalorieSharingCard share={groupCalorieShare} currentUserId="demo-user" restaurantName={table.restaurantName} />
+        </View>
+      ) : null}
       {participants.map((participant) => (
         <Pressable key={participant.id} style={styles.participantCard} onPress={() => onOpenParticipant(participant.id)}>
           <View style={styles.participantMiniAvatar}>
@@ -1033,6 +1040,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     marginTop: 12,
     padding: 13
+  },
+  groupCalorieCardWrap: {
+    marginTop: 12
   },
   hostedTableInfo: {
     gap: 4

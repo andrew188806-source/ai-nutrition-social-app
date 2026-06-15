@@ -4,9 +4,10 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav, DemoModeToggle, PremiumBadge } from "../components/DemoUi";
 import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCard";
-import { getLatestCorrectedMealRecord, getMealRecords } from "../features/analysis/analysisMealRecordStore";
-import { calculateTodayNutritionSummary, getTodayMealRecords } from "../features/analysis/nutritionSummary";
+import { getLatestCorrectedMealRecord, getMealRecords, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
+import { calculateTodayNutritionSummary, getEffectiveCalories, getTodayMealRecords } from "../features/analysis/nutritionSummary";
 import type { SavedMealRecord } from "../features/analysis/types";
+import { MealCompletionForm } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes, type SelfMadeDish } from "../features/self-made-dishes";
 import { Card, Chip, CompactRow, SecondaryButton, SectionHeader } from "../theme/components";
@@ -25,6 +26,8 @@ type MealCard = {
   rating: string;
   review: string;
   photoLabel: string;
+  mealId?: string;
+  estimatedCalories?: number;
 };
 type MonthlyCard = (typeof zhTW.mobile.mealLog.foodDiary.monthlyCards)[number];
 type FavoriteCard = (typeof zhTW.mobile.mealLog.foodDiary.favoriteCards)[number];
@@ -45,12 +48,15 @@ export default function MealLogScreen() {
     slot: meal.mealPeriod,
     name: meal.mealName || emptyField,
     source: `${zhTW.mobile.finalUx.restaurantNameLabel}｜${meal.restaurantName || emptyField}`,
-    calories: `${meal.calories} kcal`,
+    calories: `${getEffectiveCalories(meal)} kcal`,
     macros: `${zhTW.mobile.analysis.protein} ${meal.protein}g｜${zhTW.mobile.analysis.carbs} ${meal.carbohydrates}g｜${zhTW.mobile.analysis.fat} ${meal.fat}g`,
     rating: diary.editRatingCta,
     review: `${meal.ingredients}｜${meal.portion}`,
-    photoLabel: diary.mealDetailTitle
+    photoLabel: diary.mealDetailTitle,
+    mealId: meal.mealId,
+    estimatedCalories: meal.estimatedCalories ?? meal.calories
   }));
+  const mealDetailCards: MealCard[] = [...correctedMealCards, ...diary.mealCards];
 
   const [demoUserPlan, setDemoUserPlan] = useDemoUserPlan();
   const isPaid = demoUserPlan === "premium";
@@ -61,6 +67,7 @@ export default function MealLogScreen() {
   const [selectedRankingGroup, setSelectedRankingGroup] = useState<RankingGroupId | null>(null);
   const [selectedRankingOption, setSelectedRankingOption] = useState<string | null>(null);
   const [mockMessage, setMockMessage] = useState("");
+  const [editingMeal, setEditingMeal] = useState<MealCard | null>(null);
 
   const selectedDaily = diary.dailyCards.find((card) => card.id === selectedDailyId);
   const selectedMonth = diary.monthlyCards.find((card) => card.id === selectedMonthId) ?? diary.monthlyCards[0];
@@ -109,7 +116,7 @@ export default function MealLogScreen() {
           <Card>
             <SectionHeader title={diary.mealDetailTitle} subtitle={diary.mealDetailBody} />
             <View style={styles.stack}>
-              {[...correctedMealCards, ...diary.mealCards].map((meal) => (
+              {mealDetailCards.map((meal) => (
                 <MealFoodCard
                   favoriteLabel={diary.favoriteCta}
                   favoritedLabel={diary.favoritedCta}
@@ -118,12 +125,35 @@ export default function MealLogScreen() {
                   meal={meal}
                   onToggleFavorite={() => toggleFavorite(meal.id, favoriteIds, setFavoriteIds)}
                   onMockAction={setMockMessage}
+                  onEditRating={meal.mealId ? () => setEditingMeal(meal) : undefined}
                   shareCta={diary.shareCta}
                   editRatingCta={diary.editRatingCta}
                 />
               ))}
             </View>
           </Card>
+
+          {editingMeal ? (
+            <MealCompletionForm
+              visible={!!editingMeal}
+              onClose={() => setEditingMeal(null)}
+              onSubmit={(result) => {
+                if (!editingMeal.mealId) {
+                  return;
+                }
+                updateMealRecordByMealId(editingMeal.mealId, {
+                  rating: result.rating,
+                  portionFeeling: result.portionFeeling,
+                  wouldEatAgain: result.wouldEatAgain,
+                  completionPercentage: result.completionPercentage,
+                  unfinishedReason: result.unfinishedReason,
+                  actualCalories: result.actualCalories
+                });
+              }}
+              estimatedCalories={editingMeal.estimatedCalories ?? 0}
+              mealName={editingMeal.name}
+            />
+          ) : null}
 
           <Card tone="blush">
             <SectionHeader title={diary.sharingTitle} subtitle={diary.sharingBody} />
@@ -390,7 +420,7 @@ function RecentMealCard({ meal }: { meal: SavedMealRecord }) {
     <View style={styles.recentMealCard}>
       <View style={styles.recentMealHeader}>
         <Text style={styles.recentMealSlot}>{meal.mealPeriod}</Text>
-        <Text style={styles.recentMealCalories}>{meal.calories} kcal</Text>
+        <Text style={styles.recentMealCalories}>{getEffectiveCalories(meal)} kcal</Text>
       </View>
       <Text style={styles.recentMealName}>{meal.mealName || emptyField}</Text>
       <View style={styles.recentMealTagsRow}>
@@ -443,7 +473,7 @@ function DailyOverviewCard({ card, detailCta, onPress }: { card: DailyCard; deta
   );
 }
 
-function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorited, meal, onMockAction, onToggleFavorite, shareCta }: { editRatingCta: string; favoriteLabel: string; favoritedLabel: string; isFavorited: boolean; meal: MealCard; onMockAction: (message: string) => void; onToggleFavorite: () => void; shareCta: string }) {
+function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorited, meal, onEditRating, onMockAction, onToggleFavorite, shareCta }: { editRatingCta: string; favoriteLabel: string; favoritedLabel: string; isFavorited: boolean; meal: MealCard; onEditRating?: () => void; onMockAction: (message: string) => void; onToggleFavorite: () => void; shareCta: string }) {
   return (
     <View style={styles.innerCard}>
       <View style={styles.dailyOverviewHeader}>
@@ -456,7 +486,7 @@ function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorite
       <Text style={styles.cardBody}>{meal.rating}</Text>
       <Text style={styles.cardBody}>{meal.review}</Text>
       <View style={styles.actionRow}>
-        <Pressable onPress={() => onMockAction("已開啟餐點評分編輯")}>
+        <Pressable onPress={onEditRating ?? (() => onMockAction("已開啟餐點評分編輯"))}>
           <Text style={styles.linkText}>{editRatingCta}</Text>
         </Pressable>
         <Pressable onPress={onToggleFavorite}>

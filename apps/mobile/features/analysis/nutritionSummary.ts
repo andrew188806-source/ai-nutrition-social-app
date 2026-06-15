@@ -93,6 +93,12 @@ function estimateMacrosFromCalories(calories: number) {
   };
 }
 
+// Food Diary / Today's Nutrition prefer the post-meal-rating-corrected actualCalories,
+// then the AI's estimatedCalories, falling back to the legacy calories field.
+export function getEffectiveCalories(meal: SavedMealRecord): number {
+  return meal.actualCalories ?? meal.estimatedCalories ?? meal.calories;
+}
+
 export function getTodayMealRecords(): SavedMealRecord[] {
   return [...baselineTodayMealRecords, ...getMealRecords()];
 }
@@ -100,15 +106,16 @@ export function getTodayMealRecords(): SavedMealRecord[] {
 export function calculateTodayNutritionSummary(records: SavedMealRecord[] = getTodayMealRecords()): TodayNutritionSummary {
   let estimatedMealCount = 0;
   const totals = records.reduce<NutritionTotals>((sum, meal) => {
+    const effectiveCalories = getEffectiveCalories(meal);
     const hasMacroData = meal.protein > 0 || meal.carbohydrates > 0 || meal.fat > 0;
     const macros = hasMacroData
       ? { protein: meal.protein, carbs: meal.carbohydrates, fat: meal.fat }
-      : estimateMacrosFromCalories(meal.calories);
-    if (!hasMacroData && meal.calories > 0) {
+      : estimateMacrosFromCalories(effectiveCalories);
+    if (!hasMacroData && effectiveCalories > 0) {
       estimatedMealCount += 1;
     }
     return {
-      calories: sum.calories + meal.calories,
+      calories: sum.calories + effectiveCalories,
       protein: sum.protein + macros.protein,
       carbs: sum.carbs + macros.carbs,
       fat: sum.fat + macros.fat

@@ -1,4 +1,4 @@
-﻿import { type ReactNode, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,7 +7,8 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, DemoModeToggle, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, useAnalysisCorrectionState } from "../features/analysis";
-import { saveCorrectedMealRecord } from "../features/analysis/analysisMealRecordStore";
+import { saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
+import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { getAiRecommendationMealBuddyCard, resetMealBuddyVisibleQuotaForDemo, setPendingMatchRequest, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
@@ -28,6 +29,10 @@ export default function AnalysisScreen() {
   const [showMealBuddyConfirm, setShowMealBuddyConfirm] = useState(false);
   const [showMealBuddySuccess, setShowMealBuddySuccess] = useState(false);
   const isAnalysisConfirmed = analysis.matchState === "confirmed";
+  // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
+  const [mealId] = useState(() => generateMealId());
+  const [preMealPhotoIds] = useState(() => [generatePhotoId("pre")]);
+  const [guiltSharingResult, setGuiltSharingResult] = useState<{ peopleCount: number; sharedCaloriesPerPerson: number } | null>(null);
 
   useEffect(() => {
     if (typeof params.mealSlot === "string") {
@@ -58,6 +63,7 @@ export default function AnalysisScreen() {
       isSocialMeal: false
     };
     saveCorrectedMealRecord({
+      mealId,
       restaurantName: analysis.restaurantName,
       mealName: analysis.mealName,
       calories: analysis.nutritionSummary.calories,
@@ -67,11 +73,25 @@ export default function AnalysisScreen() {
       ingredients: analysis.nutritionSummary.ingredientSummary,
       portion: analysis.nutritionSummary.portion,
       mealPeriod: selectedMealPeriod,
-      date: "2026/06/01"
+      date: "2026/06/01",
+      preMealPhotoIds,
+      estimatedCalories: analysis.nutritionSummary.calories,
+      calorieSharingPeopleCount: guiltSharingResult?.peopleCount,
+      sharedCaloriesPerPerson: guiltSharingResult?.sharedCaloriesPerPerson
     });
     if (selectedMealPeriod.includes("晚餐")) {
       confirmPlannedDinnerFromAnalysis(savedPlan);
     }
+  }
+
+  function handleGuiltSharingConfirm(result: { peopleCount: number; sharedCaloriesPerPerson: number }) {
+    // 罪惡分擔 only attaches the split result to this meal record — it never asks
+    // meal-completion questions (those live in the post-meal rating flow only).
+    setGuiltSharingResult(result);
+    updateMealRecordByMealId(mealId, {
+      calorieSharingPeopleCount: result.peopleCount,
+      sharedCaloriesPerPerson: result.sharedCaloriesPerPerson
+    });
   }
 
   function saveMealRecordToMockDatabase() {
@@ -194,12 +214,15 @@ export default function AnalysisScreen() {
           ) : isAnalysisConfirmed ? (
             <CompletedAnalysisHero
               nutritionSummary={analysis.nutritionSummary}
+              mealName={analysis.mealName}
+              guiltSharingResult={guiltSharingResult}
               onFindBuddy={confirmCreateMealBuddyCard}
               onOpenMealLog={saveMealRecordToMockDatabase}
               onOpenNutritionRecord={() => router.push("/meal-log")}
+              onGuiltShare={handleGuiltSharingConfirm}
             />
           ) : (
-            <ExternalDiningAnalysis analysis={analysis} renderSuccessActions={renderSuccessActions} />
+            <ExternalDiningAnalysis analysis={analysis} />
           )}
 
           {!analysis.isSelfCooked && analysis.matchState === "editing" ? <CandidateCorrectionList analysis={analysis} renderSuccessActions={renderSuccessActions} /> : null}
@@ -365,14 +388,20 @@ function SelfCookedIntro({ nutritionSummary }: { nutritionSummary: ReturnType<ty
 
 function CompletedAnalysisHero({
   nutritionSummary,
+  mealName,
+  guiltSharingResult,
   onFindBuddy,
   onOpenMealLog,
-  onOpenNutritionRecord
+  onOpenNutritionRecord,
+  onGuiltShare
 }: {
   nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"];
+  mealName: string;
+  guiltSharingResult: { peopleCount: number; sharedCaloriesPerPerson: number } | null;
   onFindBuddy: () => void;
   onOpenMealLog: () => void;
   onOpenNutritionRecord: () => void;
+  onGuiltShare: (result: { peopleCount: number; sharedCaloriesPerPerson: number }) => void;
 }) {
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
 
@@ -395,6 +424,13 @@ function CompletedAnalysisHero({
           ))}
         </View>
       </View>
+      <SingleMealGuiltShare
+        estimatedCalories={nutritionSummary.calories}
+        mealName={mealName}
+        calorieSharingPeopleCount={guiltSharingResult?.peopleCount}
+        sharedCaloriesPerPerson={guiltSharingResult?.sharedCaloriesPerPerson}
+        onShare={onGuiltShare}
+      />
       <View style={styles.ctaColumn}>
         <PrimaryButton icon="buddies" label={zhTW.mobile.refinedLogic.mealBuddyCard.findPeopleCta} onPress={onFindBuddy} />
         <View style={styles.ctaRow2}>
@@ -505,7 +541,7 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
   );
 }
 
-function ExternalDiningAnalysis({ analysis, renderSuccessActions }: { analysis: ReturnType<typeof useAnalysisCorrectionState>; renderSuccessActions: () => ReactNode }) {
+function ExternalDiningAnalysis({ analysis }: { analysis: ReturnType<typeof useAnalysisCorrectionState> }) {
   const [showDetails, setShowDetails] = useState(false);
 
   return (
