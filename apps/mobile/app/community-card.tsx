@@ -5,6 +5,7 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, LockNotice, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { resolveCommunityProfileDisplay, type AvatarSource } from "../features/display-resolvers";
+import { getMascotSource } from "../theme/components";
 
 type CommunityCardVisibility = (typeof zhTW.mobile.communityCard.visibilityOptions)[number];
 type CommunityCardIntent = (typeof zhTW.mobile.communityCard.intents)[number];
@@ -117,6 +118,10 @@ function ResolvedCommunityAvatar({ avatarSource }: { avatarSource: AvatarSource 
   }
 
   if (avatarSource.type === "mascot") {
+    const source = getMascotSource(avatarSource.mascotId);
+    if (source) {
+      return <Image source={source} style={styles.avatarImage} resizeMode="cover" />;
+    }
     return <Text style={styles.avatarText}>{avatarSource.assetKey}</Text>;
   }
 

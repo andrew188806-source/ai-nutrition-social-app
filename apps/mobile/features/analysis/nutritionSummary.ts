@@ -1,6 +1,6 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import type { PlannedMeal } from "../planned-meal/types";
-import { getMealRecords } from "./analysisMealRecordStore";
+import { getTodayMealRecords } from "./analysisMealRecordStore";
 import type { SavedMealRecord } from "./types";
 
 export const dailyNutritionTargets = {
@@ -44,47 +44,6 @@ const vegetableKeywords = ["菜", "瓜", "筍", "菇", "椰", "蔬", "葉", "番
 
 const mealSlotOptions = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions;
 
-// Baseline records for the meals shown in "今天吃了什麼" before any Analysis -> 加入今日飲食 save.
-// Kept in sync with the matching entries in lib/i18n/zh-TW.ts (mealLog.foodDiary.mealCards).
-const baselineTodayMealRecords: SavedMealRecord[] = [
-  {
-    restaurantName: "早安豆漿",
-    mealName: "鮪魚蛋吐司",
-    calories: 420,
-    protein: 22,
-    carbohydrates: 46,
-    fat: 14,
-    ingredients: "鮪魚、蛋、全麥吐司",
-    portion: "1份",
-    mealPeriod: mealSlotOptions[0],
-    date: "2026/06/01"
-  },
-  {
-    restaurantName: "好食健康碗",
-    mealName: "香煎雞胸健康餐",
-    calories: 620,
-    protein: 38,
-    carbohydrates: 58,
-    fat: 22,
-    ingredients: "雞胸肉、花椰菜、地瓜",
-    portion: "1份",
-    mealPeriod: mealSlotOptions[1],
-    date: "2026/06/01"
-  },
-  {
-    restaurantName: "便利商店",
-    mealName: "無糖豆漿",
-    calories: 120,
-    protein: 9,
-    carbohydrates: 8,
-    fat: 5,
-    ingredients: "無糖豆漿",
-    portion: "1杯",
-    mealPeriod: mealSlotOptions[3],
-    date: "2026/06/01"
-  }
-];
-
 function estimateMacrosFromCalories(calories: number) {
   return {
     protein: Math.round((calories * 0.2) / 4),
@@ -99,9 +58,6 @@ export function getEffectiveCalories(meal: SavedMealRecord): number {
   return meal.actualCalories ?? meal.estimatedCalories ?? meal.calories;
 }
 
-export function getTodayMealRecords(): SavedMealRecord[] {
-  return [...baselineTodayMealRecords, ...getMealRecords()];
-}
 
 export function calculateTodayNutritionSummary(records: SavedMealRecord[] = getTodayMealRecords()): TodayNutritionSummary {
   let estimatedMealCount = 0;

@@ -8,7 +8,8 @@ import { GroupCalorieSharingCard, GroupTableCalorieUpload, getLatestGroupCalorie
 import { getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { createRestaurantFourPersonTable, getActiveFourPersonTable, updateActiveFourPersonTable, type ActiveFourPersonTable } from "../features/group-tables";
-import { createOrOpenGroupTableChat } from "../features/meal-buddy-card";
+import { getCommunityProfileByProfileId, resolveCommunityProfileDisplay, type AvatarSource } from "../features/display-resolvers";
+import { createOrOpenGroupTableChat, getMockTableParticipantCandidates } from "../features/meal-buddy-card";
 
 export default function GroupTablesScreen() {
   const router = useRouter();
@@ -24,6 +25,8 @@ export default function GroupTablesScreen() {
 
 type GroupTableChatTarget = {
   chatThreadId: string;
+  hostProfileId?: string;
+  participantProfileIds?: string[];
   tableId: string;
   tableName: string;
 };
@@ -41,6 +44,8 @@ type GroupDiningTab = "my" | "find" | "create";
 
 const hostedTableChatTarget: GroupTableChatTarget = {
   chatThreadId: "chat-group-table-japanese-dinner",
+  hostProfileId: "mina",
+  participantProfileIds: ["mina", "bo", "an"],
   tableId: "table-japanese-dinner",
   tableName: "四人桌｜清爽日式晚餐"
 };
@@ -69,8 +74,7 @@ export function GroupTablesContent({
   const [inviteSent, setInviteSent] = useState(false);
   const [moduleView, setModuleView] = useState<"tables" | "invite">("tables");
   const [tableTab, setTableTab] = useState<"my" | "find">("my");
-  const [myTableView, setMyTableView] = useState<"card" | "participants" | "communityCard">("card");
-  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [myTableView, setMyTableView] = useState<"card" | "participants">("card");
   const [restaurantSearchDismissed, setRestaurantSearchDismissed] = useState(false);
   const [isGroupCalorieUploadOpen, setIsGroupCalorieUploadOpen] = useState(false);
   const [groupCalorieShare, setGroupCalorieShare] = useState<GroupCalorieShare | null>(null);
@@ -82,15 +86,19 @@ export function GroupTablesContent({
   const fullInviteCandidates = useMemo(() => getFullInviteCandidates(isPremiumMode), [isPremiumMode]);
   const sortedInviteCandidates = useMemo(() => sortInviteCandidates(fullInviteCandidates, activeSort, sortDirection), [activeSort, fullInviteCandidates, sortDirection]);
   const inviteCandidates = sortedInviteCandidates.slice(0, isPremiumMode ? 10 : 5);
-  const participants = useMemo(() => getTableParticipants(), []);
-  const selectedParticipant = participants.find((participant) => participant.id === selectedParticipantId) ?? participants[0];
   const activeTableChatTarget = activeTable
     ? {
         chatThreadId: activeTable.groupChatThreadId ?? `chat-group-${activeTable.tableId}`,
+        hostProfileId: activeTable.hostProfileId,
+        participantProfileIds: activeTable.participantProfileIds,
         tableId: activeTable.tableId,
         tableName: `四人桌｜${activeTable.restaurantName}`
       }
     : hostedTableChatTarget;
+  const participants = useMemo(
+    () => getTableParticipants(activeTableChatTarget.tableId, activeTableChatTarget.participantProfileIds),
+    [activeTableChatTarget.tableId, activeTableChatTarget.participantProfileIds?.join("|")]
+  );
   useEffect(() => {
     setGroupCalorieShare(getLatestGroupCalorieShare(activeTableChatTarget.tableId));
   }, [activeTableChatTarget.tableId]);
@@ -112,7 +120,7 @@ export function GroupTablesContent({
     const nextTable = existingTable ?? createTableFromRestaurantContext(restaurantContext);
     setActiveTable(nextTable);
     setTableCapacity(nextTable.maxParticipants);
-    setTableParticipantCount(nextTable.participantIds.length >= 4 ? 4 : 3);
+    setTableParticipantCount(nextTable.participantProfileIds.length >= 4 ? 4 : 3);
     setTableTab("my");
     setMyTableView("card");
     focusGroupTableElementAfterRender("my-table-state-area");
@@ -140,11 +148,11 @@ export function GroupTablesContent({
       return;
     }
     setTableCapacity(activeTable.maxParticipants);
-    setTableParticipantCount(activeTable.participantIds.length >= 4 ? 4 : 3);
+    setTableParticipantCount(activeTable.participantProfileIds.length >= 4 ? 4 : 3);
   }, [activeTable?.tableId]);
 
   useEffect(() => {
-    if (myTableView === "participants" || myTableView === "communityCard") {
+    if (myTableView === "participants") {
       focusGroupTableElementAfterRender("my-table-state-area");
     }
   }, [myTableView]);
@@ -272,8 +280,11 @@ export function GroupTablesContent({
               }
               setInviteSent(true);
               setTableParticipantCount(4);
+              const participantProfileIds = ["demo-user", ...selectedInviteIds].slice(0, 4);
               const updated = updateActiveFourPersonTable({
-                participantIds: ["demo-user", ...selectedInviteIds].slice(0, 4),
+                hostProfileId: "demo-user",
+                participantProfileIds,
+                participantIds: participantProfileIds,
                 status: "已成團",
                 groupChatThreadId: hostedTableChatTarget.chatThreadId
               });
@@ -350,14 +361,12 @@ export function GroupTablesContent({
                   participants={participants}
                   onBack={() => setMyTableView("card")}
                   onOpenChat={() => onOpenChat?.(activeTableChatTarget)}
-                  onOpenParticipant={(id) => {
-                    setSelectedParticipantId(id);
-                    setMyTableView("communityCard");
+                  onOpenParticipant={(profileId) => {
+                    if (profileId && getCommunityProfileByProfileId(profileId)) {
+                      router.push({ pathname: "/community-profile/[profileId]", params: { profileId } });
+                    }
                   }}
                 />
-              ) : null}
-              {myTableView === "communityCard" ? (
-                <ParticipantCommunityCard participant={selectedParticipant} onBack={() => setMyTableView("participants")} />
               ) : null}
             </>
           ) : (
@@ -450,6 +459,7 @@ export function GroupTablesContent({
 
 type InviteCandidate = {
   id: string;
+  profileId: string;
   name: string;
   goal: string;
   lastTable: string;
@@ -473,8 +483,40 @@ type TableParticipant = InviteCandidate & {
   summary: string;
 };
 
-function getTableParticipants(): TableParticipant[] {
-  return getFullInviteCandidates(true).slice(0, 4).map((candidate, index) => ({
+function getTableParticipants(tableId: string, participantProfileIds?: readonly string[]): TableParticipant[] {
+  const tableCandidates = getMockTableParticipantCandidates(tableId);
+  const candidates = participantProfileIds?.length
+    ? participantProfileIds.map((profileId, index) => {
+        const tableCandidate = tableCandidates.find((candidate) => candidate.userId === profileId);
+        const profile = resolveCommunityProfileDisplay(profileId);
+        return {
+          id: profileId,
+          profileId,
+          name: profile.displayName,
+          goal: tableCandidate?.nutritionGoal ?? profile.shortProfileSummary,
+          lastTable: tableCandidate?.preferredFoodName ?? "",
+          mealCount: 12 - index,
+          knownDays: 20 + index * 9,
+          recentDays: (index % 6) + 1,
+          tags: profile.tags
+        };
+      })
+    : tableCandidates.map((candidate, index) => {
+        const profile = resolveCommunityProfileDisplay(candidate.userId);
+        return {
+          id: candidate.userId,
+          profileId: candidate.userId,
+          name: profile.displayName,
+          goal: candidate.nutritionGoal,
+          lastTable: candidate.preferredFoodName,
+          mealCount: 12 - index,
+          knownDays: 20 + index * 9,
+          recentDays: (index % 6) + 1,
+          tags: profile.tags
+        };
+      });
+
+  return candidates.slice(0, 4).map((candidate, index) => ({
     ...candidate,
     status: zhTW.mobile.correctedFlow.participantStatuses[index % zhTW.mobile.correctedFlow.participantStatuses.length],
     summary: zhTW.mobile.correctedFlow.participantSummary[index % zhTW.mobile.correctedFlow.participantSummary.length]
@@ -486,21 +528,30 @@ function addUnique(items: string[], id: string) {
 }
 
 function getFullInviteCandidates(isPremiumMode: boolean): InviteCandidate[] {
-  const base = zhTW.mobile.mealBuddies.buddies;
-  const names = isPremiumMode ? zhTW.mobile.refinedLogic.mealPartner.premiumNames : zhTW.mobile.refinedLogic.mealPartner.freeNames;
-  return names.map((name, index) => {
-    const buddy = base[index % base.length];
+  const candidates = getCanonicalGroupInviteCandidates();
+  return candidates.slice(0, isPremiumMode ? candidates.length : 5).map((candidate, index) => {
+    const profile = resolveCommunityProfileDisplay(candidate.userId);
     return {
-      id: name,
-      name,
-      goal: buddy.goal,
-      lastTable: buddy.intent,
+      id: candidate.userId,
+      profileId: candidate.userId,
+      name: profile.displayName,
+      goal: candidate.nutritionGoal,
+      lastTable: candidate.preferredFoodName,
       mealCount: 12 - index,
       knownDays: 20 + index * 9,
       recentDays: (index % 6) + 1,
-      tags: buddy.tags
+      tags: profile.tags
     };
   });
+}
+
+function getCanonicalGroupInviteCandidates() {
+  const candidates = [
+    ...getMockTableParticipantCandidates("table-japanese-dinner"),
+    ...getMockTableParticipantCandidates("table-light-lunch"),
+    ...getMockTableParticipantCandidates("table-chicken-bento")
+  ];
+  return [...new Map(candidates.map((candidate) => [candidate.userId, candidate])).values()];
 }
 
 function sortInviteCandidates(candidates: InviteCandidate[], activeSort: string, direction: "desc" | "asc"): InviteCandidate[] {
@@ -662,16 +713,16 @@ function HostedTableCard({ activeTable, onInvite, onManage, onOpen, onOpenChat, 
   );
 }
 
-function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, onOpenParticipant, participants }: { activeTable: ActiveFourPersonTable | null; groupCalorieShare: GroupCalorieShare | null; onBack: () => void; onOpenChat: () => void; onOpenParticipant: (id: string) => void; participants: TableParticipant[] }) {
+function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, onOpenParticipant, participants }: { activeTable: ActiveFourPersonTable | null; groupCalorieShare: GroupCalorieShare | null; onBack: () => void; onOpenChat: () => void; onOpenParticipant: (profileId?: string) => void; participants: TableParticipant[] }) {
   const table = activeTable ?? {
     restaurantName: zhTW.mobile.correctedFlow.hostedTable.name,
     location: zhTW.mobile.correctedFlow.hostedTable.place,
     suggestedTime: zhTW.mobile.correctedFlow.hostedTable.time,
     maxParticipants: 4,
-    participantIds: [],
+    participantProfileIds: [],
     status: zhTW.mobile.correctedFlow.hostedTable.status
   };
-  const participantCount = table.participantIds.length || participants.length;
+  const participantCount = table.participantProfileIds.length || participants.length;
   return (
     <SnowCard tone="ai">
       <SnowSectionHeader title={zhTW.mobile.correctedFlow.participantsTitle} subtitle={zhTW.mobile.correctedFlow.activeTableLimitHint} />
@@ -694,12 +745,12 @@ function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, 
         </View>
       ) : null}
       {participants.map((participant) => (
-        <Pressable key={participant.id} style={styles.participantCard} onPress={() => onOpenParticipant(participant.id)}>
+        <Pressable key={participant.id} style={styles.participantCard} onPress={() => onOpenParticipant(participant.profileId)}>
           <View style={styles.participantMiniAvatar}>
-            <Text style={styles.participantText}>{participant.name.slice(0, 1)}</Text>
+            <ResolvedParticipantAvatar avatarSource={resolveCommunityProfileDisplay(participant.profileId).avatarSource} />
           </View>
           <View style={styles.flex}>
-            <Text style={styles.candidateName}>{participant.name}</Text>
+            <Text style={styles.candidateName}>{resolveCommunityProfileDisplay(participant.profileId).displayName}</Text>
             <Text style={styles.aaRule}>{participant.status}</Text>
             <Text style={styles.reason}>{participant.summary}</Text>
             <TagRow tags={participant.tags.slice(0, 3)} />
@@ -717,6 +768,7 @@ function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, 
 }
 
 function ParticipantCommunityCard({ onBack, participant }: { onBack: () => void; participant: TableParticipant }) {
+  const profile = resolveCommunityProfileDisplay(participant.profileId);
   return (
     <Card tone="premium">
       <Pressable style={styles.headerButton} onPress={onBack}>
@@ -725,14 +777,14 @@ function ParticipantCommunityCard({ onBack, participant }: { onBack: () => void;
       <SectionTitle title={zhTW.mobile.correctedFlow.communityCardTitle} subtitle={participant.summary} />
       <View style={styles.communityCardTop}>
         <View style={styles.communityAvatar}>
-          <Text style={styles.participantText}>{participant.name.slice(0, 1)}</Text>
+          <ResolvedParticipantAvatar avatarSource={profile.avatarSource} />
         </View>
         <View style={styles.flex}>
-          <Text style={styles.restaurant}>{participant.name}</Text>
+          <Text style={styles.restaurant}>{profile.displayName}</Text>
           <Text style={styles.aaRule}>{zhTW.mobile.correctedFlow.verifiedParticipant}</Text>
         </View>
       </View>
-      <TagRow tags={participant.tags} />
+      <TagRow tags={profile.tags} />
       <Text style={styles.reason}>{zhTW.mobile.correctedFlow.commonMealInterests}: {participant.goal}</Text>
       <Text style={styles.reason}>{zhTW.mobile.correctedFlow.commonArea}: {participant.lastTable}</Text>
       <Text style={styles.reason}>{zhTW.mobile.correctedFlow.mealFriendCount}: {participant.mealCount}</Text>
@@ -740,6 +792,20 @@ function ParticipantCommunityCard({ onBack, participant }: { onBack: () => void;
       <Text style={styles.reason}>{zhTW.mobile.correctedFlow.socialIntro}: {participant.summary}</Text>
     </Card>
   );
+}
+
+function ResolvedParticipantAvatar({ avatarSource }: { avatarSource: AvatarSource }) {
+  if (avatarSource.type === "mascot") {
+    const source = getMascotSource(avatarSource.mascotId);
+    return source ? <Image source={source} style={styles.resolvedAvatarImage} resizeMode="cover" /> : null;
+  }
+  if (avatarSource.type === "photo" && avatarSource.photoUrl) {
+    return <Image source={{ uri: avatarSource.photoUrl }} style={styles.resolvedAvatarImage} resizeMode="cover" />;
+  }
+  if (avatarSource.type === "initial") {
+    return <Text style={styles.participantText}>{avatarSource.value}</Text>;
+  }
+  return null;
 }
 
 function InviteMode({
@@ -1101,6 +1167,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: colors.teal,
     height: 42,
+    overflow: "hidden",
     width: 42
   },
   communityCardTop: {
@@ -1117,7 +1184,12 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     backgroundColor: colors.coral,
     height: 74,
+    overflow: "hidden",
     width: 74
+  },
+  resolvedAvatarImage: {
+    height: "100%",
+    width: "100%"
   },
   blurredParticipantText: {
     letterSpacing: 1.5,

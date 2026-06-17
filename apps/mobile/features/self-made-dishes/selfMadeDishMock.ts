@@ -1,7 +1,7 @@
 import type { SelfMadeDish } from "./types";
 
 // Mock "我做的料理" collection, keyed by userId. Kept separate from
-// apps/mobile/app/restaurants.tsx's restaurantDishes — nothing here has a restaurantId
+// canonical restaurant menus — nothing here has a restaurantId
 // that would make it part of a restaurant's menu.
 let selfMadeDishes: SelfMadeDish[] = [
   {
@@ -54,6 +54,6 @@ export function getSelfMadeDishes(userId: string): SelfMadeDish[] {
 export function addSelfMadeDish(dish: SelfMadeDish) {
   // Backend integration entry: AI photo analysis of a self-cooked meal (no restaurantId),
   // or manual "我做的料理" entry -> this collection. Must not write into
-  // apps/mobile/app/restaurants.tsx's restaurantDishes.
+  // canonical restaurant menus.
   selfMadeDishes = [dish, ...selfMadeDishes];
 }

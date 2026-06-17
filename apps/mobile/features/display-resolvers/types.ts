@@ -20,6 +20,7 @@ export type CommunityProfileDisplay = {
 
 export type RestaurantMenuDisplay = {
   id: string;
+  menuItemId?: string;
   name: string;
   priceTwd?: number;
   tags: string[];
@@ -27,6 +28,7 @@ export type RestaurantMenuDisplay = {
   proteinGrams?: number;
   carbsGrams?: number;
   fatGrams?: number;
+  fiberGrams?: number;
   disclosureStatus?: string;
 };
 

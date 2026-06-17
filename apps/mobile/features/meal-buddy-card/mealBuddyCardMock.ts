@@ -1,6 +1,7 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { getCommunityCardSettings } from "../community-card-settings/communityCardSettingsStore";
 import { getEffectiveCurrentDate, getEffectiveDateKey } from "../demo-time";
+import { getCanonicalMenuItemById, getCanonicalRestaurantById, getCanonicalRestaurantByName, getPrimaryMenuItemForRestaurant } from "../restaurants";
 import type { MealBuddyCard, MealBuddyCardSourceType, MealBuddyCandidate, MealBuddyIntentionType } from "./types";
 
 const now = "2026-06-01T12:00:00+08:00";
@@ -9,15 +10,18 @@ let cardSequence = 0;
 
 export function createMealBuddyCard(input: Partial<MealBuddyCard> & { sourceType: MealBuddyCardSourceType; intentionType: MealBuddyIntentionType }): MealBuddyCard {
   cardSequence += 1;
+  const restaurant = input.restaurantId ? getCanonicalRestaurantById(input.restaurantId) : getCanonicalRestaurantByName(input.restaurantName);
+  const menuItem = input.menuItemId ? getCanonicalMenuItemById(input.menuItemId) : restaurant ? getPrimaryMenuItemForRestaurant(restaurant.restaurantId) : null;
   return {
     userId: input.userId ?? "demo-user",
     cardType: input.cardType ?? (input.sourceType === "restaurant_page" ? "restaurant" : "general"),
     sourceType: input.sourceType,
     intentionType: input.intentionType,
-    preferredFoodName: input.preferredFoodName ?? "",
-    restaurantId: input.restaurantId ?? "",
-    restaurantName: input.restaurantName ?? "",
-    foodCategory: input.foodCategory ?? "",
+    preferredFoodName: input.preferredFoodName ?? menuItem?.name ?? "",
+    restaurantId: restaurant?.restaurantId ?? input.restaurantId ?? "",
+    menuItemId: menuItem?.menuItemId ?? input.menuItemId,
+    restaurantName: restaurant?.name ?? input.restaurantName ?? "",
+    foodCategory: input.foodCategory ?? restaurant?.category ?? "",
     area: input.area ?? "",
     preferredTime: input.preferredTime ?? "",
     nutritionGoal: input.nutritionGoal ?? "",
@@ -68,17 +72,20 @@ export function getAiRecommendationMealBuddyCard(mealPeriod: string = zhTW.mobil
   });
 }
 
-export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId: string, foodCategory: string, area: string, preferredTime: string, diningDate: string) {
+export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId: string, menuItemId: string | undefined, foodCategory: string, area: string, preferredTime: string, diningDate: string) {
   // Backend integration entry: Restaurant -> Meal Buddy Card.
+  const restaurant = getCanonicalRestaurantById(restaurantId) ?? getCanonicalRestaurantByName(restaurantName);
+  const menuItem = menuItemId ? getCanonicalMenuItemById(menuItemId) : restaurant ? getPrimaryMenuItemForRestaurant(restaurant.restaurantId) : null;
   return createMealBuddyCard({
     cardType: "restaurant",
     sourceType: "restaurant_page",
     intentionType: getDefaultInteractionPreference(),
-    restaurantId,
-    restaurantName,
-    foodCategory,
+    restaurantId: restaurant?.restaurantId ?? restaurantId,
+    menuItemId: menuItem?.menuItemId,
+    restaurantName: restaurant?.name ?? restaurantName,
+    foodCategory: restaurant?.category ?? foodCategory,
     area,
-    preferredFoodName: foodCategory,
+    preferredFoodName: menuItem?.name ?? foodCategory,
     preferredTime,
     nutritionGoal: "想在這間餐廳找飯友",
     diningDate
@@ -116,6 +123,22 @@ export function getManualMealBuddyCard(mealPeriod: string, preferredFoodName?: s
 export function getMealBuddyCandidates(): MealBuddyCandidate[] {
   return zhTW.mobile.refinedLogic.mealBuddyCard.candidates.map((candidate) => ({
     ...candidate,
+    ...canonicalCandidateRestaurantFields(candidate.restaurantId, candidate.restaurantName),
     intentionType: candidate.intentionType as MealBuddyIntentionType
   }));
+}
+
+function canonicalCandidateRestaurantFields(restaurantId: string, restaurantName: string) {
+  const restaurant = getCanonicalRestaurantById(restaurantId) ?? getCanonicalRestaurantByName(restaurantName);
+  const menuItem = restaurant ? getPrimaryMenuItemForRestaurant(restaurant.restaurantId) : null;
+  if (!restaurant) {
+    return {};
+  }
+  return {
+    restaurantId: restaurant.restaurantId,
+    menuItemId: menuItem?.menuItemId,
+    restaurantName: restaurant.name,
+    preferredFoodName: menuItem?.name ?? restaurantName,
+    foodCategory: restaurant.category
+  };
 }

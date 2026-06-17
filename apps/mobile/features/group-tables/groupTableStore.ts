@@ -9,7 +9,9 @@ export type ActiveFourPersonTable = {
   cuisineTags: string[];
   suggestedTime: string;
   maxParticipants: 4 | 6 | 8;
-  participantIds: UserId[];
+  hostProfileId?: UserId;
+  participantProfileIds: UserId[];
+  participantIds?: UserId[];
   status: "招募中" | "已成團";
   groupChatThreadId?: ChatId;
 };
@@ -41,6 +43,8 @@ export function createRestaurantFourPersonTable(input: {
     cuisineTags: input.cuisineTags,
     suggestedTime: input.suggestedTime,
     maxParticipants: 4,
+    hostProfileId: "demo-user",
+    participantProfileIds: ["demo-user"],
     participantIds: ["demo-user"],
     status: "招募中"
   };
@@ -52,7 +56,7 @@ export function updateActiveFourPersonTable(update: Partial<ActiveFourPersonTabl
   if (!activeTable) {
     return null;
   }
-  activeTable = { ...activeTable, ...update };
+  activeTable = normalizeActiveTable({ ...activeTable, ...update });
   persistActiveTable();
   return activeTable;
 }
@@ -68,7 +72,7 @@ function readStoredActiveTable(): ActiveFourPersonTable | null {
     return null;
   }
   try {
-    return JSON.parse(raw) as ActiveFourPersonTable;
+    return normalizeActiveTable(JSON.parse(raw) as ActiveFourPersonTable);
   } catch {
     return null;
   }
@@ -84,4 +88,14 @@ function persistActiveTable() {
 
 function safeId(value: string) {
   return encodeURIComponent(value).replace(/%/g, "").toLowerCase();
+}
+
+function normalizeActiveTable(table: ActiveFourPersonTable): ActiveFourPersonTable {
+  const participantProfileIds = table.participantProfileIds ?? table.participantIds ?? [];
+  return {
+    ...table,
+    hostProfileId: table.hostProfileId ?? participantProfileIds[0] ?? "demo-user",
+    participantProfileIds,
+    participantIds: table.participantIds ?? participantProfileIds
+  };
 }

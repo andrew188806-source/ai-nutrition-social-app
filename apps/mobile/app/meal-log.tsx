@@ -4,8 +4,8 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav, PremiumBadge } from "../components/DemoUi";
 import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCard";
-import { getLatestCorrectedMealRecord, getMealRecords, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
-import { calculateTodayNutritionSummary, getEffectiveCalories, getTodayMealRecords } from "../features/analysis/nutritionSummary";
+import { getLatestCorrectedMealRecord, getMealRecords, getTodayMealRecords, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
+import { calculateTodayNutritionSummary, getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import type { SavedMealRecord } from "../features/analysis/types";
 import { MealCompletionForm } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
@@ -44,7 +44,7 @@ export default function MealLogScreen() {
   const selfMadeDishes = getSelfMadeDishes("demo-user");
   const mealRecordGroups = groupMealRecordsByDate(mealRecords);
   const correctedMealCards: MealCard[] = mealRecords.map((meal, index) => ({
-    id: `corrected-meal-${index}`,
+    id: meal.mealId ?? `meal-record-${index}`,
     slot: meal.mealPeriod,
     name: meal.mealName || emptyField,
     source: `${zhTW.mobile.finalUx.restaurantNameLabel}｜${meal.restaurantName || emptyField}`,
@@ -56,7 +56,7 @@ export default function MealLogScreen() {
     mealId: meal.mealId,
     estimatedCalories: meal.estimatedCalories ?? meal.calories
   }));
-  const mealDetailCards: MealCard[] = [...correctedMealCards, ...diary.mealCards];
+  const mealDetailCards: MealCard[] = correctedMealCards;
 
   const [demoUserPlan] = useDemoUserPlan();
   const isPaid = demoUserPlan === "premium";

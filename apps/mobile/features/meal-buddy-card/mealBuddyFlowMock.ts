@@ -1,3 +1,4 @@
+﻿import { getDefaultRestaurantForProfileTags, getPrimaryMenuItemForRestaurant } from "../restaurants";
 import type { ChatId, RankedMealBuddyCandidate, TableId, UserId } from "./types";
 
 // DEMO DATA FLOW: Community Profile -> Matched Buddy -> Chat Thread -> Meal Session / Four-Person Table.
@@ -57,9 +58,10 @@ export type MockGatheringRecord = {
   people: string;
   status: string;
   payment: string;
-  source: "飯友邀請" | "四人桌";
+  source: "憌臬??隢? | "?犖獢?;
   withPerson: string;
   buddyId?: UserId;
+  participantProfileId?: UserId;
   tableId?: TableId;
   chatThreadId: ChatId;
   chatName: string;
@@ -74,13 +76,13 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     avatar: "M",
     name: "Mina",
     verified: true,
-    ageRange: "25-34歲",
-    area: "台北大安",
+    ageRange: "25-34甇?,
+    area: "?啣?憭批?",
     distanceKm: 0.6,
-    tags: ["日式", "拍照打卡", "AA 制"],
-    recentMealStatus: "今天想吃清爽日式料理",
-    commonInterests: ["烤魚定食", "清爽日式", "拍照打卡"],
-    intro: "喜歡清爽晚餐，也想找人一起探索健康定食。",
+    tags: ["?亙?", "??", "AA ??],
+    recentMealStatus: "隞予?喳?皜?亙???",
+    commonInterests: ["?日?摰?", "皜?亙?", "??"],
+    intro: "?迭皜??嚗??單鈭箔?韏瑟蝝Ｗ摨瑕?憌?,
     mascotId: "taste-explorer"
   },
   {
@@ -88,13 +90,13 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     avatar: "B",
     name: "Bo",
     verified: false,
-    ageRange: "25-34歲",
-    area: "台北大安",
+    ageRange: "25-34甇?,
+    area: "?啣?憭批?",
     distanceKm: 0.8,
-    tags: ["高蛋白", "清湯", "AA 制"],
-    recentMealStatus: "想找健康午餐飯友",
-    commonInterests: ["雞胸便當", "豆腐鍋", "運動後補充"],
-    intro: "想吃清淡一點，不想太油。",
+    tags: ["擃???, "皜僖", "AA ??],
+    recentMealStatus: "?單?亙熒??憌臬?",
+    commonInterests: ["?靘輻", "鞊???, "??敺???],
+    intro: "?喳?皜楚銝暺?銝憭芣硃??,
     mascotId: "protein-believer"
   },
   {
@@ -102,27 +104,27 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     avatar: "I",
     name: "Ivy",
     verified: true,
-    ageRange: "25-34歲",
-    area: "台北大安",
+    ageRange: "25-34甇?,
+    area: "?啣?憭批?",
     distanceKm: 1.1,
-    tags: ["蔬食", "高纖", "先聊聊"],
-    recentMealStatus: "今天想吃蔬食咖哩",
-    commonInterests: ["蔬食咖哩", "高纖飲食", "清爽晚餐"],
-    intro: "喜歡先聊聊附近清爽選擇，再決定要不要一起吃。",
+    tags: ["?祇?", "擃?", "????],
+    recentMealStatus: "隞予?喳??祇??",
+    commonInterests: ["?祇??", "擃?憌脤?", "皜??"],
+    intro: "?迭????餈??賡???捱摰?銝?銝韏瑕???,
     mascotId: "vegetarian-believer"
   },
   {
     id: "an",
-    avatar: "安",
-    name: "小安",
+    avatar: "摰?,
+    name: "撠?",
     verified: true,
-    ageRange: "25-34歲",
-    area: "台北大安",
+    ageRange: "25-34甇?,
+    area: "?啣?憭批?",
     distanceKm: 1,
-    tags: ["日式", "清爽", "聊聊後再決定"],
-    recentMealStatus: "晚餐想吃茶泡飯套餐",
-    commonInterests: ["日式定食", "烤魚", "飯後散步"],
-    intro: "喜歡慢慢吃飯，也很在意餐後舒服感。",
+    tags: ["?亙?", "皜", "??敺?瘙箏?"],
+    recentMealStatus: "???喳??嗆部憌臬?擗?,
+    commonInterests: ["?亙?摰?", "?日?", "憌臬???郊"],
+    intro: "?迭?Ｘ?ㄞ嚗?敺??敺?????,
     mascotId: "balance-guardian"
   },
   {
@@ -130,13 +132,13 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     avatar: "S",
     name: "Sean",
     verified: false,
-    ageRange: "25-34歲",
-    area: "台北大安",
+    ageRange: "25-34甇?,
+    area: "?啣?憭批?",
     distanceKm: 0.9,
-    tags: ["新店", "日式", "先聊聊"],
-    recentMealStatus: "想先看菜單再決定",
-    commonInterests: ["日式烤魚", "新店探索", "輕鬆聊天"],
-    intro: "喜歡探索新店，也會先交換菜單再約。",
+    tags: ["?啣?", "?亙?", "????],
+    recentMealStatus: "?喳????桀?瘙箏?",
+    commonInterests: ["?亙??日?", "?啣??Ｙ揣", "頛??予"],
+    intro: "?迭?Ｙ揣?啣?嚗???鈭斗??????,
     mascotId: "taste-explorer"
   },
   {
@@ -144,13 +146,13 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     avatar: "K",
     name: "Kai",
     verified: true,
-    ageRange: "25-34歲",
-    area: "信義區",
+    ageRange: "25-34甇?,
+    area: "靽∠儔?",
     distanceKm: 0.7,
-    tags: ["高蛋白", "健身後", "AA 制"],
-    recentMealStatus: "想吃雞胸便當",
-    commonInterests: ["高蛋白", "健身後補充", "健康碗"],
-    intro: "健身後常找營養標示清楚的餐點。",
+    tags: ["擃???, "?亥澈敺?, "AA ??],
+    recentMealStatus: "?喳??靘輻",
+    commonInterests: ["擃???, "?亥澈敺???, "?亙熒蝣?],
+    intro: "?亥澈敺虜?曄?擗?蝷箸?璆?擗???,
     mascotId: "protein-believer"
   },
   {
@@ -158,23 +160,23 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     avatar: "L",
     name: "Leo",
     verified: true,
-    ageRange: "25-34歲",
-    area: "信義區",
+    ageRange: "25-34甇?,
+    area: "靽∠儔?",
     distanceKm: 0.8,
-    tags: ["健身", "備餐", "先聊聊"],
-    recentMealStatus: "想聊高蛋白外食",
-    commonInterests: ["高蛋白碗", "備餐", "健身外食"],
-    intro: "常分享高蛋白外食選擇。",
+    tags: ["?亥澈", "??", "????],
+    recentMealStatus: "?唾?擃??賢?憌?,
+    commonInterests: ["擃??賜?", "??", "?亥澈憭?"],
+    intro: "撣詨?鈭恍??憭??豢???,
     mascotId: "low-carb-ninja"
   }
 ];
 
 // Matched Buddy: references a Community Profile and exactly one direct Chat Thread.
 export const mockMatchedBuddies: MockMatchedBuddy[] = [
-  buildMatchedBuddy("mina", 9, "2026/05/08", "今天", "chat-direct-mina"),
-  buildMatchedBuddy("bo", 5, "2026/05/18", "3 天前", "chat-direct-bo"),
-  buildMatchedBuddy("ivy", 4, "2026/05/22", "5 天前", "chat-direct-ivy"),
-  buildMatchedBuddy("an", 12, "2026/04/26", "昨天", "chat-direct-an")
+  buildMatchedBuddy("mina", 9, "2026/05/08", "隞予", "chat-direct-mina"),
+  buildMatchedBuddy("bo", 5, "2026/05/18", "3 憭拙?", "chat-direct-bo"),
+  buildMatchedBuddy("ivy", 4, "2026/05/22", "5 憭拙?", "chat-direct-ivy"),
+  buildMatchedBuddy("an", 12, "2026/04/26", "?典予", "chat-direct-an")
 ];
 
 // Chat Thread: direct chats reference buddy/profile IDs; group chats reference table IDs.
@@ -185,11 +187,11 @@ export const mockChatThreads: MockChatThread[] = [
     buddyId: "bo",
     participantProfileId: "bo",
     title: "Bo",
-    lastMessage: "我也想吃高蛋白午餐，要約好初健康碗嗎？",
-    relatedMeal: "跟 Bo 約高蛋白午餐",
+    lastMessage: "???喳?擃??賢?擗?閬?憟賢??亙熒蝣?嚗?,
+    relatedMeal: "頝?Bo 蝝????",
     time: "12:40",
     unread: true,
-    demoLabel: "測試資料"
+    demoLabel: "皜祈岫鞈?"
   },
   {
     id: "chat-direct-mina",
@@ -197,11 +199,11 @@ export const mockChatThreads: MockChatThread[] = [
     buddyId: "mina",
     participantProfileId: "mina",
     title: "Mina",
-    lastMessage: "小森健康食堂的烤魚定食看起來不錯。",
-    relatedMeal: "跟 Mina 吃烤魚定食",
+    lastMessage: "撠ㄝ?亙熒憌??擳?憌?韏瑚?銝??,
+    relatedMeal: "頝?Mina ?擳?憌?,
     time: "18:05",
     unread: true,
-    demoLabel: "測試資料"
+    demoLabel: "皜祈岫鞈?"
   },
   {
     id: "chat-direct-ivy",
@@ -209,23 +211,23 @@ export const mockChatThreads: MockChatThread[] = [
     buddyId: "ivy",
     participantProfileId: "ivy",
     title: "Ivy",
-    lastMessage: "可以先聊聊附近蔬食選擇。",
-    relatedMeal: "蔬食咖哩",
+    lastMessage: "?臭誑????餈憌??,
+    relatedMeal: "?祇??",
     time: "11:20",
     unread: false,
-    demoLabel: "測試資料"
+    demoLabel: "皜祈岫鞈?"
   },
   {
     id: "chat-direct-an",
     type: "direct",
     buddyId: "an",
     participantProfileId: "an",
-    title: "小安",
-    lastMessage: "下次可以再約清爽火鍋。",
-    relatedMeal: "跟小安吃小火鍋",
-    time: "上週六",
+    title: "撠?",
+    lastMessage: "銝活?臭誑??皜?恍???,
+    relatedMeal: "頝?摰?撠??,
+    time: "銝勗",
     unread: false,
-    demoLabel: "測試資料"
+    demoLabel: "皜祈岫鞈?"
   }
 ];
 
@@ -234,103 +236,106 @@ export const mockGatheringRecords = {
   hosting: [
     {
       id: "host-japanese-dinner",
-      name: "四人桌：清爽日式晚餐",
-      location: "小森健康食堂",
-      time: "今天 19:00",
-      people: "4 人桌",
-      status: "已確認",
-      payment: "AA 制",
-      source: "四人桌",
-      withPerson: "Mina、Bo、小安",
+      name: "?犖獢?皜?亙???",
+      location: "撠ㄝ?亙熒憌?",
+      time: "隞予 19:00",
+      people: "4 鈭箸?",
+      status: "撌脩Ⅱ隤?,
+      payment: "AA ??,
+      source: "?犖獢?,
+      withPerson: "Mina?o??摰?,
       tableId: "table-japanese-dinner",
       chatThreadId: "chat-group-table-japanese-dinner",
-      chatName: "四人桌｜清爽日式晚餐",
-      notes: "清爽日式晚餐，成桌後可在群聊確認菜單。",
-      matchReasons: ["都偏好日式", "晚餐時間接近", "距離接近"]
+      chatName: "?犖獢?皜?亙???",
+      notes: "皜?亙???嚗?獢??臬蝢方?蝣箄????,
+      matchReasons: ["?賢?憟賣撘?, "?????亥?", "頝?亥?"]
     },
     {
       id: "host-protein-lunch",
-      name: "跟 Bo 約高蛋白午餐",
-      location: "好初健康碗",
-      time: "明天 12:20",
-      people: "2人",
-      status: "招募中",
-      payment: "看情況",
-      source: "飯友邀請",
+      name: "頝?Bo 蝝????",
+      location: "憟賢??亙熒蝣?,
+      time: "?予 12:20",
+      people: "2鈭?,
+      status: "??銝?,
+      payment: "??瘜?,
+      source: "憌臬??隢?,
       withPerson: "Bo",
       buddyId: "bo",
+      participantProfileId: "bo",
       chatThreadId: "chat-direct-bo",
       chatName: "Bo",
-      notes: "適合運動後補充，午餐快速吃完。",
-      matchReasons: ["都想吃高蛋白", "午餐時段接近", "飲食目標相似"]
+      notes: "?拙???敺?????敹恍?摰?,
+      matchReasons: ["?賣???", "???挾?亥?", "憌脤??格??訾撮"]
     }
   ] satisfies MockGatheringRecord[],
   joined: [
     {
       id: "joined-fish-set",
-      name: "跟 Mina 吃烤魚定食",
-      location: "小森健康食堂",
-      time: "今天 18:30",
-      people: "2人",
-      status: "已確認",
-      payment: "AA 制",
-      source: "飯友邀請",
+      name: "頝?Mina ?擳?憌?,
+      location: "撠ㄝ?亙熒憌?",
+      time: "隞予 18:30",
+      people: "2鈭?,
+      status: "撌脩Ⅱ隤?,
+      payment: "AA ??,
+      source: "憌臬??隢?,
       withPerson: "Mina",
       buddyId: "mina",
+      participantProfileId: "mina",
       chatThreadId: "chat-direct-mina",
       chatName: "Mina",
-      notes: "晚餐走清爽路線，避免太油。",
-      matchReasons: ["都想吃日式", "晚餐時間接近", "距離接近"]
+      notes: "??韏唳??質楝蝺??踹?憭芣硃??,
+      matchReasons: ["?賣?撘?, "?????亥?", "頝?亥?"]
     },
     {
       id: "joined-light-lunch",
-      name: "四人桌：清爽午餐",
-      location: "青葉食堂",
-      time: "週五 12:10",
-      people: "3/4 人",
-      status: "等待開局",
-      payment: "AA 制",
-      source: "四人桌",
-      withPerson: "Sean、Ivy",
+      name: "?犖獢?皜??",
+      location: "??憌?",
+      time: "?曹? 12:10",
+      people: "3/4 鈭?,
+      status: "蝑???",
+      payment: "AA ??,
+      source: "?犖獢?,
+      withPerson: "Sean?vy",
       tableId: "table-light-lunch",
       chatThreadId: "chat-group-table-light-lunch",
-      chatName: "四人桌｜清爽午餐",
-      notes: "尚未成桌，成桌後才會開啟群聊。",
-      matchReasons: ["都偏好清爽餐", "午餐時段接近"]
+      chatName: "?犖獢?皜??",
+      notes: "撠??嚗?獢?????蝢方???,
+      matchReasons: ["?賢?憟賣??賡?", "???挾?亥?"]
     }
   ] satisfies MockGatheringRecord[],
   ended: [
     {
       id: "ended-chicken",
-      name: "四人桌：雞胸便當",
-      location: "山線蛋白餐盒",
-      time: "昨天 12:30",
-      people: "4人桌",
-      status: "已結束",
-      payment: "AA 制",
-      source: "四人桌",
-      withPerson: "Kai、Leo、小安",
+      name: "?犖獢??靘輻",
+      location: "撅梁??擗?",
+      time: "?典予 12:30",
+      people: "4鈭箸?",
+      status: "撌脩???,
+      payment: "AA ??,
+      source: "?犖獢?,
+      withPerson: "Kai?eo??摰?,
       tableId: "table-chicken-bento",
       chatThreadId: "chat-group-table-chicken-bento",
-      chatName: "四人桌｜雞胸便當",
-      notes: "已結束的高蛋白午餐。",
-      matchReasons: ["都偏好高蛋白", "午餐時段接近"]
+      chatName: "?犖獢??靘輻",
+      notes: "撌脩???擃??賢?擗?,
+      matchReasons: ["?賢?憟賡??", "???挾?亥?"]
     },
     {
       id: "ended-hotpot",
-      name: "跟小安吃小火鍋",
-      location: "暖湯鍋物",
-      time: "上週六 19:00",
-      people: "2人",
-      status: "已取消",
-      payment: "看情況",
-      source: "飯友邀請",
-      withPerson: "小安",
+      name: "頝?摰?撠??,
+      location: "?僖?",
+      time: "銝勗 19:00",
+      people: "2鈭?,
+      status: "撌脣?瘨?,
+      payment: "??瘜?,
+      source: "憌臬??隢?,
+      withPerson: "撠?",
       buddyId: "an",
+      participantProfileId: "an",
       chatThreadId: "chat-direct-an",
-      chatName: "小安",
-      notes: "臨時取消，保留聊天紀錄。",
-      matchReasons: ["都想吃火鍋", "晚餐時段接近"]
+      chatName: "撠?",
+      notes: "?冽???嚗???憭拍???,
+      matchReasons: ["?賣???, "???挾?亥?"]
     }
   ] satisfies MockGatheringRecord[]
 };
@@ -380,17 +385,20 @@ function buildMatchedBuddy(profileId: string, mealCount: number, knownSince: str
 }
 
 function profileToCandidate(profile: MockCommunityProfile): RankedMealBuddyCandidate {
+  const restaurant = getDefaultRestaurantForProfileTags(profile.tags);
+  const menuItem = getPrimaryMenuItemForRestaurant(restaurant.restaurantId);
   return {
     userId: profile.id,
     displayName: profile.name,
-    restaurantId: "rest-demo",
-    restaurantName: profile.tags.includes("高蛋白") ? "好初健康碗" : profile.tags.includes("蔬食") ? "青葉食堂" : "小森健康食堂",
-    preferredFoodName: profile.commonInterests[0],
-    foodCategory: profile.tags[0] ?? "均衡餐",
+    restaurantId: restaurant.restaurantId,
+    menuItemId: menuItem?.menuItemId,
+    restaurantName: restaurant.name,
+    preferredFoodName: menuItem?.name ?? profile.commonInterests[0],
+    foodCategory: restaurant.category,
     area: profile.area,
     preferredTime: profile.recentMealStatus.includes("午餐") ? "午餐" : "晚餐",
     nutritionGoal: profile.commonInterests[1] ?? "均衡飲食",
-    intentionType: profile.tags.includes("先聊聊") || profile.tags.includes("聊聊後再決定") ? "chat_first" : "eat_together",
+    intentionType: profile.tags.includes("先聊聊") || profile.tags.includes("聊天") ? "chat_first" : "eat_together",
     distanceKm: profile.distanceKm,
     activityScore: 8,
     isPremium: profile.verified,
@@ -398,7 +406,7 @@ function profileToCandidate(profile: MockCommunityProfile): RankedMealBuddyCandi
     tags: profile.tags,
     socialNote: profile.intro,
     rankScore: 82,
-    matchReasons: ["餐點偏好相近", "用餐時段接近", "距離接近"],
+    matchReasons: ["餐點偏好接近", "健康目標相近", "距離相近"],
     mascotId: profile.mascotId
   };
 }

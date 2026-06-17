@@ -8,6 +8,7 @@ import { PremiumBadge, colors } from "../components/DemoUi";
 import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getEffectiveCurrentDate } from "../features/demo-time";
+import { getCanonicalRestaurantMenuItems, getCanonicalRestaurants, type CanonicalRestaurant, type CanonicalRestaurantMenuItem } from "../features/restaurants";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -31,30 +32,8 @@ const locationTree = {
 
 type City = keyof typeof locationTree;
 type District<C extends City = City> = keyof (typeof locationTree)[C];
-type Restaurant = (typeof zhTW.mobile.restaurants.list)[number];
+type Restaurant = CanonicalRestaurant;
 type DiningDateOption = (typeof zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions)[number];
-
-// RestaurantDish / restaurantDishes hold ONLY restaurant-owned menu items (source
-// "restaurant_menu" or "ai_user_uploaded" attached to this restaurant's restaurantId).
-// A user's own homemade / manually logged dishes ("我做的料理") are a separate concept
-// tracked in apps/mobile/features/self-made-dishes (SelfMadeDish, keyed by userId) and
-// must never be added to restaurantDishes or shown in a restaurant's "均衡推薦" list.
-type DishSource = "restaurant_menu" | "ai_user_uploaded";
-type DishVerificationStatus = "restaurant_verified" | "ai_estimated" | "pending_review";
-type RestaurantDish = {
-  id: string;
-  restaurantId: string;
-  name: string;
-  calories: number;
-  nutritionTags: string[];
-  mealType?: string;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  fiber?: number;
-  source: DishSource;
-  verificationStatus: DishVerificationStatus;
-};
 type RecommendationMode = "ai" | "custom";
 type DropdownKey = "locationScope" | "city" | "district" | "place" | "diningGoal" | "cuisineType" | "diningSituation" | null;
 
@@ -82,143 +61,11 @@ const defaultFilters: RestaurantFilters = {
   place: "市府商圈"
 };
 
-// Mock restaurant-owned menu data. Each dish belongs to exactly one restaurant via restaurantId
-// ("restaurant-<name>", matching the id format used for Meal Buddy Card / four-person table flows).
-const restaurantDishes: RestaurantDish[] = [
-  {
-    id: "dish-haochu-1",
-    restaurantId: "restaurant-好初健康碗",
-    name: "雞胸高蛋白碗",
-    calories: 620,
-    nutritionTags: ["高蛋白", "熱量管理"],
-    mealType: "午餐",
-    protein: 38,
-    carbs: 55,
-    fat: 14,
-    fiber: 5,
-    source: "restaurant_menu",
-    verificationStatus: "restaurant_verified"
-  },
-  {
-    id: "dish-haochu-2",
-    restaurantId: "restaurant-好初健康碗",
-    name: "高纖蔬食碗",
-    calories: 480,
-    nutritionTags: ["高纖飲食", "蔬食選項", "低卡選項"],
-    mealType: "午餐",
-    protein: 16,
-    carbs: 64,
-    fat: 12,
-    fiber: 11,
-    source: "restaurant_menu",
-    verificationStatus: "restaurant_verified"
-  },
-  {
-    id: "dish-haochu-3",
-    restaurantId: "restaurant-好初健康碗",
-    name: "雞胸溫沙拉早餐盒",
-    calories: 390,
-    nutritionTags: ["高蛋白", "低卡選項"],
-    mealType: "早餐",
-    protein: 24,
-    carbs: 30,
-    fat: 14,
-    fiber: 6,
-    source: "ai_user_uploaded",
-    verificationStatus: "pending_review"
-  },
-  {
-    id: "dish-mori-1",
-    restaurantId: "restaurant-森日蔬食廚房",
-    name: "蔬食咖哩飯",
-    calories: 540,
-    nutritionTags: ["蔬食選項", "高纖飲食"],
-    mealType: "午餐",
-    protein: 14,
-    carbs: 78,
-    fat: 16,
-    fiber: 9,
-    source: "restaurant_menu",
-    verificationStatus: "ai_estimated"
-  },
-  {
-    id: "dish-mori-2",
-    restaurantId: "restaurant-森日蔬食廚房",
-    name: "豆腐蕈菇湯麵",
-    calories: 460,
-    nutritionTags: ["低卡選項", "蔬食選項"],
-    mealType: "晚餐",
-    protein: 17,
-    carbs: 58,
-    fat: 12,
-    fiber: 8,
-    source: "restaurant_menu",
-    verificationStatus: "ai_estimated"
-  },
-  {
-    id: "dish-mori-3",
-    restaurantId: "restaurant-森日蔬食廚房",
-    name: "蔬食歐姆蛋早餐盤",
-    calories: 410,
-    nutritionTags: ["蔬食選項", "高蛋白"],
-    mealType: "早餐",
-    protein: 19,
-    carbs: 34,
-    fat: 18,
-    fiber: 6,
-    source: "ai_user_uploaded",
-    verificationStatus: "ai_estimated"
-  },
-  {
-    id: "dish-mountain-1",
-    restaurantId: "restaurant-山線蛋白餐盒",
-    name: "瘦蛋白便當",
-    calories: 560,
-    nutritionTags: ["高蛋白菜單", "適合增肌"],
-    mealType: "晚餐",
-    protein: 46,
-    carbs: 52,
-    fat: 11,
-    fiber: 6,
-    source: "restaurant_menu",
-    verificationStatus: "ai_estimated"
-  },
-  {
-    id: "dish-mountain-2",
-    restaurantId: "restaurant-山線蛋白餐盒",
-    name: "雙重雞胸蛋白盤",
-    calories: 590,
-    nutritionTags: ["高蛋白菜單", "熱量管理"],
-    mealType: "午餐",
-    protein: 52,
-    carbs: 40,
-    fat: 12,
-    fiber: 5,
-    source: "restaurant_menu",
-    verificationStatus: "ai_estimated"
-  },
-  {
-    id: "dish-mountain-3",
-    restaurantId: "restaurant-山線蛋白餐盒",
-    name: "蛋白魚塊餐盒",
-    calories: 530,
-    nutritionTags: ["高蛋白菜單", "適合減脂"],
-    mealType: "晚餐",
-    protein: 44,
-    carbs: 45,
-    fat: 13,
-    fiber: 5,
-    source: "ai_user_uploaded",
-    verificationStatus: "pending_review"
-  }
-];
-
 function getRestaurantDishes(restaurant: Restaurant) {
-  const restaurantId = `restaurant-${restaurant.name}`;
-  return restaurantDishes.filter((dish) => dish.restaurantId === restaurantId);
+  return getCanonicalRestaurantMenuItems(restaurant.restaurantId);
 }
 
-function getDishStatusLabel(dish: RestaurantDish) {
+function getDishStatusLabel(dish: CanonicalRestaurantMenuItem) {
   if (dish.source === "ai_user_uploaded") {
     return dish.verificationStatus === "pending_review" ? "使用者拍照上傳・待確認" : "使用者拍照上傳・AI 估算";
   }
@@ -245,7 +92,7 @@ export default function RestaurantsScreen() {
   const selectedPlaces = (locationTree[draftFilters.city] as Record<string, readonly string[]>)[draftFilters.district] ?? [];
 
   const recommendedRestaurants = useMemo(() => {
-    return [...zhTW.mobile.restaurants.list].sort((a, b) => restaurantScore(b, filters) - restaurantScore(a, filters));
+    return [...getCanonicalRestaurants()].sort((a, b) => restaurantScore(b, filters) - restaurantScore(a, filters));
   }, [filters]);
 
   function openRecommendationModal() {
@@ -296,9 +143,9 @@ export default function RestaurantsScreen() {
 
   function startRestaurantMealBuddyCard(restaurant: Restaurant, preferredTime: string) {
     // Integration entry: Restaurant -> shared Meal Buddy Card pool.
-    const restaurantId = `restaurant-${restaurant.name}`;
     const diningDate = resolveDiningDate(diningDateOption, customDiningDate);
-    const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags.join("、"), filters.location, preferredTime, diningDate);
+    const primaryDish = getRestaurantDishes(restaurant)[0];
+    const card = getRestaurantMealBuddyCard(restaurant.name, restaurant.restaurantId, primaryDish?.menuItemId, restaurant.tags.join("、"), filters.location, preferredTime, diningDate);
     upsertMealBuddyCardWithQuota(card, demoMode);
     closeMealBuddyPanel();
     setCreatedRestaurantNames((current) => (current.includes(restaurant.name) ? current : [...current, restaurant.name]));
@@ -340,7 +187,7 @@ export default function RestaurantsScreen() {
       pathname: "/meal-buddies",
       params: {
         restaurantActionType: action === "create" ? "createFourPersonTable" : "findFourPersonTable",
-        restaurantId: `restaurant-${pendingTableRestaurant.name}`,
+        restaurantId: pendingTableRestaurant.restaurantId,
         restaurantLocation: filters.location,
         restaurantName: pendingTableRestaurant.name,
         restaurantTags: pendingTableRestaurant.tags.join("、"),
@@ -404,7 +251,7 @@ export default function RestaurantsScreen() {
                       <Text style={styles.scoreBadgeLabel}>符合度</Text>
                     </View>
                   </View>
-                  <Text style={styles.restaurantMetaSnow}>{inferCuisineType(restaurant)} · {restaurant.distance}</Text>
+                  <Text style={styles.restaurantMetaSnow}>{restaurant.category} · {restaurant.distanceDisplay}</Text>
                   <View style={styles.restaurantTagsRow}>
                     {restaurant.tags.map((tag) => (
                       <View key={tag} style={styles.restaurantTagChip}>
@@ -797,7 +644,7 @@ function RestaurantDetailModal({
                   ) : null}
                 </View>
                 <Text style={styles.restaurantMetaSnow}>
-                  {inferCuisineType(restaurant)} · {restaurant.distance} · 符合度 {restaurant.score}
+                  {restaurant.category} · {restaurant.distanceDisplay} · 符合度 {restaurant.score}
                 </Text>
 
                 <View style={[styles.nutritionInfoBox, verified && styles.nutritionInfoBoxVerified]}>
@@ -824,16 +671,16 @@ function RestaurantDetailModal({
                     {dishes.map((dish) => {
                       const statusLabel = getDishStatusLabel(dish);
                       return (
-                        <View key={dish.id} style={styles.dishRow}>
+                        <View key={dish.menuItemId} style={styles.dishRow}>
                           <View style={styles.dishIconBox}>
                             <Icon name="plate" size={16} color={snow.primaryDeep} />
                           </View>
                           <View style={styles.dishContent}>
                             <View style={styles.dishMainRow}>
                               <Text style={styles.dishName}>{dish.name}</Text>
-                              {dish.nutritionTags[0] ? (
+                              {dish.tags[0] ? (
                                 <View style={styles.dishTag}>
-                                  <Text style={styles.dishTagText}>{dish.nutritionTags[0]}</Text>
+                                  <Text style={styles.dishTagText}>{dish.tags[0]}</Text>
                                 </View>
                               ) : null}
                               <Text style={styles.dishCalories}>{dish.calories} kcal</Text>
@@ -923,8 +770,8 @@ function resolveDiningDate(option: string, customDate: string) {
 }
 
 function restaurantScore(restaurant: Restaurant, filters: RestaurantFilters) {
-  const distance = Number.parseFloat(restaurant.distance.replace("km", "").replace("m", ""));
-  const distanceScore = restaurant.distance.includes("m") ? 45 : Math.max(10, 35 - distance * 8);
+  const distance = Number.parseFloat(restaurant.distanceDisplay.replace("km", "").replace("m", ""));
+  const distanceScore = restaurant.distanceDisplay.includes("m") ? 45 : Math.max(10, 35 - distance * 8);
   const tags = restaurant.tags.join(" ");
   const aiBaseScore = filters.mode === "ai" ? 70 : 35;
   const nutritionScore = filters.mode === "ai" && tags.includes("高蛋白") ? 26 : 0;
@@ -945,7 +792,7 @@ function getActiveFilterLabels(filters: RestaurantFilters) {
 }
 
 function getRecommendationReasons(restaurant: Restaurant, filters: RestaurantFilters) {
-  const reasons = [`距離約 ${restaurant.distance}`];
+  const reasons = [`距離約 ${restaurant.distanceDisplay}`];
   if (restaurant.tags.some((tag) => tag.includes("高蛋白"))) {
     reasons.unshift("今日蛋白質仍有補充空間");
   }
@@ -971,16 +818,14 @@ function isRestaurantVerified(restaurant: Restaurant) {
 }
 
 function inferCuisineType(restaurant: Restaurant) {
-  if (restaurant.name.includes("蔬食")) return "蔬食 咖啡廳";
-  if (restaurant.name.includes("健康碗") || restaurant.name.includes("蛋白")) return "日式 早午餐";
-  return "中式";
+  return restaurant.category;
 }
 
 function getSituationBoost(restaurant: Restaurant, situation: string) {
   if (situation === "找飯友" && getSocialHint(restaurant).includes("飯友")) return 22;
   if (situation === "四人桌" && getSocialHint(restaurant).includes("四人桌")) return 24;
   if (situation === "運動後補充" && restaurant.tags.some((tag) => tag.includes("高蛋白") || tag.includes("增肌"))) return 20;
-  if (situation === "自己吃" && restaurant.distance.includes("m")) return 12;
+  if (situation === "自己吃" && restaurant.distanceDisplay.includes("m")) return 12;
   return 0;
 }
 

@@ -4,7 +4,8 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { NutritionDetailReport } from "../components/NutritionDetailReport";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { calculateTodayNutritionSummary, getTodayMealRecords } from "../features/analysis/nutritionSummary";
+import { getTodayMealRecords } from "../features/analysis/analysisMealRecordStore";
+import { calculateTodayNutritionSummary, getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import { getAutoSettledPlannedDinnerRecord, getConfirmedDinnerRecord, getPlannedDinner } from "../features/planned-meal";
 
 export default function TodayIntakeScreen() {
@@ -12,6 +13,7 @@ export default function TodayIntakeScreen() {
   const intake = zhTW.mobile.analysis.savedIntake;
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
   const mealRecords = getTodayMealRecords();
+  const lunchRecord = mealRecords.find((meal) => meal.mealPeriod === zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1]) ?? mealRecords[0];
   const summary = calculateTodayNutritionSummary(mealRecords);
   const plannedDinner = getPlannedDinner();
   const confirmedDinner = getConfirmedDinnerRecord();
@@ -42,17 +44,17 @@ export default function TodayIntakeScreen() {
       <Card>
         <SectionTitle title={daily.mealRecordsTitle} />
         <View style={styles.mealList}>
-          {mealRecords.map((meal, index) => (
-            <View key={`corrected-meal-${index}`} style={styles.mealCard}>
+          {mealRecords.map((meal) => (
+            <View key={meal.mealId ?? `${meal.date}-${meal.mealPeriod}-${meal.mealName}`} style={styles.mealCard}>
               <View style={styles.mealHeader}>
                 <Text style={styles.mealTime}>{meal.mealPeriod}</Text>
-                <Text style={styles.mealCalories}>{meal.calories} kcal</Text>
+                <Text style={styles.mealCalories}>{getEffectiveCalories(meal)} kcal</Text>
               </View>
               <Text style={styles.mealTitle}>{meal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
               <Text style={styles.mealNote}>
                 {meal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}｜{meal.ingredients}｜{meal.portion}
               </Text>
-              <TagRow tags={["已吃", "AI 分析確認", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
+              <TagRow tags={[meal.source ?? "manual", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
             </View>
           ))}
         </View>
@@ -60,15 +62,17 @@ export default function TodayIntakeScreen() {
 
       <Card tone="mint">
         <SectionTitle title={zhTW.mobile.plannedDinner.lunchRecommendationLabel} subtitle={zhTW.mobile.plannedDinner.lunchAdvice[0]} />
-        <View style={styles.currentMealCard}>
-          <View style={styles.mealHeader}>
-            <Text style={styles.mealTime}>{daily.mealRecords[1].time}</Text>
-            <Text style={styles.mealCalories}>{daily.mealRecords[1].calories}</Text>
+        {lunchRecord ? (
+          <View style={styles.currentMealCard}>
+            <View style={styles.mealHeader}>
+              <Text style={styles.mealTime}>{lunchRecord.mealPeriod}</Text>
+              <Text style={styles.mealCalories}>{getEffectiveCalories(lunchRecord)} kcal</Text>
+            </View>
+            <Text style={styles.mealTitle}>{lunchRecord.mealName}</Text>
+            <Text style={styles.mealNote}>{lunchRecord.restaurantName}｜{lunchRecord.ingredients}</Text>
+            <TagRow tags={[lunchRecord.source ?? "manual", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
           </View>
-          <Text style={styles.mealTitle}>{daily.mealRecords[1].title}</Text>
-          <Text style={styles.mealNote}>{daily.mealRecords[1].note}</Text>
-          <TagRow tags={daily.mealRecords[1].tags} />
-        </View>
+        ) : null}
       </Card>
 
       <Card tone="amber">

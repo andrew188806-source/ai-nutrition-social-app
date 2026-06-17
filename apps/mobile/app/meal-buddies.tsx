@@ -1,13 +1,13 @@
 ﻿import { useEffect, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, DemoModeToggle, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
+import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard, getMascotSource } from "../theme/components";
 import { Icon, type IconName } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
-import { getAvatarDisplayLabel, getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
+import { getCommunityCardSettings } from "../features/community-card-settings";
 import {
   addMealBuddyChatMessage,
   addMealBuddyChatSystemMessage,
@@ -74,22 +74,18 @@ function parseMealBuddySection(section?: string): MealBuddySection {
 }
 
 function getVisibleMatchedFriends(invites: ReturnType<typeof getMealBuddyInvites>): MatchedFriend[] {
-  const acceptedBuddyIds = new Set(invites.filter((invite) => invite.status === "accepted").map(profileIdFromInvitation));
+  const acceptedBuddyIds = new Set(invites.filter((invite) => invite.status === "accepted" && invite.profileId).map((invite) => invite.profileId as string));
   const baseFriends = mockMatchedBuddies.filter((friend) => friend.id !== "ivy" || acceptedBuddyIds.has("ivy"));
   const existingIds = new Set(baseFriends.map((friend) => friend.id));
   const acceptedInviteFriends = invites
-    .filter((invite) => invite.status === "accepted" && (invite.type === "chat" || invite.type === "meal"))
+    .filter((invite) => invite.status === "accepted" && Boolean(invite.profileId) && (invite.type === "chat" || invite.type === "meal"))
     .map(createMatchedBuddyFromInvitation)
     .filter((friend) => !existingIds.has(friend.id));
   return [...baseFriends, ...acceptedInviteFriends];
 }
 
-function profileIdFromInvitation(invite: ReturnType<typeof getMealBuddyInvites>[number]) {
-  return invite.candidateUserId.replace("demo-", "").toLowerCase();
-}
-
 function resolveInvitationProfileDisplay(invite: ReturnType<typeof getMealBuddyInvites>[number]) {
-  return resolveCommunityProfileDisplay(profileIdFromInvitation(invite));
+  return resolveCommunityProfileDisplay(invite.profileId);
 }
 
 function invitationDisplayName(invite: ReturnType<typeof getMealBuddyInvites>[number], profile: CommunityProfileDisplay | null) {
@@ -99,19 +95,11 @@ function invitationDisplayName(invite: ReturnType<typeof getMealBuddyInvites>[nu
   return profile?.displayName ?? "";
 }
 
-function invitationAvatarText(avatarSource: AvatarSource | undefined) {
-  if (!avatarSource || avatarSource.type === "none") {
-    return "";
-  }
-  if (avatarSource.type === "initial") {
-    return avatarSource.value;
-  }
-  return avatarSource.assetKey ?? "";
-}
-
 function resolveChatProfileDisplay(chat?: ReturnType<typeof getMealBuddyChats>[number] | null) {
-  const profileId = chat?.participantProfileId ?? chat?.buddyId;
-  return profileId ? resolveCommunityProfileDisplay(profileId) : null;
+  if (!chat || chat.threadType === "group") {
+    return null;
+  }
+  return resolveCommunityProfileDisplay(chat?.participantProfileId);
 }
 
 function chatDisplayName(chat: ReturnType<typeof getMealBuddyChats>[number], profile: CommunityProfileDisplay | null) {
@@ -129,27 +117,32 @@ function chatSummaryText(chat: ReturnType<typeof getMealBuddyChats>[number], pro
 }
 
 function resolveMatchedFriendProfileDisplay(friend: MatchedFriend) {
-  return resolveCommunityProfileDisplay(friend.profileId ?? friend.id);
+  return resolveCommunityProfileDisplay(friend.profileId);
 }
 
 function createMatchedBuddyFromInvitation(invite: ReturnType<typeof getMealBuddyInvites>[number]): MatchedFriend {
-  const profileId = profileIdFromInvitation(invite);
-  return {
+  const profileId = invite.profileId ?? "";
+  const chatId = `chat-direct-${profileId}`;
+  const referenceOnlyFriend = {
     id: profileId,
     profileId,
-    avatar: invite.userName.slice(0, 1),
-    name: invite.userName,
+    invitationId: invite.id,
+    buddyId: profileId,
+    chatId,
+    avatar: "",
+    name: "",
     verified: true,
-    tags: [invite.inviterCard.foodCategory, invite.inviterCard.area, invite.type === "chat" ? "先聊聊" : "可約飯"].filter(Boolean),
+    tags: [],
     recentMealStatus: invite.mealName,
     mealCount: 1,
     knownSince: "2026/06/04",
     lastTable: invite.time,
-    commonInterests: [invite.mealName, invite.inviterCard.foodCategory].filter(Boolean),
+    commonInterests: [],
     areas: [invite.area],
-    intro: "由邀請接受後加入的飯友測試資料。",
-    chatThreadId: `chat-direct-${profileId}`
-  };
+    intro: "",
+    chatThreadId: chatId
+  } satisfies MatchedFriend & { invitationId: string; buddyId: string; chatId: string };
+  return referenceOnlyFriend;
 }
 
 function readPersistedRecommendationGroups(_activeCards: MealBuddyCard[]) {
@@ -182,6 +175,7 @@ type GatheringRecord = MockGatheringRecord;
 const gatheringRecords = mockGatheringRecords;
 
 export default function MealBuddyHomeScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{
     highlightCardCreatedAt?: string;
     restaurantActionType?: string;
@@ -211,6 +205,11 @@ export default function MealBuddyHomeScreen() {
   const chats = getMealBuddyChats();
   const invites = getMealBuddyInvites();
   const matchedFriends = getVisibleMatchedFriends(invites);
+  const openCommunityProfile = (profileId?: string) => {
+    if (profileId) {
+      router.push({ pathname: "/community-profile/[profileId]", params: { profileId } });
+    }
+  };
 
   // Meal Buddy is one shared system: Free/Paid only changes limits, masking, and upgrade prompts.
   // AI/manual/restaurant cards share the same card list; source only controls the small visual label.
@@ -366,12 +365,13 @@ export default function MealBuddyHomeScreen() {
           initialTab={friendInitialTab}
           invites={invites}
           isPremium={demoMode === "premium"}
+          onOpenProfile={openCommunityProfile}
           onAcceptInvite={(invite) => {
             acceptMealBuddyInvite(invite);
             const updatedInvite = getMealBuddyInvites().find((item) => item.id === invite.id) ?? invite;
             setSocialVersion((version) => version + 1);
             if (invite.type === "chat" || invite.type === "meal") {
-              const chat = getMealBuddyChats().find((item) => item.userName === invite.userName || item.buddyId === invite.candidateUserId.replace("demo-", ""));
+              const chat = getMealBuddyChats().find((item) => item.participantProfileId === invite.profileId);
               setFocusedChatId(chat?.id ?? "");
               setFocusedChatName(invite.userName);
               setFriendInitialTab("chats");
@@ -396,6 +396,7 @@ export default function MealBuddyHomeScreen() {
         <GatheringsSection
           acceptedInvite={acceptedMealInvite}
           invites={invites}
+          onOpenProfile={openCommunityProfile}
           onAcceptInvite={(invite) => {
             acceptMealBuddyInvite(invite);
             const updatedInvite = getMealBuddyInvites().find((item) => item.id === invite.id) ?? invite;
@@ -419,6 +420,7 @@ export default function MealBuddyHomeScreen() {
               targetChat = createOrOpenMealSessionChat({
                 buddyId: record.buddyId,
                 chatThreadId: record.chatThreadId,
+                participantProfileId: record.participantProfileId,
                 userName: record.chatName,
                 relatedMeal: record.name || "一般飯友飯局"
               });
@@ -700,8 +702,7 @@ function DiscoverSection({
                   onInviteTable={(candidate) => onInviteTable(candidate, group.card)}
                   pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, getMealBuddyCardId(group.card))?.type ?? null}
                   onViewCard={(candidate) => {
-                    setPreviewCandidate(candidate);
-                    setPreviewCard(group.card);
+                    openCommunityProfile(candidate.userId);
                     onViewCandidateCard(candidate);
                   }}
                 />
@@ -984,10 +985,7 @@ function CandidateCommunityModal({
   const profile = getCandidateDisplayProfile(candidate, isPremium ? "premium" : "free");
   const modalCopy = zhTW.mobile.refinedLogic.mealBuddyCard.communityModal;
   const communitySettings = getCommunityCardSettings();
-  const selectedMascot = getSelectedMascot(communitySettings);
   const displayName = cleanDisplayName(profile.displayName);
-  const configuredAvatar = getAvatarDisplayLabel({ context: isPremium ? "normal" : "free", mascot: selectedMascot, settings: communitySettings });
-  const avatarSymbol = isPremium ? profile.avatarText || configuredAvatar : configuredAvatar || mascotAvatarFor(candidate.foodCategory);
   const locationText = isPremium ? candidate.area : `${candidate.area}附近`;
   const distanceText = isPremium ? `距離 ${candidate.distanceKm.toFixed(1)} km` : "距離保護中";
   const paymentTag = candidate.tags.find((tag) => tag.includes("AA") || tag.includes("AB") || tag.includes("請") || tag.includes("付款")) ?? modalCopy.defaultPayment;
@@ -1007,7 +1005,7 @@ function CandidateCommunityModal({
           <ScrollView contentContainerStyle={styles.socialModalContent}>
             <View style={styles.socialHeader}>
               <View style={[styles.socialAvatar, !isPremium && styles.socialMascotAvatar]}>
-                <Text style={styles.socialAvatarText}>{avatarSymbol}</Text>
+                <ProfileAvatarImage avatarSource={profile.avatarSource} />
               </View>
               <View style={styles.socialIdentity}>
                 <Text style={styles.socialName}>{displayName}</Text>
@@ -1139,7 +1137,8 @@ function MyFriendsSection({
   onAcceptInvite,
   onChatUpdated,
   onDeclineInvite,
-  onDeleteInvite
+  onDeleteInvite,
+  onOpenProfile
 }: {
   chats: ReturnType<typeof getMealBuddyChats>;
   focusedChatId: string;
@@ -1152,6 +1151,7 @@ function MyFriendsSection({
   onChatUpdated: () => void;
   onDeclineInvite: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
   onDeleteInvite: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
+  onOpenProfile: (profileId?: string) => void;
 }) {
   const [mode, setMode] = useState<"list" | "chat" | "card">("list");
   const [activeTab, setActiveTab] = useState<MyFriendsTab>(initialTab);
@@ -1168,7 +1168,7 @@ function MyFriendsSection({
       setSelectedChat(null);
       return;
     }
-    const targetChat = chats.find((chat) => chat.id === focusedChatId) ?? findChatByName(chats, focusedChatName);
+    const targetChat = chats.find((chat) => chat.id === focusedChatId) ?? null;
     if (targetChat) {
       setSelectedChat(targetChat);
       const friend = findFriendForChat(friends, targetChat);
@@ -1190,7 +1190,7 @@ function MyFriendsSection({
   const visibleInvites = invites.filter((invite) => invite.status === "pending" || invite.direction === "sent");
 
   if (mode === "chat") {
-    const chat = selectedChat ?? chats.find((item) => item.buddyId === selectedFriend.id || item.userName.includes(selectedFriend.name.split(" ")[0]));
+    const chat = selectedChat ?? chats.find((item) => item.participantProfileId === selectedFriend.profileId);
     return (
       <FriendChatMode
         friend={selectedFriend}
@@ -1251,7 +1251,7 @@ function MyFriendsSection({
                   <Pressable
                     style={styles.secondaryButton}
                     onPress={() => {
-                      setExpandedFriendCardId(friend.id);
+                      onOpenProfile(friend.profileId);
                     }}
                   >
                     <Text style={styles.secondaryButtonText}>查看社群卡</Text>
@@ -1259,7 +1259,7 @@ function MyFriendsSection({
                   <Pressable
                     style={styles.primaryButton}
                     onPress={() => {
-                      const chat = chats.find((item) => item.id === friend.chatThreadId || item.buddyId === friend.id || item.userName === friend.name);
+                      const chat = chats.find((item) => item.id === friend.chatThreadId || item.participantProfileId === friend.profileId);
                       setSelectedFriend(friend);
                       setSelectedChat(chat ?? createDirectChatFromMatchedBuddy(friend));
                       setMode("chat");
@@ -1299,13 +1299,7 @@ function MyFriendsSection({
                   <Pressable
                     style={styles.secondaryButton}
                     onPress={() => {
-                      setSelectedFriend({
-                        ...friends[0],
-                        name: displayName,
-                        recentMealStatus: invite.mealName,
-                        tags: profile?.tags ?? []
-                      });
-                      setMode("card");
+                      onOpenProfile(invite.profileId);
                     }}
                   >
                     <Text style={styles.secondaryButtonText}>查看社群卡</Text>
@@ -1521,19 +1515,12 @@ function FriendChatMode({
   );
 }
 
-function findChatByName(chats: ReturnType<typeof getMealBuddyChats>, name: string) {
-  if (!name) {
-    return null;
-  }
-  return chats.find((chat) => chat.userName === name || chat.userName.includes(name) || name.includes(chat.userName)) ?? null;
-}
-
 function findFriendForChat(friends: MatchedFriend[], chat: ReturnType<typeof getMealBuddyChats>[number]) {
-  return friends.find((friend) => chat.buddyId === friend.id || chat.userName === friend.name || chat.userName.includes(friend.name));
+  return friends.find((friend) => chat.participantProfileId === friend.profileId);
 }
 
 function createDirectChatFromMatchedBuddy(friend: MatchedFriend): ReturnType<typeof getMealBuddyChats>[number] {
-  const profileId = friend.profileId ?? friend.id;
+  const profileId = friend.profileId;
   return {
     id: friend.chatThreadId,
     userName: profileId,
@@ -1549,21 +1536,22 @@ function createDirectChatFromMatchedBuddy(friend: MatchedFriend): ReturnType<typ
 }
 
 function createFriendFromChat(chat: ReturnType<typeof getMealBuddyChats>[number]): MatchedFriend {
-  const id = chat.buddyId ?? chat.tableId ?? chat.id;
+  const profileId = chat.participantProfileId ?? "";
+  const id = profileId || chat.id;
   return {
     id,
-    profileId: id,
-    avatar: chat.threadType === "group" ? "桌" : chat.userName.slice(0, 1),
-    name: chat.userName,
+    profileId,
+    avatar: "",
+    name: profileId,
     verified: chat.threadType === "group",
-    tags: [chat.threadType === "group" ? "四人桌群聊" : "飯友聊天"],
-    recentMealStatus: chat.relatedMeal,
+    tags: [],
+    recentMealStatus: "",
     mealCount: 1,
     knownSince: "2026/06/01",
     lastTable: "今天",
-    commonInterests: [chat.relatedMeal],
-    areas: ["台北大安"],
-    intro: chat.threadType === "group" ? "四人桌成桌後的群聊。" : "飯友聊天。 ",
+    commonInterests: [],
+    areas: [],
+    intro: "",
     chatThreadId: chat.id
   };
 }
@@ -1597,13 +1585,15 @@ function GatheringsSection({
   invites,
   onAcceptInvite,
   onDeclineInvite,
-  onOpenChat
+  onOpenChat,
+  onOpenProfile
 }: {
   acceptedInvite: ReturnType<typeof getMealBuddyInvites>[number] | null;
   invites: ReturnType<typeof getMealBuddyInvites>;
   onAcceptInvite: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
   onDeclineInvite: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
   onOpenChat: (record: GatheringRecord) => void;
+  onOpenProfile: (profileId?: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<GatheringTab>("ongoing");
   const [selectedRecord, setSelectedRecord] = useState<GatheringRecord | null>(() => acceptedInvite ? mealEventFromInvite(acceptedInvite) : null);
@@ -1674,7 +1664,7 @@ function GatheringsSection({
             <View style={styles.cardList}>
               {incomingMealInvites.length === 0 ? <Text style={styles.limitHint}>目前沒有收到新的飯局邀請。</Text> : null}
               {incomingMealInvites.map((invite) => (
-                <InvitationSummaryCard key={invite.id} invite={invite} onAccept={() => onAcceptInvite(invite)} onCommunity={() => setCommunityInvite(invite)} onDecline={() => onDeclineInvite(invite)} onDetail={() => setDetailInvite(invite)} />
+                <InvitationSummaryCard key={invite.id} invite={invite} onAccept={() => onAcceptInvite(invite)} onCommunity={() => onOpenProfile(invite.profileId)} onDecline={() => onDeclineInvite(invite)} onDetail={() => setDetailInvite(invite)} />
               ))}
             </View>
           </Card>
@@ -1683,7 +1673,7 @@ function GatheringsSection({
             <View style={styles.cardList}>
               {sentMealInvites.length === 0 ? <Text style={styles.limitHint}>目前沒有寄出的飯局邀請。</Text> : null}
               {sentMealInvites.map((invite) => (
-                <InvitationSummaryCard key={invite.id} invite={invite} onAccept={() => onAcceptInvite(invite)} onCommunity={() => setCommunityInvite(invite)} onDecline={() => onDeclineInvite(invite)} onDetail={() => setDetailInvite(invite)} />
+                <InvitationSummaryCard key={invite.id} invite={invite} onAccept={() => onAcceptInvite(invite)} onCommunity={() => onOpenProfile(invite.profileId)} onDecline={() => onDeclineInvite(invite)} onDetail={() => setDetailInvite(invite)} />
               ))}
             </View>
           </Card>
@@ -1900,27 +1890,34 @@ function InviteCommunityModal({ invite, onClose }: { invite: ReturnType<typeof g
 }
 
 function InvitationAvatar({ avatarSource }: { avatarSource?: AvatarSource }) {
-  if (avatarSource?.type === "photo" && avatarSource.photoUrl) {
-    return <Image source={{ uri: avatarSource.photoUrl }} style={styles.avatarLarge} resizeMode="cover" />;
-  }
-
-  return <Text style={styles.avatarText}>{invitationAvatarText(avatarSource)}</Text>;
+  return <ProfileAvatarImage avatarSource={avatarSource} />;
 }
 
 function ChatProfileAvatar({ avatarSource }: { avatarSource?: AvatarSource }) {
-  if (avatarSource?.type === "photo" && avatarSource.photoUrl) {
-    return <Image source={{ uri: avatarSource.photoUrl }} style={styles.avatar} resizeMode="cover" />;
-  }
-
-  return <Text style={styles.avatarText}>{invitationAvatarText(avatarSource)}</Text>;
+  return <ProfileAvatarImage avatarSource={avatarSource} />;
 }
 
 function MatchedProfileAvatar({ avatarSource }: { avatarSource?: AvatarSource }) {
+  return <ProfileAvatarImage avatarSource={avatarSource} />;
+}
+
+function ProfileAvatarImage({ avatarSource }: { avatarSource?: AvatarSource }) {
   if (avatarSource?.type === "photo" && avatarSource.photoUrl) {
     return <Image source={{ uri: avatarSource.photoUrl }} style={styles.avatarFill} resizeMode="cover" />;
   }
 
-  return <Text style={styles.avatarText}>{invitationAvatarText(avatarSource)}</Text>;
+  if (avatarSource?.type === "mascot") {
+    const source = getMascotSource(avatarSource.mascotId);
+    if (source) {
+      return <Image source={source} style={styles.avatarFill} resizeMode="cover" />;
+    }
+  }
+
+  if (avatarSource?.type === "initial") {
+    return <Text style={styles.avatarText}>{avatarSource.value}</Text>;
+  }
+
+  return null;
 }
 
 function MealEventDetail({ invite, onBack, onCancel, onOpenChat, onViewInviteDetail, record }: { invite: ReturnType<typeof getMealBuddyInvites>[number] | null; onBack: () => void; onCancel: () => void; onOpenChat: (record: GatheringRecord) => void; onViewInviteDetail: () => void; record: GatheringRecord }) {
@@ -2095,9 +2092,10 @@ function mealEventFromInvite(invite: ReturnType<typeof getMealBuddyInvites>[numb
     payment: "AA 制",
     source: "飯友邀請" as GatheringRecord["source"],
     withPerson: invite.userName,
-    buddyId: invite.candidateUserId.replace("demo-", ""),
+    buddyId: invite.profileId,
+    participantProfileId: invite.profileId,
     chatName: invite.userName,
-    chatThreadId: `chat-direct-${invite.candidateUserId.replace("demo-", "")}`,
+    chatThreadId: `chat-direct-${invite.profileId ?? invite.id}`,
     notes: "來自飯友邀請的測試資料。",
     matchReasons: invite.matchReasons
   };

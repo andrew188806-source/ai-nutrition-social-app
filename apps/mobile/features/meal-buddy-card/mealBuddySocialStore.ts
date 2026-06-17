@@ -1,5 +1,6 @@
 import { storage } from "../../lib/storage";
 import { getEffectiveCurrentDate } from "../demo-time";
+import { getCanonicalMenuItemById, getCanonicalRestaurantById, getCanonicalRestaurantByName, getPrimaryMenuItemForRestaurant } from "../restaurants";
 import { getMockChatThreadByName, mockChatThreads } from "./mealBuddyFlowMock";
 import { getMealBuddyCardId, type CardId, type ChatId, type MatchId, type MealBuddyCard, type RankedMealBuddyCandidate, type TableId, type UserId } from "./types";
 
@@ -33,6 +34,7 @@ export type MealBuddyInvitePreview = {
   type: "chat" | "meal" | "table";
   status: "pending" | "accepted" | "declined" | "expired";
   direction: "sent" | "received";
+  profileId?: UserId;
   candidateUserId: UserId;
   sourceCardKey: CardId;
   inviterUser: string;
@@ -51,7 +53,9 @@ export type MealBuddyInvitePreview = {
   tableId?: TableId;
   tableName?: string;
   hostName?: string;
+  restaurantId?: string;
   restaurantName?: string;
+  menuItemId?: string;
   currentParticipants?: number;
   requiredParticipants?: number;
   tableStatus?: "pending" | "accepted" | "declined" | "formed";
@@ -93,6 +97,8 @@ function buildDefaultChats(): MealBuddyChatPreview[] {
 function buildDefaultInvites(): MealBuddyInvitePreview[] {
   const minaMealCard = buildInviteCard({
     sourceType: "manual",
+    restaurantId: "restaurant-mori-veggie",
+    menuItemId: "dish-mori-1",
     preferredFoodName: "清爽日式晚餐",
     restaurantName: "小森健康食堂",
     foodCategory: "日式",
@@ -102,6 +108,8 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   });
   const leoChatCard = buildInviteCard({
     sourceType: "manual",
+    restaurantId: "restaurant-haochu-bowl",
+    menuItemId: "dish-haochu-1",
     preferredFoodName: "高蛋白午餐",
     restaurantName: "好初健康碗",
     foodCategory: "健康餐",
@@ -111,6 +119,8 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   });
   const tableInviteCard = buildInviteCard({
     sourceType: "manual",
+    restaurantId: "restaurant-mori-veggie",
+    menuItemId: "dish-mori-1",
     preferredFoodName: "清爽日式晚餐",
     restaurantName: "小森健康食堂",
     foodCategory: "日式",
@@ -122,6 +132,8 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   });
   const myDinnerCard = buildInviteCard({
     sourceType: "ai_recommendation",
+    restaurantId: "restaurant-mori-veggie",
+    menuItemId: "dish-mori-1",
     preferredFoodName: "日式烤魚定食",
     restaurantName: "小森健康食堂",
     foodCategory: "日式",
@@ -131,6 +143,8 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   });
   const myLunchCard = buildInviteCard({
     sourceType: "ai_recommendation",
+    restaurantId: "restaurant-haochu-bowl",
+    menuItemId: "dish-haochu-1",
     preferredFoodName: "健康碗午餐",
     restaurantName: "好初健康碗",
     foodCategory: "健康餐",
@@ -140,6 +154,8 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   });
   const ivySushiCard = buildInviteCard({
     sourceType: "manual",
+    restaurantId: "restaurant-mori-veggie",
+    menuItemId: "dish-mori-2",
     preferredFoodName: "壽司晚餐",
     restaurantName: "青葉壽司",
     foodCategory: "日式",
@@ -149,6 +165,8 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   });
   const mySushiCard = buildInviteCard({
     sourceType: "ai_recommendation",
+    restaurantId: "restaurant-mori-veggie",
+    menuItemId: "dish-mori-2",
     preferredFoodName: "清爽壽司",
     restaurantName: "青葉壽司",
     foodCategory: "日式",
@@ -163,6 +181,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       type: "table",
       status: "pending",
       direction: "received",
+      profileId: "mina",
       candidateUserId: japaneseDinnerTableId,
       sourceCardKey: getMealBuddyCardId(tableInviteCard),
       inviterUser: "Mina",
@@ -181,7 +200,9 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       tableId: japaneseDinnerTableId,
       tableName: japaneseDinnerTableName,
       hostName: "Mina",
+      restaurantId: tableInviteCard.restaurantId,
       restaurantName: "小森健康食堂",
+      menuItemId: tableInviteCard.menuItemId,
       currentParticipants: 3,
       requiredParticipants: 4,
       tableStatus: "pending"
@@ -191,6 +212,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       type: "meal",
       status: "pending",
       direction: "received",
+      profileId: "ivy",
       candidateUserId: "demo-ivy",
       sourceCardKey: getMealBuddyCardId(mySushiCard),
       inviterUser: "Ivy",
@@ -205,13 +227,17 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       expiresAt: "2026-06-05T11:00:00.000Z",
       demoLabel: "Demo Invitation 測試資料",
       area: "台北中山",
-      distanceKm: 1.1
+      distanceKm: 1.1,
+      restaurantId: ivySushiCard.restaurantId,
+      restaurantName: ivySushiCard.restaurantName,
+      menuItemId: ivySushiCard.menuItemId
     },
     {
       id: "invite-demo-mina-meal",
       type: "meal",
       status: "pending",
       direction: "received",
+      profileId: "mina",
       candidateUserId: "demo-mina",
       sourceCardKey: getMealBuddyCardId(myDinnerCard),
       inviterUser: "Mina",
@@ -226,13 +252,17 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       expiresAt: "2026-06-05T10:00:00.000Z",
       demoLabel: "Demo Invitation 測試資料",
       area: "台北大安",
-      distanceKm: 0.9
+      distanceKm: 0.9,
+      restaurantId: minaMealCard.restaurantId,
+      restaurantName: minaMealCard.restaurantName,
+      menuItemId: minaMealCard.menuItemId
     },
     {
       id: "invite-demo-leo-chat",
       type: "chat",
       status: "pending",
       direction: "received",
+      profileId: "leo",
       candidateUserId: "demo-leo",
       sourceCardKey: getMealBuddyCardId(myLunchCard),
       inviterUser: "Leo",
@@ -247,7 +277,10 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       expiresAt: "2026-06-05T09:30:00.000Z",
       demoLabel: "Demo Invitation 測試資料",
       area: "台北信義",
-      distanceKm: 1.2
+      distanceKm: 1.2,
+      restaurantId: leoChatCard.restaurantId,
+      restaurantName: leoChatCard.restaurantName,
+      menuItemId: leoChatCard.menuItemId
     }
   ];
 }
@@ -290,11 +323,13 @@ export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
 export function createOrOpenMealSessionChat({
   buddyId,
   chatThreadId,
+  participantProfileId,
   relatedMeal,
   userName
 }: {
   buddyId?: string;
   chatThreadId?: string;
+  participantProfileId?: string;
   relatedMeal: string;
   userName: string;
 }) {
@@ -315,7 +350,7 @@ export function createOrOpenMealSessionChat({
     unread: true,
     demoLabel: "一般飯局",
     buddyId: buddyId ?? mockThread?.buddyId,
-    participantProfileId: mockThread?.participantProfileId,
+    participantProfileId: participantProfileId ?? mockThread?.participantProfileId,
     threadType: "direct",
     updatedAt: now,
     lastMessageAt: now,
@@ -439,6 +474,7 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     type,
     status: "pending",
     direction: "sent",
+    profileId: candidate.userId,
     candidateUserId: candidate.userId,
     sourceCardKey,
     inviterUser: "我",
@@ -454,6 +490,9 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     demoLabel: "Demo Invitation 測試資料",
     area: candidate.area,
     distanceKm: candidate.distanceKm,
+    restaurantId: candidate.restaurantId,
+    restaurantName: candidate.restaurantName,
+    menuItemId: candidate.menuItemId,
     mascotId: candidate.mascotId
   };
   invitePreviews = [invite, ...invitePreviews.filter((item) => item.id !== invite.id)];
@@ -468,11 +507,16 @@ export function acceptMealBuddyInvite(invite: MealBuddyInvitePreview) {
   }
 
   invitePreviews = invitePreviews.map((item) => (item.id === invite.id ? { ...item, status: "accepted" } : item));
-  const acceptedProfileId = profileIdFromInvitation(invite);
+  const acceptedProfileId = invite.profileId;
+  if (!acceptedProfileId) {
+    persistSocialState();
+    return;
+  }
   const chat = createOrOpenMealBuddyChat({
     userId: acceptedProfileId,
     displayName: invite.userName,
     restaurantId: invite.inviterCard.restaurantId,
+    menuItemId: invite.inviterCard.menuItemId,
     restaurantName: invite.inviterCard.restaurantName,
     preferredFoodName: invite.mealName,
     foodCategory: invite.inviterCard.foodCategory,
@@ -599,6 +643,8 @@ function touchChat(chatId: string, lastMessage: string, time: string, sender: Me
 function candidateToCardInput(candidate: RankedMealBuddyCandidate, sourceType: MealBuddyCard["sourceType"]): Partial<MealBuddyCard> {
   return {
     sourceType,
+    restaurantId: candidate.restaurantId,
+    menuItemId: candidate.menuItemId,
     preferredFoodName: candidate.preferredFoodName,
     restaurantName: candidate.restaurantName,
     foodCategory: candidate.foodCategory,
@@ -649,17 +695,15 @@ function mergeMissingDefaultInvites(currentInvites: MealBuddyInvitePreview[]) {
   for (const invite of buildDefaultInvites()) {
     if (!mergedById.has(invite.id)) {
       mergedById.set(invite.id, invite);
+      continue;
     }
+    mergedById.set(invite.id, { ...mergedById.get(invite.id)!, profileId: invite.profileId, tableId: mergedById.get(invite.id)!.tableId ?? invite.tableId });
   }
   return [...mergedById.values()];
 }
 
 function hasAcceptedInviteForBuddy(buddyId: string) {
-  return invitePreviews.some((invite) => invite.status === "accepted" && profileIdFromInvitation(invite) === buddyId);
-}
-
-function profileIdFromInvitation(invite: MealBuddyInvitePreview) {
-  return invite.candidateUserId.replace("demo-", "").toLowerCase();
+  return invitePreviews.some((invite) => invite.status === "accepted" && invite.profileId === buddyId);
 }
 
 function normalizeMergedChat(base: MealBuddyChatPreview, current: MealBuddyChatPreview, override: Partial<MealBuddyChatPreview>) {
@@ -679,7 +723,10 @@ function findCanonicalDirectChat(chat: MealBuddyChatPreview, canonicalDirectChat
   if (chat.buddyId && canonicalDirectChats.has(chat.buddyId)) {
     return canonicalDirectChats.get(chat.buddyId);
   }
-  return [...canonicalDirectChats.values()].find((canonical) => canonical.userName === chat.userName || chat.userName.includes(canonical.userName) || canonical.userName.includes(chat.userName));
+  if (chat.participantProfileId && canonicalDirectChats.has(chat.participantProfileId)) {
+    return canonicalDirectChats.get(chat.participantProfileId);
+  }
+  return undefined;
 }
 
 function findCanonicalGroupChat(chat: MealBuddyChatPreview, canonicalGroupChats: Map<string | undefined, MealBuddyChatPreview>) {
@@ -729,15 +776,18 @@ function readStoredSocialState() {
 
 function buildInviteCard(input: Partial<MealBuddyCard>): MealBuddyCard {
   const now = getEffectiveCurrentDate().toISOString();
+  const restaurant = input.restaurantId ? getCanonicalRestaurantById(input.restaurantId) : getCanonicalRestaurantByName(input.restaurantName);
+  const menuItem = input.menuItemId ? getCanonicalMenuItemById(input.menuItemId) : restaurant ? getPrimaryMenuItemForRestaurant(restaurant.restaurantId) : null;
   return {
     userId: input.userId ?? "mock-user",
     cardType: input.cardType ?? "general",
     sourceType: input.sourceType ?? "manual",
     intentionType: input.intentionType ?? "chat_first",
-    preferredFoodName: input.preferredFoodName ?? "",
-    restaurantId: input.restaurantId ?? "",
-    restaurantName: input.restaurantName ?? "",
-    foodCategory: input.foodCategory ?? "",
+    preferredFoodName: input.preferredFoodName ?? menuItem?.name ?? "",
+    restaurantId: restaurant?.restaurantId ?? input.restaurantId ?? "",
+    menuItemId: menuItem?.menuItemId ?? input.menuItemId,
+    restaurantName: restaurant?.name ?? input.restaurantName ?? "",
+    foodCategory: input.foodCategory ?? restaurant?.category ?? "",
     area: input.area ?? "",
     preferredTime: input.preferredTime ?? "",
     nutritionGoal: input.nutritionGoal ?? "",

@@ -6,15 +6,24 @@ import type { AvatarSource, CommunityProfileDisplay, CommunityProfileMode } from
 
 const currentUserIds = new Set(["demo-user", "current-user", "me", "self", "community-card"]);
 const mascots = zhTW.mobile.communityCardSettings.mascots as readonly SystemMascot[];
+const unknownMascot = mascots[0];
 
-export function resolveCommunityProfileDisplay(profileIdOrCommunityCardId: string): CommunityProfileDisplay | null {
-  if (currentUserIds.has(profileIdOrCommunityCardId)) {
+export function getCommunityProfileByProfileId(profileId: string) {
+  return getMockProfile(profileId) ?? null;
+}
+
+export function resolveCommunityProfileDisplay(profileId: string | null | undefined, _mode?: "anonymous" | "free" | "premium" | "paid"): CommunityProfileDisplay {
+  if (!profileId) {
+    return unknownCommunityProfileDisplay();
+  }
+
+  if (currentUserIds.has(profileId)) {
     return resolveCurrentUserCommunityProfile();
   }
 
-  const profile = getMockProfile(profileIdOrCommunityCardId);
+  const profile = getCommunityProfileByProfileId(profileId);
   if (!profile) {
-    return null;
+    return unknownCommunityProfileDisplay();
   }
 
   const mascot = resolveMascot(profile.mascotId);
@@ -32,6 +41,20 @@ export function resolveCommunityProfileDisplay(profileIdOrCommunityCardId: strin
     isPremium: profile.verified,
     shortProfileSummary: profile.intro,
     tags: [...profile.tags]
+  };
+}
+
+export function unknownCommunityProfileDisplay(): CommunityProfileDisplay {
+  return {
+    displayName: "未知飯友",
+    avatarSource: unknownMascot ? { type: "mascot", mascotId: unknownMascot.id, assetKey: unknownMascot.assetKey } : { type: "none" },
+    mascotId: unknownMascot?.id ?? null,
+    selectedMascotName: unknownMascot?.name ?? null,
+    photoUrl: null,
+    profileMode: "unknown",
+    isPremium: false,
+    shortProfileSummary: "",
+    tags: []
   };
 }
 

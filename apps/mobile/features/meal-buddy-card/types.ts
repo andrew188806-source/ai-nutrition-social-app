@@ -21,6 +21,7 @@ export type MealBuddyCard = {
   intentionType: MealBuddyIntentionType;
   preferredFoodName: string;
   restaurantId: string;
+  menuItemId?: string;
   restaurantName: string;
   foodCategory: string;
   area: string;
@@ -49,6 +50,7 @@ export type MealBuddyCandidate = {
   preferredTime: string;
   nutritionGoal: string;
   intentionType: MealBuddyIntentionType;
+  menuItemId?: string;
   distanceKm: number;
   activityScore: number;
   isPremium: boolean;
