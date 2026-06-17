@@ -1680,7 +1680,9 @@ export const zhTW = {
       list: [
         { name: "好初健康碗", distance: "850m", score: "96%", tags: ["藍勾勾認證", "有營養標示", "高蛋白菜單"] },
         { name: "森日蔬食廚房", distance: "1.2km", score: "88%", tags: ["蔬食選項", "低卡選項", "有營養標示"] },
-        { name: "山線蛋白餐盒", distance: "1.8km", score: "84%", tags: ["適合增肌", "高蛋白菜單", "有營養標示"] }
+        { name: "山線蛋白餐盒", distance: "1.8km", score: "84%", tags: ["適合增肌", "高蛋白菜單", "有營養標示"] },
+        { name: "春暖麵線屋", distance: "1.4km", score: "82%", tags: ["暖胃主食", "低脂選項", "有營養標示"] },
+        { name: "平衡輕食咖啡", distance: "0.9km", score: "85%", tags: ["低卡選項", "早午餐", "咖啡飲品"] }
       ],
       sponsoredTitle: "情境式贊助推薦",
       sponsoredBody: "今天晚餐需要高纖清爽選項，這張贊助推薦會清楚標示，不會假裝成一般推薦。",
@@ -1740,6 +1742,24 @@ export const zhTW = {
           reason: "成員都偏好營養標示透明且高蛋白的餐廳。",
           tags: ["藍勾勾認證", "一起嘗試新餐廳", "有營養標示"],
           premiumOnly: false
+        },
+        {
+          restaurantName: "春暖麵線屋",
+          mealTheme: "暖胃輕食午餐局",
+          progress: "目前 1/4 人，還差 3 人開桌",
+          status: "等待成團",
+          reason: "適合想吃清爽暖胃主食、不想太重油膩的成員。",
+          tags: ["暖胃主食", "低脂選項", "找午餐夥伴"],
+          premiumOnly: false
+        },
+        {
+          restaurantName: "平衡輕食咖啡",
+          mealTheme: "低卡早午餐聚",
+          progress: "目前 2/4 人，還差 2 人開桌",
+          status: "等待成團",
+          reason: "偏好早午餐、輕食與咖啡飲品的人最適合。",
+          tags: ["低卡選項", "早午餐", "咖啡飲品"],
+          premiumOnly: true
         }
       ]
     },

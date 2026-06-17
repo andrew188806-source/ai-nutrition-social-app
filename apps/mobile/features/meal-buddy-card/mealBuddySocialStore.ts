@@ -182,7 +182,7 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       status: "pending",
       direction: "received",
       profileId: "mina",
-      candidateUserId: japaneseDinnerTableId,
+      candidateUserId: "demo-mina",
       sourceCardKey: getMealBuddyCardId(tableInviteCard),
       inviterUser: "Mina",
       inviteeUser: "我",

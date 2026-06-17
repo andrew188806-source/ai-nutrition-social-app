@@ -9,7 +9,23 @@ import type { GroupCalorieImport, GroupCalorieShare } from "./calorieSharingType
 const groupShareStorageKey = "haocu.calorieSharing.groupShares.v1";
 const groupImportStorageKey = "haocu.calorieSharing.groupImports.v1";
 
-let groupShares: GroupCalorieShare[] = readStored<GroupCalorieShare>(groupShareStorageKey);
+const seedGroupShares: GroupCalorieShare[] = [
+  {
+    groupTableId: "table-japanese-dinner",
+    hostUserId: "mina",
+    photoIds: ["photo-japanese-dinner-1", "photo-japanese-dinner-2"],
+    estimatedTotalCalories: 2720,
+    peopleCount: 4,
+    averageCaloriesPerPerson: 680,
+    createdAt: "2026-06-01T19:30:00+08:00",
+    sharedCardId: "share-card-japanese-dinner-001"
+  }
+];
+
+let groupShares: GroupCalorieShare[] = (() => {
+  const stored = readStored<GroupCalorieShare>(groupShareStorageKey);
+  return stored.length > 0 ? stored : seedGroupShares;
+})();
 let groupImports: GroupCalorieImport[] = readStored<GroupCalorieImport>(groupImportStorageKey);
 
 export function saveGroupCalorieShare(share: GroupCalorieShare) {

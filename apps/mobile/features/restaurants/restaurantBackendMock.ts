@@ -216,6 +216,130 @@ export const canonicalRestaurants: CanonicalRestaurant[] = [
         verificationStatus: "ai_estimated"
       }
     ]
+  },
+  {
+    restaurantId: "restaurant-noodle-soup",
+    name: "春暖麵線屋",
+    location: "中山區",
+    distanceDisplay: "1.4km",
+    category: "麵食",
+    tags: ["暖胃主食", "低脂選項", "均衡推薦"],
+    priceRange: "NT$90-150",
+    rating: "4.5",
+    score: "82%",
+    aliases: ["restaurant-春暖麵線屋", "rest-noodle", "春暖麵線"],
+    menuItems: [
+      {
+        menuItemId: "dish-noodle-1",
+        restaurantId: "restaurant-noodle-soup",
+        name: "蚵仔麵線",
+        calories: 420,
+        protein: 18,
+        carbs: 64,
+        fat: 9,
+        fiber: 3,
+        price: 90,
+        tags: ["暖胃主食", "低脂選項"],
+        emoji: "🍜",
+        mealType: "午餐",
+        source: "restaurant_menu",
+        verificationStatus: "restaurant_verified"
+      },
+      {
+        menuItemId: "dish-noodle-2",
+        restaurantId: "restaurant-noodle-soup",
+        name: "雞絲拌麵",
+        calories: 480,
+        protein: 26,
+        carbs: 66,
+        fat: 11,
+        fiber: 4,
+        price: 120,
+        tags: ["高蛋白", "均衡推薦"],
+        emoji: "🍝",
+        mealType: "午餐",
+        source: "restaurant_menu",
+        verificationStatus: "ai_estimated"
+      },
+      {
+        menuItemId: "dish-noodle-3",
+        restaurantId: "restaurant-noodle-soup",
+        name: "蔬菜清湯麵",
+        calories: 350,
+        protein: 12,
+        carbs: 58,
+        fat: 7,
+        fiber: 6,
+        price: 100,
+        tags: ["低卡選項", "蔬食選項"],
+        emoji: "🥣",
+        mealType: "晚餐",
+        source: "restaurant_menu",
+        verificationStatus: "restaurant_verified"
+      }
+    ]
+  },
+  {
+    restaurantId: "restaurant-cafe-balance",
+    name: "平衡輕食咖啡",
+    location: "大安區",
+    distanceDisplay: "0.9km",
+    category: "輕食咖啡",
+    tags: ["低卡選項", "早午餐", "咖啡飲品"],
+    priceRange: "NT$120-200",
+    rating: "4.6",
+    score: "85%",
+    aliases: ["restaurant-平衡輕食咖啡", "rest-cafe", "平衡咖啡"],
+    menuItems: [
+      {
+        menuItemId: "dish-cafe-1",
+        restaurantId: "restaurant-cafe-balance",
+        name: "酪梨鮮蝦吐司",
+        calories: 440,
+        protein: 22,
+        carbs: 42,
+        fat: 18,
+        fiber: 5,
+        price: 180,
+        tags: ["低卡選項", "早午餐"],
+        emoji: "🥑",
+        mealType: "早餐",
+        source: "restaurant_menu",
+        verificationStatus: "restaurant_verified"
+      },
+      {
+        menuItemId: "dish-cafe-2",
+        restaurantId: "restaurant-cafe-balance",
+        name: "希臘優格沙拉碗",
+        calories: 380,
+        protein: 20,
+        carbs: 38,
+        fat: 14,
+        fiber: 7,
+        price: 165,
+        tags: ["低卡選項", "高纖飲食"],
+        emoji: "🥗",
+        mealType: "午餐",
+        source: "restaurant_menu",
+        verificationStatus: "ai_estimated"
+      },
+      {
+        menuItemId: "dish-cafe-3",
+        restaurantId: "restaurant-cafe-balance",
+        name: "無糖燕麥拿鐵",
+        calories: 120,
+        protein: 6,
+        carbs: 18,
+        fat: 3,
+        fiber: 2,
+        price: 130,
+        tags: ["咖啡飲品", "低卡選項"],
+        emoji: "☕",
+        mealType: "飲品",
+        source: "restaurant_menu",
+        verificationStatus: "restaurant_verified"
+      }
+    ]
   }
 ];
 
@@ -257,6 +381,12 @@ export function getDefaultRestaurantForProfileTags(tags: string[]) {
   }
   if (tags.some((tag) => tag.includes("蛋白") || tag.toLowerCase().includes("protein"))) {
     return canonicalRestaurants[2];
+  }
+  if (tags.some((tag) => tag.includes("麵") || tag.includes("湯") || tag.includes("暖"))) {
+    return canonicalRestaurants[3];
+  }
+  if (tags.some((tag) => tag.includes("咖啡") || tag.includes("輕食") || tag.includes("早午餐"))) {
+    return canonicalRestaurants[4];
   }
   return canonicalRestaurants[0];
 }
