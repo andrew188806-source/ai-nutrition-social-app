@@ -1,21 +1,35 @@
-﻿import { getDefaultRestaurantForProfileTags, getPrimaryMenuItemForRestaurant } from "../restaurants";
+import { getCanonicalMenuItemById, getCanonicalRestaurantById, getDefaultRestaurantForProfileTags, getPrimaryMenuItemForRestaurant } from "../restaurants";
 import type { ChatId, RankedMealBuddyCandidate, TableId, UserId } from "./types";
 
-// DEMO DATA FLOW: Community Profile -> Matched Buddy -> Chat Thread -> Meal Session / Four-Person Table.
-// Keep IDs stable so every screen renders the same people and sessions from one source of truth.
 export type MockCommunityProfile = {
   id: string;
+  profileId: string;
+  displayName: string;
+  anonymousName: string;
   avatar: string;
-  name: string;
-  verified: boolean;
+  mascotId: string;
+  mascotAvatar: string;
+  realAvatarKey: string;
+  realAvatar: string;
+  realAvatarUrl: string;
+  age: number;
   ageRange: string;
+  gender: "male" | "female" | "other";
   area: string;
   distanceKm: number;
+  verificationStatus: "verified" | "unverified";
+  verified: boolean;
+  healthGoal: string;
+  dietSummary: string;
+  recentMealStyle: string;
+  nutritionGoalSummary: string;
+  willingToChat: boolean;
   tags: string[];
-  recentMealStatus: string;
+  preferredMealTypes: string[];
+  favoriteRestaurantIds: string[];
+  favoriteMenuItemIds: string[];
   commonInterests: string[];
   intro: string;
-  mascotId?: string;
 };
 
 export type MockMatchedBuddy = {
@@ -58,355 +72,501 @@ export type MockGatheringRecord = {
   people: string;
   status: string;
   payment: string;
-  source: "憌臬??隢? | "?犖獢?;
+  source: "meal_session" | "group_table";
   withPerson: string;
   buddyId?: UserId;
   participantProfileId?: UserId;
   tableId?: TableId;
+  hostProfileId?: UserId;
+  participantProfileIds?: UserId[];
   chatThreadId: ChatId;
   chatName: string;
   notes?: string;
   matchReasons?: string[];
 };
 
-// Community Profile: the origin record for every demo person.
+const photoSeedBase = "https://api.dicebear.com/9.x/personas/png?backgroundColor=f2f4f7&radius=50&seed=";
+
 export const mockCommunityProfiles: MockCommunityProfile[] = [
-  {
-    id: "mina",
+  profile({
+    profileId: "current-user",
+    displayName: "好厝用戶",
+    anonymousName: "均衡守護者",
+    avatar: "H",
+    mascotId: "balance-guardian",
+    age: 29,
+    ageRange: "25-34",
+    gender: "other",
+    area: "Da'an",
+    distanceKm: 0,
+    verificationStatus: "verified",
+    healthGoal: "穩定精神與體力",
+    dietSummary: "均衡餐盤，重視蛋白質與蔬菜",
+    recentMealStyle: "晚餐有事先規劃",
+    nutritionGoalSummary: "熱量穩定，纖維再提高",
+    willingToChat: true,
+    tags: ["均衡", "蛋白質", "纖維"],
+    preferredMealTypes: ["午餐", "晚餐"],
+    favoriteRestaurantIds: ["restaurant-haochu-bowl", "restaurant-mori-veggie"],
+    favoriteMenuItemIds: ["dish-haochu-1", "dish-mori-1"],
+    commonInterests: ["均衡餐盒", "附近餐廳", "熱量分享"],
+    intro: "喜歡實際、穩定的飲食安排，也願意和重視營養的人一起吃飯。"
+  }),
+  profile({
+    profileId: "mina",
+    displayName: "米娜",
+    anonymousName: "嚐鮮探險家",
     avatar: "M",
-    name: "Mina",
-    verified: true,
-    ageRange: "25-34甇?,
-    area: "?啣?憭批?",
+    mascotId: "taste-explorer",
+    age: 28,
+    ageRange: "25-34",
+    gender: "female",
+    area: "Da'an",
     distanceKm: 0.6,
-    tags: ["?亙?", "??", "AA ??],
-    recentMealStatus: "隞予?喳?皜?亙???",
-    commonInterests: ["?日?摰?", "皜?亙?", "??"],
-    intro: "?迭皜??嚗??單鈭箔?韏瑟蝝Ｗ摨瑕?憌?,
-    mascotId: "taste-explorer"
-  },
-  {
-    id: "bo",
-    avatar: "B",
-    name: "Bo",
-    verified: false,
-    ageRange: "25-34甇?,
-    area: "?啣?憭批?",
-    distanceKm: 0.8,
-    tags: ["擃???, "皜僖", "AA ??],
-    recentMealStatus: "?單?亙熒??憌臬?",
-    commonInterests: ["?靘輻", "鞊???, "??敺???],
-    intro: "?喳?皜楚銝暺?銝憭芣硃??,
-    mascotId: "protein-believer"
-  },
-  {
-    id: "ivy",
+    verificationStatus: "verified",
+    healthGoal: "維持均衡活力",
+    dietSummary: "蔬菜多一點，搭配低脂蛋白質",
+    recentMealStyle: "晚餐偏好均衡餐盒",
+    nutritionGoalSummary: "蛋白質與纖維達標，不吃過量",
+    willingToChat: true,
+    tags: ["均衡", "新餐廳", "AA 制"],
+    preferredMealTypes: ["午餐", "晚餐"],
+    favoriteRestaurantIds: ["restaurant-haochu-bowl", "restaurant-mori-veggie"],
+    favoriteMenuItemIds: ["dish-haochu-1", "dish-mori-1"],
+    commonInterests: ["均衡餐盒", "探索餐廳", "AA 制"],
+    intro: "喜歡嘗試健康餐盒，也希望晚餐可以輕鬆聊天、不要有壓力。"
+  }),
+  profile({
+    profileId: "ivy",
+    displayName: "小艾",
+    anonymousName: "蔬食盤子",
     avatar: "I",
-    name: "Ivy",
-    verified: true,
-    ageRange: "25-34甇?,
-    area: "?啣?憭批?",
+    mascotId: "vegetarian-believer",
+    age: 26,
+    ageRange: "25-34",
+    gender: "female",
+    area: "Xinyi",
     distanceKm: 1.1,
-    tags: ["?祇?", "擃?", "????],
-    recentMealStatus: "隞予?喳??祇??",
-    commonInterests: ["?祇??", "擃?憌脤?", "皜??"],
-    intro: "?迭????餈??賡???捱摰?銝?銝韏瑕???,
-    mascotId: "vegetarian-believer"
-  },
-  {
-    id: "an",
-    avatar: "摰?,
-    name: "撠?",
-    verified: true,
-    ageRange: "25-34甇?,
-    area: "?啣?憭批?",
-    distanceKm: 1,
-    tags: ["?亙?", "皜", "??敺?瘙箏?"],
-    recentMealStatus: "???喳??嗆部憌臬?擗?,
-    commonInterests: ["?亙?摰?", "?日?", "憌臬???郊"],
-    intro: "?迭?Ｘ?ㄞ嚗?敺??敺?????,
-    mascotId: "balance-guardian"
-  },
-  {
-    id: "sean",
-    avatar: "S",
-    name: "Sean",
-    verified: false,
-    ageRange: "25-34甇?,
-    area: "?啣?憭批?",
-    distanceKm: 0.9,
-    tags: ["?啣?", "?亙?", "????],
-    recentMealStatus: "?喳????桀?瘙箏?",
-    commonInterests: ["?亙??日?", "?啣??Ｙ揣", "頛??予"],
-    intro: "?迭?Ｙ揣?啣?嚗???鈭斗??????,
-    mascotId: "taste-explorer"
-  },
-  {
-    id: "kai",
-    avatar: "K",
-    name: "Kai",
-    verified: true,
-    ageRange: "25-34甇?,
-    area: "靽∠儔?",
-    distanceKm: 0.7,
-    tags: ["擃???, "?亥澈敺?, "AA ??],
-    recentMealStatus: "?喳??靘輻",
-    commonInterests: ["擃???, "?亥澈敺???, "?亙熒蝣?],
-    intro: "?亥澈敺虜?曄?擗?蝷箸?璆?擗???,
-    mascotId: "protein-believer"
-  },
-  {
-    id: "leo",
-    avatar: "L",
-    name: "Leo",
-    verified: true,
-    ageRange: "25-34甇?,
-    area: "靽∠儔?",
+    verificationStatus: "verified",
+    healthGoal: "建立蔬食習慣",
+    dietSummary: "多數餐點以蔬食為主，注意蛋白質",
+    recentMealStyle: "晚餐偏好蔬食壽司組合",
+    nutritionGoalSummary: "增加植物性蛋白，減少宵夜",
+    willingToChat: true,
+    tags: ["蔬食", "清爽晚餐", "先聊天"],
+    preferredMealTypes: ["晚餐"],
+    favoriteRestaurantIds: ["restaurant-mori-veggie", "restaurant-cafe-balance"],
+    favoriteMenuItemIds: ["dish-mori-2", "dish-cafe-1"],
+    commonInterests: ["蔬食餐點", "清爽晚餐", "營養小技巧"],
+    intro: "偏好輕鬆的蔬食餐，也喜歡交換實用的飲食習慣。"
+  }),
+  profile({
+    profileId: "bo",
+    displayName: "阿博",
+    anonymousName: "麵食偵查員",
+    avatar: "B",
+    mascotId: "taste-explorer",
+    age: 30,
+    ageRange: "25-34",
+    gender: "male",
+    area: "Xinyi",
     distanceKm: 0.8,
-    tags: ["?亥澈", "??", "????],
-    recentMealStatus: "?唾?擃??賢?憌?,
-    commonInterests: ["擃??賜?", "??", "?亥澈憭?"],
-    intro: "撣詨?鈭恍??憭??豢???,
-    mascotId: "low-carb-ninja"
-  }
+    verificationStatus: "unverified",
+    healthGoal: "控制份量",
+    dietSummary: "常吃麵食與餐盒，會注意鈉含量",
+    recentMealStyle: "午餐常選麵食套餐",
+    nutritionGoalSummary: "份量剛好，多補蔬菜",
+    willingToChat: false,
+    tags: ["份量控制", "麵食", "均衡"],
+    preferredMealTypes: ["午餐", "晚餐"],
+    favoriteRestaurantIds: ["restaurant-noodle-soup", "restaurant-mori-veggie"],
+    favoriteMenuItemIds: ["dish-noodle-1", "dish-mori-1"],
+    commonInterests: ["麵店", "份量控制", "均衡配菜"],
+    intro: "喜歡簡單直接的餐點，偏好沒有壓力的飯局。"
+  }),
+  profile({
+    profileId: "leo",
+    displayName: "里歐",
+    anonymousName: "蛋白質規劃師",
+    avatar: "L",
+    mascotId: "protein-believer",
+    age: 29,
+    ageRange: "25-34",
+    gender: "male",
+    area: "Songshan",
+    distanceKm: 0.8,
+    verificationStatus: "verified",
+    healthGoal: "增加肌肉量",
+    dietSummary: "午餐高蛋白，晚餐清爽一點",
+    recentMealStyle: "午餐偏好高蛋白套餐",
+    nutritionGoalSummary: "提高蛋白質，同時控制熱量",
+    willingToChat: true,
+    tags: ["高蛋白", "健身", "AA 制"],
+    preferredMealTypes: ["午餐"],
+    favoriteRestaurantIds: ["restaurant-mountain-protein", "restaurant-haochu-bowl"],
+    favoriteMenuItemIds: ["dish-mountain-1", "dish-haochu-1"],
+    commonInterests: ["蛋白質目標", "訓練餐", "午餐規劃"],
+    intro: "會認真記錄蛋白質，也喜歡分享運動後適合吃什麼。"
+  }),
+  profile({
+    profileId: "an",
+    displayName: "安",
+    anonymousName: "穩定餐盒",
+    avatar: "A",
+    mascotId: "balance-guardian",
+    age: 27,
+    ageRange: "25-34",
+    gender: "female",
+    area: "Da'an",
+    distanceKm: 1.0,
+    verificationStatus: "verified",
+    healthGoal: "維持穩定作息",
+    dietSummary: "均衡套餐，飲料盡量低糖",
+    recentMealStyle: "晚餐偏好均衡套餐",
+    nutritionGoalSummary: "血糖穩定，纖維足夠",
+    willingToChat: true,
+    tags: ["均衡", "低糖", "清爽晚餐"],
+    preferredMealTypes: ["午餐", "晚餐"],
+    favoriteRestaurantIds: ["restaurant-mori-veggie", "restaurant-haochu-bowl"],
+    favoriteMenuItemIds: ["dish-mori-1", "dish-haochu-2"],
+    commonInterests: ["均衡套餐", "低糖選擇", "用餐時間"],
+    intro: "重視穩定生活節奏，偏好安靜、均衡的飯局。"
+  }),
+  profile({
+    profileId: "kai",
+    displayName: "凱",
+    anonymousName: "精打細算餐盒",
+    avatar: "K",
+    mascotId: "balance-guardian",
+    age: 25,
+    ageRange: "25-34",
+    gender: "male",
+    area: "Songshan",
+    distanceKm: 0.7,
+    verificationStatus: "unverified",
+    healthGoal: "吃得健康也控制預算",
+    dietSummary: "快速均衡午餐，營養資訊清楚",
+    recentMealStyle: "午餐偏好高 CP 值餐盒",
+    nutritionGoalSummary: "不超支，也盡量選高蛋白",
+    willingToChat: true,
+    tags: ["高 CP 值", "均衡", "AA 制"],
+    preferredMealTypes: ["午餐"],
+    favoriteRestaurantIds: ["restaurant-haochu-bowl", "restaurant-noodle-soup"],
+    favoriteMenuItemIds: ["dish-haochu-2", "dish-noodle-2"],
+    commonInterests: ["高 CP 值餐", "均衡午餐", "快速規劃"],
+    intro: "喜歡價格透明、又不失健康感的選擇。"
+  }),
+  profile({
+    profileId: "yuna",
+    displayName: "優娜",
+    anonymousName: "咖啡散步者",
+    avatar: "Y",
+    mascotId: "taste-explorer",
+    age: 24,
+    ageRange: "18-24",
+    gender: "female",
+    area: "Xinyi",
+    distanceKm: 1.3,
+    verificationStatus: "unverified",
+    healthGoal: "點心更清爽",
+    dietSummary: "咖啡廳輕食、水果、少量甜點",
+    recentMealStyle: "下午偏好咖啡廳輕食",
+    nutritionGoalSummary: "點心清爽一點，補一點蛋白質",
+    willingToChat: true,
+    tags: ["咖啡廳", "輕食", "先聊天"],
+    preferredMealTypes: ["下午茶", "晚餐"],
+    favoriteRestaurantIds: ["restaurant-cafe-balance", "restaurant-mori-veggie"],
+    favoriteMenuItemIds: ["dish-cafe-1", "dish-mori-3"],
+    commonInterests: ["咖啡廳輕食", "少量甜點", "步行距離"],
+    intro: "喜歡輕鬆的咖啡廳飯局，也願意先從聊天開始。"
+  }),
+  profile({
+    profileId: "sean",
+    displayName: "尚恩",
+    anonymousName: "晚餐導航員",
+    avatar: "S",
+    mascotId: "taste-explorer",
+    age: 31,
+    ageRange: "25-34",
+    gender: "male",
+    area: "Da'an",
+    distanceKm: 0.9,
+    verificationStatus: "unverified",
+    healthGoal: "晚餐選擇更穩定",
+    dietSummary: "均衡晚餐，少一點油炸",
+    recentMealStyle: "晚餐常參加多人桌",
+    nutritionGoalSummary: "晚餐要有飽足感，也少油一點",
+    willingToChat: true,
+    tags: ["晚餐", "均衡", "新餐廳"],
+    preferredMealTypes: ["晚餐"],
+    favoriteRestaurantIds: ["restaurant-mori-veggie", "restaurant-mountain-protein"],
+    favoriteMenuItemIds: ["dish-mori-1", "dish-mountain-2"],
+    commonInterests: ["晚餐規劃", "多人桌", "清爽選擇"],
+    intro: "常加入晚餐多人桌，喜歡找附近比較清爽的餐點。"
+  })
 ];
 
-// Matched Buddy: references a Community Profile and exactly one direct Chat Thread.
 export const mockMatchedBuddies: MockMatchedBuddy[] = [
-  buildMatchedBuddy("mina", 9, "2026/05/08", "隞予", "chat-direct-mina"),
-  buildMatchedBuddy("bo", 5, "2026/05/18", "3 憭拙?", "chat-direct-bo"),
-  buildMatchedBuddy("ivy", 4, "2026/05/22", "5 憭拙?", "chat-direct-ivy"),
-  buildMatchedBuddy("an", 12, "2026/04/26", "?典予", "chat-direct-an")
+  buildMatchedBuddy("mina", 9, "2026/05/08", "均衡晚餐桌", "chat-direct-mina"),
+  buildMatchedBuddy("bo", 5, "2026/05/18", "麵食午餐", "chat-direct-bo"),
+  buildMatchedBuddy("leo", 7, "2026/05/12", "高蛋白午餐", "chat-direct-leo"),
+  buildMatchedBuddy("an", 12, "2026/04/26", "穩定晚餐", "chat-direct-an"),
+  buildMatchedBuddy("ivy", 4, "2026/05/22", "蔬食晚餐", "chat-direct-ivy")
 ];
 
-// Chat Thread: direct chats reference buddy/profile IDs; group chats reference table IDs.
 export const mockChatThreads: MockChatThread[] = [
+  directChat("mina", "chat-direct-mina", "這個餐盒當晚餐剛好，要不要先簡單聊一下？", "米娜的均衡餐盒", "18:05", true),
+  directChat("bo", "chat-direct-bo", "午餐可以，我這次會多加一份青菜。", "阿博的麵食套餐", "12:40", true),
+  directChat("leo", "chat-direct-leo", "這份高蛋白套餐很符合目標，明天午餐可以嗎？", "里歐的高蛋白午餐", "14:30", false),
+  directChat("an", "chat-direct-an", "均衡套餐聽起來不錯，我飲料會選無糖。", "安的穩定晚餐", "昨天", false),
+  directChat("ivy", "chat-direct-ivy", "蔬食壽司可以，如果時間還開放我想加入。", "小艾的蔬食晚餐", "11:20", false),
+  directChat("yuna", "chat-direct-yuna", "咖啡廳輕食很適合先聊聊。", "優娜的咖啡廳輕食", "15:00", true),
   {
-    id: "chat-direct-bo",
-    type: "direct",
-    buddyId: "bo",
-    participantProfileId: "bo",
-    title: "Bo",
-    lastMessage: "???喳?擃??賢?擗?閬?憟賢??亙熒蝣?嚗?,
-    relatedMeal: "頝?Bo 蝝????",
-    time: "12:40",
+    id: "chat-group-table-balanced-dinner",
+    type: "group",
+    tableId: "table-balanced-dinner",
+    title: "均衡晚餐桌",
+    lastMessage: "米娜開的桌還有一個空位。",
+    relatedMeal: "小森蔬食套餐",
+    time: "19:00",
     unread: true,
-    demoLabel: "皜祈岫鞈?"
+    demoLabel: "多人飯局"
   },
   {
-    id: "chat-direct-mina",
-    type: "direct",
-    buddyId: "mina",
-    participantProfileId: "mina",
-    title: "Mina",
-    lastMessage: "撠ㄝ?亙熒憌??擳?憌?韏瑚?銝??,
-    relatedMeal: "頝?Mina ?擳?憌?,
-    time: "18:05",
-    unread: true,
-    demoLabel: "皜祈岫鞈?"
-  },
-  {
-    id: "chat-direct-ivy",
-    type: "direct",
-    buddyId: "ivy",
-    participantProfileId: "ivy",
-    title: "Ivy",
-    lastMessage: "?臭誑????餈憌??,
-    relatedMeal: "?祇??",
-    time: "11:20",
+    id: "chat-group-table-light-lunch",
+    type: "group",
+    tableId: "table-light-lunch",
+    title: "清爽午餐桌",
+    lastMessage: "小艾、優娜和尚恩正在比較清爽餐點。",
+    relatedMeal: "清爽午餐組合",
+    time: "12:10",
     unread: false,
-    demoLabel: "皜祈岫鞈?"
-  },
-  {
-    id: "chat-direct-an",
-    type: "direct",
-    buddyId: "an",
-    participantProfileId: "an",
-    title: "撠?",
-    lastMessage: "銝活?臭誑??皜?恍???,
-    relatedMeal: "頝?摰?撠??,
-    time: "銝勗",
-    unread: false,
-    demoLabel: "皜祈岫鞈?"
+    demoLabel: "多人飯局"
   }
 ];
 
-// Meal Session / Four-Person Table: session records reference their shared chat thread.
 export const mockGatheringRecords = {
   hosting: [
     {
-      id: "host-japanese-dinner",
-      name: "?犖獢?皜?亙???",
-      location: "撠ㄝ?亙熒憌?",
-      time: "隞予 19:00",
-      people: "4 鈭箸?",
-      status: "撌脩Ⅱ隤?,
-      payment: "AA ??,
-      source: "?犖獢?,
-      withPerson: "Mina?o??摰?,
-      tableId: "table-japanese-dinner",
-      chatThreadId: "chat-group-table-japanese-dinner",
-      chatName: "?犖獢?皜?亙???",
-      notes: "皜?亙???嚗?獢??臬蝢方?蝣箄????,
-      matchReasons: ["?賢?憟賣撘?, "?????亥?", "頝?亥?"]
+      id: "host-balanced-dinner",
+      name: "均衡晚餐桌",
+      location: "小森蔬食",
+      time: "今晚 19:00",
+      people: "3/4 人",
+      status: "招募中",
+      payment: "AA split",
+      source: "group_table",
+      withPerson: "米娜、阿博、安",
+      tableId: "table-balanced-dinner",
+      hostProfileId: "mina",
+      participantProfileIds: ["mina", "bo", "an"],
+      chatThreadId: "chat-group-table-balanced-dinner",
+      chatName: "均衡晚餐桌",
+      notes: "以均衡餐盒與輕鬆營養選擇為主的多人晚餐。",
+      matchReasons: ["晚餐時間接近", "均衡目標相近", "距離接近"]
     },
     {
       id: "host-protein-lunch",
-      name: "頝?Bo 蝝????",
-      location: "憟賢??亙熒蝣?,
-      time: "?予 12:20",
-      people: "2鈭?,
-      status: "??銝?,
-      payment: "??瘜?,
-      source: "憌臬??隢?,
-      withPerson: "Bo",
-      buddyId: "bo",
-      participantProfileId: "bo",
-      chatThreadId: "chat-direct-bo",
-      chatName: "Bo",
-      notes: "?拙???敺?????敹恍?摰?,
-      matchReasons: ["?賣???", "???挾?亥?", "憌脤??格??訾撮"]
+      name: "里歐的高蛋白午餐",
+      location: "山系高蛋白",
+      time: "明天 12:30",
+      people: "2 人",
+      status: "已確認",
+      payment: "各付各的",
+      source: "meal_session",
+      withPerson: "里歐",
+      buddyId: "leo",
+      participantProfileId: "leo",
+      chatThreadId: "chat-direct-leo",
+      chatName: "Leo",
+      notes: "營養標示清楚的高蛋白午餐。",
+      matchReasons: ["蛋白質目標相近", "午餐時間接近", "餐廳距離接近"]
     }
   ] satisfies MockGatheringRecord[],
   joined: [
     {
-      id: "joined-fish-set",
-      name: "頝?Mina ?擳?憌?,
-      location: "撠ㄝ?亙熒憌?",
-      time: "隞予 18:30",
-      people: "2鈭?,
-      status: "撌脩Ⅱ隤?,
-      payment: "AA ??,
-      source: "憌臬??隢?,
-      withPerson: "Mina",
+      id: "joined-mina-bowl",
+      name: "米娜的均衡餐盒",
+      location: "好厝均衡碗",
+      time: "今晚 18:30",
+      people: "2 人",
+      status: "已確認",
+      payment: "AA split",
+      source: "meal_session",
+      withPerson: "米娜",
       buddyId: "mina",
       participantProfileId: "mina",
       chatThreadId: "chat-direct-mina",
       chatName: "Mina",
-      notes: "??韏唳??質楝蝺??踹?憭芣硃??,
-      matchReasons: ["?賣?撘?, "?????亥?", "頝?亥?"]
+      notes: "以纖維與均衡為重點的餐盒晚餐。",
+      matchReasons: ["營養目標相近", "晚餐時間相同", "距離接近"]
     },
     {
       id: "joined-light-lunch",
-      name: "?犖獢?皜??",
-      location: "??憌?",
-      time: "?曹? 12:10",
-      people: "3/4 鈭?,
-      status: "蝑???",
-      payment: "AA ??,
-      source: "?犖獢?,
-      withPerson: "Sean?vy",
+      name: "清爽午餐桌",
+      location: "均衡咖啡",
+      time: "明天 12:10",
+      people: "3/4 人",
+      status: "開放中",
+      payment: "AA split",
+      source: "group_table",
+      withPerson: "小艾、優娜、尚恩",
       tableId: "table-light-lunch",
+      hostProfileId: "ivy",
+      participantProfileIds: ["ivy", "yuna", "sean"],
       chatThreadId: "chat-group-table-light-lunch",
-      chatName: "?犖獢?皜??",
-      notes: "撠??嚗?獢?????蝢方???,
-      matchReasons: ["?賢?憟賣??賡?", "???挾?亥?"]
+      chatName: "清爽午餐桌",
+      notes: "以蔬食與咖啡廳輕食為主的午餐桌。",
+      matchReasons: ["偏好清爽餐點", "適合先聊天", "地點接近"]
     }
   ] satisfies MockGatheringRecord[],
   ended: [
     {
-      id: "ended-chicken",
-      name: "?犖獢??靘輻",
-      location: "撅梁??擗?",
-      time: "?典予 12:30",
-      people: "4鈭箸?",
-      status: "撌脩???,
-      payment: "AA ??,
-      source: "?犖獢?,
-      withPerson: "Kai?eo??摰?,
-      tableId: "table-chicken-bento",
-      chatThreadId: "chat-group-table-chicken-bento",
-      chatName: "?犖獢??靘輻",
-      notes: "撌脩???擃??賢?擗?,
-      matchReasons: ["?賢?憟賡??", "???挾?亥?"]
+      id: "ended-protein-table",
+      name: "高蛋白午餐桌",
+      location: "山系高蛋白",
+      time: "昨天 12:30",
+      people: "4 人",
+      status: "已完成",
+      payment: "AA split",
+      source: "group_table",
+      withPerson: "凱、里歐、安",
+      tableId: "table-protein-lunch",
+      hostProfileId: "leo",
+      participantProfileIds: ["leo", "kai", "an", "bo"],
+      chatThreadId: "chat-group-table-protein-lunch",
+      chatName: "高蛋白午餐桌",
+      notes: "已完成的高蛋白午餐多人桌。",
+      matchReasons: ["蛋白質目標相近", "午餐時間接近"]
     },
     {
-      id: "ended-hotpot",
-      name: "頝?摰?撠??,
-      location: "?僖?",
-      time: "銝勗 19:00",
-      people: "2鈭?,
-      status: "撌脣?瘨?,
-      payment: "??瘜?,
-      source: "憌臬??隢?,
-      withPerson: "撠?",
+      id: "ended-an-balanced-set",
+      name: "安的穩定晚餐",
+      location: "小森蔬食",
+      time: "上週 19:00",
+      people: "2 人",
+      status: "已完成",
+      payment: "各付各的",
+      source: "meal_session",
+      withPerson: "安",
       buddyId: "an",
       participantProfileId: "an",
       chatThreadId: "chat-direct-an",
-      chatName: "撠?",
-      notes: "?冽???嚗???憭拍???,
-      matchReasons: ["?賣???, "???挾?亥?"]
+      chatName: "An",
+      notes: "搭配低糖飲料的均衡晚餐。",
+      matchReasons: ["作息穩定", "均衡目標相近"]
     }
   ] satisfies MockGatheringRecord[]
 };
 
 export function getMockProfile(profileId: string) {
-  return mockCommunityProfiles.find((profile) => profile.id === profileId);
+  return mockCommunityProfiles.find((profileItem) => profileItem.profileId === profileId || profileItem.id === profileId);
 }
 
 export function getMockChatThreadByName(name: string) {
   return mockChatThreads.find((thread) => thread.title === name || thread.title.includes(name) || name.includes(thread.title));
 }
 
-export function getMockTableParticipantCandidates(tableId = "table-japanese-dinner"): RankedMealBuddyCandidate[] {
-  const participantIdsByTable: Record<string, string[]> = {
-    "table-japanese-dinner": ["mina", "bo", "an"],
-    "table-light-lunch": ["sean", "ivy"],
-    "table-chicken-bento": ["kai", "leo", "an"]
-  };
-  return (participantIdsByTable[tableId] ?? participantIdsByTable["table-japanese-dinner"])
+export function getMockMealBuddyCandidates(): RankedMealBuddyCandidate[] {
+  return ["mina", "ivy", "bo", "leo", "an", "kai", "yuna", "sean"]
     .map(getMockProfile)
-    .filter((profile): profile is MockCommunityProfile => Boolean(profile))
+    .filter((profileItem): profileItem is MockCommunityProfile => Boolean(profileItem))
     .map(profileToCandidate);
 }
 
-function buildMatchedBuddy(profileId: string, mealCount: number, knownSince: string, lastTable: string, chatThreadId: string): MockMatchedBuddy {
-  const profile = getMockProfile(profileId);
-  if (!profile) {
-    throw new Error(`Missing mock community profile: ${profileId}`);
-  }
+export function getMockTableParticipantCandidates(tableId = "table-balanced-dinner"): RankedMealBuddyCandidate[] {
+  const participantIdsByTable: Record<string, string[]> = {
+    "table-balanced-dinner": ["mina", "bo", "an"],
+    "table-light-lunch": ["ivy", "yuna", "sean"],
+    "table-protein-lunch": ["leo", "kai", "an", "bo"]
+  };
+  return (participantIdsByTable[tableId] ?? participantIdsByTable["table-balanced-dinner"])
+    .map(getMockProfile)
+    .filter((profileItem): profileItem is MockCommunityProfile => Boolean(profileItem))
+    .map(profileToCandidate);
+}
+
+function profile(input: Omit<MockCommunityProfile, "id" | "profileId" | "mascotAvatar" | "realAvatarKey" | "realAvatar" | "realAvatarUrl" | "verified"> & { profileId: string }): MockCommunityProfile {
+  const verified = input.verificationStatus === "verified";
+  const realAvatarUrl = `${photoSeedBase}${encodeURIComponent(input.profileId)}`;
   return {
-    id: profile.id,
-    profileId: profile.id,
-    avatar: profile.avatar,
-    name: profile.name,
-    verified: profile.verified,
-    tags: profile.tags,
-    recentMealStatus: profile.recentMealStatus,
-    mealCount,
-    knownSince,
-    lastTable,
-    commonInterests: profile.commonInterests,
-    areas: [profile.area],
-    intro: profile.intro,
-    chatThreadId,
-    mascotId: profile.mascotId
+    ...input,
+    id: input.profileId,
+    profileId: input.profileId,
+    mascotAvatar: input.mascotId,
+    realAvatarKey: `avatar-photo-${input.profileId}`,
+    realAvatar: realAvatarUrl,
+    realAvatarUrl,
+    verified
   };
 }
 
-function profileToCandidate(profile: MockCommunityProfile): RankedMealBuddyCandidate {
-  const restaurant = getDefaultRestaurantForProfileTags(profile.tags);
-  const menuItem = getPrimaryMenuItemForRestaurant(restaurant.restaurantId);
+function directChat(profileId: string, chatId: string, lastMessage: string, relatedMeal: string, time: string, unread: boolean): MockChatThread {
+  const profileItem = getMockProfile(profileId);
+  if (!profileItem) {
+    throw new Error(`Missing mock community profile: ${profileId}`);
+  }
   return {
-    userId: profile.id,
-    displayName: profile.name,
+    id: chatId,
+    type: "direct",
+    buddyId: profileId,
+    participantProfileId: profileId,
+    title: profileItem.displayName,
+    lastMessage,
+    relatedMeal,
+    time,
+    unread,
+    demoLabel: "飯友聊天"
+  };
+}
+
+function buildMatchedBuddy(profileId: string, mealCount: number, knownSince: string, lastTable: string, chatThreadId: string): MockMatchedBuddy {
+  const profileItem = getMockProfile(profileId);
+  if (!profileItem) {
+    throw new Error(`Missing mock community profile: ${profileId}`);
+  }
+  return {
+    id: profileItem.profileId,
+    profileId: profileItem.profileId,
+    avatar: profileItem.avatar,
+    name: profileItem.displayName,
+    verified: profileItem.verified,
+    tags: profileItem.tags,
+    recentMealStatus: profileItem.recentMealStyle,
+    mealCount,
+    knownSince,
+    lastTable,
+    commonInterests: profileItem.commonInterests,
+    areas: [profileItem.area],
+    intro: profileItem.intro,
+    chatThreadId,
+    mascotId: profileItem.mascotId
+  };
+}
+
+function profileToCandidate(profileItem: MockCommunityProfile): RankedMealBuddyCandidate {
+  const restaurant = getCanonicalRestaurantById(profileItem.favoriteRestaurantIds[0]) ?? getDefaultRestaurantForProfileTags(profileItem.tags);
+  const preferredMenuItem = getCanonicalMenuItemById(profileItem.favoriteMenuItemIds[0]) ?? getPrimaryMenuItemForRestaurant(restaurant.restaurantId);
+  return {
+    userId: profileItem.profileId,
+    displayName: profileItem.displayName,
     restaurantId: restaurant.restaurantId,
-    menuItemId: menuItem?.menuItemId,
+    menuItemId: preferredMenuItem?.menuItemId,
     restaurantName: restaurant.name,
-    preferredFoodName: menuItem?.name ?? profile.commonInterests[0],
+    preferredFoodName: preferredMenuItem?.name ?? profileItem.commonInterests[0],
     foodCategory: restaurant.category,
-    area: profile.area,
-    preferredTime: profile.recentMealStatus.includes("午餐") ? "午餐" : "晚餐",
-    nutritionGoal: profile.commonInterests[1] ?? "均衡飲食",
-    intentionType: profile.tags.includes("先聊聊") || profile.tags.includes("聊天") ? "chat_first" : "eat_together",
-    distanceKm: profile.distanceKm,
-    activityScore: 8,
-    isPremium: profile.verified,
-    isVerified: profile.verified,
-    tags: profile.tags,
-    socialNote: profile.intro,
-    rankScore: 82,
-    matchReasons: ["餐點偏好接近", "健康目標相近", "距離相近"],
-    mascotId: profile.mascotId
+    area: profileItem.area,
+    preferredTime: profileItem.preferredMealTypes[0] ?? "晚餐",
+    nutritionGoal: profileItem.nutritionGoalSummary,
+    intentionType: profileItem.willingToChat ? "chat_first" : "eat_together",
+    distanceKm: profileItem.distanceKm,
+    activityScore: profileItem.verified ? 9 : 7,
+    isPremium: profileItem.verified,
+    isVerified: profileItem.verified,
+    tags: profileItem.tags,
+    socialNote: profileItem.intro,
+    rankScore: profileItem.verified ? 88 : 82,
+    matchReasons: ["用餐時間接近", "營養目標相近", `距離 ${profileItem.distanceKm.toFixed(1)} km`],
+    mascotId: profileItem.mascotId
   };
 }

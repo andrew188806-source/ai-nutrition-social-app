@@ -6,19 +6,19 @@ import type { GroupCalorieImport, GroupCalorieShare } from "./calorieSharingType
 // - Current state: group calorie sharing cards and member imports use the shared demo storage adapter.
 // - Intended future integration: replace with group-table calorie-sharing APIs.
 // - Related feature: Group Tables -> 桌長記錄本桌熱量 -> 加入我的今日攝取.
-const groupShareStorageKey = "haocu.calorieSharing.groupShares.v1";
+const groupShareStorageKey = "haocu.calorieSharing.groupShares.v2";
 const groupImportStorageKey = "haocu.calorieSharing.groupImports.v1";
 
 const seedGroupShares: GroupCalorieShare[] = [
   {
-    groupTableId: "table-japanese-dinner",
+    groupTableId: "table-balanced-dinner",
     hostUserId: "mina",
-    photoIds: ["photo-japanese-dinner-1", "photo-japanese-dinner-2"],
+    photoIds: ["photo-balanced-dinner-1", "photo-balanced-dinner-2"],
     estimatedTotalCalories: 2720,
     peopleCount: 4,
     averageCaloriesPerPerson: 680,
     createdAt: "2026-06-01T19:30:00+08:00",
-    sharedCardId: "share-card-japanese-dinner-001"
+    sharedCardId: "share-card-balanced-dinner-001"
   }
 ];
 

@@ -43,10 +43,10 @@ type RestaurantTableContext = {
 type GroupDiningTab = "my" | "find" | "create";
 
 const hostedTableChatTarget: GroupTableChatTarget = {
-  chatThreadId: "chat-group-table-japanese-dinner",
+  chatThreadId: "chat-group-table-balanced-dinner",
   hostProfileId: "mina",
   participantProfileIds: ["mina", "bo", "an"],
-  tableId: "table-japanese-dinner",
+  tableId: "table-balanced-dinner",
   tableName: "四人桌｜清爽日式晚餐"
 };
 
@@ -172,7 +172,7 @@ export function GroupTablesContent({
         visible={isGroupCalorieUploadOpen}
         onClose={() => setIsGroupCalorieUploadOpen(false)}
         groupTableId={activeTableChatTarget.tableId}
-        hostUserId="demo-user"
+        hostUserId="current-user"
         defaultPeopleCount={tableParticipantCount}
         onGenerated={(share) => {
           setGroupCalorieShare(share);
@@ -280,9 +280,9 @@ export function GroupTablesContent({
               }
               setInviteSent(true);
               setTableParticipantCount(4);
-              const participantProfileIds = ["demo-user", ...selectedInviteIds].slice(0, 4);
+              const participantProfileIds = ["current-user", ...selectedInviteIds].slice(0, 4);
               const updated = updateActiveFourPersonTable({
-                hostProfileId: "demo-user",
+                hostProfileId: "current-user",
                 participantProfileIds,
                 participantIds: participantProfileIds,
                 status: "已成團",
@@ -547,9 +547,9 @@ function getFullInviteCandidates(isPremiumMode: boolean): InviteCandidate[] {
 
 function getCanonicalGroupInviteCandidates() {
   const candidates = [
-    ...getMockTableParticipantCandidates("table-japanese-dinner"),
+    ...getMockTableParticipantCandidates("table-balanced-dinner"),
     ...getMockTableParticipantCandidates("table-light-lunch"),
-    ...getMockTableParticipantCandidates("table-chicken-bento")
+    ...getMockTableParticipantCandidates("table-protein-lunch")
   ];
   return [...new Map(candidates.map((candidate) => [candidate.userId, candidate])).values()];
 }
@@ -655,7 +655,7 @@ function MyTableOverview({ activeTable, groupCalorieShare, onCreate, onInvite, o
           <HostedTableCard activeTable={activeTable} onInvite={onInvite} onManage={onManage} onOpen={onOpen} onOpenChat={onOpenChat} onRecordCalories={onRecordCalories} onUpgradeCapacity={onUpgradeCapacity} tableCapacity={tableCapacity} tableParticipantCount={tableParticipantCount} />
           {groupCalorieShare ? (
             <View style={styles.groupCalorieCardWrap}>
-              <GroupCalorieSharingCard share={groupCalorieShare} currentUserId="demo-user" restaurantName={activeTable.restaurantName} />
+              <GroupCalorieSharingCard share={groupCalorieShare} currentUserId="current-user" restaurantName={activeTable.restaurantName} />
             </View>
           ) : null}
         </>
@@ -741,7 +741,7 @@ function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, 
       </View>
       {groupCalorieShare ? (
         <View style={styles.groupCalorieCardWrap}>
-          <GroupCalorieSharingCard share={groupCalorieShare} currentUserId="demo-user" restaurantName={table.restaurantName} />
+          <GroupCalorieSharingCard share={groupCalorieShare} currentUserId="current-user" restaurantName={table.restaurantName} />
         </View>
       ) : null}
       {participants.map((participant) => (

@@ -1,7 +1,8 @@
 import { storage } from "../../lib/storage";
 import { getEffectiveCurrentDate } from "../demo-time";
 import { getCanonicalMenuItemById, getCanonicalRestaurantById, getCanonicalRestaurantByName, getPrimaryMenuItemForRestaurant } from "../restaurants";
-import { getMockChatThreadByName, mockChatThreads } from "./mealBuddyFlowMock";
+import { buildMealBuddyCardFromProfile } from "./mealBuddyCardMock";
+import { getMockChatThreadByName, getMockProfile, mockChatThreads } from "./mealBuddyFlowMock";
 import { getMealBuddyCardId, type CardId, type ChatId, type MatchId, type MealBuddyCard, type RankedMealBuddyCandidate, type TableId, type UserId } from "./types";
 
 export type MealBuddyChatPreview = {
@@ -62,226 +63,174 @@ export type MealBuddyInvitePreview = {
   mascotId?: string;
 };
 
-const socialStorageKey = "haocu.mealBuddy.socialState.v1";
-const japaneseDinnerTableId = "table-japanese-dinner";
-const japaneseDinnerChatId = "chat-group-table-japanese-dinner";
-const japaneseDinnerTableName = "四人桌｜清爽日式晚餐";
+const socialStorageKey = "haocu.mealBuddy.socialState.v6";
+const defaultGroupTableId = "table-balanced-dinner";
+const defaultGroupChatId = "chat-group-table-balanced-dinner";
+const defaultGroupTableName = "均衡晚餐桌";
 
 function buildDefaultChats(): MealBuddyChatPreview[] {
-  // Demo Chat Thread data: one shared thread per matched buddy or formed group table.
-  return mockChatThreads.filter((thread) => thread.buddyId !== "ivy").map((thread, index) => ({
-    id: thread.id,
-    userName: thread.title,
-    lastMessage: thread.lastMessage,
-    relatedMeal: thread.relatedMeal,
-    time: thread.time,
-    unread: thread.unread,
-    demoLabel: thread.demoLabel,
-    buddyId: thread.buddyId,
-    participantProfileId: thread.participantProfileId,
-    tableId: thread.tableId,
-    threadType: thread.type,
-    updatedAt: defaultChatUpdatedAt(index),
-    lastMessageAt: defaultChatUpdatedAt(index),
-    messages: [
-      {
-        id: `${thread.id}-seed`,
-        text: thread.lastMessage,
-        sender: thread.type === "group" ? "system" : "buddy",
-        createdAt: defaultChatUpdatedAt(index)
-      }
-    ]
-  }));
+  return mockChatThreads
+    .filter((thread) => thread.buddyId !== "ivy")
+    .map((thread, index) => ({
+      id: thread.id,
+      userName: thread.title,
+      lastMessage: thread.lastMessage,
+      relatedMeal: thread.relatedMeal,
+      time: thread.time,
+      unread: thread.unread,
+      demoLabel: thread.demoLabel,
+      buddyId: thread.buddyId,
+      participantProfileId: thread.participantProfileId,
+      tableId: thread.tableId,
+      threadType: thread.type,
+      updatedAt: defaultChatUpdatedAt(index),
+      lastMessageAt: defaultChatUpdatedAt(index),
+      messages: [
+        {
+          id: `${thread.id}-seed`,
+          text: thread.lastMessage,
+          sender: thread.type === "group" ? "system" : "buddy",
+          createdAt: defaultChatUpdatedAt(index)
+        }
+      ]
+    }));
 }
 
 function buildDefaultInvites(): MealBuddyInvitePreview[] {
-  const minaMealCard = buildInviteCard({
-    sourceType: "manual",
-    restaurantId: "restaurant-mori-veggie",
-    menuItemId: "dish-mori-1",
-    preferredFoodName: "清爽日式晚餐",
-    restaurantName: "小森健康食堂",
-    foodCategory: "日式",
-    area: "台北大安",
-    preferredTime: "今晚 18:30",
-    nutritionGoal: "清爽高蛋白"
+  const myDinnerCard = buildMealBuddyCardFromProfile("current-user", "restaurant-mori-veggie", "dish-mori-1", {
+    sourceType: "ai_recommendation",
+    intentionType: "chat_first",
+    diningMode: "chatFirst",
+    mealTime: "今晚 18:30",
+    paymentPreference: "AA 制",
+    note: "想找同樣重視均衡晚餐的人。",
+    status: "active"
   });
-  const leoChatCard = buildInviteCard({
-    sourceType: "manual",
-    restaurantId: "restaurant-haochu-bowl",
-    menuItemId: "dish-haochu-1",
-    preferredFoodName: "高蛋白午餐",
-    restaurantName: "好初健康碗",
-    foodCategory: "健康餐",
-    area: "台北信義",
-    preferredTime: "今天 12:20",
-    nutritionGoal: "補蛋白"
+  const myLunchCard = buildMealBuddyCardFromProfile("current-user", "restaurant-haochu-bowl", "dish-haochu-2", {
+    sourceType: "ai_recommendation",
+    intentionType: "eat_together",
+    diningMode: "eatTogether",
+    mealTime: "明天 12:30",
+    paymentPreference: "AA 制",
+    note: "明天午餐想找附近飯友一起吃。",
+    status: "active"
   });
-  const tableInviteCard = buildInviteCard({
+  const myCafeCard = buildMealBuddyCardFromProfile("current-user", "restaurant-cafe-balance", "dish-cafe-1", {
+    sourceType: "ai_recommendation",
+    intentionType: "chat_first",
+    diningMode: "chatFirst",
+    mealTime: "明天 15:00",
+    paymentPreference: "AA 制",
+    note: "適合先聊天的咖啡廳輕食。",
+    status: "active"
+  });
+
+  const minaTableCard = buildMealBuddyCardFromProfile("mina", "restaurant-mori-veggie", "dish-mori-1", {
     sourceType: "manual",
-    restaurantId: "restaurant-mori-veggie",
-    menuItemId: "dish-mori-1",
-    preferredFoodName: "清爽日式晚餐",
-    restaurantName: "小森健康食堂",
-    foodCategory: "日式",
-    area: "台北大安",
-    preferredTime: "今晚 19:00",
-    nutritionGoal: "清爽少油",
+    intentionType: "eat_together",
+    diningMode: "eatTogether",
+    mealTime: "今晚 19:00",
+    paymentPreference: "AA 制",
+    note: "多人桌共享均衡晚餐。",
+    status: "invited",
     maxParticipants: 4,
-    currentParticipants: 3
+    currentParticipants: 3,
+    isLargeTableEnabled: true
   });
-  const myDinnerCard = buildInviteCard({
-    sourceType: "ai_recommendation",
-    restaurantId: "restaurant-mori-veggie",
-    menuItemId: "dish-mori-1",
-    preferredFoodName: "日式烤魚定食",
-    restaurantName: "小森健康食堂",
-    foodCategory: "日式",
-    area: "台北大安",
-    preferredTime: "今晚 18:30",
-    nutritionGoal: "高蛋白、油脂適中"
-  });
-  const myLunchCard = buildInviteCard({
-    sourceType: "ai_recommendation",
-    restaurantId: "restaurant-haochu-bowl",
-    menuItemId: "dish-haochu-1",
-    preferredFoodName: "健康碗午餐",
-    restaurantName: "好初健康碗",
-    foodCategory: "健康餐",
-    area: "台北信義",
-    preferredTime: "今天 12:20",
-    nutritionGoal: "蛋白質補足"
-  });
-  const ivySushiCard = buildInviteCard({
+  const ivyMealCard = buildMealBuddyCardFromProfile("ivy", "restaurant-mori-veggie", "dish-mori-2", {
     sourceType: "manual",
-    restaurantId: "restaurant-mori-veggie",
-    menuItemId: "dish-mori-2",
-    preferredFoodName: "壽司晚餐",
-    restaurantName: "青葉壽司",
-    foodCategory: "日式",
-    area: "台北中山",
-    preferredTime: "明天 18:30",
-    nutritionGoal: "清爽、油脂適中"
+    intentionType: "eat_together",
+    diningMode: "eatTogether",
+    mealTime: "今晚 18:30",
+    paymentPreference: "AA 制",
+    note: "蔬食為主的清爽晚餐。",
+    status: "invited"
   });
-  const mySushiCard = buildInviteCard({
-    sourceType: "ai_recommendation",
-    restaurantId: "restaurant-mori-veggie",
-    menuItemId: "dish-mori-2",
-    preferredFoodName: "清爽壽司",
-    restaurantName: "青葉壽司",
-    foodCategory: "日式",
-    area: "台北中山",
-    preferredTime: "明天 18:30",
-    nutritionGoal: "晚餐控制熱量"
+  const yunaChatCard = buildMealBuddyCardFromProfile("yuna", "restaurant-cafe-balance", "dish-cafe-1", {
+    sourceType: "manual",
+    intentionType: "chat_first",
+    diningMode: "chatFirst",
+    mealTime: "明天 15:00",
+    paymentPreference: "AA 制",
+    note: "清爽咖啡廳輕食，先聊聊再決定。",
+    status: "invited"
+  });
+  const kaiLunchCard = buildMealBuddyCardFromProfile("kai", "restaurant-haochu-bowl", "dish-haochu-2", {
+    sourceType: "manual",
+    intentionType: "eat_together",
+    diningMode: "eatTogether",
+    mealTime: "明天 12:30",
+    paymentPreference: "AA 制",
+    note: "高 CP 值午餐，蛋白質再多一點。",
+    status: "invited"
+  });
+  const seanDinnerCard = buildMealBuddyCardFromProfile("sean", "restaurant-mori-veggie", "dish-mori-1", {
+    sourceType: "manual",
+    intentionType: "eat_together",
+    diningMode: "eatTogether",
+    mealTime: "明天 19:00",
+    paymentPreference: "AA 制",
+    note: "晚餐清爽少油。",
+    status: "invited"
   });
 
   return [
-    {
-      id: "invite-demo-table-japanese-dinner",
+    invite({
+      id: "invite-mina-balanced-table",
       type: "table",
-      status: "pending",
       direction: "received",
       profileId: "mina",
-      candidateUserId: "demo-mina",
-      sourceCardKey: getMealBuddyCardId(tableInviteCard),
-      inviterUser: "Mina",
-      inviteeUser: "我",
-      userName: "Mina",
-      mealName: "清爽日式晚餐",
-      time: "今晚 19:00",
-      inviterCard: tableInviteCard,
+      inviterCard: minaTableCard,
       matchedInviteeCard: myDinnerCard,
-      matchReasons: ["都想吃清爽日式", "用餐時間接近", "四人桌還差 1 位成團"],
-      createdAt: "2026-06-04T09:00:00.000Z",
-      expiresAt: "2026-06-05T09:00:00.000Z",
-      demoLabel: "Demo Invitation 測試資料",
-      area: "台北大安",
-      distanceKm: 0.9,
-      tableId: japaneseDinnerTableId,
-      tableName: japaneseDinnerTableName,
-      hostName: "Mina",
-      restaurantId: tableInviteCard.restaurantId,
-      restaurantName: "小森健康食堂",
-      menuItemId: tableInviteCard.menuItemId,
+      time: "今晚 19:00",
+      matchReasons: ["晚餐時間接近", "均衡目標相近", "多人桌還有一個空位"],
+      tableId: defaultGroupTableId,
+      tableName: defaultGroupTableName,
+      hostName: "米娜",
       currentParticipants: 3,
       requiredParticipants: 4,
       tableStatus: "pending"
-    },
-    {
-      id: "invite-demo-ivy-sushi-meal",
+    }),
+    invite({
+      id: "invite-ivy-veggie-dinner",
       type: "meal",
-      status: "pending",
       direction: "received",
       profileId: "ivy",
-      candidateUserId: "demo-ivy",
-      sourceCardKey: getMealBuddyCardId(mySushiCard),
-      inviterUser: "Ivy",
-      inviteeUser: "我",
-      userName: "Ivy",
-      mealName: "壽司晚餐",
-      time: "明天 18:30",
-      inviterCard: ivySushiCard,
-      matchedInviteeCard: mySushiCard,
-      matchReasons: ["都想吃日式", "晚餐時間接近", "想吃清爽一點"],
-      createdAt: "2026-06-04T11:00:00.000Z",
-      expiresAt: "2026-06-05T11:00:00.000Z",
-      demoLabel: "Demo Invitation 測試資料",
-      area: "台北中山",
-      distanceKm: 1.1,
-      restaurantId: ivySushiCard.restaurantId,
-      restaurantName: ivySushiCard.restaurantName,
-      menuItemId: ivySushiCard.menuItemId
-    },
-    {
-      id: "invite-demo-mina-meal",
-      type: "meal",
-      status: "pending",
-      direction: "received",
-      profileId: "mina",
-      candidateUserId: "demo-mina",
-      sourceCardKey: getMealBuddyCardId(myDinnerCard),
-      inviterUser: "Mina",
-      inviteeUser: "我",
-      userName: "Mina",
-      mealName: "清爽日式晚餐",
-      time: "今晚 18:30",
-      inviterCard: minaMealCard,
+      inviterCard: ivyMealCard,
       matchedInviteeCard: myDinnerCard,
-      matchReasons: ["都想吃日式定食", "營養目標接近", "距離接近"],
-      createdAt: "2026-06-04T10:00:00.000Z",
-      expiresAt: "2026-06-05T10:00:00.000Z",
-      demoLabel: "Demo Invitation 測試資料",
-      area: "台北大安",
-      distanceKm: 0.9,
-      restaurantId: minaMealCard.restaurantId,
-      restaurantName: minaMealCard.restaurantName,
-      menuItemId: minaMealCard.menuItemId
-    },
-    {
-      id: "invite-demo-leo-chat",
+      time: "今晚 18:30",
+      matchReasons: ["都偏好清爽晚餐", "餐廳距離接近", "蔬食餐點相近"]
+    }),
+    invite({
+      id: "invite-yuna-cafe-chat",
       type: "chat",
-      status: "pending",
       direction: "received",
-      profileId: "leo",
-      candidateUserId: "demo-leo",
-      sourceCardKey: getMealBuddyCardId(myLunchCard),
-      inviterUser: "Leo",
-      inviteeUser: "我",
-      userName: "Leo",
-      mealName: "高蛋白午餐",
-      time: "今天 12:20",
-      inviterCard: leoChatCard,
-      matchedInviteeCard: myLunchCard,
-      matchReasons: ["都在找健康餐", "午餐時間接近", "想先聊聊"],
-      createdAt: "2026-06-04T09:30:00.000Z",
-      expiresAt: "2026-06-05T09:30:00.000Z",
-      demoLabel: "Demo Invitation 測試資料",
-      area: "台北信義",
-      distanceKm: 1.2,
-      restaurantId: leoChatCard.restaurantId,
-      restaurantName: leoChatCard.restaurantName,
-      menuItemId: leoChatCard.menuItemId
-    }
+      profileId: "yuna",
+      inviterCard: yunaChatCard,
+      matchedInviteeCard: myCafeCard,
+      time: "明天 15:00",
+      matchReasons: ["都適合先聊天", "偏好咖啡廳輕食", "活動區域接近"]
+    }),
+    invite({
+      id: "invite-kai-lunch-sent",
+      type: "meal",
+      direction: "sent",
+      profileId: "kai",
+      inviterCard: myLunchCard,
+      matchedInviteeCard: kaiLunchCard,
+      time: "明天 12:30",
+      matchReasons: ["都重視高 CP 值", "午餐時間接近", "均衡餐盒相近"]
+    }),
+    invite({
+      id: "invite-sean-dinner-sent",
+      type: "meal",
+      direction: "sent",
+      profileId: "sean",
+      inviterCard: myDinnerCard,
+      matchedInviteeCard: seanDinnerCard,
+      time: "明天 19:00",
+      matchReasons: ["都在找晚餐", "偏好清爽選擇", "附近有可加入的桌"]
+    })
   ];
 }
 
@@ -293,14 +242,15 @@ export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
   const mockThread = getMockChatThreadByName(candidate.displayName);
   const now = currentTimestamp();
   const fallbackChatId = `chat-direct-${candidate.userId}`;
+  const message = `想一起看看「${candidate.preferredFoodName}」嗎？`;
   const chat: MealBuddyChatPreview = {
     id: mockThread?.id ?? fallbackChatId,
     userName: mockThread?.title ?? candidate.displayName,
-    lastMessage: `想聊聊 ${candidate.preferredFoodName} 嗎？`,
+    lastMessage: message,
     relatedMeal: candidate.preferredFoodName,
     time: "剛剛",
     unread: true,
-    demoLabel: "測試資料",
+    demoLabel: "飯友聊天",
     buddyId: mockThread?.buddyId ?? candidate.userId,
     participantProfileId: mockThread?.participantProfileId ?? candidate.userId,
     threadType: "direct",
@@ -309,7 +259,7 @@ export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
     messages: [
       {
         id: `${mockThread?.id ?? fallbackChatId}-seed`,
-        text: `先聊聊 ${candidate.preferredFoodName} 嗎？`,
+        text: message,
         sender: "buddy",
         createdAt: now
       }
@@ -333,22 +283,20 @@ export function createOrOpenMealSessionChat({
   relatedMeal: string;
   userName: string;
 }) {
-  // Backend integration entry: Meal Session -> shared direct ChatThread.
   const mockThread = getMockChatThreadByName(userName);
-  const resolvedChatId = chatThreadId ?? mockThread?.id ?? `chat-session-${userName}`;
+  const resolvedChatId = chatThreadId ?? mockThread?.id ?? `chat-session-${participantProfileId ?? buddyId ?? userName}`;
   const existingChat = chatPreviews.find((item) => item.id === resolvedChatId);
-  if (existingChat) {
-    return existingChat;
-  }
+  if (existingChat) return existingChat;
+
   const now = currentTimestamp();
   const chat: MealBuddyChatPreview = {
     id: resolvedChatId,
     userName: mockThread?.title ?? userName,
-    lastMessage: `這是「${relatedMeal}」的飯友聊天室，可以確認時間與地點。`,
+    lastMessage: `已開啟「${relatedMeal}」飯局聊天。`,
     relatedMeal,
     time: "剛剛",
     unread: true,
-    demoLabel: "一般飯局",
+    demoLabel: "飯局聊天",
     buddyId: buddyId ?? mockThread?.buddyId,
     participantProfileId: participantProfileId ?? mockThread?.participantProfileId,
     threadType: "direct",
@@ -357,7 +305,7 @@ export function createOrOpenMealSessionChat({
     messages: [
       {
         id: `${resolvedChatId}-seed`,
-        text: `這是關於「${relatedMeal}」的飯局聊天室。`,
+        text: `已開啟「${relatedMeal}」飯局聊天。`,
         sender: "system",
         createdAt: now
       }
@@ -368,23 +316,21 @@ export function createOrOpenMealSessionChat({
   return chat;
 }
 
-export function createOrOpenGroupTableChat(tableName = "四人桌", tableId?: string, chatThreadId?: string) {
-  // Backend integration entry: Four-Person Table -> shared GroupChatThread.
+export function createOrOpenGroupTableChat(tableName = defaultGroupTableName, tableId?: string, chatThreadId?: string) {
   const now = getEffectiveCurrentDate();
-  const resolvedTableId = tableId ?? (tableName.includes("清爽日式晚餐") ? japaneseDinnerTableId : undefined);
-  const resolvedChatId = chatThreadId ?? (resolvedTableId === japaneseDinnerTableId ? japaneseDinnerChatId : `chat-group-${tableName}`);
+  const resolvedTableId = tableId ?? (tableName === defaultGroupTableName ? defaultGroupTableId : undefined);
+  const resolvedChatId = chatThreadId ?? (resolvedTableId === defaultGroupTableId ? defaultGroupChatId : `chat-group-${safeId(tableName)}`);
   const existingChat = chatPreviews.find((item) => item.id === resolvedChatId || (resolvedTableId && item.tableId === resolvedTableId));
-  if (existingChat) {
-    return existingChat;
-  }
+  if (existingChat) return existingChat;
+
   const chat: MealBuddyChatPreview = {
     id: resolvedChatId,
     userName: tableName,
-    lastMessage: "四人桌已成團，可以在這裡確認時間與餐廳細節。",
-    relatedMeal: "四人餐桌",
+    lastMessage: "多人飯局已成團，可以確認時間與餐廳細節。",
+    relatedMeal: "多人飯局",
     time: "剛剛",
     unread: true,
-    demoLabel: "四人桌群聊",
+    demoLabel: "多人飯局",
     tableId: resolvedTableId,
     threadType: "group",
     updatedAt: now.toISOString(),
@@ -392,12 +338,11 @@ export function createOrOpenGroupTableChat(tableName = "四人桌", tableId?: st
     messages: [
       {
         id: `${resolvedChatId}-seed`,
-        text: "四人桌已成團，可以在這裡確認時間與餐廳細節。",
+        text: "多人飯局已成團，可以確認時間與餐廳細節。",
         sender: "system",
         createdAt: now.toISOString()
       }
     ],
-    // TODO: Replace this mock expiry with backend scheduled cleanup after real meal-session end time is stored.
     expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
   };
   chatPreviews = sortChatsByActivity([chat, ...chatPreviews.filter((item) => item.id !== chat.id)]);
@@ -422,7 +367,7 @@ export function addMealBuddyChatSystemMessage({
   relatedMeal?: string;
   userName?: string;
 }) {
-  const message = `${userName} 因為「${reason}」取消參加飯局。`;
+  const message = `${userName} 更新飯局狀態：${reason}`;
 
   if (groupTableName) {
     const groupChat = createOrOpenGroupTableChat(groupTableName);
@@ -439,24 +384,17 @@ export function addMealBuddyChatSystemMessage({
   const fallbackName = chatUserName || "飯友";
   const now = currentTimestamp();
   const fallbackChat: MealBuddyChatPreview = {
-    id: `chat-cancel-${fallbackName}`,
+    id: `chat-cancel-${safeId(fallbackName)}`,
     userName: fallbackName,
     lastMessage: message,
-    relatedMeal: relatedMeal || "一般飯友飯局",
+    relatedMeal: relatedMeal || "飯友飯局",
     time: "剛剛",
     unread: true,
     demoLabel: "系統提醒",
     threadType: "direct",
     updatedAt: now,
     lastMessageAt: now,
-    messages: [
-      {
-        id: `chat-cancel-${fallbackName}-seed`,
-        text: message,
-        sender: "system",
-        createdAt: now
-      }
-    ]
+    messages: [{ id: `chat-cancel-${safeId(fallbackName)}-seed`, text: message, sender: "system", createdAt: now }]
   };
   chatPreviews = sortChatsByActivity([fallbackChat, ...chatPreviews.filter((item) => item.id !== fallbackChat.id)]);
   persistSocialState();
@@ -465,11 +403,20 @@ export function addMealBuddyChatSystemMessage({
 export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type: "chat" | "meal" | "table" = "meal", inviterCard?: MealBuddyCard) {
   const sourceCardKey = inviterCard ? getMealBuddyCardId(inviterCard) : `candidate-${candidate.userId}`;
   const existingPending = getPendingInviteForCandidate(candidate.userId, sourceCardKey);
-  if (existingPending) {
-    return existingPending;
-  }
+  if (existingPending) return existingPending;
+
   const now = getEffectiveCurrentDate();
-  const invite: MealBuddyInvitePreview = {
+  const profile = getMockProfile(candidate.userId);
+  const matchedCard = buildMealBuddyCardFromProfile(candidate.userId, candidate.restaurantId, candidate.menuItemId, {
+    sourceType: "manual",
+    intentionType: candidate.intentionType,
+    diningMode: candidate.intentionType === "chat_first" ? "chatFirst" : "eatTogether",
+    mealTime: candidate.preferredTime,
+    paymentPreference: "AA 制",
+    note: candidate.socialNote,
+    status: "invited"
+  });
+  const invitePreview: MealBuddyInvitePreview = {
     id: `invite-${sourceCardKey}-${candidate.userId}`,
     type,
     status: "pending",
@@ -477,17 +424,17 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     profileId: candidate.userId,
     candidateUserId: candidate.userId,
     sourceCardKey,
-    inviterUser: "我",
-    inviteeUser: candidate.displayName,
-    userName: candidate.displayName,
+    inviterUser: "current-user",
+    inviteeUser: profile?.displayName ?? candidate.displayName,
+    userName: profile?.displayName ?? candidate.displayName,
     mealName: candidate.preferredFoodName,
-    time: candidate.preferredTime || "今晚",
-    inviterCard: inviterCard ?? buildInviteCard(candidateToCardInput(candidate, "manual")),
-    matchedInviteeCard: buildInviteCard(candidateToCardInput(candidate, "ai_recommendation")),
-    matchReasons: candidate.matchReasons.length ? candidate.matchReasons : ["餐點偏好接近", "距離接近", "時間接近"],
+    time: candidate.preferredTime || "晚餐",
+    inviterCard: inviterCard ?? buildMealBuddyCardFromProfile("current-user", candidate.restaurantId, candidate.menuItemId, { sourceType: "manual", intentionType: candidate.intentionType }),
+    matchedInviteeCard: matchedCard,
+    matchReasons: candidate.matchReasons.length ? candidate.matchReasons : ["用餐時間接近", "距離接近", "營養目標相近"],
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-    demoLabel: "Demo Invitation 測試資料",
+    demoLabel: "飯友邀請",
     area: candidate.area,
     distanceKm: candidate.distanceKm,
     restaurantId: candidate.restaurantId,
@@ -495,66 +442,66 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     menuItemId: candidate.menuItemId,
     mascotId: candidate.mascotId
   };
-  invitePreviews = [invite, ...invitePreviews.filter((item) => item.id !== invite.id)];
+  invitePreviews = [invitePreview, ...invitePreviews.filter((item) => item.id !== invitePreview.id)];
   persistSocialState();
-  return invite;
+  return invitePreview;
 }
 
-export function acceptMealBuddyInvite(invite: MealBuddyInvitePreview) {
-  if (invite.type === "table") {
-    acceptFourPersonTableInvite(invite);
+export function acceptMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
+  if (invitePreview.type === "table") {
+    acceptFourPersonTableInvite(invitePreview);
     return;
   }
 
-  invitePreviews = invitePreviews.map((item) => (item.id === invite.id ? { ...item, status: "accepted" } : item));
-  const acceptedProfileId = invite.profileId;
+  invitePreviews = invitePreviews.map((item) => (item.id === invitePreview.id ? { ...item, status: "accepted" } : item));
+  const acceptedProfileId = invitePreview.profileId;
   if (!acceptedProfileId) {
     persistSocialState();
     return;
   }
   const chat = createOrOpenMealBuddyChat({
     userId: acceptedProfileId,
-    displayName: invite.userName,
-    restaurantId: invite.inviterCard.restaurantId,
-    menuItemId: invite.inviterCard.menuItemId,
-    restaurantName: invite.inviterCard.restaurantName,
-    preferredFoodName: invite.mealName,
-    foodCategory: invite.inviterCard.foodCategory,
-    area: invite.area,
-    preferredTime: invite.inviterCard.preferredTime,
-    nutritionGoal: invite.inviterCard.nutritionGoal,
-    intentionType: invite.type === "chat" ? "chat_first" : "eat_together",
-    distanceKm: invite.distanceKm,
+    displayName: invitePreview.userName,
+    restaurantId: invitePreview.inviterCard.restaurantId,
+    menuItemId: invitePreview.inviterCard.menuItemId,
+    restaurantName: invitePreview.inviterCard.restaurantName,
+    preferredFoodName: invitePreview.mealName,
+    foodCategory: invitePreview.inviterCard.foodCategory,
+    area: invitePreview.area,
+    preferredTime: invitePreview.inviterCard.preferredTime,
+    nutritionGoal: invitePreview.inviterCard.nutritionGoal,
+    intentionType: invitePreview.type === "chat" ? "chat_first" : "eat_together",
+    distanceKm: invitePreview.distanceKm,
     activityScore: 80,
-    isPremium: false,
-    isVerified: true,
-    tags: ["測試資料", invite.inviterCard.foodCategory, invite.area],
-    socialNote: "這是 demo 邀請資料，用來展示接受與聊天流程。",
+    isPremium: Boolean(getMockProfile(acceptedProfileId)?.verified),
+    isVerified: Boolean(getMockProfile(acceptedProfileId)?.verified),
+    tags: getMockProfile(acceptedProfileId)?.tags ?? [],
+    socialNote: getMockProfile(acceptedProfileId)?.intro ?? "",
     rankScore: 88,
-    matchReasons: invite.matchReasons
+    matchReasons: invitePreview.matchReasons,
+    mascotId: getMockProfile(acceptedProfileId)?.mascotId
   });
-  touchChat(chat.id, invite.type === "chat" ? `你已接受 ${invite.userName} 的聊天邀請。` : `你已接受 ${invite.userName} 的飯局邀請。`, "剛剛", "system");
+  touchChat(chat.id, `已接受 ${invitePreview.userName} 的飯友邀請。`, "剛剛", "system");
   persistSocialState();
 }
 
-export function declineMealBuddyInvite(invite: MealBuddyInvitePreview) {
-  if (invite.type === "table") {
-    invitePreviews = invitePreviews.map((item) => (item.id === invite.id ? { ...item, status: "declined", tableStatus: "declined" } : item));
+export function declineMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
+  if (invitePreview.type === "table") {
+    invitePreviews = invitePreviews.map((item) => (item.id === invitePreview.id ? { ...item, status: "declined", tableStatus: "declined" } : item));
     persistSocialState();
     return;
   }
-
-  if (invite.direction === "received") {
-    invitePreviews = invitePreviews.filter((item) => item.id !== invite.id);
+  if (invitePreview.direction === "received") {
+    invitePreviews = invitePreviews.filter((item) => item.id !== invitePreview.id);
     persistSocialState();
     return;
   }
-  invitePreviews = invitePreviews.map((item) => (item.id === invite.id ? { ...item, status: "declined" } : item));
+  invitePreviews = invitePreviews.map((item) => (item.id === invitePreview.id ? { ...item, status: "declined" } : item));
   persistSocialState();
 }
 
-export function deleteMealBuddyInvite(invite: MealBuddyInvitePreview) {
-  invitePreviews = invitePreviews.filter((item) => item.id !== invite.id);
+export function deleteMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
+  invitePreviews = invitePreviews.filter((item) => item.id !== invitePreview.id);
   persistSocialState();
 }
 
@@ -563,9 +510,7 @@ export function getMealBuddyChats() {
   chatPreviews = sortChatsByActivity(mergeMissingDefaultChats(chatPreviews));
   persistSocialState();
   return chatPreviews.filter((item) => {
-    if (item.buddyId === "ivy" && !hasAcceptedInviteForBuddy("ivy")) {
-      return false;
-    }
+    if (item.buddyId === "ivy" && !hasAcceptedInviteForBuddy("ivy")) return false;
     return !item.expiresAt || new Date(item.expiresAt).getTime() > now;
   });
 }
@@ -586,27 +531,71 @@ export function resetMealBuddySocialDemoState() {
   persistSocialState();
 }
 
-function acceptFourPersonTableInvite(invite: MealBuddyInvitePreview) {
-  const requiredParticipants = invite.requiredParticipants ?? 4;
-  const currentParticipants = Math.min(requiredParticipants, (invite.currentParticipants ?? 3) + 1);
+function invite(input: {
+  id: string;
+  type: MealBuddyInvitePreview["type"];
+  direction: MealBuddyInvitePreview["direction"];
+  profileId: UserId;
+  inviterCard: MealBuddyCard;
+  matchedInviteeCard: MealBuddyCard;
+  time: string;
+  matchReasons: string[];
+  tableId?: TableId;
+  tableName?: string;
+  hostName?: string;
+  currentParticipants?: number;
+  requiredParticipants?: number;
+  tableStatus?: MealBuddyInvitePreview["tableStatus"];
+}): MealBuddyInvitePreview {
+  const profile = getMockProfile(input.profileId);
+  if (!profile) throw new Error(`Missing mock community profile: ${input.profileId}`);
+  return {
+    id: input.id,
+    type: input.type,
+    status: "pending",
+    direction: input.direction,
+    profileId: profile.profileId,
+    candidateUserId: profile.profileId,
+    sourceCardKey: getMealBuddyCardId(input.direction === "received" ? input.matchedInviteeCard : input.inviterCard),
+    inviterUser: input.direction === "received" ? profile.displayName : "current-user",
+    inviteeUser: input.direction === "received" ? "current-user" : profile.displayName,
+    userName: profile.displayName,
+    mealName: input.inviterCard.preferredFoodName,
+    time: input.time,
+    inviterCard: input.inviterCard,
+    matchedInviteeCard: input.matchedInviteeCard,
+    matchReasons: input.matchReasons,
+    createdAt: getEffectiveCurrentDate().toISOString(),
+    expiresAt: new Date(getEffectiveCurrentDate().getTime() + 24 * 60 * 60 * 1000).toISOString(),
+    demoLabel: "飯友邀請",
+    area: profile.area,
+    distanceKm: profile.distanceKm,
+    tableId: input.tableId,
+    tableName: input.tableName,
+    hostName: input.hostName,
+    restaurantId: input.inviterCard.restaurantId,
+    restaurantName: input.inviterCard.restaurantName,
+    menuItemId: input.inviterCard.menuItemId,
+    currentParticipants: input.currentParticipants,
+    requiredParticipants: input.requiredParticipants,
+    tableStatus: input.tableStatus,
+    mascotId: profile.mascotId
+  };
+}
+
+function acceptFourPersonTableInvite(invitePreview: MealBuddyInvitePreview) {
+  const requiredParticipants = invitePreview.requiredParticipants ?? 4;
+  const currentParticipants = Math.min(requiredParticipants, (invitePreview.currentParticipants ?? 3) + 1);
   const isFormed = currentParticipants >= requiredParticipants;
   const tableStatus = isFormed ? "formed" : "accepted";
 
   invitePreviews = invitePreviews.map((item) =>
-    item.id === invite.id
-      ? {
-          ...item,
-          status: "accepted",
-          currentParticipants,
-          requiredParticipants,
-          tableStatus
-        }
-      : item
+    item.id === invitePreview.id ? { ...item, status: "accepted", currentParticipants, requiredParticipants, tableStatus } : item
   );
 
   if (isFormed) {
-    const groupChat = createOrOpenGroupTableChat(invite.tableName ?? japaneseDinnerTableName, invite.tableId ?? japaneseDinnerTableId);
-    touchChat(groupChat.id, "四人飯局已成團，飯局聊天室已開啟。", "剛剛", "system");
+    const groupChat = createOrOpenGroupTableChat(invitePreview.tableName ?? defaultGroupTableName, invitePreview.tableId ?? defaultGroupTableId);
+    touchChat(groupChat.id, "多人飯局已成團，飯局聊天室已開啟。", "剛剛", "system");
   } else {
     persistSocialState();
   }
@@ -620,15 +609,7 @@ function touchChat(chatId: string, lastMessage: string, time: string, sender: Me
         ? {
             ...item,
             lastMessage,
-            messages: [
-              ...(item.messages ?? []),
-              {
-                id: `${chatId}-${now}-${(item.messages ?? []).length}`,
-                text: lastMessage,
-                sender,
-                createdAt: now
-              }
-            ],
+            messages: [...(item.messages ?? []), { id: `${chatId}-${now}-${(item.messages ?? []).length}`, text: lastMessage, sender, createdAt: now }],
             time,
             unread: true,
             updatedAt: now,
@@ -638,20 +619,6 @@ function touchChat(chatId: string, lastMessage: string, time: string, sender: Me
     )
   );
   persistSocialState();
-}
-
-function candidateToCardInput(candidate: RankedMealBuddyCandidate, sourceType: MealBuddyCard["sourceType"]): Partial<MealBuddyCard> {
-  return {
-    sourceType,
-    restaurantId: candidate.restaurantId,
-    menuItemId: candidate.menuItemId,
-    preferredFoodName: candidate.preferredFoodName,
-    restaurantName: candidate.restaurantName,
-    foodCategory: candidate.foodCategory,
-    area: candidate.area,
-    preferredTime: candidate.preferredTime,
-    nutritionGoal: candidate.nutritionGoal
-  };
 }
 
 function persistSocialState() {
@@ -664,46 +631,41 @@ function mergeMissingDefaultChats(currentChats: MealBuddyChatPreview[]) {
   const canonicalGroupChats = new Map(defaultChats.filter((chat) => chat.threadType === "group" && chat.tableId).map((chat) => [chat.tableId, chat]));
   const mergedByKey = new Map<string, MealBuddyChatPreview>();
 
-  for (const chat of currentChats) {
+  for (const chat of currentChats.filter(isUsableStoredChat)) {
     const canonicalDirect = findCanonicalDirectChat(chat, canonicalDirectChats);
     if (canonicalDirect) {
       mergedByKey.set(`direct:${canonicalDirect.buddyId}`, normalizeMergedChat(canonicalDirect, chat, { id: canonicalDirect.id, buddyId: canonicalDirect.buddyId, participantProfileId: canonicalDirect.participantProfileId, userName: canonicalDirect.userName, threadType: "direct" }));
       continue;
     }
-
     const canonicalGroup = findCanonicalGroupChat(chat, canonicalGroupChats);
     if (canonicalGroup) {
       mergedByKey.set(`group:${canonicalGroup.tableId}`, normalizeMergedChat(canonicalGroup, chat, { id: canonicalGroup.id, tableId: canonicalGroup.tableId, userName: canonicalGroup.userName, threadType: "group" }));
       continue;
     }
-
     mergedByKey.set(chat.threadType === "group" && chat.tableId ? `group:${chat.tableId}` : chat.buddyId ? `direct:${chat.buddyId}` : `chat:${chat.id}`, normalizeChatTimestamp(chat));
   }
 
   for (const chat of defaultChats) {
     const key = chat.threadType === "group" && chat.tableId ? `group:${chat.tableId}` : chat.buddyId ? `direct:${chat.buddyId}` : `chat:${chat.id}`;
-    if (!mergedByKey.has(key)) {
-      mergedByKey.set(key, chat);
-    }
+    if (!mergedByKey.has(key)) mergedByKey.set(key, chat);
   }
-
   return [...mergedByKey.values()];
 }
 
 function mergeMissingDefaultInvites(currentInvites: MealBuddyInvitePreview[]) {
-  const mergedById = new Map(currentInvites.map((invite) => [invite.id, invite]));
-  for (const invite of buildDefaultInvites()) {
-    if (!mergedById.has(invite.id)) {
-      mergedById.set(invite.id, invite);
+  const mergedById = new Map(currentInvites.filter(isUsableStoredInvite).map((invitePreview) => [invitePreview.id, invitePreview]));
+  for (const invitePreview of buildDefaultInvites()) {
+    if (!mergedById.has(invitePreview.id)) {
+      mergedById.set(invitePreview.id, invitePreview);
       continue;
     }
-    mergedById.set(invite.id, { ...mergedById.get(invite.id)!, profileId: invite.profileId, tableId: mergedById.get(invite.id)!.tableId ?? invite.tableId });
+    mergedById.set(invitePreview.id, { ...mergedById.get(invitePreview.id)!, profileId: invitePreview.profileId, candidateUserId: invitePreview.candidateUserId, tableId: mergedById.get(invitePreview.id)!.tableId ?? invitePreview.tableId });
   }
   return [...mergedById.values()];
 }
 
 function hasAcceptedInviteForBuddy(buddyId: string) {
-  return invitePreviews.some((invite) => invite.status === "accepted" && invite.profileId === buddyId);
+  return invitePreviews.some((invitePreview) => invitePreview.status === "accepted" && invitePreview.profileId === buddyId);
 }
 
 function normalizeMergedChat(base: MealBuddyChatPreview, current: MealBuddyChatPreview, override: Partial<MealBuddyChatPreview>) {
@@ -712,27 +674,17 @@ function normalizeMergedChat(base: MealBuddyChatPreview, current: MealBuddyChatP
 
 function normalizeChatTimestamp(chat: MealBuddyChatPreview) {
   const timestamp = chat.updatedAt ?? chat.lastMessageAt ?? currentTimestamp();
-  return {
-    ...chat,
-    updatedAt: timestamp,
-    lastMessageAt: chat.lastMessageAt ?? timestamp
-  };
+  return { ...chat, updatedAt: timestamp, lastMessageAt: chat.lastMessageAt ?? timestamp };
 }
 
 function findCanonicalDirectChat(chat: MealBuddyChatPreview, canonicalDirectChats: Map<string | undefined, MealBuddyChatPreview>) {
-  if (chat.buddyId && canonicalDirectChats.has(chat.buddyId)) {
-    return canonicalDirectChats.get(chat.buddyId);
-  }
-  if (chat.participantProfileId && canonicalDirectChats.has(chat.participantProfileId)) {
-    return canonicalDirectChats.get(chat.participantProfileId);
-  }
+  if (chat.buddyId && canonicalDirectChats.has(chat.buddyId)) return canonicalDirectChats.get(chat.buddyId);
+  if (chat.participantProfileId && canonicalDirectChats.has(chat.participantProfileId)) return canonicalDirectChats.get(chat.participantProfileId);
   return undefined;
 }
 
 function findCanonicalGroupChat(chat: MealBuddyChatPreview, canonicalGroupChats: Map<string | undefined, MealBuddyChatPreview>) {
-  if (chat.tableId && canonicalGroupChats.has(chat.tableId)) {
-    return canonicalGroupChats.get(chat.tableId);
-  }
+  if (chat.tableId && canonicalGroupChats.has(chat.tableId)) return canonicalGroupChats.get(chat.tableId);
   return [...canonicalGroupChats.values()].find((canonical) => canonical.userName === chat.userName || chat.userName.includes(canonical.userName) || canonical.userName.includes(chat.userName));
 }
 
@@ -760,43 +712,37 @@ function defaultChatUpdatedAt(index: number) {
 
 function readStoredSocialState() {
   const raw = storage.getItem(socialStorageKey);
-  if (!raw) {
-    return null;
-  }
+  if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as { chats?: MealBuddyChatPreview[]; invites?: MealBuddyInvitePreview[] };
-    if (!Array.isArray(parsed.chats) || !Array.isArray(parsed.invites)) {
-      return null;
-    }
-    return { chats: parsed.chats, invites: parsed.invites };
+    if (!Array.isArray(parsed.chats) || !Array.isArray(parsed.invites)) return null;
+    const chats = parsed.chats.filter(isUsableStoredChat);
+    const invites = parsed.invites.filter(isUsableStoredInvite);
+    if (!chats.length && !invites.length) return null;
+    return { chats, invites };
   } catch {
     return null;
   }
 }
 
-function buildInviteCard(input: Partial<MealBuddyCard>): MealBuddyCard {
-  const now = getEffectiveCurrentDate().toISOString();
-  const restaurant = input.restaurantId ? getCanonicalRestaurantById(input.restaurantId) : getCanonicalRestaurantByName(input.restaurantName);
-  const menuItem = input.menuItemId ? getCanonicalMenuItemById(input.menuItemId) : restaurant ? getPrimaryMenuItemForRestaurant(restaurant.restaurantId) : null;
-  return {
-    userId: input.userId ?? "mock-user",
-    cardType: input.cardType ?? "general",
-    sourceType: input.sourceType ?? "manual",
-    intentionType: input.intentionType ?? "chat_first",
-    preferredFoodName: input.preferredFoodName ?? menuItem?.name ?? "",
-    restaurantId: restaurant?.restaurantId ?? input.restaurantId ?? "",
-    menuItemId: menuItem?.menuItemId ?? input.menuItemId,
-    restaurantName: restaurant?.name ?? input.restaurantName ?? "",
-    foodCategory: input.foodCategory ?? restaurant?.category ?? "",
-    area: input.area ?? "",
-    preferredTime: input.preferredTime ?? "",
-    nutritionGoal: input.nutritionGoal ?? "",
-    maxParticipants: input.maxParticipants ?? 4,
-    currentParticipants: input.currentParticipants ?? 1,
-    isLargeTableEnabled: input.isLargeTableEnabled ?? false,
-    visibilityStatus: input.visibilityStatus ?? "active",
-    diningDate: input.diningDate ?? getEffectiveCurrentDate().toISOString().slice(0, 10),
-    createdAt: input.createdAt ?? now,
-    expiresAt: input.expiresAt ?? new Date(getEffectiveCurrentDate().getTime() + 6 * 60 * 60 * 1000).toISOString()
-  };
+function isUsableStoredChat(chat: MealBuddyChatPreview) {
+  if (isLegacyIdentity(chat.buddyId) || isLegacyIdentity(chat.participantProfileId)) return false;
+  if (chat.threadType === "direct") {
+    const profileId = chat.participantProfileId ?? chat.buddyId;
+    return Boolean(profileId && getMockProfile(profileId));
+  }
+  return true;
+}
+
+function isUsableStoredInvite(invitePreview: MealBuddyInvitePreview) {
+  if (isLegacyIdentity(invitePreview.profileId) || isLegacyIdentity(invitePreview.candidateUserId)) return false;
+  return Boolean(invitePreview.profileId && invitePreview.candidateUserId === invitePreview.profileId && getMockProfile(invitePreview.profileId));
+}
+
+function isLegacyIdentity(value?: string) {
+  return Boolean(value && /^(demo-|buddy-|chat-|session-|table-)/.test(value));
+}
+
+function safeId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "table";
 }

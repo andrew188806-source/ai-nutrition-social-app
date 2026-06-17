@@ -12,7 +12,7 @@ export function getCommunityProfileByProfileId(profileId: string) {
   return getMockProfile(profileId) ?? null;
 }
 
-export function resolveCommunityProfileDisplay(profileId: string | null | undefined, _mode?: "anonymous" | "free" | "premium" | "paid"): CommunityProfileDisplay {
+export function resolveCommunityProfileDisplay(profileId: string | null | undefined, mode?: "anonymous" | "free" | "premium" | "paid"): CommunityProfileDisplay {
   if (!profileId) {
     return unknownCommunityProfileDisplay();
   }
@@ -26,18 +26,34 @@ export function resolveCommunityProfileDisplay(profileId: string | null | undefi
     return unknownCommunityProfileDisplay();
   }
 
+  const isPaid = mode ? mode === "premium" || mode === "paid" : getDemoUserPlan() === "premium";
   const mascot = resolveMascot(profile.mascotId);
-  const avatarSource: AvatarSource = profile.mascotId
-    ? { type: "mascot", mascotId: profile.mascotId, assetKey: mascot?.assetKey }
-    : { type: "initial", value: profile.avatar };
+
+  // Free / anonymous mode: mascot avatar + anonymous name.
+  // Paid / real mode: placeholder real-photo avatar + display name.
+  let avatarSource: AvatarSource;
+  if (isPaid && profile.realAvatarKey) {
+    avatarSource = { type: "photo", photoUrl: profile.realAvatarUrl ?? profile.realAvatar ?? null, assetKey: profile.realAvatarKey };
+  } else if (profile.mascotId) {
+    avatarSource = { type: "mascot", mascotId: profile.mascotId, assetKey: mascot?.assetKey };
+  } else {
+    avatarSource = { type: "initial", value: profile.avatar };
+  }
+
+  const displayName = profile.displayName;
+  const profileMode: CommunityProfileMode = isPaid
+    ? (profile.realAvatarKey ? "premium_real_photo" : "premium_anonymous")
+    : profile.verified
+    ? "premium_anonymous"
+    : "free_anonymous";
 
   return {
-    displayName: profile.name,
+    displayName,
     avatarSource,
     mascotId: profile.mascotId ?? null,
     selectedMascotName: mascot?.name ?? null,
-    photoUrl: null,
-    profileMode: profile.verified ? "premium_anonymous" : "free_anonymous",
+    photoUrl: isPaid ? profile.realAvatarUrl ?? profile.realAvatar ?? null : null,
+    profileMode,
     isPremium: profile.verified,
     shortProfileSummary: profile.intro,
     tags: [...profile.tags]

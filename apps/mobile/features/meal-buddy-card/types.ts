@@ -16,9 +16,11 @@ export type TableId = string;
 
 export type MealBuddyCard = {
   userId: UserId;
+  profileId?: UserId;
   cardType: MealBuddyCardType;
   sourceType: MealBuddyCardSourceType;
   intentionType: MealBuddyIntentionType;
+  diningMode?: "chatFirst" | "eatTogether";
   preferredFoodName: string;
   restaurantId: string;
   menuItemId?: string;
@@ -26,7 +28,12 @@ export type MealBuddyCard = {
   foodCategory: string;
   area: string;
   preferredTime: string;
+  mealTime?: string;
+  mealDate?: string;
   nutritionGoal: string;
+  paymentPreference?: string;
+  note?: string;
+  status?: "active" | "invited" | "matched" | "chatting";
   maxParticipants: number;
   currentParticipants: number;
   isLargeTableEnabled: boolean;

@@ -23,7 +23,7 @@ export type BuddyDisplaySource = {
 
 export function getBuddyDisplayProfile(source: BuddyDisplaySource, mode: DemoMode) {
   const isPremium = mode === "premium";
-  const resolvedProfile = source.profileId || source.userId ? resolveCommunityProfileDisplay(source.profileId ?? source.userId ?? "") : null;
+  const resolvedProfile = source.profileId || source.userId ? resolveCommunityProfileDisplay(source.profileId ?? source.userId ?? "", isPremium ? "premium" : "free") : null;
   const displayName = resolvedProfile?.displayName ?? source.displayName;
   const area = source.area || "";
   const firstChar = displayName.slice(0, 1) || "?";

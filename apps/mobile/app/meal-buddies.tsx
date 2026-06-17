@@ -353,6 +353,7 @@ export default function MealBuddyHomeScreen() {
             focusElementAfterRender(recommendationGroupElementId(group.id));
           }}
           paidQuotaMessage={paidQuotaMessage}
+          onOpenProfile={openCommunityProfile}
         />
       ) : null}
 
@@ -513,6 +514,7 @@ function DiscoverSection({
   onInviteTable,
   onOpenChat,
   onOpenPremium,
+  onOpenProfile,
   onViewCandidateCard,
   onUseCard
 }: {
@@ -537,6 +539,7 @@ function DiscoverSection({
   onInviteTable: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenChat: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenPremium: () => void;
+  onOpenProfile: (profileId?: string) => void;
   onViewCandidateCard: (candidate: RankedMealBuddyCandidate) => void;
   onUseCard: (card: MealBuddyCard) => void;
 }) {
@@ -557,11 +560,6 @@ function DiscoverSection({
           .includes(normalizedQuery)
       )
     : activeCards;
-  const sentInvitesCount = invites.filter((invite) => invite.direction === "sent" && invite.status === "pending").length;
-  const receivedInvitesCount = invites.filter((invite) => invite.direction === "received" && invite.status === "pending").length;
-  const hasUnreadChats = chats.some((chat) => chat.unread);
-  const totalCardCount = cardUsage.general.count + cardUsage.restaurant.count;
-
   useEffect(() => {
     const targetCard = activeCards.find((card) => card.createdAt === highlightCardCreatedAt) ?? activeCards.find((card) => card.sourceType === "ai_recommendation");
     if (!targetCard) return;
@@ -612,56 +610,55 @@ function DiscoverSection({
 
   return (
     <>
-      <SnowCard>
-        <SnowSectionHeader title="搜尋飯友" subtitle="輸入餐點、地區或飯友卡關鍵字，快速找到你建立的飯友卡。" />
-        <TextInput
-          placeholder="搜尋飯友卡、餐點或地區"
-          placeholderTextColor={snow.faint}
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </SnowCard>
-
-      <SnowCard>
-        <SnowSectionHeader title="狀態" subtitle="快速查看配對進度，前往聊天、邀請、飯友桌與四人餐桌。" />
-        <View style={styles.statusGrid}>
-          <StatusEntry icon="buddies" label="我的卡" value={`${totalCardCount}`} onPress={() => focusElementAfterRender("meal-buddy-my-cards-section")} />
-          <StatusEntry icon="heart" label="已配對" value={`${matchedFriendsCount}`} onPress={onGoToMatchedBuddies} />
-          <StatusEntry icon="invite" label="邀請中" value={`${sentInvitesCount}`} dot={receivedInvitesCount > 0} onPress={onGoToPendingInvites} />
-          <StatusEntry icon="chat" label="聊天" value={`${chats.length}`} dot={hasUnreadChats} onPress={onGoToChats} />
-        </View>
-        <View style={styles.ctaRow2}>
-          <View style={styles.ctaItem}>
-            <PrimaryButton icon="table4" label="飯友桌" onPress={onGoToMealTables} />
-          </View>
-          <View style={styles.ctaItem}>
-            <SecondaryButton icon="plus" label="建立飯友卡" onPress={() => requestCreateCard("general")} />
-          </View>
-        </View>
-        <View style={styles.ctaRow2}>
-          <View style={styles.ctaItem}>
-            <SecondaryButton icon="table4" label="四人餐桌" onPress={onGoToFourSeatTableCreation} />
-          </View>
-        </View>
-      </SnowCard>
-
       <View nativeID="meal-buddy-my-cards-section">
-        <SnowCard tone="primary">
-          <SnowSectionHeader title="我的飯友卡" subtitle="你建立並放進配對池的飯友卡都在這裡管理。" />
+        <SnowCard>
+          <SnowSectionHeader title="我的飯友卡" subtitle="管理飯友卡、前往已配對飯友與多人飯局。" />
+
+          <View style={styles.actionButtonGrid}>
+            <Pressable style={[styles.actionButton, styles.actionButtonNeutral]} onPress={onGoToMatchedBuddies}>
+              <Icon name="buddies" size={16} color={snow.ink} />
+              <Text style={styles.actionButtonLabel}>我的飯友</Text>
+            </Pressable>
+            <Pressable style={[styles.actionButton, styles.actionButtonNeutral]} onPress={onGoToFourSeatTableCreation}>
+              <Icon name="table4" size={16} color={snow.ink} />
+              <Text style={styles.actionButtonLabel}>多人飯局</Text>
+            </Pressable>
+            <Pressable style={[styles.actionButton, styles.actionButtonCoral]} onPress={() => requestCreateCard("general")}>
+              <Icon name="plus" size={16} color="#B83030" />
+              <Text style={[styles.actionButtonLabel, styles.actionButtonLabelCoral]}>建立飯友卡</Text>
+            </Pressable>
+            <Pressable style={[styles.actionButton, styles.actionButtonAmber]} onPress={() => requestCreateCard("restaurant")}>
+              <Icon name="plate" size={16} color="#A05010" />
+              <Text style={[styles.actionButtonLabel, styles.actionButtonLabelAmber]}>建立餐廳卡</Text>
+            </Pressable>
+          </View>
+
           <View style={styles.statGrid}>
-            <StatCard icon="buddies" label="一般飯友卡" value={`${cardUsage.general.count}/${cardUsage.general.limit}`} tone="primary" />
-            <StatCard icon="table4" label="餐廳飯友卡" value={`${cardUsage.restaurant.count}/${cardUsage.restaurant.limit}`} />
-            <StatCard icon="spark" label="今日可看飯友" value={`${dailyUsage.used}/${dailyUsage.limit}`} tone="ai" />
-          </View>
-          <View style={styles.ctaRow2}>
-            <View style={styles.ctaItem}>
-              <PrimaryButton icon="plus" label="建立飯友卡" onPress={() => requestCreateCard("general")} />
+            <View style={[styles.miniStat, styles.miniStatCoral]}>
+              <Icon name="buddies" size={14} color="#B83030" />
+              <Text style={[styles.miniStatValue, { color: "#B83030" }]}>{cardUsage.general.count}/{cardUsage.general.limit}</Text>
+              <Text style={styles.miniStatLabel}>一般飯友卡</Text>
             </View>
-            <View style={styles.ctaItem}>
-              <SecondaryButton icon="plate" label="建立餐廳卡" onPress={() => requestCreateCard("restaurant")} />
+            <View style={[styles.miniStat, styles.miniStatAmber]}>
+              <Icon name="plate" size={14} color="#A05010" />
+              <Text style={[styles.miniStatValue, { color: "#A05010" }]}>{cardUsage.restaurant.count}/{cardUsage.restaurant.limit}</Text>
+              <Text style={styles.miniStatLabel}>餐廳飯友卡</Text>
+            </View>
+            <View style={[styles.miniStat, styles.miniStatBlue]}>
+              <Icon name="spark" size={14} color="#2068B0" />
+              <Text style={[styles.miniStatValue, { color: "#2068B0" }]}>{dailyUsage.used}/{dailyUsage.limit}</Text>
+              <Text style={styles.miniStatLabel}>今日可看飯友</Text>
             </View>
           </View>
+
+          <TextInput
+            placeholder="搜尋飯友卡、餐點或地區"
+            placeholderTextColor={snow.faint}
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+
           {cardQuotaMessage ? <Text style={styles.message}>{cardQuotaMessage}</Text> : null}
           {formTarget ? <InlineMealBuddyCardForm card={formTarget.card} cardType={formTarget.cardType} mode={formTarget.mode} onCancel={() => setFormTarget(null)} onSave={saveInlineCard} /> : null}
           <MealBuddyCardGroup
@@ -702,7 +699,7 @@ function DiscoverSection({
                   onInviteTable={(candidate) => onInviteTable(candidate, group.card)}
                   pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, getMealBuddyCardId(group.card))?.type ?? null}
                   onViewCard={(candidate) => {
-                    openCommunityProfile(candidate.userId);
+                    onOpenProfile(candidate.userId);
                     onViewCandidateCard(candidate);
                   }}
                 />
@@ -936,7 +933,7 @@ function MealBuddyCardEntry({ card, highlighted = false, onDelete, onEdit, onUse
         <PremiumBadge label={mealBuddyCardSourceLabel(card)} variant={card.sourceType === "ai_recommendation" ? "premium" : "free"} />
       </View>
       <Text style={styles.cardEntryMeta}>餐點類型：{card.foodCategory || card.preferredFoodName || "尚未設定"}</Text>
-      <Text style={styles.cardEntryMeta}>時間：{card.preferredTime || "尚未設定"} · 付款偏好：AA 制</Text>
+      <Text style={styles.cardEntryMeta}>時間：{card.mealTime || card.preferredTime || "尚未設定"} · 付款偏好：{card.paymentPreference || "AA 制"}</Text>
       <Text style={styles.cardEntryMeta}>營養目標：{card.nutritionGoal || "尚未設定"} · 狀態：{card.visibilityStatus === "active" ? "使用中" : card.visibilityStatus}</Text>
       <View style={styles.cardEntryActions}>
         <PrimaryButton icon="buddies" label="用這張卡找飯友" onPress={onUse} />
@@ -2076,7 +2073,7 @@ function mealEventFromInvite(invite: ReturnType<typeof getMealBuddyInvites>[numb
       source: "四人桌" as GatheringRecord["source"],
       withPerson: invite.hostName ?? invite.userName,
       tableId: invite.tableId,
-      chatThreadId: "chat-group-table-japanese-dinner",
+      chatThreadId: "chat-group-table-balanced-dinner",
       chatName: invite.tableName ?? `四人桌｜${invite.mealName}`,
       notes: "來自四人飯局邀請的測試資料。",
       matchReasons: invite.matchReasons
@@ -2861,5 +2858,78 @@ const styles = StyleSheet.create({
   cardEntryActions: {
     gap: 8,
     marginTop: 12
+  },
+  actionButtonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14
+  },
+  actionButton: {
+    alignItems: "center",
+    borderRadius: radius.base,
+    borderWidth: 1.5,
+    flex: 1,
+    flexBasis: "45%",
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 10
+  },
+  actionButtonNeutral: {
+    borderColor: snow.line,
+    backgroundColor: snow.card
+  },
+  actionButtonCoral: {
+    borderColor: "#E8A0A0",
+    backgroundColor: "#FFF0EF"
+  },
+  actionButtonAmber: {
+    borderColor: "#E8C880",
+    backgroundColor: "#FFF8EC"
+  },
+  actionButtonLabel: {
+    color: snow.ink,
+    fontSize: 12,
+    fontFamily: fonts.bold,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  actionButtonLabelCoral: {
+    color: "#B83030"
+  },
+  actionButtonLabelAmber: {
+    color: "#A05010"
+  },
+  miniStat: {
+    flex: 1,
+    flexBasis: 90,
+    alignItems: "center",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10
+  },
+  miniStatCoral: {
+    borderColor: "#E8A0A0",
+    backgroundColor: "#FFF0EF"
+  },
+  miniStatAmber: {
+    borderColor: "#E8C880",
+    backgroundColor: "#FFF8EC"
+  },
+  miniStatBlue: {
+    borderColor: "#90C0E8",
+    backgroundColor: "#EEF4FF"
+  },
+  miniStatValue: {
+    fontSize: 16,
+    fontFamily: fonts.numeral,
+    fontWeight: "800"
+  },
+  miniStatLabel: {
+    color: snow.sub,
+    fontSize: 10.5,
+    fontFamily: fonts.body,
+    textAlign: "center"
   }
 });

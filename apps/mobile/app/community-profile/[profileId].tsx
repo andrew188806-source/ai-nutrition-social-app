@@ -30,9 +30,9 @@ export default function CommunityProfileDetailScreen() {
         <TagRow tags={display.tags} />
         {profile ? (
           <>
-            <Text style={styles.message}>健康目標：{profile.commonInterests[1] ?? display.shortProfileSummary}</Text>
-            <Text style={styles.message}>飲食摘要：{display.shortProfileSummary}</Text>
-            <Text style={styles.message}>最近狀態：{profile.recentMealStatus}</Text>
+            <Text style={styles.message}>健康目標：{profile.healthGoal ?? profile.commonInterests[1] ?? display.shortProfileSummary}</Text>
+            <Text style={styles.message}>飲食摘要：{profile.dietSummary ?? display.shortProfileSummary}</Text>
+            <Text style={styles.message}>最近狀態：{profile.recentMealStyle}</Text>
           </>
         ) : (
           <Text style={styles.message}>請從有效的社群卡、聊天、邀請或飯局參加者重新開啟。</Text>
