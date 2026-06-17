@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { BottomNav, DemoModeToggle, PremiumBadge } from "../components/DemoUi";
+import { BottomNav, PremiumBadge } from "../components/DemoUi";
 import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCard";
 import { getLatestCorrectedMealRecord, getMealRecords, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
 import { calculateTodayNutritionSummary, getEffectiveCalories, getTodayMealRecords } from "../features/analysis/nutritionSummary";
@@ -58,7 +58,7 @@ export default function MealLogScreen() {
   }));
   const mealDetailCards: MealCard[] = [...correctedMealCards, ...diary.mealCards];
 
-  const [demoUserPlan, setDemoUserPlan] = useDemoUserPlan();
+  const [demoUserPlan] = useDemoUserPlan();
   const isPaid = demoUserPlan === "premium";
   const [selectedDailyId, setSelectedDailyId] = useState<string | null>(null);
   const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
@@ -332,9 +332,6 @@ export default function MealLogScreen() {
                 · {item}
               </Text>
             ))}
-          </View>
-          <View style={styles.demoToggleWrap}>
-            <DemoModeToggle mode={demoUserPlan} onChange={setDemoUserPlan} />
           </View>
         </Card>
 

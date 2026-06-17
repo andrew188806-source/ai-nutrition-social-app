@@ -14,6 +14,7 @@ export type MockCommunityProfile = {
   recentMealStatus: string;
   commonInterests: string[];
   intro: string;
+  mascotId?: string;
 };
 
 export type MockMatchedBuddy = {
@@ -31,6 +32,7 @@ export type MockMatchedBuddy = {
   areas: string[];
   intro: string;
   chatThreadId: ChatId;
+  mascotId?: string;
 };
 
 export type MockChatThread = {
@@ -78,7 +80,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["日式", "拍照打卡", "AA 制"],
     recentMealStatus: "今天想吃清爽日式料理",
     commonInterests: ["烤魚定食", "清爽日式", "拍照打卡"],
-    intro: "喜歡清爽晚餐，也想找人一起探索健康定食。"
+    intro: "喜歡清爽晚餐，也想找人一起探索健康定食。",
+    mascotId: "taste-explorer"
   },
   {
     id: "bo",
@@ -91,7 +94,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["高蛋白", "清湯", "AA 制"],
     recentMealStatus: "想找健康午餐飯友",
     commonInterests: ["雞胸便當", "豆腐鍋", "運動後補充"],
-    intro: "想吃清淡一點，不想太油。"
+    intro: "想吃清淡一點，不想太油。",
+    mascotId: "protein-believer"
   },
   {
     id: "ivy",
@@ -104,7 +108,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["蔬食", "高纖", "先聊聊"],
     recentMealStatus: "今天想吃蔬食咖哩",
     commonInterests: ["蔬食咖哩", "高纖飲食", "清爽晚餐"],
-    intro: "喜歡先聊聊附近清爽選擇，再決定要不要一起吃。"
+    intro: "喜歡先聊聊附近清爽選擇，再決定要不要一起吃。",
+    mascotId: "vegetarian-believer"
   },
   {
     id: "an",
@@ -117,7 +122,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["日式", "清爽", "聊聊後再決定"],
     recentMealStatus: "晚餐想吃茶泡飯套餐",
     commonInterests: ["日式定食", "烤魚", "飯後散步"],
-    intro: "喜歡慢慢吃飯，也很在意餐後舒服感。"
+    intro: "喜歡慢慢吃飯，也很在意餐後舒服感。",
+    mascotId: "balance-guardian"
   },
   {
     id: "sean",
@@ -130,7 +136,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["新店", "日式", "先聊聊"],
     recentMealStatus: "想先看菜單再決定",
     commonInterests: ["日式烤魚", "新店探索", "輕鬆聊天"],
-    intro: "喜歡探索新店，也會先交換菜單再約。"
+    intro: "喜歡探索新店，也會先交換菜單再約。",
+    mascotId: "taste-explorer"
   },
   {
     id: "kai",
@@ -143,7 +150,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["高蛋白", "健身後", "AA 制"],
     recentMealStatus: "想吃雞胸便當",
     commonInterests: ["高蛋白", "健身後補充", "健康碗"],
-    intro: "健身後常找營養標示清楚的餐點。"
+    intro: "健身後常找營養標示清楚的餐點。",
+    mascotId: "protein-believer"
   },
   {
     id: "leo",
@@ -156,7 +164,8 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     tags: ["健身", "備餐", "先聊聊"],
     recentMealStatus: "想聊高蛋白外食",
     commonInterests: ["高蛋白碗", "備餐", "健身外食"],
-    intro: "常分享高蛋白外食選擇。"
+    intro: "常分享高蛋白外食選擇。",
+    mascotId: "low-carb-ninja"
   }
 ];
 
@@ -365,7 +374,8 @@ function buildMatchedBuddy(profileId: string, mealCount: number, knownSince: str
     commonInterests: profile.commonInterests,
     areas: [profile.area],
     intro: profile.intro,
-    chatThreadId
+    chatThreadId,
+    mascotId: profile.mascotId
   };
 }
 
@@ -388,6 +398,7 @@ function profileToCandidate(profile: MockCommunityProfile): RankedMealBuddyCandi
     tags: profile.tags,
     socialNote: profile.intro,
     rankScore: 82,
-    matchReasons: ["餐點偏好相近", "用餐時段接近", "距離接近"]
+    matchReasons: ["餐點偏好相近", "用餐時段接近", "距離接近"],
+    mascotId: profile.mascotId
   };
 }

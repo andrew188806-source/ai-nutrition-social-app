@@ -67,8 +67,6 @@ export default function CommunityCardSettingsScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.communityCardSettings.title}
       subtitle={zhTW.mobile.communityCardSettings.subtitle}
-      primaryAction={{ href: "/community-card", label: zhTW.mobile.communityCard.previewTitle }}
-      secondaryAction={{ href: "/permissions", label: zhTW.mobile.primaryNav.profile }}
     >
       <Card tone="mint">
         <SectionTitle title={zhTW.mobile.communityCardSettings.anonymousTitle} subtitle={zhTW.mobile.communityCardSettings.anonymousBody} />

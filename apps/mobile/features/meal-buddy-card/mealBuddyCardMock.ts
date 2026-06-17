@@ -1,5 +1,6 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { getCommunityCardSettings } from "../community-card-settings/communityCardSettingsStore";
+import { getEffectiveCurrentDate, getEffectiveDateKey } from "../demo-time";
 import type { MealBuddyCard, MealBuddyCardSourceType, MealBuddyCandidate, MealBuddyIntentionType } from "./types";
 
 const now = "2026-06-01T12:00:00+08:00";
@@ -24,6 +25,7 @@ export function createMealBuddyCard(input: Partial<MealBuddyCard> & { sourceType
     currentParticipants: input.currentParticipants ?? 1,
     isLargeTableEnabled: input.isLargeTableEnabled ?? false,
     visibilityStatus: input.visibilityStatus ?? "active",
+    diningDate: input.diningDate ?? getEffectiveDateKey(),
     createdAt: input.createdAt ?? `${now}#${cardSequence}`,
     expiresAt: input.expiresAt ?? expires
   };
@@ -60,11 +62,13 @@ export function getAiRecommendationMealBuddyCard(mealPeriod: string = zhTW.mobil
     foodCategory: copy.foodCategory,
     area: copy.area,
     preferredTime: getCommunityMealTime(mealPeriod),
-    nutritionGoal: copy.nutritionGoal
+    nutritionGoal: copy.nutritionGoal,
+    // AI analysis recommendations are always for today; no future date selection.
+    diningDate: getEffectiveDateKey()
   });
 }
 
-export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId: string, foodCategory: string, area: string, preferredTime: string) {
+export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId: string, foodCategory: string, area: string, preferredTime: string, diningDate: string) {
   // Backend integration entry: Restaurant -> Meal Buddy Card.
   return createMealBuddyCard({
     cardType: "restaurant",
@@ -76,8 +80,22 @@ export function getRestaurantMealBuddyCard(restaurantName: string, restaurantId:
     area,
     preferredFoodName: foodCategory,
     preferredTime,
-    nutritionGoal: "想在這間餐廳找飯友"
+    nutritionGoal: "想在這間餐廳找飯友",
+    diningDate
   });
+}
+
+export function describeDiningDate(diningDate: string) {
+  const options = zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions;
+  const todayKey = getEffectiveDateKey();
+  if (diningDate === todayKey) {
+    return options[0];
+  }
+  const tomorrowKey = new Date(getEffectiveCurrentDate().getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (diningDate === tomorrowKey) {
+    return options[1];
+  }
+  return diningDate;
 }
 
 export function getManualMealBuddyCard(mealPeriod: string, preferredFoodName?: string, foodCategory?: string) {

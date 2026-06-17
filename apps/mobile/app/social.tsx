@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, ComparisonPreview, DemoModeToggle, LockNotice, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
+import { Card, ComparisonPreview, LockNotice, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 
 export default function SocialScreen() {
   const router = useRouter();
-  const [demoMode, setDemoMode] = useDemoUserPlan();
+  const [demoMode] = useDemoUserPlan();
   const [upgradePrompt, setUpgradePrompt] = useState<"profile" | "compatibility" | null>(null);
   const [hasGeneratedMatches, setHasGeneratedMatches] = useState(false);
   const isPremiumMode = demoMode === "premium";
@@ -28,12 +28,8 @@ export default function SocialScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.nearby.title}
       subtitle={zhTW.mobile.nearby.subtitle}
-      primaryAction={{ href: "/restaurants", label: zhTW.mobile.finalUx.viewRestaurantRecommendations }}
-      secondaryAction={{ href: "/meal-buddies", label: zhTW.mobile.nearby.friendListCta }}
     >
       <UpgradePromptModal visible={upgradePrompt !== null} title={upgradeCopy.title} body={upgradeCopy.body} actionLabel={zhTW.common.close} onClose={() => setUpgradePrompt(null)} />
-      <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
-
       <Card tone="mint">
         <SectionTitle title={zhTW.mobile.nearby.entryTitle} subtitle={zhTW.mobile.nearby.entryBody} />
         <View style={styles.tagSpace}>

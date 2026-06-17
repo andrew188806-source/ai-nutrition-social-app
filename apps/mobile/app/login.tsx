@@ -6,8 +6,6 @@ export default function LoginScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.loginTitle}
       subtitle={zhTW.mobile.loginSubtitle}
-      primaryAction={{ href: "/meal-photo", label: zhTW.mobile.startDemo }}
-      secondaryAction={{ href: "/", label: zhTW.common.backHome }}
     />
   );
 }

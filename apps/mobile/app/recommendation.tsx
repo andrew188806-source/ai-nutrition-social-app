@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, DemoModeToggle, IconBubble, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { Card, IconBubble, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import {
@@ -27,7 +27,7 @@ export default function RecommendationScreen() {
   const [planExpanded, setPlanExpanded] = useState(false);
   const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(() => getPlannedDinner());
   const [draftPlan, setDraftPlan] = useState<PlannedMeal>(() => getPlannedDinner() ?? getDefaultPlannedDinner());
-  const [demoMode, setDemoMode] = useDemoUserPlan();
+  const [demoMode] = useDemoUserPlan();
   const [rerunCount, setRerunCount] = useState(0);
 
   function savePlan() {
@@ -61,9 +61,7 @@ export default function RecommendationScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.nextMealTitle}
       subtitle={zhTW.mobile.nextMealSubtitle}
-      primaryAction={{ href: "/social", label: zhTW.mobile.correctedFlow.triggerMealBuddy }}
     >
-      <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
       <Card tone="amber">
         <View style={styles.heroCard}>
           <IconBubble icon="GO" />
@@ -169,4 +167,3 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   }
 });
-

@@ -128,7 +128,6 @@ export default function MealPhotoScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.refinedLogic.aiEntry.title}
       subtitle={zhTW.mobile.refinedLogic.aiEntry.body}
-      primaryAction={{ href: "/", label: zhTW.common.backHome }}
     >
       <Card tone="premium">
         <View style={styles.heroVisual}>

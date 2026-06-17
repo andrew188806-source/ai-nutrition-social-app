@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Fragment, useMemo, useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
@@ -7,6 +7,7 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { PremiumBadge, colors } from "../components/DemoUi";
 import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
+import { getEffectiveCurrentDate } from "../features/demo-time";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -31,6 +32,7 @@ const locationTree = {
 type City = keyof typeof locationTree;
 type District<C extends City = City> = keyof (typeof locationTree)[C];
 type Restaurant = (typeof zhTW.mobile.restaurants.list)[number];
+type DiningDateOption = (typeof zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions)[number];
 
 // RestaurantDish / restaurantDishes hold ONLY restaurant-owned menu items (source
 // "restaurant_menu" or "ai_user_uploaded" attached to this restaurant's restaurantId).
@@ -232,6 +234,8 @@ export default function RestaurantsScreen() {
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
   const [recommendationModalVisible, setRecommendationModalVisible] = useState(false);
   const [pendingRestaurant, setPendingRestaurant] = useState<Restaurant | null>(null);
+  const [diningDateOption, setDiningDateOption] = useState<DiningDateOption>(zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[0]);
+  const [customDiningDate, setCustomDiningDate] = useState("");
   const [pendingTableRestaurant, setPendingTableRestaurant] = useState<Restaurant | null>(null);
   const [savedRestaurants, setSavedRestaurants] = useState<string[]>([]);
   const [createdRestaurantNames, setCreatedRestaurantNames] = useState<string[]>([]);
@@ -249,10 +253,6 @@ export default function RestaurantsScreen() {
     setCustomLocationEditing(false);
     setOpenDropdown(null);
     setRecommendationModalVisible(true);
-  }
-
-  function updateQuickFilter(key: "diningGoal" | "cuisineType", value: string) {
-    setFilters((current) => ({ ...current, [key]: value }));
   }
 
   function updateRecommendations() {
@@ -282,12 +282,25 @@ export default function RestaurantsScreen() {
     setOpenDropdown(null);
   }
 
+  function openMealBuddyPanel(restaurant: Restaurant) {
+    setPendingRestaurant(restaurant);
+    setDiningDateOption(zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[0]);
+    setCustomDiningDate("");
+  }
+
+  function closeMealBuddyPanel() {
+    setPendingRestaurant(null);
+    setDiningDateOption(zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[0]);
+    setCustomDiningDate("");
+  }
+
   function startRestaurantMealBuddyCard(restaurant: Restaurant, preferredTime: string) {
     // Integration entry: Restaurant -> shared Meal Buddy Card pool.
     const restaurantId = `restaurant-${restaurant.name}`;
-    const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags.join("、"), filters.location, preferredTime);
+    const diningDate = resolveDiningDate(diningDateOption, customDiningDate);
+    const card = getRestaurantMealBuddyCard(restaurant.name, restaurantId, restaurant.tags.join("、"), filters.location, preferredTime, diningDate);
     upsertMealBuddyCardWithQuota(card, demoMode);
-    setPendingRestaurant(null);
+    closeMealBuddyPanel();
     setCreatedRestaurantNames((current) => (current.includes(restaurant.name) ? current : [...current, restaurant.name]));
     setDetailRestaurant(null);
     router.push({
@@ -310,7 +323,7 @@ export default function RestaurantsScreen() {
 
   function startCreateFromDetail(restaurant: Restaurant) {
     setDetailRestaurant(null);
-    setPendingRestaurant(restaurant);
+    openMealBuddyPanel(restaurant);
   }
 
   function startTableFromDetail(restaurant: Restaurant) {
@@ -343,7 +356,6 @@ export default function RestaurantsScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.mainSections.exploreTitle}
       subtitle="依據今日營養需求、飲食習慣與附近餐廳智慧推薦。"
-      primaryAction={{ href: "/permissions", label: zhTW.mobile.home.profileCta }}
     >
       <Pressable accessibilityRole="button" style={styles.locationRow} onPress={openRecommendationModal}>
         <Icon name="pin" size={18} color={snow.primaryDeep} />
@@ -366,23 +378,6 @@ export default function RestaurantsScreen() {
         <PrimaryButton icon="target" label="調整推薦條件" onPress={openRecommendationModal} />
       </SnowCard>
 
-      <View style={styles.filterRow}>
-        <Text style={styles.filterRowLabel}>目標</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowScroll}>
-          {diningGoals.map((goal) => (
-            <Chip key={goal} label={goal} active={filters.diningGoal === goal} onPress={() => updateQuickFilter("diningGoal", goal)} />
-          ))}
-        </ScrollView>
-      </View>
-      <View style={styles.filterRow}>
-        <Text style={styles.filterRowLabel}>種類</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowScroll}>
-          {cuisineTypes.map((type) => (
-            <Chip key={type} label={type} tone="ai" active={filters.cuisineType === type} onPress={() => updateQuickFilter("cuisineType", type)} />
-          ))}
-        </ScrollView>
-      </View>
-
       <SnowSectionHeader title="推薦餐廳" subtitle={`共 ${recommendedRestaurants.length} 間餐廳，依符合度排序`} />
       <View style={styles.cardList}>
         {recommendedRestaurants.map((restaurant) => {
@@ -391,7 +386,8 @@ export default function RestaurantsScreen() {
           const verified = isRestaurantVerified(restaurant);
           const created = createdRestaurantNames.includes(restaurant.name);
           return (
-            <SnowCard key={restaurant.name} style={styles.restaurantCard}>
+            <Fragment key={restaurant.name}>
+            <SnowCard style={styles.restaurantCard}>
               <Pressable accessibilityRole="button" style={styles.restaurantCardTouchable} onPress={() => openRestaurantDetail(restaurant)}>
                 <View style={styles.restaurantHero}>
                   <LinearGradient colors={[snow.heroFrom, snow.primarySoft]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
@@ -435,7 +431,7 @@ export default function RestaurantsScreen() {
                     accessibilityRole="button"
                     disabled={created}
                     style={[styles.createCardPill, created && styles.createCardPillDone]}
-                    onPress={() => setPendingRestaurant(restaurant)}
+                    onPress={() => openMealBuddyPanel(restaurant)}
                   >
                     <Icon name={created ? "check" : "invite"} size={14} color={created ? snow.green : snow.primaryDeep} />
                     <Text style={[styles.createCardPillText, created && styles.createCardPillTextDone]}>
@@ -462,21 +458,36 @@ export default function RestaurantsScreen() {
                 </View>
               </View>
             </SnowCard>
+            {pendingRestaurant && pendingRestaurant.name === restaurant.name ? (
+              <SnowCard tone="primary">
+                <SnowSectionHeader title={zhTW.mobile.refinedLogic.mealBuddyCard.diningDateQuestion} subtitle={pendingRestaurant.name} />
+                <View style={styles.snowChipRow}>
+                  {zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions.map((option) => (
+                    <Chip key={option} label={option} active={diningDateOption === option} onPress={() => setDiningDateOption(option)} />
+                  ))}
+                </View>
+                {diningDateOption === zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[2] ? (
+                  <TextInput
+                    style={styles.customDateInput}
+                    value={customDiningDate}
+                    onChangeText={setCustomDiningDate}
+                    placeholder={zhTW.mobile.refinedLogic.mealBuddyCard.customDiningDatePlaceholder}
+                    placeholderTextColor={snow.sub}
+                  />
+                ) : null}
+                <SnowSectionHeader title={zhTW.mobile.refinedLogic.mealBuddyCard.diningTimeQuestion} />
+                <View style={styles.snowChipRow}>
+                  {zhTW.mobile.refinedLogic.mealBuddyCard.mealPeriods.map((period) => (
+                    <Chip key={period} label={period} onPress={() => startRestaurantMealBuddyCard(pendingRestaurant, period)} />
+                  ))}
+                </View>
+                <SecondaryButton label="取消" onPress={closeMealBuddyPanel} />
+              </SnowCard>
+            ) : null}
+            </Fragment>
           );
         })}
       </View>
-
-      {pendingRestaurant ? (
-        <SnowCard tone="primary">
-          <SnowSectionHeader title={zhTW.mobile.refinedLogic.mealBuddyCard.diningTimeQuestion} subtitle={pendingRestaurant.name} />
-          <View style={styles.snowChipRow}>
-            {zhTW.mobile.refinedLogic.mealBuddyCard.mealPeriods.map((period) => (
-              <Chip key={period} label={period} onPress={() => startRestaurantMealBuddyCard(pendingRestaurant, period)} />
-            ))}
-          </View>
-          <SecondaryButton label="取消" onPress={() => setPendingRestaurant(null)} />
-        </SnowCard>
-      ) : null}
 
       <RestaurantTableActionModal
         restaurant={pendingTableRestaurant}
@@ -895,6 +906,22 @@ function formatLocation(filters: RestaurantFilters) {
   return [filters.city, filters.district, filters.place].filter(Boolean).join("｜");
 }
 
+function getOffsetDateKey(offsetDays: number) {
+  const base = getEffectiveCurrentDate().getTime();
+  return new Date(base + offsetDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function resolveDiningDate(option: string, customDate: string) {
+  const options = zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions;
+  if (option === options[1]) {
+    return getOffsetDateKey(1);
+  }
+  if (option === options[2] && /^\d{4}-\d{2}-\d{2}$/.test(customDate)) {
+    return customDate;
+  }
+  return getOffsetDateKey(0);
+}
+
 function restaurantScore(restaurant: Restaurant, filters: RestaurantFilters) {
   const distance = Number.parseFloat(restaurant.distance.replace("km", "").replace("m", ""));
   const distanceScore = restaurant.distance.includes("m") ? 45 : Math.max(10, 35 - distance * 8);
@@ -1043,6 +1070,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: 12
+  },
+  customDateInput: {
+    borderColor: snow.line,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    backgroundColor: snow.card,
+    color: snow.ink,
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   customFields: {
     gap: 4,
@@ -1279,21 +1318,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     fontWeight: "900"
-  },
-  filterRow: {
-    gap: 6,
-    marginTop: 4
-  },
-  filterRowLabel: {
-    color: snow.sub,
-    fontSize: 12,
-    fontFamily: fonts.medium,
-    fontWeight: "700"
-  },
-  filterRowScroll: {
-    flexDirection: "row",
-    gap: 8,
-    paddingRight: 4
   },
   flex: {
     flex: 1,

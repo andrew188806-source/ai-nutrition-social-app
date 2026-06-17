@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, DemoModeToggle, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, useAnalysisCorrectionState } from "../features/analysis";
 import { saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
@@ -13,14 +13,14 @@ import { getAiRecommendationMealBuddyCard, resetMealBuddyVisibleQuotaForDemo, se
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
-import { Icon, type IconName } from "../theme/icons";
+import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
 
 export default function AnalysisScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mealSlot?: string }>();
   const analysis = useAnalysisCorrectionState();
-  const [demoMode, setDemoMode] = useDemoUserPlan();
+  const [demoMode] = useDemoUserPlan();
   const [mealSaved, setMealSaved] = useState(false);
   const defaultMealPeriod = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1];
   const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : defaultMealPeriod;
@@ -121,39 +121,17 @@ export default function AnalysisScreen() {
     }, 650);
   }
 
-  const quickShortcuts: { label: string; icon: IconName; onPress: () => void }[] = [
-    { label: zhTW.mobile.todayNutritionSummary.cardTitle, icon: "target", onPress: () => router.push("/") },
-    { label: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealRecordsTitle, icon: "plate", onPress: () => router.push("/today-intake") },
-    { label: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.plannedMealTitle, icon: "star", onPress: () => router.push("/today-intake") },
-    { label: zhTW.mobile.nextMealTitle, icon: "spark", onPress: () => router.push("/recommendation") }
-  ];
-
   return (
     <PlaceholderScreen
       title={zhTW.mobile.analysisTitle}
       subtitle={zhTW.mobile.analysisSubtitle}
-      primaryAction={{ href: "/meal-buddies", label: zhTW.mobile.refinedLogic.analysisFlow.goMealPartners }}
-      secondaryAction={{ href: "/", label: zhTW.common.backHome }}
     >
-      <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
       <MealBuddyCreateConfirmModal
         onCancel={() => setShowMealBuddyConfirm(false)}
         onConfirm={createMealBuddyCardFromCurrentRecommendation}
         visible={showMealBuddyConfirm}
       />
       <MealBuddySuccessToast visible={showMealBuddySuccess} />
-      {!mealSaved ? (
-        <View style={styles.quickChipsRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickChipsContent}>
-            {quickShortcuts.map((item) => (
-              <Pressable key={item.label} style={styles.quickChip} onPress={item.onPress}>
-                <Icon name={item.icon} size={14} color={snow.primaryDeep} />
-                <Text style={styles.quickChipText}>{item.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
       {mealSaved ? (
         <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
       ) : (
@@ -1510,32 +1488,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12
   },
-  quickChipsRow: {
-    marginTop: 4
-  },
-  quickChipsContent: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 2
-  },
-  quickChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: hexA(snow.primary, 0.18),
-    backgroundColor: snow.card,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    ...shadows.soft
-  },
-  quickChipText: {
-    color: snow.ink,
-    fontSize: 12.5,
-    fontFamily: fonts.medium,
-    fontWeight: "700"
-  },
   segmentTrack: {
     flexDirection: "row",
     gap: 6,
@@ -1628,5 +1580,3 @@ const styles = StyleSheet.create({
     flex: 1
   }
 });
-
-

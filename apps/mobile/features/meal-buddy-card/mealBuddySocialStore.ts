@@ -55,6 +55,7 @@ export type MealBuddyInvitePreview = {
   currentParticipants?: number;
   requiredParticipants?: number;
   tableStatus?: "pending" | "accepted" | "declined" | "formed";
+  mascotId?: string;
 };
 
 const socialStorageKey = "haocu.mealBuddy.socialState.v1";
@@ -452,7 +453,8 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
     demoLabel: "Demo Invitation 測試資料",
     area: candidate.area,
-    distanceKm: candidate.distanceKm
+    distanceKm: candidate.distanceKm,
+    mascotId: candidate.mascotId
   };
   invitePreviews = [invite, ...invitePreviews.filter((item) => item.id !== invite.id)];
   persistSocialState();
@@ -743,6 +745,7 @@ function buildInviteCard(input: Partial<MealBuddyCard>): MealBuddyCard {
     currentParticipants: input.currentParticipants ?? 1,
     isLargeTableEnabled: input.isLargeTableEnabled ?? false,
     visibilityStatus: input.visibilityStatus ?? "active",
+    diningDate: input.diningDate ?? getEffectiveCurrentDate().toISOString().slice(0, 10),
     createdAt: input.createdAt ?? now,
     expiresAt: input.expiresAt ?? new Date(getEffectiveCurrentDate().getTime() + 6 * 60 * 60 * 1000).toISOString()
   };

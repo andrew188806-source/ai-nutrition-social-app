@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, ComparisonPreview, LockNotice, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
+import { Card, LockNotice, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
+import { AiNoteBox, Badge, Card as SnowCard, EmptyState, FeastCoverCard, FillBar, PrimaryButton as SnowPrimaryButton, SectionHeader as SnowSectionHeader, SecondaryButton as SnowSecondaryButton, Segmented, SeatLine, getMascotSource } from "../theme/components";
 import { GroupCalorieSharingCard, GroupTableCalorieUpload, getLatestGroupCalorieShare, type GroupCalorieShare } from "../features/calorie-sharing";
-import { getAvatarDisplayLabel, getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
+import { getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { createRestaurantFourPersonTable, getActiveFourPersonTable, updateActiveFourPersonTable, type ActiveFourPersonTable } from "../features/group-tables";
 import { createOrOpenGroupTableChat } from "../features/meal-buddy-card";
@@ -36,6 +37,8 @@ type RestaurantTableContext = {
   suggestedTime: string;
 };
 
+type GroupDiningTab = "my" | "find" | "create";
+
 const hostedTableChatTarget: GroupTableChatTarget = {
   chatThreadId: "chat-group-table-japanese-dinner",
   tableId: "table-japanese-dinner",
@@ -65,16 +68,17 @@ export function GroupTablesContent({
   const [sortDirection, setSortDirection] = useState<"desc" | "asc">("desc");
   const [inviteSent, setInviteSent] = useState(false);
   const [moduleView, setModuleView] = useState<"tables" | "invite">("tables");
+  const [tableTab, setTableTab] = useState<"my" | "find">("my");
   const [myTableView, setMyTableView] = useState<"card" | "participants" | "communityCard">("card");
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [restaurantSearchDismissed, setRestaurantSearchDismissed] = useState(false);
   const [isGroupCalorieUploadOpen, setIsGroupCalorieUploadOpen] = useState(false);
   const [groupCalorieShare, setGroupCalorieShare] = useState<GroupCalorieShare | null>(null);
   const isPremiumMode = demoMode === "premium";
+  const activeGroupTab: GroupDiningTab = moduleView === "invite" ? "create" : tableTab;
   const tableSearchContext = restaurantContext?.action === "find" && !restaurantSearchDismissed ? restaurantContext : undefined;
   const communitySettings = getCommunityCardSettings();
   const hostMascot = getSelectedMascot(communitySettings);
-  const hostAvatar = getAvatarDisplayLabel({ context: "tableHost", mascot: hostMascot, settings: communitySettings });
   const fullInviteCandidates = useMemo(() => getFullInviteCandidates(isPremiumMode), [isPremiumMode]);
   const sortedInviteCandidates = useMemo(() => sortInviteCandidates(fullInviteCandidates, activeSort, sortDirection), [activeSort, fullInviteCandidates, sortDirection]);
   const inviteCandidates = sortedInviteCandidates.slice(0, isPremiumMode ? 10 : 5);
@@ -109,6 +113,7 @@ export function GroupTablesContent({
     setActiveTable(nextTable);
     setTableCapacity(nextTable.maxParticipants);
     setTableParticipantCount(nextTable.participantIds.length >= 4 ? 4 : 3);
+    setTableTab("my");
     setMyTableView("card");
     focusGroupTableElementAfterRender("my-table-state-area");
   }, [restaurantContext]);
@@ -119,6 +124,7 @@ export function GroupTablesContent({
 
   useEffect(() => {
     if (tableSearchContext) {
+      setTableTab("find");
       focusGroupTableElementAfterRender("available-table-state-area");
     }
   }, [tableSearchContext]);
@@ -177,6 +183,7 @@ export function GroupTablesContent({
           setTableCapacity(4);
           setTableParticipantCount(3);
           setShowReplaceTableConfirm(false);
+          setTableTab("my");
           setMyTableView("card");
           focusGroupTableElementAfterRender("my-table-state-area");
         }}
@@ -205,210 +212,167 @@ export function GroupTablesContent({
           focusGroupTableElementAfterRender("group-table-invite-mode");
         }}
       />
-      <Card tone={isPremiumMode ? "premium" : "mint"}>
-        <PremiumBadge label={isPremiumMode ? zhTW.mobile.premiumUi.premiumBadge : zhTW.mobile.premiumUi.freeBadge} variant={isPremiumMode ? "premium" : "free"} />
-        <SectionTitle title={isPremiumMode ? zhTW.mobile.correctedFlow.myTableTitle : zhTW.mobile.correctedFlow.freeTablePreviewTitle} subtitle={isPremiumMode ? zhTW.mobile.correctedFlow.activeTableLimitHint : zhTW.mobile.correctedFlow.freeTablePreviewBody} />
-        {!isPremiumMode ? <TagRow tags={zhTW.mobile.correctedFlow.freeTablePreviewItems} /> : null}
+
+      <SnowCard>
+        <SnowSectionHeader title="多人飯局" subtitle="與飯友一起開桌，分享美食時光。" />
         {isPremiumMode ? (
           <View style={styles.hostRow}>
-            <View style={styles.hostAvatar}>
-              <Text style={styles.participantText}>{hostAvatar}</Text>
-            </View>
+            {getMascotSource(hostMascot.id) ? (
+              <Image source={getMascotSource(hostMascot.id)!} style={styles.hostAvatar} resizeMode="cover" />
+            ) : (
+              <View style={styles.hostAvatar} />
+            )}
             <View style={styles.flex}>
               <Text style={styles.aaRule}>{zhTW.mobile.refinedLogic.avatar.tableHostRule}</Text>
-              <Text style={styles.reason}>{zhTW.mobile.refinedLogic.avatar.tableHostTemporaryRule}</Text>
             </View>
           </View>
         ) : null}
-      </Card>
-
-      {moduleView === "invite" ? (
-        <View nativeID="group-table-invite-mode">
-        <InviteMode
-          activeSort={activeSort}
-          candidates={inviteCandidates}
-          inviteSent={inviteSent}
-          isPremiumMode={isPremiumMode}
-          selectedIds={selectedInviteIds}
-          onBack={() => setModuleView("tables")}
-          sortDirection={sortDirection}
-          onChangeSort={(sort) => {
-            if (sort === activeSort) {
-              setSortDirection((current) => (current === "desc" ? "asc" : "desc"));
-              return;
+        <Segmented
+          options={[
+            { id: "my", label: "我的飯局" },
+            { id: "find", label: "尋找飯局" },
+            { id: "create", label: "建立飯局" }
+          ]}
+          activeId={activeGroupTab}
+          onChange={(id) => {
+            if (id === "create") {
+              setModuleView("invite");
+            } else {
+              setModuleView("tables");
+              setTableTab(id as "my" | "find");
             }
-            setActiveSort(sort);
-            setSortDirection("desc");
-          }}
-          onComplete={() => {
-            if (selectedInviteIds.length === 0) {
-              return;
-            }
-            setInviteSent(true);
-            setTableParticipantCount(4);
-            const updated = updateActiveFourPersonTable({
-              participantIds: ["demo-user", ...selectedInviteIds].slice(0, 4),
-              status: "已成團",
-              groupChatThreadId: hostedTableChatTarget.chatThreadId
-            });
-            if (updated) {
-              setActiveTable(updated);
-            }
-            setModuleView("tables");
-          }}
-          onInviteAll={() => {
-            if (!isPremiumMode) {
-              setShowInviteUpgrade(true);
-              return;
-            }
-            setSelectedInviteIds(inviteCandidates.map((candidate) => candidate.id));
-          }}
-          onSearch={() => setShowFriendSearch(true)}
-          onShowUpgrade={() => setShowInviteUpgrade(true)}
-          onToggleCandidate={(id) => {
-            setInviteSent(false);
-            setSelectedInviteIds((current) => {
-              if (!isPremiumMode) {
-                return current.includes(id) ? [] : [id];
-              }
-              return current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id];
-            });
           }}
         />
+      </SnowCard>
+
+      {activeGroupTab === "create" ? (
+        <View nativeID="group-table-invite-mode">
+          <InviteMode
+            activeSort={activeSort}
+            candidates={inviteCandidates}
+            inviteSent={inviteSent}
+            isPremiumMode={isPremiumMode}
+            selectedIds={selectedInviteIds}
+            onBack={() => {
+              setModuleView("tables");
+              setTableTab("my");
+            }}
+            sortDirection={sortDirection}
+            onChangeSort={(sort) => {
+              if (sort === activeSort) {
+                setSortDirection((current) => (current === "desc" ? "asc" : "desc"));
+                return;
+              }
+              setActiveSort(sort);
+              setSortDirection("desc");
+            }}
+            onComplete={() => {
+              if (selectedInviteIds.length === 0) {
+                return;
+              }
+              setInviteSent(true);
+              setTableParticipantCount(4);
+              const updated = updateActiveFourPersonTable({
+                participantIds: ["demo-user", ...selectedInviteIds].slice(0, 4),
+                status: "已成團",
+                groupChatThreadId: hostedTableChatTarget.chatThreadId
+              });
+              if (updated) {
+                setActiveTable(updated);
+              }
+              setModuleView("tables");
+              setTableTab("my");
+            }}
+            onInviteAll={() => {
+              if (!isPremiumMode) {
+                setShowInviteUpgrade(true);
+                return;
+              }
+              setSelectedInviteIds(inviteCandidates.map((candidate) => candidate.id));
+            }}
+            onSearch={() => setShowFriendSearch(true)}
+            onShowUpgrade={() => setShowInviteUpgrade(true)}
+            onToggleCandidate={(id) => {
+              setInviteSent(false);
+              setSelectedInviteIds((current) => {
+                if (!isPremiumMode) {
+                  return current.includes(id) ? [] : [id];
+                }
+                return current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id];
+              });
+            }}
+          />
         </View>
       ) : null}
 
-      {moduleView === "tables" ? (
-        <>
-        {tableSearchContext ? (
-          <View nativeID="available-table-state-area">
-            <Card tone="mint">
-              <SectionTitle title={zhTW.mobile.groupTables.availableTablesTitle} subtitle={zhTW.mobile.groupTables.availableTablesBody} />
-            </Card>
-            <RestaurantTableSearchContextCardWithBack
-              context={tableSearchContext}
-              exactCount={restaurantTableResults.exact.length}
-              similarCount={restaurantTableResults.similar.length}
-              onClear={() => setRestaurantSearchDismissed(true)}
-            />
-            {restaurantTables.map((table) => {
-              const isJoined = joinedTable === table.mealTheme;
-              const isCompleted = table.status === zhTW.mobile.groupTables.completedStatusLabel;
-              const isLockedForFree = !isPremiumMode && table.premiumOnly;
-              const shouldBlurParticipants = !isPremiumMode && !isCompleted;
-
-              return (
-                <Card key={`restaurant-search-${table.mealTheme}`} tone={table.premiumOnly || isPremiumMode ? "premium" : "default"}>
-                  <View style={styles.tableHeader}>
-                    <View style={styles.flex}>
-                      <View style={styles.badgeRow}>
-                        <PremiumBadge label={table.premiumOnly || isPremiumMode ? zhTW.mobile.premiumUi.premiumTables : zhTW.mobile.premiumUi.freeBadge} variant={table.premiumOnly || isPremiumMode ? "premium" : "free"} />
-                        {table.status === zhTW.mobile.groupTables.completedStatusLabel ? <PremiumBadge label={zhTW.mobile.groupTables.completedState} variant="free" /> : null}
-                      </View>
-                      <Text style={styles.restaurant}>{table.restaurantName}</Text>
-                      <Text style={styles.theme}>{table.mealTheme}</Text>
-                    </View>
-                    <Text style={styles.progress}>{table.progress}</Text>
-                  </View>
-
-                  <TagRow tags={table.tags} />
-                  <Text style={styles.reason}>{table.reason}</Text>
-                  <Text style={styles.aaRule}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
-
-                  <View style={styles.participants}>
-                    {[0, 1, 2, 3].map((item) => {
-                      const isHiddenParticipant = shouldBlurParticipants && item > 1;
-                      return (
-                        <View key={item} style={[styles.participant, isHiddenParticipant && styles.lockedParticipant]}>
-                          <Text style={[styles.participantText, isHiddenParticipant && styles.blurredParticipantText]}>{isHiddenParticipant ? "..." : "OK"}</Text>
-                          {isHiddenParticipant ? <View style={styles.participantBlur} /> : null}
-                        </View>
-                      );
-                    })}
-                  </View>
-
-                  {isLockedForFree ? <LockNotice title={zhTW.mobile.premiumUi.upgradeCompatibilityTitle} body={zhTW.mobile.groupTables.lockedCompatibility} /> : null}
-                  {!isCompleted && !isPremiumMode ? <Text style={styles.premiumLock}>{zhTW.mobile.groupTables.premiumVisibility}</Text> : null}
-
-                  <Pressable disabled={isCompleted} style={[styles.joinButton, isCompleted && styles.disabledButton]} onPress={() => setJoinedTable(table.mealTheme)}>
-                    <Text style={styles.joinButtonText}>{isCompleted ? zhTW.mobile.groupTables.completedState : isJoined ? zhTW.mobile.groupTables.joinedState : zhTW.common.join}</Text>
-                  </Pressable>
-                  <Pressable style={styles.inviteButton} onPress={() => setModuleView("invite")}>
-                    <Text style={styles.joinButtonText}>{zhTW.mobile.correctedFlow.oneTapInvite}</Text>
-                  </Pressable>
-                </Card>
-              );
-            })}
-            {restaurantTables.length === 0 ? (
-              <Card tone="mint">
-                <SectionTitle title={tableSearchContext.restaurantName} subtitle="目前這間餐廳還沒有可加入的四人桌，可以建立一桌。" />
-              </Card>
-            ) : null}
-          </View>
-        ) : null}
+      {activeGroupTab === "my" ? (
         <View nativeID="my-table-state-area">
-        {isPremiumMode ? (
-          <>
-            <View>
-            {myTableView === "card" ? (
-              <MyTableOverview
-                activeTable={activeTable}
-                onCreate={() => {
-                  if (activeTable) {
-                    setShowCreateUpgrade(true);
-                    return;
-                  }
-                  const nextTable = createRestaurantFourPersonTable({
-                    restaurantId: "manual-table",
-                    restaurantName: zhTW.mobile.correctedFlow.hostedTable.name,
-                    location: zhTW.mobile.correctedFlow.hostedTable.place,
-                    cuisineTags: [],
-                    suggestedTime: zhTW.mobile.correctedFlow.hostedTable.time
-                  });
-                  setActiveTable(nextTable);
-                }}
-                onInvite={() => setModuleView("invite")}
-                onManage={() => setMyTableView("participants")}
-                onOpen={() => setMyTableView("participants")}
-                onOpenChat={() => onOpenChat?.(activeTableChatTarget)}
-                onUpgradeCapacity={() => {
-                  if (tableParticipantCount < 4) {
-                    setShowCapacityWarning(true);
-                    return;
-                  }
-                  setShowCapacityOptions(true);
-                }}
-                tableCapacity={tableCapacity}
-                tableParticipantCount={tableParticipantCount}
-                onRecordCalories={() => setIsGroupCalorieUploadOpen(true)}
-                groupCalorieShare={groupCalorieShare}
-              />
-            ) : null}
-            {myTableView === "participants" ? (
-              <ParticipantsMode
-                activeTable={activeTable}
-                groupCalorieShare={groupCalorieShare}
-                participants={participants}
-                onBack={() => setMyTableView("card")}
-                onOpenChat={() => onOpenChat?.(activeTableChatTarget)}
-                onOpenParticipant={(id) => {
-                  setSelectedParticipantId(id);
-                  setMyTableView("communityCard");
-                }}
-              />
-            ) : null}
-            {myTableView === "communityCard" ? (
-              <ParticipantCommunityCard participant={selectedParticipant} onBack={() => setMyTableView("participants")} />
-            ) : null}
-            </View>
-          </>
-        ) : null}
+          {isPremiumMode ? (
+            <>
+              {myTableView === "card" ? (
+                <MyTableOverview
+                  activeTable={activeTable}
+                  groupCalorieShare={groupCalorieShare}
+                  onCreate={() => {
+                    if (activeTable) {
+                      setShowCreateUpgrade(true);
+                      return;
+                    }
+                    const nextTable = createRestaurantFourPersonTable({
+                      restaurantId: "manual-table",
+                      restaurantName: zhTW.mobile.correctedFlow.hostedTable.name,
+                      location: zhTW.mobile.correctedFlow.hostedTable.place,
+                      cuisineTags: [],
+                      suggestedTime: zhTW.mobile.correctedFlow.hostedTable.time
+                    });
+                    setActiveTable(nextTable);
+                  }}
+                  onInvite={() => setModuleView("invite")}
+                  onManage={() => setMyTableView("participants")}
+                  onOpen={() => setMyTableView("participants")}
+                  onOpenChat={() => onOpenChat?.(activeTableChatTarget)}
+                  onUpgradeCapacity={() => {
+                    if (tableParticipantCount < 4) {
+                      setShowCapacityWarning(true);
+                      return;
+                    }
+                    setShowCapacityOptions(true);
+                  }}
+                  tableCapacity={tableCapacity}
+                  tableParticipantCount={tableParticipantCount}
+                  onRecordCalories={() => setIsGroupCalorieUploadOpen(true)}
+                />
+              ) : null}
+              {myTableView === "participants" ? (
+                <ParticipantsMode
+                  activeTable={activeTable}
+                  groupCalorieShare={groupCalorieShare}
+                  participants={participants}
+                  onBack={() => setMyTableView("card")}
+                  onOpenChat={() => onOpenChat?.(activeTableChatTarget)}
+                  onOpenParticipant={(id) => {
+                    setSelectedParticipantId(id);
+                    setMyTableView("communityCard");
+                  }}
+                />
+              ) : null}
+              {myTableView === "communityCard" ? (
+                <ParticipantCommunityCard participant={selectedParticipant} onBack={() => setMyTableView("participants")} />
+              ) : null}
+            </>
+          ) : (
+            <EmptyState
+              mascot="balance"
+              title="升級以使用多人飯局"
+              body="付費版可以建立、加入、管理飯局，並與飯友即時聊天。"
+              primaryAction={{ label: "了解付費版", icon: "star", onPress: () => setShowCreateUpgrade(true) }}
+            />
+          )}
         </View>
-        {!tableSearchContext ? (
+      ) : null}
+
+      {activeGroupTab === "find" ? (
         <View nativeID="available-table-state-area">
-          <Card tone="mint">
-            <SectionTitle title={zhTW.mobile.groupTables.availableTablesTitle} subtitle={zhTW.mobile.groupTables.availableTablesBody} />
-          </Card>
           {tableSearchContext ? (
             <RestaurantTableSearchContextCardWithBack
               context={tableSearchContext}
@@ -417,82 +381,69 @@ export function GroupTablesContent({
               onClear={() => setRestaurantSearchDismissed(true)}
             />
           ) : null}
+          {restaurantTables.length === 0 ? (
+            <EmptyState
+              mascot="explorer"
+              title="附近還沒有飯局"
+              body="目前沒有符合的四人桌，試試建立一個新的飯局邀請飯友加入。"
+              primaryAction={{ label: "建立飯局", icon: "plus", onPress: () => setModuleView("invite") }}
+            />
+          ) : null}
           {restaurantTables.map((table) => {
-          const isJoined = joinedTable === table.mealTheme;
-          const isCompleted = table.status === zhTW.mobile.groupTables.completedStatusLabel;
-          const isLockedForFree = !isPremiumMode && table.premiumOnly;
-          const shouldBlurParticipants = !isPremiumMode && !isCompleted;
+            const isJoined = joinedTable === table.mealTheme;
+            const isCompleted = table.status === zhTW.mobile.groupTables.completedStatusLabel;
+            const isLockedForFree = !isPremiumMode && table.premiumOnly;
+            const shouldBlurParticipants = !isPremiumMode && !isCompleted;
+            const coverVariant = table.premiumOnly ? "warm" : "fresh";
+            const joinedCount = shouldBlurParticipants ? 1 : 2;
 
-          return (
-            <Card key={table.mealTheme} tone={table.premiumOnly || isPremiumMode ? "premium" : "default"}>
-              <View style={styles.tableHeader}>
-                <View style={styles.flex}>
-                  <View style={styles.badgeRow}>
-                    <PremiumBadge label={table.premiumOnly || isPremiumMode ? zhTW.mobile.premiumUi.premiumTables : zhTW.mobile.premiumUi.freeBadge} variant={table.premiumOnly || isPremiumMode ? "premium" : "free"} />
-                    {table.status === zhTW.mobile.groupTables.completedStatusLabel ? <PremiumBadge label={zhTW.mobile.groupTables.completedState} variant="free" /> : null}
+            return (
+              <SnowCard key={table.mealTheme}>
+                <FeastCoverCard
+                  variant={coverVariant}
+                  timeLabel={"今晚"}
+                  badgeLabel={table.status === zhTW.mobile.groupTables.completedStatusLabel ? zhTW.mobile.groupTables.completedState : table.premiumOnly || isPremiumMode ? zhTW.mobile.premiumUi.premiumTables : zhTW.mobile.premiumUi.freeBadge}
+                  badgeUrgent={!isCompleted && !table.premiumOnly}
+                  title={table.mealTheme}
+                  subtitle={table.restaurantName}
+                />
+                <View style={{ marginTop: 12 }}>
+                  <SeatLine
+                    joined={Array.from({ length: joinedCount }, (_, i) => ({ type: "real" as const, initial: ["宜", "綠"][i] }))}
+                    openCount={4 - joinedCount}
+                    size={34}
+                  />
+                  <View style={{ marginTop: 8 }}>
+                    <FillBar joined={joinedCount} size={4} height={5} />
                   </View>
-                  <Text style={styles.restaurant}>{table.restaurantName}</Text>
-                  <Text style={styles.theme}>{table.mealTheme}</Text>
                 </View>
-                <Text style={styles.progress}>{table.progress}</Text>
-              </View>
-
-              <TagRow tags={table.tags} />
-              <Text style={styles.reason}>{table.reason}</Text>
-              <Text style={styles.aaRule}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
-
-              <View style={styles.participants}>
-                {[0, 1, 2, 3].map((item) => {
-                  const isHiddenParticipant = shouldBlurParticipants && item > 1;
-                  return (
-                    <View key={item} style={[styles.participant, isHiddenParticipant && styles.lockedParticipant]}>
-                      <Text style={[styles.participantText, isHiddenParticipant && styles.blurredParticipantText]}>{isHiddenParticipant ? "..." : "OK"}</Text>
-                      {isHiddenParticipant ? <View style={styles.participantBlur} /> : null}
-                    </View>
-                  );
-                })}
-              </View>
-
-              {isLockedForFree ? <LockNotice title={zhTW.mobile.premiumUi.upgradeCompatibilityTitle} body={zhTW.mobile.groupTables.lockedCompatibility} /> : null}
-              {!isCompleted && !isPremiumMode ? <Text style={styles.premiumLock}>{zhTW.mobile.groupTables.premiumVisibility}</Text> : null}
-
-              <Pressable disabled={isCompleted} style={[styles.joinButton, isCompleted && styles.disabledButton]} onPress={() => setJoinedTable(table.mealTheme)}>
-                <Text style={styles.joinButtonText}>{isCompleted ? zhTW.mobile.groupTables.completedState : isJoined ? zhTW.mobile.groupTables.joinedState : zhTW.common.join}</Text>
-              </Pressable>
-              <Pressable style={styles.inviteButton} onPress={() => setModuleView("invite")}>
-                <Text style={styles.joinButtonText}>{zhTW.mobile.correctedFlow.oneTapInvite}</Text>
-              </Pressable>
-            </Card>
-          );
+                <TagRow tags={table.tags} />
+                {table.reason ? <AiNoteBox label="AI 推薦" text={table.reason} /> : null}
+                <Text style={styles.aaRule}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
+                <View style={styles.participants}>
+                  {[0, 1, 2, 3].map((item) => {
+                    const isHiddenParticipant = shouldBlurParticipants && item > 1;
+                    return (
+                      <View key={item} style={[styles.participant, isHiddenParticipant && styles.lockedParticipant]}>
+                        <Text style={[styles.participantText, isHiddenParticipant && styles.blurredParticipantText]}>{isHiddenParticipant ? "..." : "OK"}</Text>
+                        {isHiddenParticipant ? <View style={styles.participantBlur} /> : null}
+                      </View>
+                    );
+                  })}
+                </View>
+                {isLockedForFree ? <LockNotice title={zhTW.mobile.premiumUi.upgradeCompatibilityTitle} body={zhTW.mobile.groupTables.lockedCompatibility} /> : null}
+                {!isCompleted && !isPremiumMode ? <Text style={styles.premiumLock}>{zhTW.mobile.groupTables.premiumVisibility}</Text> : null}
+                <Pressable disabled={isCompleted} style={[styles.joinButton, isCompleted && styles.disabledButton]} onPress={() => setJoinedTable(table.mealTheme)}>
+                  <Text style={styles.joinButtonText}>{isCompleted ? zhTW.mobile.groupTables.completedState : isJoined ? zhTW.mobile.groupTables.joinedState : zhTW.common.join}</Text>
+                </Pressable>
+                <Pressable style={styles.inviteButton} onPress={() => setModuleView("invite")}>
+                  <Text style={styles.joinButtonText}>{zhTW.mobile.correctedFlow.oneTapInvite}</Text>
+                </Pressable>
+              </SnowCard>
+            );
           })}
         </View>
-        ) : null}
-        </>
       ) : null}
-
-      <Card tone="mint">
-        <SectionTitle title={zhTW.mobile.groupTables.detailTitle} subtitle={zhTW.mobile.groupTables.detailBody} />
-      </Card>
-
-      <Card tone="amber">
-        <SectionTitle title={zhTW.mobile.groupTables.foodMemoryFitTitle} subtitle={zhTW.mobile.groupTables.foodMemoryFitBody} />
-      </Card>
-
-      <Card tone={isPremiumMode ? "premium" : "default"}>
-        <PremiumBadge label={isPremiumMode ? zhTW.mobile.premiumUi.premiumBadge : zhTW.mobile.premiumUi.freeBadge} variant={isPremiumMode ? "premium" : "free"} />
-        <Text style={styles.limitPill}>{isPremiumMode ? zhTW.mobile.premiumUi.premiumRemainingTableJoins : zhTW.mobile.premiumUi.remainingTableJoins}</Text>
-        <ComparisonPreview
-          freeTitle={zhTW.mobile.premiumUi.freeSeesTitle}
-          premiumTitle={zhTW.mobile.premiumUi.premiumUnlocksTitle}
-          freeItems={zhTW.mobile.groupTables.freePreview}
-          premiumItems={zhTW.mobile.groupTables.premiumPreview}
-        />
-      </Card>
-
-      <Card tone="premium">
-        <PremiumBadge label={zhTW.mobile.premiumUi.premiumBadge} />
-        <SectionTitle title={zhTW.common.premium} subtitle={zhTW.mobile.groupTables.premiumJoinLimit} />
-      </Card>
     </>
   );
 }
@@ -640,15 +591,14 @@ function RestaurantTableSearchContextCardWithBack({
 function MyTableOverview({ activeTable, groupCalorieShare, onCreate, onInvite, onManage, onOpen, onOpenChat, onRecordCalories, onUpgradeCapacity, tableCapacity, tableParticipantCount }: { activeTable: ActiveFourPersonTable | null; groupCalorieShare: GroupCalorieShare | null; onCreate: () => void; onInvite: () => void; onManage: () => void; onOpen: () => void; onOpenChat: () => void; onRecordCalories: () => void; onUpgradeCapacity: () => void; tableCapacity: 4 | 6 | 8; tableParticipantCount: 3 | 4 }) {
   return (
     <Card tone="premium">
-      <PremiumBadge label={zhTW.mobile.correctedFlow.myTableTitle} />
-      <SectionTitle title={zhTW.mobile.correctedFlow.myTableTitle} subtitle={zhTW.mobile.correctedFlow.activeTableLimitHint} />
+      <SnowSectionHeader title={zhTW.mobile.correctedFlow.myTableTitle} subtitle={zhTW.mobile.correctedFlow.activeTableLimitHint} />
       {!activeTable ? (
-        <>
-          <Text style={styles.reason}>{zhTW.mobile.correctedFlow.noActiveTable}</Text>
-          <Pressable style={styles.joinButton} onPress={onCreate}>
-            <Text style={styles.joinButtonText}>{zhTW.mobile.correctedFlow.startTable}</Text>
-          </Pressable>
-        </>
+        <EmptyState
+          mascot="protein"
+          title="還沒有建立飯局"
+          body={zhTW.mobile.correctedFlow.noActiveTable}
+          primaryAction={{ label: zhTW.mobile.correctedFlow.startTable, icon: "plus", onPress: onCreate }}
+        />
       ) : (
         <>
           <HostedTableCard activeTable={activeTable} onInvite={onInvite} onManage={onManage} onOpen={onOpen} onOpenChat={onOpenChat} onRecordCalories={onRecordCalories} onUpgradeCapacity={onUpgradeCapacity} tableCapacity={tableCapacity} tableParticipantCount={tableParticipantCount} />
@@ -664,13 +614,27 @@ function MyTableOverview({ activeTable, groupCalorieShare, onCreate, onInvite, o
 }
 
 function HostedTableCard({ activeTable, onInvite, onManage, onOpen, onOpenChat, onRecordCalories, onUpgradeCapacity, tableCapacity, tableParticipantCount }: { activeTable: ActiveFourPersonTable; onInvite: () => void; onManage: () => void; onOpen?: () => void; onOpenChat?: () => void; onRecordCalories?: () => void; onUpgradeCapacity: () => void; tableCapacity: 4 | 6 | 8; tableParticipantCount: 3 | 4 }) {
+  const urgentLabel = tableParticipantCount < tableCapacity ? `還缺 ${tableCapacity - tableParticipantCount} 位` : "已滿座";
   return (
     <View style={styles.hostedTableCard}>
+      <FeastCoverCard
+        variant="warm"
+        timeLabel={activeTable.suggestedTime || "待定"}
+        badgeLabel={urgentLabel}
+        badgeUrgent={tableParticipantCount < tableCapacity}
+        title={`${activeTable.restaurantName}｜四人餐桌`}
+        subtitle={activeTable.location || "地點待確認"}
+      />
+      <View style={{ marginTop: 10, gap: 6 }}>
+        <SeatLine
+          joined={Array.from({ length: tableParticipantCount }, (_, i) => ({ type: "real" as const, initial: ["宜", "綠", "R", "哲"][i] }))}
+          openCount={tableCapacity - tableParticipantCount}
+          size={34}
+        />
+        <FillBar joined={tableParticipantCount} size={tableCapacity} height={5} />
+      </View>
       <Pressable style={styles.hostedTableInfo} onPress={onOpen ?? onManage}>
-        <Text style={styles.hostedTableName}>{activeTable.restaurantName}｜四人餐桌</Text>
         <Text style={styles.hostedTableMeta}>{zhTW.mobile.correctedFlow.tablePlaceLabel}: {activeTable.location || "待確認"}</Text>
-        <Text style={styles.hostedTableMeta}>{zhTW.mobile.correctedFlow.tableTimeLabel}: {activeTable.suggestedTime}</Text>
-        <Text style={styles.hostedTableMeta}>{zhTW.mobile.correctedFlow.currentPeoplePrefix}{tableParticipantCount}/{tableCapacity}</Text>
         <Text style={styles.hostedTableMeta}>{zhTW.mobile.correctedFlow.tableStatusLabel}: {activeTable.status}</Text>
       </Pressable>
       <View style={styles.tableActionGroup}>
@@ -707,14 +671,21 @@ function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, 
     participantIds: [],
     status: zhTW.mobile.correctedFlow.hostedTable.status
   };
+  const participantCount = table.participantIds.length || participants.length;
   return (
-    <Card tone="mint">
-      <SectionTitle title={zhTW.mobile.correctedFlow.participantsTitle} subtitle={zhTW.mobile.correctedFlow.activeTableLimitHint} />
-      <View style={styles.hostedTableCard}>
-        <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tableNameLabel}: {table.restaurantName}</Text>
+    <SnowCard tone="ai">
+      <SnowSectionHeader title={zhTW.mobile.correctedFlow.participantsTitle} subtitle={zhTW.mobile.correctedFlow.activeTableLimitHint} />
+      <View style={{ gap: 6 }}>
+        <SeatLine
+          joined={participants.slice(0, participantCount).map((p) => ({ type: "real" as const, initial: p.name.slice(0, 1) }))}
+          openCount={table.maxParticipants - participantCount}
+          size={34}
+        />
+        <FillBar joined={participantCount} size={table.maxParticipants} height={5} />
+      </View>
+      <View style={{ gap: 4 }}>
         <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tablePlaceLabel}: {table.location}</Text>
         <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tableTimeLabel}: {table.suggestedTime}</Text>
-        <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tablePeopleLabel}: {table.participantIds.length}/{table.maxParticipants}</Text>
         <Text style={styles.theme}>{zhTW.mobile.correctedFlow.tableStatusLabel}: {table.status}</Text>
       </View>
       {groupCalorieShare ? (
@@ -741,7 +712,7 @@ function ParticipantsMode({ activeTable, groupCalorieShare, onBack, onOpenChat, 
       <Pressable style={styles.bottomReturnButton} onPress={onBack}>
         <Text style={styles.bottomReturnButtonText}>{zhTW.mobile.correctedFlow.backToMyTable}</Text>
       </Pressable>
-    </Card>
+    </SnowCard>
   );
 }
 
@@ -803,7 +774,7 @@ function InviteMode({
   const selectedCountLabel = `${zhTW.mobile.correctedFlow.selectedPrefix} ${selectedIds.length} ${zhTW.mobile.correctedFlow.selectedSuffix}`;
 
   return (
-    <Card tone="mint">
+    <SnowCard>
       <View style={styles.inviteModeHeader}>
         <Pressable style={styles.headerButton} onPress={onBack}>
           <Text style={styles.headerButtonText}>{zhTW.mobile.correctedFlow.backToTables}</Text>
@@ -818,7 +789,7 @@ function InviteMode({
         </View>
       </View>
 
-      <SectionTitle title={inviteSent ? zhTW.mobile.correctedFlow.inviteSuccess : zhTW.mobile.correctedFlow.inviteModeTitle} subtitle={zhTW.mobile.correctedFlow.inviteModeBody} />
+      <SnowSectionHeader title={inviteSent ? zhTW.mobile.correctedFlow.inviteSuccess : zhTW.mobile.correctedFlow.inviteModeTitle} subtitle={zhTW.mobile.correctedFlow.inviteModeBody} />
 
       <View style={styles.sortRow}>
         {zhTW.mobile.correctedFlow.inviteSortOptions.map((sort) => (
@@ -854,7 +825,7 @@ function InviteMode({
           <Text style={styles.completeButtonText}>{zhTW.mobile.correctedFlow.completeInvite}</Text>
         </Pressable>
       </View>
-    </Card>
+    </SnowCard>
   );
 }
 

@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, PremiumBadge, SectionTitle, TagRow, colors } from "../../components/DemoUi";
+import { getMascotSource } from "../../theme/components";
 import { getAvatarDisplayLabel } from "./avatarDisplayPolicy";
 import type { CommunityCardSettingsState, PreviewMode, SystemMascot, VisibilityLevel } from "./types";
 
@@ -102,9 +103,13 @@ export function SystemAvatarSelector({ mascots, selectedId, onSelect }: { mascot
           const selected = selectedId === mascot.id;
           return (
             <Pressable key={mascot.id} style={[styles.mascotCard, selected && styles.mascotCardActive]} onPress={() => onSelect(mascot.id)}>
-              <View style={styles.mascotAvatar}>
-                <Text style={styles.mascotAvatarText}>{mascot.assetKey}</Text>
-              </View>
+              {getMascotSource(mascot.id) ? (
+                <Image source={getMascotSource(mascot.id)!} style={styles.mascotAvatarImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.mascotAvatar}>
+                  <Text style={styles.mascotAvatarText}>{mascot.assetKey}</Text>
+                </View>
+              )}
               <Text style={styles.mascotName}>{mascot.name}</Text>
               <Text style={styles.mascotDescription}>{mascot.description}</Text>
               <TagRow tags={mascot.tags.slice(0, 3)} />
@@ -194,9 +199,13 @@ export function CommunityCardPreview({ mascot, mode, settings }: { mascot: Syste
       <PremiumBadge label={mode === "free" ? zhTW.mobile.premiumUi.freeBadge : mode === "premium" ? zhTW.mobile.premiumUi.premiumBadge : zhTW.mobile.communityCardSettings.previewModes[2]} variant={mode === "free" ? "free" : "premium"} />
       <SectionTitle title={zhTW.mobile.communityCardSettings.previewTitle} subtitle={zhTW.mobile.communityCardSettings.previewBody} />
       <View style={styles.previewCard}>
-        <View style={styles.previewAvatar}>
-          <Text style={styles.previewAvatarText}>{canSee("avatar") ? avatarLabel : mascot.assetKey}</Text>
-        </View>
+        {getMascotSource(mascot.id) ? (
+          <Image source={getMascotSource(mascot.id)!} style={styles.previewAvatarImage} resizeMode="cover" />
+        ) : (
+          <View style={styles.previewAvatar}>
+            <Text style={styles.previewAvatarText}>{canSee("avatar") ? avatarLabel : mascot.assetKey}</Text>
+          </View>
+        )}
         <View style={styles.flex}>
           <Text style={styles.previewName}>{canSee("nickname") ? settings.nickname : mascot.name}</Text>
           <Text style={styles.previewMeta}>{mascot.personalityType}</Text>
@@ -368,6 +377,11 @@ const styles = StyleSheet.create({
     height: 52,
     width: 52
   },
+  mascotAvatarImage: {
+    borderRadius: 18,
+    height: 52,
+    width: 52
+  },
   mascotAvatarText: {
     color: "#ffffff",
     fontSize: 17,
@@ -516,6 +530,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 24,
     backgroundColor: colors.ink,
+    height: 64,
+    width: 64
+  },
+  previewAvatarImage: {
+    borderRadius: 24,
     height: 64,
     width: 64
   },

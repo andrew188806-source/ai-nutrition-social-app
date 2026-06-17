@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { BottomNav, DemoModeToggle, PremiumBadge } from "../components/DemoUi";
+import { BottomNav, PremiumBadge } from "../components/DemoUi";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes } from "../features/self-made-dishes";
 import { Card, Chip, CompactRow, IconButton, PersonAvatar, SectionHeader, StatCard } from "../theme/components";
@@ -18,7 +18,7 @@ type ProfileRowItem = {
 
 export default function MeScreen() {
   const router = useRouter();
-  const [demoUserPlan, setDemoUserPlan] = useDemoUserPlan();
+  const [demoUserPlan] = useDemoUserPlan();
   const isPremium = demoUserPlan === "premium";
   const profile = zhTW.mobile.profile;
   const diary = zhTW.mobile.mealLog.foodDiary;
@@ -87,9 +87,6 @@ export default function MeScreen() {
           <View style={styles.rowList}>
             <CompactRow icon="buddies" iconTone="primary" title={isPremium ? premiumUi.premiumRemainingMatches : premiumUi.remainingMatches} />
             <CompactRow icon="table4" iconTone="primary" title={isPremium ? premiumUi.premiumRemainingTableJoins : premiumUi.remainingTableJoins} />
-          </View>
-          <View style={styles.demoToggleWrap}>
-            <DemoModeToggle mode={demoUserPlan} onChange={setDemoUserPlan} />
           </View>
         </Card>
 

@@ -22,8 +22,6 @@ export default function TodayIntakeScreen() {
     <PlaceholderScreen
       title={intake.title}
       subtitle={intake.body}
-      primaryAction={{ href: "/meal-buddies", label: intake.findBuddy }}
-      secondaryAction={{ href: "/analysis", label: zhTW.mobile.nav.analysis }}
     >
       <Card tone="premium">
         <Text style={styles.savedBadge}>{intake.savedMessage}</Text>

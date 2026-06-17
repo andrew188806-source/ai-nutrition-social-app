@@ -2,42 +2,29 @@ import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, DemoModeToggle, LockNotice, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { Card, LockNotice, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { getAvatarDisplayLabel, getCommunityCardSettings, getSelectedMascot } from "../features/community-card-settings";
-import { useDemoUserPlan } from "../features/demo-user-plan";
+import { resolveCommunityProfileDisplay, type AvatarSource } from "../features/display-resolvers";
 
 type CommunityCardVisibility = (typeof zhTW.mobile.communityCard.visibilityOptions)[number];
 type CommunityCardIntent = (typeof zhTW.mobile.communityCard.intents)[number];
 type PaymentPreference = (typeof zhTW.mobile.correctedFlow.paymentOptions)[number];
 
-const profilePhotos = [
-  require("../assets/profiles/profile-01.png"),
-  require("../assets/profiles/profile-02.png")
-];
-
 export default function CommunityCardScreen() {
   const router = useRouter();
-  const [demoMode, setDemoMode] = useDemoUserPlan();
   const [visibility, setVisibility] = useState<CommunityCardVisibility>(zhTW.mobile.communityCard.visibilityOptions[0]);
   const [intent, setIntent] = useState<CommunityCardIntent>(zhTW.mobile.communityCard.intents[0]);
   const [paymentPreference, setPaymentPreference] = useState<PaymentPreference>(zhTW.mobile.correctedFlow.paymentOptions[0]);
   const [isPublished, setIsPublished] = useState(false);
-  const isPremiumMode = demoMode === "premium";
-  const savedSettings = getCommunityCardSettings();
-  const selectedMascot = getSelectedMascot(savedSettings);
-  const avatarLabel = getAvatarDisplayLabel({ context: isPremiumMode ? "normal" : "free", mascot: selectedMascot, settings: savedSettings });
+  const profileDisplay = resolveCommunityProfileDisplay("community-card");
+  const isPremiumProfile = profileDisplay?.isPremium ?? false;
   const socialDetail = zhTW.mobile.refinedLogic.lifestyleWorld.communityDetails[0];
 
   return (
     <PlaceholderScreen
       title={zhTW.mobile.communityCard.title}
       subtitle={zhTW.mobile.mainSections.communityCardSubtitle}
-      primaryAction={{ href: "/meal-buddies", label: zhTW.mobile.mealBuddies.viewList }}
-      secondaryAction={{ href: "/meal-log", label: zhTW.common.backHome }}
     >
-      <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
-
       <Card tone="mint">
         <SectionTitle title={zhTW.mobile.communityCard.entryTitle} subtitle={zhTW.mobile.communityCard.entryBody} />
       </Card>
@@ -84,16 +71,16 @@ export default function CommunityCardScreen() {
         </View>
       </Card>
 
-      <Card tone={isPremiumMode ? "premium" : "default"}>
-        <PremiumBadge label={isPremiumMode ? zhTW.mobile.premiumUi.premiumBadge : zhTW.mobile.premiumUi.freeBadge} variant={isPremiumMode ? "premium" : "free"} />
+      <Card tone={isPremiumProfile ? "premium" : "default"}>
+        <PremiumBadge label={isPremiumProfile ? zhTW.mobile.premiumUi.premiumBadge : zhTW.mobile.premiumUi.freeBadge} variant={isPremiumProfile ? "premium" : "free"} />
         <SectionTitle title={zhTW.mobile.communityCard.previewTitle} subtitle={zhTW.mobile.communityCard.matchReason} />
-        <View style={[styles.previewShell, isPremiumMode && styles.previewShellPremium]}>
-          <View style={[styles.avatar, !isPremiumMode && styles.lockedAvatar]}>
-            {isPremiumMode ? <Image source={profilePhotos[0]} style={styles.avatarImage} /> : <Text style={styles.avatarText}>{avatarLabel}</Text>}
+        <View style={[styles.previewShell, isPremiumProfile && styles.previewShellPremium]}>
+          <View style={[styles.avatar, !isPremiumProfile && styles.lockedAvatar]}>
+            <ResolvedCommunityAvatar avatarSource={profileDisplay?.avatarSource ?? { type: "none" }} />
           </View>
           <View style={styles.profileContent}>
-            <Text style={styles.profileName}>{isPremiumMode ? zhTW.mobile.communityCard.premiumName : zhTW.mobile.communityCard.anonymousName}</Text>
-            <Text style={styles.meta}>{isPremiumMode ? savedSettings.nickname : selectedMascot.name}</Text>
+            <Text style={styles.profileName}>{profileDisplay?.displayName}</Text>
+            <Text style={styles.meta}>{profileDisplay?.shortProfileSummary}</Text>
             <Text style={styles.meta}>{zhTW.mobile.communityCard.nearbyStatus}</Text>
             <Text style={styles.meta}>{zhTW.mobile.refinedLogic.lifestyleWorld.wantsToEat}{socialDetail.meal}</Text>
             <Text style={styles.meta}>{zhTW.mobile.refinedLogic.lifestyleWorld.todayMood}{socialDetail.mood}</Text>
@@ -102,9 +89,9 @@ export default function CommunityCardScreen() {
           </View>
         </View>
         <View style={styles.tagSpace}>
-          <TagRow tags={[intent, ...savedSettings.selectedEatingTags.slice(0, isPremiumMode ? 4 : 2), ...selectedMascot.tags.slice(0, 1)]} />
+          <TagRow tags={profileDisplay?.tags ?? []} />
         </View>
-        {!isPremiumMode ? <LockNotice title={zhTW.mobile.premiumUi.fullProfileUnlock} body={zhTW.mobile.communityCard.unlockButton} /> : null}
+        {!isPremiumProfile ? <LockNotice title={zhTW.mobile.premiumUi.fullProfileUnlock} body={zhTW.mobile.communityCard.unlockButton} /> : null}
       </Card>
 
       <Card tone="amber">
@@ -122,6 +109,26 @@ export default function CommunityCardScreen() {
       </Card>
     </PlaceholderScreen>
   );
+}
+
+function ResolvedCommunityAvatar({ avatarSource }: { avatarSource: AvatarSource }) {
+  if (avatarSource.type === "photo" && avatarSource.photoUrl) {
+    return <Image source={{ uri: avatarSource.photoUrl }} style={styles.avatarImage} />;
+  }
+
+  if (avatarSource.type === "mascot") {
+    return <Text style={styles.avatarText}>{avatarSource.assetKey}</Text>;
+  }
+
+  if (avatarSource.type === "photo" && avatarSource.assetKey) {
+    return <Text style={styles.avatarText}>{avatarSource.assetKey}</Text>;
+  }
+
+  if (avatarSource.type === "initial") {
+    return <Text style={styles.avatarText}>{avatarSource.value}</Text>;
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({

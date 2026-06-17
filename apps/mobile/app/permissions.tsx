@@ -12,7 +12,6 @@ export default function PermissionsScreen() {
     <PlaceholderScreen
       title={zhTW.mobile.profile.title}
       subtitle={zhTW.mobile.profile.subtitle}
-      primaryAction={{ href: "/", label: zhTW.common.backHome }}
     >
       <Card tone="premium">
         <View style={styles.premiumHero}>

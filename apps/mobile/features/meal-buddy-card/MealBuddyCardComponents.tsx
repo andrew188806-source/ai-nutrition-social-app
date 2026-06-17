@@ -1,17 +1,11 @@
-﻿import { Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type ImageSourcePropType } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, PremiumBadge, SectionTitle, TagRow, colors } from "../../components/DemoUi";
+import { getMascotSource } from "../../theme/components";
+import { resolveRestaurantDisplay, type AvatarSource } from "../display-resolvers";
 import { getCandidateDisplayProfile } from "./mealBuddyDisplayPolicy";
+import { describeDiningDate } from "./mealBuddyCardMock";
 import type { MealBuddyCard, MealBuddyIntentionType, RankedMealBuddyCandidate } from "./types";
-
-const profilePhotos: ImageSourcePropType[] = [
-  require("../../assets/profiles/profile-01.png"),
-  require("../../assets/profiles/profile-02.png"),
-  require("../../assets/profiles/profile-03.png"),
-  require("../../assets/profiles/profile-04.png"),
-  require("../../assets/profiles/profile-05.png"),
-  require("../../assets/profiles/profile-06.png")
-];
 
 export function IntentionSelector({ onSelect }: { onSelect: (intention: MealBuddyIntentionType) => void }) {
   return (
@@ -32,14 +26,17 @@ export function IntentionSelector({ onSelect }: { onSelect: (intention: MealBudd
 }
 
 export function MealBuddyCardSummary({ card }: { card: MealBuddyCard }) {
-  const tags = [card.foodCategory, card.area, card.preferredTime, card.nutritionGoal].filter(Boolean);
+  const restaurantDisplay = card.restaurantId ? resolveRestaurantDisplay(card.restaurantId) : null;
+  const restaurantName = restaurantDisplay?.restaurantName ?? card.restaurantName;
+  const tags = restaurantDisplay ? [restaurantDisplay.category, ...restaurantDisplay.tags, card.preferredTime, card.nutritionGoal].filter(Boolean) : [card.foodCategory, card.area, card.preferredTime, card.nutritionGoal].filter(Boolean);
   const cardTypeLabel = card.cardType === "restaurant" ? zhTW.mobile.refinedLogic.mealBuddyCard.restaurantCardTitle : zhTW.mobile.refinedLogic.mealBuddyCard.generalCardTitle;
   return (
     <Card tone="amber">
       <PremiumBadge label={cardTypeLabel} />
-      <SectionTitle title={card.preferredFoodName || card.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.manualCardTitle} subtitle={sourceLabel(card.sourceType)} />
+      <SectionTitle title={card.preferredFoodName || restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.manualCardTitle} subtitle={sourceLabel(card.sourceType)} />
       <View style={styles.summaryGrid}>
-        <SummaryItem label={zhTW.mobile.refinedLogic.mealBuddyCard.restaurantNameLabel} value={card.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField} />
+        <SummaryItem label={zhTW.mobile.refinedLogic.mealBuddyCard.restaurantNameLabel} value={restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField} />
+        <SummaryItem label={zhTW.mobile.refinedLogic.mealBuddyCard.diningDateLabel} value={describeDiningDate(card.diningDate)} />
         <SummaryItem label={zhTW.mobile.refinedLogic.mealBuddyCard.preferredTimeLabel} value={card.preferredTime || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField} />
         <SummaryItem label={zhTW.mobile.refinedLogic.mealBuddyCard.participantLabel} value={`${card.currentParticipants}/${card.maxParticipants}`} />
         <SummaryItem label={zhTW.mobile.refinedLogic.mealBuddyCard.intentionLabel} value={intentionLabel(card.intentionType)} />
@@ -85,43 +82,43 @@ export function RankedMealBuddyCard({
 
   return (
     <Pressable style={styles.cardPressable} onPress={onViewCard}>
-    <Card tone={isPremiumMode || candidate.isPremium ? "premium" : "default"}>
-      <View style={styles.cardTop}>
-        <View style={[styles.avatar, !isPremiumMode && styles.maskedAvatar]}>
-          {isPremiumMode ? <Image source={profilePhotoFor(candidate.userId)} style={styles.avatarImage} /> : <Text style={styles.avatarText}>{zhTW.mobile.refinedLogic.mealBuddyCard.anonymousAvatar}</Text>}
-        </View>
-        <View style={styles.flex}>
-          <View style={styles.nameRow}>
+      <Card tone={isPremiumMode || candidate.isPremium ? "premium" : "default"}>
+        <View style={styles.cardTop}>
+          <View style={[styles.avatar, !isPremiumMode && styles.maskedAvatar]}>
+            <ResolvedAvatar avatarSource={displayProfile.avatarSource} fallbackText={displayProfile.avatarText || zhTW.mobile.refinedLogic.mealBuddyCard.anonymousAvatar} />
+          </View>
+          <View style={styles.flex}>
+            <View style={styles.nameRow}>
               <Text style={styles.name}>{displayProfile.displayName}</Text>
               <Text style={styles.score}>{candidate.rankScore}</Text>
             </View>
             <Text style={styles.meta}>{locationText}</Text>
-          <Text style={styles.intent}>{candidate.preferredFoodName}</Text>
-          <Text style={styles.meta}>{candidate.socialNote}</Text>
+            <Text style={styles.intent}>{candidate.preferredFoodName}</Text>
+            <Text style={styles.meta}>{candidate.socialNote}</Text>
+          </View>
         </View>
-      </View>
-      <View style={styles.badgeRow}>
-        <PremiumBadge label={isChatFirst ? zhTW.mobile.refinedLogic.mealBuddyCard.chatFirstBadge : zhTW.mobile.refinedLogic.mealBuddyCard.eatTogetherBadge} variant={isChatFirst ? "free" : "premium"} />
-        {candidate.isVerified ? <PremiumBadge label={zhTW.mobile.refinedLogic.mealBuddyCard.verifiedBadge} variant="premium" /> : null}
-      </View>
-      <View style={styles.reasonBubble}>
-        <Text style={styles.reasonTitle}>{zhTW.mobile.refinedLogic.mealBuddyCard.matchReasonTitle}</Text>
-        <Text style={styles.message}>{candidate.matchReasons.join("、") || zhTW.mobile.refinedLogic.mealBuddyCard.defaultMatchReason}</Text>
-      </View>
-      <TagRow tags={displayProfile.tags} />
-      {pendingInviteType ? <Text style={styles.sentHint}>已送出邀請，可到「我的飯友 &gt; 配對中」取消後再改邀請類型。</Text> : null}
-      <View style={styles.actionRow}>
-        <Pressable disabled={Boolean(pendingInviteType)} style={[styles.secondaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onChat)}>
-          <Text style={styles.secondaryButtonText}>{pendingInviteType === "chat" ? "已送出邀請" : "邀請先聊聊"}</Text>
-        </Pressable>
-        <Pressable disabled={Boolean(pendingInviteType)} style={[styles.primaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onEatTogether)}>
-          <Text style={styles.primaryButtonText}>{pendingInviteType === "meal" ? "已送出邀請" : "邀請吃飯"}</Text>
-        </Pressable>
-        <Pressable disabled={Boolean(pendingInviteType)} style={[styles.secondaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onInviteTable)}>
-          <Text style={styles.secondaryButtonText}>{pendingInviteType === "table" ? "已送出邀請" : "邀請加入4人桌"}</Text>
-        </Pressable>
-      </View>
-    </Card>
+        <View style={styles.badgeRow}>
+          <PremiumBadge label={isChatFirst ? zhTW.mobile.refinedLogic.mealBuddyCard.chatFirstBadge : zhTW.mobile.refinedLogic.mealBuddyCard.eatTogetherBadge} variant={isChatFirst ? "free" : "premium"} />
+          {candidate.isVerified ? <PremiumBadge label={zhTW.mobile.refinedLogic.mealBuddyCard.verifiedBadge} variant="premium" /> : null}
+        </View>
+        <View style={styles.reasonBubble}>
+          <Text style={styles.reasonTitle}>{zhTW.mobile.refinedLogic.mealBuddyCard.matchReasonTitle}</Text>
+          <Text style={styles.message}>{candidate.matchReasons.join("、") || zhTW.mobile.refinedLogic.mealBuddyCard.defaultMatchReason}</Text>
+        </View>
+        <TagRow tags={displayProfile.tags} />
+        {pendingInviteType ? <Text style={styles.sentHint}>已送出邀請，可到「我的飯友 &gt; 配對中」取消後再改邀請類型。</Text> : null}
+        <View style={styles.actionRow}>
+          <Pressable disabled={Boolean(pendingInviteType)} style={[styles.secondaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onChat)}>
+            <Text style={styles.secondaryButtonText}>{pendingInviteType === "chat" ? "已送出邀請" : "邀請先聊聊"}</Text>
+          </Pressable>
+          <Pressable disabled={Boolean(pendingInviteType)} style={[styles.primaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onEatTogether)}>
+            <Text style={styles.primaryButtonText}>{pendingInviteType === "meal" ? "已送出邀請" : "邀請吃飯"}</Text>
+          </Pressable>
+          <Pressable disabled={Boolean(pendingInviteType)} style={[styles.secondaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onInviteTable)}>
+            <Text style={styles.secondaryButtonText}>{pendingInviteType === "table" ? "已送出邀請" : "邀請加入4人桌"}</Text>
+          </Pressable>
+        </View>
+      </Card>
     </Pressable>
   );
 }
@@ -145,10 +142,12 @@ export function MealBuddyRecommendationList({
   pendingInviteForCandidate?: (candidate: RankedMealBuddyCandidate) => "chat" | "meal" | "table" | null;
   items: RankedMealBuddyCandidate[];
 }) {
+  const restaurantDisplay = card.restaurantId ? resolveRestaurantDisplay(card.restaurantId) : null;
+  const sourceName = card.preferredFoodName || restaurantDisplay?.restaurantName || card.restaurantName || "飯友卡";
   return (
     <>
       <View style={styles.sectionSpace}>
-        <Text style={styles.compactSourceText}>來源卡：{card.preferredFoodName || card.restaurantName || "飯友卡"} · {card.preferredTime || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
+        <Text style={styles.compactSourceText}>來源卡：{sourceName} · {card.preferredTime || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
         {items.map((candidate) => (
           <RankedMealBuddyCard
             key={`recommendation-${candidate.userId}`}
@@ -180,9 +179,20 @@ function sourceLabel(sourceType: MealBuddyCard["sourceType"]) {
   return zhTW.mobile.refinedLogic.mealBuddyCard.sourceManual;
 }
 
-function profilePhotoFor(userId: string) {
-  const seed = [...userId].reduce((total, char) => total + char.charCodeAt(0), 0);
-  return profilePhotos[seed % profilePhotos.length];
+function ResolvedAvatar({ avatarSource, fallbackText }: { avatarSource: AvatarSource; fallbackText: string }) {
+  if (avatarSource.type === "photo" && avatarSource.photoUrl) {
+    return <Image source={{ uri: avatarSource.photoUrl }} style={styles.avatarImage} resizeMode="cover" />;
+  }
+  if (avatarSource.type === "mascot") {
+    const source = getMascotSource(avatarSource.mascotId);
+    if (source) {
+      return <Image source={source} style={styles.avatarImage} resizeMode="cover" />;
+    }
+  }
+  if (avatarSource.type === "initial") {
+    return <Text style={styles.avatarText}>{avatarSource.value}</Text>;
+  }
+  return <Text style={styles.avatarText}>{fallbackText}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -381,5 +391,3 @@ const styles = StyleSheet.create({
     marginTop: 5
   }
 });
-
-

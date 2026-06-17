@@ -30,6 +30,10 @@ export type MealBuddyCard = {
   currentParticipants: number;
   isLargeTableEnabled: boolean;
   visibilityStatus: MealBuddyVisibilityStatus;
+  // ISO date (YYYY-MM-DD) the user intends to eat. AI-recommendation cards are
+  // always created with today's date; restaurant-page cards let the user pick
+  // today / tomorrow / a custom date.
+  diningDate: string;
   createdAt: string;
   expiresAt: string;
 };
@@ -51,6 +55,7 @@ export type MealBuddyCandidate = {
   isVerified: boolean;
   tags: readonly string[];
   socialNote: string;
+  mascotId?: string;
 };
 
 export type RankedMealBuddyCandidate = MealBuddyCandidate & {

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav } from "../components/DemoUi";
 import { TodayMealGrid } from "../components/TodayMealGrid";
@@ -8,6 +8,7 @@ import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCa
 import { resetMealRecords } from "../features/analysis/analysisMealRecordStore";
 import { calculateTodayNutritionSummary, getTodayMealRecords, mapMealRecordsToMealSlots } from "../features/analysis/nutritionSummary";
 import { advanceDemoTimeByDays, getEffectiveDateKey, isDemoTestingEnabled, resetDemoTime } from "../features/demo-time";
+import { useDemoUserPlan } from "../features/demo-user-plan";
 import { resetAllMealBuddyDemoState, resetMealBuddySocialDemoState } from "../features/meal-buddy-card";
 import { getPlannedDinner } from "../features/planned-meal";
 import { storage } from "../lib/storage";
@@ -18,6 +19,7 @@ import { fonts, hexA, radius, snowPalette as colors } from "../theme/tokens";
 export default function LandingScreen() {
   const router = useRouter();
   const [demoDateKey, setDemoDateKey] = useState(getEffectiveDateKey());
+  const [, setDemoUserPlan] = useDemoUserPlan();
   const mealRecords = getTodayMealRecords();
   const plannedDinner = getPlannedDinner();
   const summary = calculateTodayNutritionSummary(mealRecords);
@@ -48,6 +50,10 @@ export default function LandingScreen() {
     resetMealRecords();
     storage.removeItem("haocu.mealBuddy.recommendationGroups.v1");
     setDemoDateKey(getEffectiveDateKey());
+  }
+
+  function openTutorialPlaceholder() {
+    Alert.alert("新手教學", "新手教學尚未設定");
   }
 
   return (
@@ -105,6 +111,11 @@ export default function LandingScreen() {
               <SecondaryButton label="模擬明天" onPress={() => advanceDemoDate(1)} />
               <SecondaryButton label="模擬一週後" onPress={() => advanceDemoDate(7)} />
               <SecondaryButton label="重置測試資料" onPress={resetDemoData} />
+            </View>
+            <View style={styles.demoToolRow}>
+              <SecondaryButton label="新手教學" onPress={openTutorialPlaceholder} />
+              <SecondaryButton label="免費版" onPress={() => setDemoUserPlan("free")} />
+              <SecondaryButton label="Premium版" onPress={() => setDemoUserPlan("premium")} />
             </View>
           </Card>
         ) : null}

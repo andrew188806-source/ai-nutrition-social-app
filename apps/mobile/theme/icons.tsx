@@ -28,7 +28,10 @@ export type IconName =
   | "arrowUp"
   | "chat"
   | "pin"
-  | "search";
+  | "search"
+  | "send"
+  | "users"
+  | "calendar";
 
 type IconProps = {
   name: IconName;
@@ -211,6 +214,25 @@ function renderIcon(name: IconName, shared: { stroke: string; strokeWidth: numbe
         <>
           <Circle cx="11" cy="11" r="6.5" {...shared} />
           <Path d="M16 16l4.5 4.5" {...shared} />
+        </>
+      );
+    case "send":
+      return <Path d="M3 11.5 21 3l-7.5 18-2.5-7.5L3 11.5Z" {...shared} />;
+    case "users":
+      return (
+        <>
+          <Circle cx="9" cy="8" r="3" {...shared} />
+          <Circle cx="17" cy="9.5" r="2.4" {...shared} />
+          <Path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" {...shared} />
+          <Path d="M15 14c2.5.3 4.5 2.4 4.5 5" {...shared} />
+        </>
+      );
+    case "calendar":
+      return (
+        <>
+          <Rect x="3" y="5" width="18" height="16" rx="2" {...shared} />
+          <Path d="M3 9.5h18" {...shared} />
+          <Path d="M8 3v3M16 3v3" {...shared} />
         </>
       );
     default:

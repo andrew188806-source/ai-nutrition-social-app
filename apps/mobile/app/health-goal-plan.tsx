@@ -1,22 +1,18 @@
 import { StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { Card, DemoModeToggle, LockNotice, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
+import { Card, LockNotice, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 
 export default function HealthGoalPlanScreen() {
-  const [demoMode, setDemoMode] = useDemoUserPlan();
+  const [demoMode] = useDemoUserPlan();
   const isPremiumMode = demoMode === "premium";
 
   return (
     <PlaceholderScreen
       title={zhTW.mobile.healthGoalPlan.title}
       subtitle={zhTW.mobile.healthGoalPlan.subtitle}
-      primaryAction={{ href: "/recommendation", label: zhTW.mobile.nextMealTitle }}
-      secondaryAction={{ href: "/meal-log", label: zhTW.mobile.nav.mealLog }}
     >
-      <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
-
       <Card tone="amber">
         <Text style={styles.disclaimer}>{zhTW.mobile.healthGoalPlan.disclaimer}</Text>
       </Card>
