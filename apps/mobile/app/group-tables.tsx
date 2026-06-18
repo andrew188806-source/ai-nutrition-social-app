@@ -284,7 +284,6 @@ export function GroupTablesContent({
               const updated = updateActiveFourPersonTable({
                 hostProfileId: "current-user",
                 participantProfileIds,
-                participantIds: participantProfileIds,
                 status: "已成團",
                 groupChatThreadId: hostedTableChatTarget.chatThreadId
               });

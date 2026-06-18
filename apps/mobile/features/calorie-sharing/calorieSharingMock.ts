@@ -2,6 +2,10 @@ import { storage } from "../../lib/storage";
 import type { TableId, UserId } from "../meal-buddy-card/types";
 import type { GroupCalorieImport, GroupCalorieShare } from "./calorieSharingTypes";
 
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Local calorie/guilt-sharing session state. Future backend boundary:
+// meal_sharing_sessions + sharing_participants.
+
 // TODO(engineering):
 // - Current state: group calorie sharing cards and member imports use the shared demo storage adapter.
 // - Intended future integration: replace with group-table calorie-sharing APIs.

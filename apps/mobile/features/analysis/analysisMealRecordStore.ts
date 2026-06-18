@@ -1,6 +1,10 @@
 import { storage } from "../../lib/storage";
 import type { SavedMealRecord } from "./types";
 
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Canonical meal-record demo source for Analysis, Today Intake, Meal Log, ratings,
+// planned-meal settlement, and calorie/guilt sharing. mealId is the canonical meal identity.
+
 export type DinnerEstimate = {
   name: string;
   calories: number;

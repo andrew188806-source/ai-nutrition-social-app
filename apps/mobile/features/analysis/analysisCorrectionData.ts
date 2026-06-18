@@ -1,6 +1,10 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import type { CorrectionSection, CorrectionSectionKey, NutritionSummary } from "./types";
 
+// DEMO_ONLY MOCK_DATA TODO_BACKEND_REPLACE:
+// AI analysis sample/correction data. Future backend should provide model output,
+// confidence, user corrections, and nutrition estimate versions.
+
 type AddedSections = Record<CorrectionSectionKey, boolean>;
 
 export function buildCorrectionSections(addedSections: AddedSections): CorrectionSection[] {

@@ -5,6 +5,11 @@ import { getCanonicalMenuItemById, getCanonicalRestaurantById, getCanonicalResta
 import { getMockMealBuddyCandidates, getMockProfile } from "./mealBuddyFlowMock";
 import type { MealBuddyCard, MealBuddyCardSourceType, MealBuddyCandidate, MealBuddyIntentionType } from "./types";
 
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Meal Buddy Cards are generated from Community Profiles plus canonical
+// restaurantId/menuItemId. Do not independently invent person identity here.
+// restaurantId is the canonical restaurant identity; menuItemId is the canonical dish identity.
+
 const now = "2026-06-01T12:00:00+08:00";
 const expires = "2026-06-01T21:00:00+08:00";
 let cardSequence = 0;
@@ -152,22 +157,6 @@ export function describeDiningDate(diningDate: string) {
     return options[1];
   }
   return diningDate;
-}
-
-export function getManualMealBuddyCard(mealPeriod: string, preferredFoodName?: string, foodCategory?: string) {
-  const copy = zhTW.mobile.refinedLogic.mealBuddyCard.prefill.manual;
-  return buildMealBuddyCardFromProfile("current-user", "restaurant-haochu-bowl", "dish-haochu-1", {
-    cardType: "general",
-    sourceType: "manual",
-    intentionType: getDefaultInteractionPreference(),
-    preferredFoodName: preferredFoodName || copy.preferredFoodName,
-    foodCategory: foodCategory || copy.foodCategory,
-    area: copy.area,
-    preferredTime: getCommunityMealTime(mealPeriod),
-    mealTime: getCommunityMealTime(mealPeriod),
-    nutritionGoal: copy.nutritionGoal,
-    note: "手動建立的飯友卡，仍保留 profileId 與 canonical 餐廳餐點參照。"
-  });
 }
 
 export function getMealBuddyCandidates(): MealBuddyCandidate[] {

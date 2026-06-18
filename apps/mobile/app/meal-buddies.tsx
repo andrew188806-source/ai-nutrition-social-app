@@ -106,7 +106,7 @@ function chatDisplayName(chat: ReturnType<typeof getMealBuddyChats>[number], pro
   if (profile) {
     return profile.displayName;
   }
-  return chat.threadType === "group" ? chat.userName : "飯友";
+  return chat.threadType === "group" ? chat.userName || chat.tableId || "四人桌群聊" : "飯友";
 }
 
 function chatSummaryText(chat: ReturnType<typeof getMealBuddyChats>[number], profile: CommunityProfileDisplay | null) {
@@ -129,17 +129,9 @@ function createMatchedBuddyFromInvitation(invite: ReturnType<typeof getMealBuddy
     invitationId: invite.id,
     buddyId: profileId,
     chatId,
-    avatar: "",
-    name: "",
-    verified: true,
-    tags: [],
-    recentMealStatus: invite.mealName,
     mealCount: 1,
     knownSince: "2026/06/04",
     lastTable: invite.time,
-    commonInterests: [],
-    areas: [invite.area],
-    intro: "",
     chatThreadId: chatId
   } satisfies MatchedFriend & { invitationId: string; buddyId: string; chatId: string };
   return referenceOnlyFriend;
@@ -374,7 +366,7 @@ export default function MealBuddyHomeScreen() {
             if (invite.type === "chat" || invite.type === "meal") {
               const chat = getMealBuddyChats().find((item) => item.participantProfileId === invite.profileId);
               setFocusedChatId(chat?.id ?? "");
-              setFocusedChatName(invite.userName);
+              setFocusedChatName(invitationDisplayName(updatedInvite, resolveInvitationProfileDisplay(updatedInvite)));
               setFriendInitialTab("chats");
             } else {
               setAcceptedMealInvite(updatedInvite);
@@ -422,13 +414,13 @@ export default function MealBuddyHomeScreen() {
                 buddyId: record.buddyId,
                 chatThreadId: record.chatThreadId,
                 participantProfileId: record.participantProfileId,
-                userName: record.chatName,
+                userName: record.participantProfileId ?? record.chatName ?? record.id,
                 relatedMeal: record.name || "一般飯友飯局"
               });
             }
             setSocialVersion((version) => version + 1);
             setFocusedChatId(targetChat.id);
-            setFocusedChatName(targetChat.userName);
+            setFocusedChatName(chatDisplayName(targetChat, resolveChatProfileDisplay(targetChat)));
             setFriendInitialTab("chats");
             setActiveSection("friends");
           }}
@@ -452,7 +444,7 @@ export default function MealBuddyHomeScreen() {
             const chat = createOrOpenGroupTableChat(tableName, tableId, chatThreadId);
             setSocialVersion((version) => version + 1);
             setFocusedChatId(chat.id);
-            setFocusedChatName(chat.userName);
+            setFocusedChatName(chatDisplayName(chat, resolveChatProfileDisplay(chat)));
             setFriendInitialTab("chats");
             setActiveSection("friends");
           }}
@@ -1477,7 +1469,7 @@ function FriendChatMode({
   const chatProfile = resolveChatProfileDisplay(liveChat) ?? resolveCommunityProfileDisplay(friend.profileId);
   const title = chatProfile?.displayName ?? (isGroupChat ? liveChat?.userName ?? "四人桌群聊" : "飯友");
   const subtitle = isGroupChat ? "四人桌成桌後的群聊，用來確認集合時間與餐廳細節。" : chatProfile?.shortProfileSummary ?? "";
-  const threadMessages = liveChat?.messages?.length ? liveChat.messages : [{ id: `preview-${localChatVersion}`, text: liveChat?.lastMessage ?? `我也想吃${friend.commonInterests[0]}，要聊聊嗎？`, sender: "buddy" as const }];
+  const threadMessages = liveChat?.messages?.length ? liveChat.messages : [{ id: `preview-${localChatVersion}`, text: liveChat?.lastMessage ?? "想一起聊聊這餐嗎？", sender: "buddy" as const }];
 
   return (
     <Card tone="mint">
@@ -1526,7 +1518,6 @@ function createDirectChatFromMatchedBuddy(friend: MatchedFriend): ReturnType<typ
     time: "剛剛",
     unread: true,
     demoLabel: "測試資料",
-    buddyId: friend.id,
     participantProfileId: profileId,
     threadType: "direct"
   };
@@ -1538,17 +1529,9 @@ function createFriendFromChat(chat: ReturnType<typeof getMealBuddyChats>[number]
   return {
     id,
     profileId,
-    avatar: "",
-    name: profileId,
-    verified: chat.threadType === "group",
-    tags: [],
-    recentMealStatus: "",
     mealCount: 1,
     knownSince: "2026/06/01",
     lastTable: "今天",
-    commonInterests: [],
-    areas: [],
-    intro: "",
     chatThreadId: chat.id
   };
 }
@@ -1567,7 +1550,7 @@ function FriendCommunityCard({ friend, isPremium, onBack }: { friend: MatchedFri
       </View>
       <TagRow tags={profile?.tags ?? []} />
       <Text style={styles.message}>個人摘要：{profile?.shortProfileSummary ?? ""}</Text>
-      <Text style={styles.message}>{isPremium ? `一起吃過 ${friend.mealCount} 次 · 最近想吃：${friend.recentMealStatus}` : profile?.shortProfileSummary ?? ""}</Text>
+      <Text style={styles.message}>{isPremium ? `一起吃過 ${friend.mealCount} 次 · 最近同桌：${friend.lastTable}` : profile?.shortProfileSummary ?? ""}</Text>
       <Text style={styles.message}>{isPremium ? `最近同桌：${friend.lastTable}` : profile?.shortProfileSummary ?? ""}</Text>
       <Pressable style={styles.secondaryButtonWide} onPress={onBack}>
         <Text style={styles.secondaryButtonText}>返回我的飯友</Text>
@@ -1720,7 +1703,7 @@ function GatheringsSection({
         onSubmit={(record, reason) => {
           const isGroupTable = record.source === "四人桌" || record.people.includes("4");
           addMealBuddyChatSystemMessage({
-            chatUserName: isGroupTable ? undefined : record.withPerson,
+            chatUserName: isGroupTable ? undefined : record.participantProfileId,
             groupTableName: isGroupTable ? record.name : undefined,
             reason,
             relatedMeal: record.name
@@ -1931,7 +1914,7 @@ function MealEventDetail({ invite, onBack, onCancel, onOpenChat, onViewInviteDet
       <SectionTitle title={`${record.name} 詳情`} subtitle={isGroupTable ? "四人桌會顯示桌主、人數與餐桌狀態。" : "一般飯友飯局會顯示邀請人、配對卡與聊天室。"} />
       <View style={styles.summaryGrid}>
         <SummaryPill label="飯局類型" value={isGroupTable ? "四人桌" : "一般飯友飯局"} />
-        <SummaryPill label={isGroupTable ? "桌主 / 飯友" : "一起吃飯的人"} value={record.withPerson} />
+        <SummaryPill label={isGroupTable ? "桌主 / 飯友" : "一起吃飯的人"} value={gatheringPersonText(record, invite)} />
         <SummaryPill label="餐廳 / 地點" value={record.location} />
         <SummaryPill label="時間" value={record.time} />
         <SummaryPill label="參加者" value={record.people} />
@@ -1939,7 +1922,7 @@ function MealEventDetail({ invite, onBack, onCancel, onOpenChat, onViewInviteDet
         <SummaryPill label="付款偏好" value={record.payment} />
         <SummaryPill label="開始方式" value={record.source} />
       </View>
-      <Text style={styles.message}>{isGroupTable ? `餐桌參加者：我、${record.withPerson}` : `飯友：我、${invite?.userName ?? record.withPerson}`}</Text>
+      <Text style={styles.message}>{isGroupTable ? `餐桌參加者：我、${gatheringPersonText(record, invite)}` : `飯友：我、${gatheringPersonText(record, invite)}`}</Text>
       <Text style={styles.message}>備註：{isGroupTable ? "四人桌成桌後會開啟群聊確認細節。" : "一般飯友飯局會沿用一對一聊天室。"}</Text>
       {matchReasons ? <Text style={styles.message}>配對原因：{matchReasons}</Text> : null}
       {showParticipants ? (
@@ -1964,7 +1947,7 @@ function MealEventDetail({ invite, onBack, onCancel, onOpenChat, onViewInviteDet
       {invite ? (
         <View style={styles.previewCard}>
           <Text style={styles.meta}>來自飯友邀請</Text>
-          <Text style={styles.name}>{invite.userName} 的邀請</Text>
+          <Text style={styles.name}>{gatheringPersonText(record, invite)} 的邀請</Text>
           <Text style={styles.message}>使用的飯友卡：{invite.inviterCard.preferredFoodName || invite.inviterCard.restaurantName || "飯友卡"}</Text>
           <Text style={styles.message}>你被配到的飯友卡：{invite.matchedInviteeCard.preferredFoodName || invite.matchedInviteeCard.restaurantName || "飯友卡"}</Text>
           <Text style={styles.meta}>配對原因：{invite.matchReasons.slice(0, 3).join("、")}</Text>
@@ -2060,7 +2043,21 @@ function mealEventElementId(recordId: string) {
   return `meal-event-${recordId}`;
 }
 
+function gatheringPersonText(record: GatheringRecord, invite?: ReturnType<typeof getMealBuddyInvites>[number] | null) {
+  if (record.participantProfileId) {
+    return resolveCommunityProfileDisplay(record.participantProfileId).displayName;
+  }
+  if (record.participantProfileIds?.length) {
+    return record.participantProfileIds.map((profileId) => resolveCommunityProfileDisplay(profileId).displayName).join("、");
+  }
+  if (invite?.profileId) {
+    return resolveCommunityProfileDisplay(invite.profileId).displayName;
+  }
+  return "飯友";
+}
+
 function mealEventFromInvite(invite: ReturnType<typeof getMealBuddyInvites>[number]): GatheringRecord {
+  const inviteProfileName = invite.profileId ? resolveCommunityProfileDisplay(invite.profileId).displayName : "飯友";
   if (invite.type === "table") {
     return {
       id: `accepted-${invite.id}`,
@@ -2071,7 +2068,8 @@ function mealEventFromInvite(invite: ReturnType<typeof getMealBuddyInvites>[numb
       status: invite.tableStatus === "formed" ? "已成團" : "已接受",
       payment: "AA 制",
       source: "四人桌" as GatheringRecord["source"],
-      withPerson: invite.hostName ?? invite.userName,
+      hostProfileId: invite.profileId,
+      participantProfileIds: invite.profileId ? [invite.profileId] : [],
       tableId: invite.tableId,
       chatThreadId: "chat-group-table-balanced-dinner",
       chatName: invite.tableName ?? `四人桌｜${invite.mealName}`,
@@ -2081,17 +2079,16 @@ function mealEventFromInvite(invite: ReturnType<typeof getMealBuddyInvites>[numb
   }
   return {
     id: `accepted-${invite.id}`,
-    name: `和 ${invite.userName} 的${invite.mealName}`,
+    name: `和 ${inviteProfileName} 的${invite.mealName}`,
     location: invite.inviterCard.restaurantName || invite.inviterCard.area || "待確認地點",
     time: invite.time,
     people: "2人",
     status: "已確認",
     payment: "AA 制",
     source: "飯友邀請" as GatheringRecord["source"],
-    withPerson: invite.userName,
     buddyId: invite.profileId,
     participantProfileId: invite.profileId,
-    chatName: invite.userName,
+    chatName: invite.profileId,
     chatThreadId: `chat-direct-${invite.profileId ?? invite.id}`,
     notes: "來自飯友邀請的測試資料。",
     matchReasons: invite.matchReasons

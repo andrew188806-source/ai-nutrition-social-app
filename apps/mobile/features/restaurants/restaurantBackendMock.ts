@@ -1,3 +1,6 @@
+// DEMO_ONLY MOCK_DATA TODO_BACKEND_REPLACE TODO_SUPABASE_REPLACE:
+// Canonical restaurant/menu mock backend. restaurantId identifies restaurants;
+// menuItemId identifies dishes/menu items. i18n copy must not be used as restaurant data.
 export type CanonicalRestaurantMenuItem = {
   menuItemId: string;
   restaurantId: string;

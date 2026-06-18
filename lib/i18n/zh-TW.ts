@@ -1463,16 +1463,9 @@ export const zhTW = {
             nutritionGoal: "均衡飲食"
           }
         },
-        candidates: [
-          { userId: "buddy-kai", displayName: "Kai 高蛋白午餐人", restaurantId: "rest-haochu", restaurantName: "好初健康碗", preferredFoodName: "雞胸便當", foodCategory: "高蛋白", area: "信義區", preferredTime: "午餐", nutritionGoal: "增肌高蛋白", intentionType: "eat_together", distanceKm: 0.7, activityScore: 9, isPremium: true, isVerified: true, tags: ["高蛋白", "健身後", "AA 制"], socialNote: "剛收藏健康便當，想直接約一餐。" },
-          { userId: "buddy-ivy", displayName: "Ivy 蔬食探索者", restaurantId: "rest-mori", restaurantName: "森日蔬食廚房", preferredFoodName: "蔬食咖哩", foodCategory: "蔬食", area: "台北大安", preferredTime: "今晚", nutritionGoal: "高纖清爽", intentionType: "chat_first", distanceKm: 1.1, activityScore: 8, isPremium: false, isVerified: true, tags: ["蔬食", "高纖", "先聊聊"], socialNote: "想先聊聊附近清爽晚餐選擇。" },
-          { userId: "buddy-mina", displayName: "Mina 清爽晚餐派", restaurantId: "rest-aoba", restaurantName: "青葉食堂", preferredFoodName: "清爽日式料理", foodCategory: "日式", area: "台北大安", preferredTime: "今晚", nutritionGoal: "清爽高蛋白", intentionType: "eat_together", distanceKm: 0.5, activityScore: 9, isPremium: true, isVerified: false, tags: ["日式", "清爽", "可直接約飯"], socialNote: "也想吃日式烤魚或豆腐鍋。" },
-          { userId: "buddy-sean", displayName: "Sean 新店探險家", restaurantId: "rest-aoba", restaurantName: "青葉食堂", preferredFoodName: "日式烤魚套餐", foodCategory: "日式", area: "台北大安", preferredTime: "今晚", nutritionGoal: "清爽高蛋白", intentionType: "chat_first", distanceKm: 0.9, activityScore: 7, isPremium: false, isVerified: false, tags: ["新店", "日式", "聊聊後再決定"], socialNote: "想先交換菜單，再決定要不要一起吃。" },
-          { userId: "buddy-nora", displayName: "Nora 低碳便當控", restaurantId: "rest-protein", restaurantName: "山線蛋白餐盒", preferredFoodName: "瘦蛋白便當", foodCategory: "高蛋白", area: "信義區", preferredTime: "晚餐", nutritionGoal: "控卡低碳", intentionType: "eat_together", distanceKm: 1.4, activityScore: 8, isPremium: true, isVerified: true, tags: ["低碳", "控卡", "可直接約飯"], socialNote: "偏好有營養標示的餐盒。" },
-          { userId: "buddy-leo", displayName: "Leo 健身備餐人", restaurantId: "rest-haochu", restaurantName: "好初健康碗", preferredFoodName: "高蛋白碗", foodCategory: "高蛋白", area: "信義區", preferredTime: "午餐", nutritionGoal: "增肌高蛋白", intentionType: "chat_first", distanceKm: 0.8, activityScore: 7, isPremium: false, isVerified: true, tags: ["健身", "備餐", "先聊聊"], socialNote: "常分享高蛋白外食選擇。" },
-          { userId: "buddy-rae", displayName: "Rae 咖啡甜點派", restaurantId: "rest-cafe", restaurantName: "巷口咖啡", preferredFoodName: "低糖甜點", foodCategory: "甜點", area: "松菸", preferredTime: "下午", nutritionGoal: "少糖放鬆", intentionType: "chat_first", distanceKm: 1.6, activityScore: 6, isPremium: false, isVerified: false, tags: ["甜點", "咖啡", "低糖"], socialNote: "想找不太有壓力的下午茶飯友。" },
-          { userId: "buddy-bo", displayName: "Bo 火鍋飯友", restaurantId: "rest-hotpot", restaurantName: "暖湯鍋物", preferredFoodName: "豆腐鍋", foodCategory: "火鍋", area: "台北大安", preferredTime: "今晚", nutritionGoal: "清爽高蛋白", intentionType: "eat_together", distanceKm: 1.2, activityScore: 8, isPremium: true, isVerified: false, tags: ["火鍋", "清湯", "AA 制"], socialNote: "想吃清湯鍋，不想太油。" }
-        ]
+        // DEMO_ONLY LEGACY_COPY: old i18n social candidate data removed.
+        // Meal Buddy candidates now come from mealBuddyFlowMock.ts via profileId.
+        candidates: []
       },
       mealGatherings: {
         title: "我的飯局",

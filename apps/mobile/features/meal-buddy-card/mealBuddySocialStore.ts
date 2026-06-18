@@ -1,6 +1,5 @@
 import { storage } from "../../lib/storage";
 import { getEffectiveCurrentDate } from "../demo-time";
-import { getCanonicalMenuItemById, getCanonicalRestaurantById, getCanonicalRestaurantByName, getPrimaryMenuItemForRestaurant } from "../restaurants";
 import { buildMealBuddyCardFromProfile } from "./mealBuddyCardMock";
 import { getMockChatThreadByName, getMockProfile, mockChatThreads } from "./mealBuddyFlowMock";
 import { getMealBuddyCardId, type CardId, type ChatId, type MatchId, type MealBuddyCard, type RankedMealBuddyCandidate, type TableId, type UserId } from "./types";
@@ -38,9 +37,9 @@ export type MealBuddyInvitePreview = {
   profileId?: UserId;
   candidateUserId: UserId;
   sourceCardKey: CardId;
-  inviterUser: string;
-  inviteeUser: string;
-  userName: string;
+  inviterUser?: UserId;
+  inviteeUser?: UserId;
+  userName?: UserId;
   mealName: string;
   time: string;
   inviterCard: MealBuddyCard;
@@ -49,21 +48,21 @@ export type MealBuddyInvitePreview = {
   createdAt: string;
   expiresAt: string;
   demoLabel: string;
-  area: string;
-  distanceKm: number;
   tableId?: TableId;
   tableName?: string;
-  hostName?: string;
   restaurantId?: string;
   restaurantName?: string;
   menuItemId?: string;
   currentParticipants?: number;
   requiredParticipants?: number;
   tableStatus?: "pending" | "accepted" | "declined" | "formed";
-  mascotId?: string;
 };
 
-const socialStorageKey = "haocu.mealBuddy.socialState.v6";
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Invitations, matches, chat previews/messages, and group-table chat transitions.
+// Critical identity rule: profileId/participantProfileId are person identity;
+// never use tableId/chatId/sessionId/userName as a person profile id.
+const socialStorageKey = "haocu.mealBuddy.socialState.v7";
 const defaultGroupTableId = "table-balanced-dinner";
 const defaultGroupChatId = "chat-group-table-balanced-dinner";
 const defaultGroupTableName = "均衡晚餐桌";
@@ -73,7 +72,7 @@ function buildDefaultChats(): MealBuddyChatPreview[] {
     .filter((thread) => thread.buddyId !== "ivy")
     .map((thread, index) => ({
       id: thread.id,
-      userName: thread.title,
+      userName: thread.type === "group" ? thread.title ?? thread.tableId ?? "" : thread.participantProfileId ?? thread.buddyId ?? "",
       lastMessage: thread.lastMessage,
       relatedMeal: thread.relatedMeal,
       time: thread.time,
@@ -186,7 +185,6 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
       matchReasons: ["晚餐時間接近", "均衡目標相近", "多人桌還有一個空位"],
       tableId: defaultGroupTableId,
       tableName: defaultGroupTableName,
-      hostName: "米娜",
       currentParticipants: 3,
       requiredParticipants: 4,
       tableStatus: "pending"
@@ -245,7 +243,7 @@ export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
   const message = `想一起看看「${candidate.preferredFoodName}」嗎？`;
   const chat: MealBuddyChatPreview = {
     id: mockThread?.id ?? fallbackChatId,
-    userName: mockThread?.title ?? candidate.displayName,
+    userName: mockThread?.participantProfileId ?? mockThread?.buddyId ?? candidate.userId,
     lastMessage: message,
     relatedMeal: candidate.preferredFoodName,
     time: "剛剛",
@@ -291,7 +289,7 @@ export function createOrOpenMealSessionChat({
   const now = currentTimestamp();
   const chat: MealBuddyChatPreview = {
     id: resolvedChatId,
-    userName: mockThread?.title ?? userName,
+    userName: participantProfileId ?? buddyId ?? mockThread?.participantProfileId ?? mockThread?.buddyId ?? userName,
     lastMessage: `已開啟「${relatedMeal}」飯局聊天。`,
     relatedMeal,
     time: "剛剛",
@@ -406,7 +404,6 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
   if (existingPending) return existingPending;
 
   const now = getEffectiveCurrentDate();
-  const profile = getMockProfile(candidate.userId);
   const matchedCard = buildMealBuddyCardFromProfile(candidate.userId, candidate.restaurantId, candidate.menuItemId, {
     sourceType: "manual",
     intentionType: candidate.intentionType,
@@ -425,8 +422,8 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     candidateUserId: candidate.userId,
     sourceCardKey,
     inviterUser: "current-user",
-    inviteeUser: profile?.displayName ?? candidate.displayName,
-    userName: profile?.displayName ?? candidate.displayName,
+    inviteeUser: candidate.userId,
+    userName: candidate.userId,
     mealName: candidate.preferredFoodName,
     time: candidate.preferredTime || "晚餐",
     inviterCard: inviterCard ?? buildMealBuddyCardFromProfile("current-user", candidate.restaurantId, candidate.menuItemId, { sourceType: "manual", intentionType: candidate.intentionType }),
@@ -435,12 +432,9 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
     demoLabel: "飯友邀請",
-    area: candidate.area,
-    distanceKm: candidate.distanceKm,
     restaurantId: candidate.restaurantId,
     restaurantName: candidate.restaurantName,
-    menuItemId: candidate.menuItemId,
-    mascotId: candidate.mascotId
+    menuItemId: candidate.menuItemId
   };
   invitePreviews = [invitePreview, ...invitePreviews.filter((item) => item.id !== invitePreview.id)];
   persistSocialState();
@@ -459,29 +453,34 @@ export function acceptMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
     persistSocialState();
     return;
   }
+  const acceptedProfile = getMockProfile(acceptedProfileId);
+  if (!acceptedProfile) {
+    persistSocialState();
+    return;
+  }
   const chat = createOrOpenMealBuddyChat({
     userId: acceptedProfileId,
-    displayName: invitePreview.userName,
+    displayName: acceptedProfile.displayName,
     restaurantId: invitePreview.inviterCard.restaurantId,
     menuItemId: invitePreview.inviterCard.menuItemId,
     restaurantName: invitePreview.inviterCard.restaurantName,
     preferredFoodName: invitePreview.mealName,
     foodCategory: invitePreview.inviterCard.foodCategory,
-    area: invitePreview.area,
+    area: acceptedProfile.area,
     preferredTime: invitePreview.inviterCard.preferredTime,
     nutritionGoal: invitePreview.inviterCard.nutritionGoal,
     intentionType: invitePreview.type === "chat" ? "chat_first" : "eat_together",
-    distanceKm: invitePreview.distanceKm,
+    distanceKm: acceptedProfile.distanceKm,
     activityScore: 80,
-    isPremium: Boolean(getMockProfile(acceptedProfileId)?.verified),
-    isVerified: Boolean(getMockProfile(acceptedProfileId)?.verified),
-    tags: getMockProfile(acceptedProfileId)?.tags ?? [],
-    socialNote: getMockProfile(acceptedProfileId)?.intro ?? "",
+    isPremium: acceptedProfile.verified,
+    isVerified: acceptedProfile.verified,
+    tags: acceptedProfile.tags,
+    socialNote: acceptedProfile.intro,
     rankScore: 88,
     matchReasons: invitePreview.matchReasons,
-    mascotId: getMockProfile(acceptedProfileId)?.mascotId
+    mascotId: acceptedProfile.mascotId
   });
-  touchChat(chat.id, `已接受 ${invitePreview.userName} 的飯友邀請。`, "剛剛", "system");
+  touchChat(chat.id, `已接受 ${acceptedProfile.displayName} 的飯友邀請。`, "剛剛", "system");
   persistSocialState();
 }
 
@@ -542,7 +541,6 @@ function invite(input: {
   matchReasons: string[];
   tableId?: TableId;
   tableName?: string;
-  hostName?: string;
   currentParticipants?: number;
   requiredParticipants?: number;
   tableStatus?: MealBuddyInvitePreview["tableStatus"];
@@ -557,9 +555,9 @@ function invite(input: {
     profileId: profile.profileId,
     candidateUserId: profile.profileId,
     sourceCardKey: getMealBuddyCardId(input.direction === "received" ? input.matchedInviteeCard : input.inviterCard),
-    inviterUser: input.direction === "received" ? profile.displayName : "current-user",
-    inviteeUser: input.direction === "received" ? "current-user" : profile.displayName,
-    userName: profile.displayName,
+    inviterUser: input.direction === "received" ? profile.profileId : "current-user",
+    inviteeUser: input.direction === "received" ? "current-user" : profile.profileId,
+    userName: profile.profileId,
     mealName: input.inviterCard.preferredFoodName,
     time: input.time,
     inviterCard: input.inviterCard,
@@ -568,18 +566,14 @@ function invite(input: {
     createdAt: getEffectiveCurrentDate().toISOString(),
     expiresAt: new Date(getEffectiveCurrentDate().getTime() + 24 * 60 * 60 * 1000).toISOString(),
     demoLabel: "飯友邀請",
-    area: profile.area,
-    distanceKm: profile.distanceKm,
     tableId: input.tableId,
     tableName: input.tableName,
-    hostName: input.hostName,
     restaurantId: input.inviterCard.restaurantId,
     restaurantName: input.inviterCard.restaurantName,
     menuItemId: input.inviterCard.menuItemId,
     currentParticipants: input.currentParticipants,
     requiredParticipants: input.requiredParticipants,
-    tableStatus: input.tableStatus,
-    mascotId: profile.mascotId
+    tableStatus: input.tableStatus
   };
 }
 

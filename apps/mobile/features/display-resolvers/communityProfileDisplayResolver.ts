@@ -8,6 +8,9 @@ const currentUserIds = new Set(["demo-user", "current-user", "me", "self", "comm
 const mascots = zhTW.mobile.communityCardSettings.mascots as readonly SystemMascot[];
 const unknownMascot = mascots[0];
 
+// DEMO_ONLY display resolver guard:
+// profileId is canonical. Free mode may swap avatarSource to mascot, but it must
+// not replace the person's displayName with anonymousName.
 export function getCommunityProfileByProfileId(profileId: string) {
   return getMockProfile(profileId) ?? null;
 }
@@ -29,7 +32,7 @@ export function resolveCommunityProfileDisplay(profileId: string | null | undefi
   const isPaid = mode ? mode === "premium" || mode === "paid" : getDemoUserPlan() === "premium";
   const mascot = resolveMascot(profile.mascotId);
 
-  // Free / anonymous mode: mascot avatar + anonymous name.
+  // Free / anonymous mode: mascot avatar only. The person's displayName stays stable.
   // Paid / real mode: placeholder real-photo avatar + display name.
   let avatarSource: AvatarSource;
   if (isPaid && profile.realAvatarKey) {
@@ -86,7 +89,7 @@ function resolveCurrentUserCommunityProfile(): CommunityProfileDisplay {
       : { type: "mascot", mascotId: settings.publicMascotAvatarId || selectedMascot.id, assetKey: selectedMascot.assetKey };
 
   return {
-    displayName: isPremium ? settings.nickname : selectedMascot.name,
+    displayName: settings.nickname,
     avatarSource,
     mascotId: settings.publicMascotAvatarId || selectedMascot.id,
     selectedMascotName: selectedMascot.name,

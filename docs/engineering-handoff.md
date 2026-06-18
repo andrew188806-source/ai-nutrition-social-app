@@ -1,132 +1,222 @@
 # Engineering Handoff
 
-## Project Overview
+This project is a mock-first MVP for AI nutrition analysis, restaurant/menu discovery, meal records, Meal Buddy social flows, chat, and group dining. Preserve existing UI and business behavior while replacing mock stores incrementally.
 
-This repository is a mock-first MVP for AI-assisted nutrition, food memory, restaurant discovery, and meal-buddy social flows. It is a monorepo with:
-
-- `apps/mobile`: Expo Router application and the primary MVP demo.
-- `apps/restaurant-web`: Next.js restaurant operations surface.
-- `apps/admin-web`: Next.js administration surface.
-- `packages/shared`: broad backend-facing domain contracts and shared mock foundations.
-- `packages/services`: service-adapter boundary.
-
-The current product behavior is intentionally demo-oriented. Preserve working flows while replacing mock stores incrementally.
-
-## Architecture
-
-- Route files in `apps/mobile/app` compose screens, read route context, and coordinate navigation.
-- Feature folders in `apps/mobile/features` own domain types, reusable rules, mock data, and mutable demo stores.
-- `apps/mobile/lib/storage.ts` is the shared persistence adapter. Web uses `localStorage`; native uses an AsyncStorage-backed cache.
-- `apps/mobile/components/DemoUi.tsx` and `apps/mobile/theme` contain the current shared presentation primitives.
-- Traditional Chinese user-facing copy lives primarily in `lib/i18n/zh-TW.ts`.
-
-See [navigation-map.md](./navigation-map.md) and `apps/mobile/features/README.md` for ownership details.
-
-## Major Feature Modules
-
-| Feature | Primary screens | Feature ownership |
-| --- | --- | --- |
-| AI Analysis | `meal-photo.tsx`, `analysis.tsx` | `features/analysis` |
-| Today Nutrition | `today-intake.tsx`, home summary | analysis meal records + planned meal store |
-| Food Memory / 美食日記 | `meal-log.tsx` | meal records plus current archive demo data |
-| Meal Buddy | `meal-buddies.tsx` | `features/meal-buddy-card` |
-| Chat | internal to `meal-buddies.tsx` | `mealBuddySocialStore.ts` |
-| Four-Person Tables | internal to Meal Buddy; compatibility file `group-tables.tsx` | `features/group-tables` + social store |
-| Restaurants | `restaurants.tsx` | restaurant page plus shared Meal Buddy/table entry stores |
-| Premium | shared preview controls | `features/demo-user-plan` |
-| My Page / Profile | `me.tsx`, Community Card routes | `features/community-card-settings` |
-| Settings | `permissions.tsx`, Community Card settings | profile/settings routes and stores |
-
-## Type Ownership
-
-- AI result and saved-meal types: `apps/mobile/features/analysis/types.ts`
-- Meal Buddy card, candidate, and stable social IDs: `apps/mobile/features/meal-buddy-card/types.ts`
-- Active four-person table: `apps/mobile/features/group-tables/groupTableStore.ts`
-- Community Card settings: `apps/mobile/features/community-card-settings/types.ts`
-- Planned meal: `apps/mobile/features/planned-meal/types.ts`
-- Broad backend-facing contracts: `packages/shared/src/types.ts`
-
-Avoid adding duplicate page-local types unless they are truly presentation-only.
-
-## Mock Data Strategy
-
-The most important shared social source is:
-
-`Community Profile -> Meal Buddy Candidate -> Matched Buddy -> ChatThread -> MealSession / FourPersonTable`
-
-It is represented by:
-
-- `mealBuddyFlowMock.ts`: canonical demo identities and linked social/session records.
-- `mealBuddyCardStore.ts`: mutable Meal Buddy card pool and recommendation state.
-- `mealBuddySocialStore.ts`: invitations, matched relationships, chat threads, messages, and session transitions.
-- `groupTableStore.ts`: one active hosted table used by restaurant and table flows.
-
-Other mock/state sources:
-
-- `analysisMealRecordStore.ts`: confirmed AI meals used by Today Nutrition and Food Memory.
-- `plannedMealStore.ts`: planned dinner and mock settlement.
-- `demoUserPlanStore.ts`: Free/Premium rendering mode over the same data.
-- `demoTimeStore.ts`: mock date/time behavior.
-
-### Mock Data Still Embedded In Screens
-
-- Restaurant/menu recommendation records remain in `apps/mobile/app/restaurants.tsx`.
-- Planned-dinner choice records remain in `apps/mobile/app/meal-photo.tsx`.
-- Food Memory and several presentation datasets remain in `lib/i18n/zh-TW.ts`.
-
-These should move only when their API contracts are defined; moving them now would create unnecessary regression risk.
-
-## Integration Entry Points
-
-Search for `Integration entry`, `Backend integration entry`, or `TODO(engineering)`.
-
-- Restaurant -> Meal Buddy Card: restaurant screen to Meal Buddy card store.
-- Restaurant -> Four-Person Table: restaurant screen to group-table store.
-- AI Analysis -> Today Intake: analysis screen to meal-record store.
-- AI Analysis -> Meal Buddy Card: analysis screen to Meal Buddy card store.
-- Planned Dinner -> Today Intake: planned-meal store.
-- Meal Session -> ChatThread: Meal Buddy social store.
-- Four-Person Table -> GroupChatThread: Meal Buddy social store.
-
-Replace store internals with API/service calls while keeping stable IDs and page call sites intact where possible.
-
-## Known Limitations And Risky Areas
-
-- `meal-buddies.tsx`, `group-tables.tsx`, `restaurants.tsx`, and `meal-log.tsx` are large. Extract only behaviorally stable sections; do not rewrite them in one pass.
-- Chat, invitation, and session state is mock/local state. Production requires authenticated persistence, realtime delivery, moderation, and notifications.
-- Some fallback matching remains name-oriented in legacy/demo paths. New integrations must use IDs.
-- AsyncStorage hydration is asynchronous while several demo stores expose synchronous reads; native cold-start persistence needs a proper hydration lifecycle.
-- `/social` is a reachable legacy route. `/group-tables` is a compatibility route. Remove neither until all callers are migrated and verified.
-- `features/nutrition-memory` is not directly routed today. Confirm product ownership before removing or expanding it.
-- Free and Premium are demo modes over shared data, not separate systems.
-
-## Next Engineering Priorities
-
-1. Add authenticated API adapters behind the existing store boundaries.
-2. Add an explicit native hydration/loading lifecycle for persisted stores.
-3. Split the largest route files by stable internal section without changing behavior.
-4. Move restaurant/menu and Food Memory mock datasets into owning features once API contracts exist.
-5. Migrate remaining `/social` callers into the unified Meal Buddy shell.
-6. Add automated flow tests for analysis -> intake, invitations -> chat/session, and restaurant -> Meal Buddy/table.
-
-## Verification
+## Start And Check Commands
 
 From the repository root:
 
 ```powershell
+npm.cmd run mobile
 npm.cmd run typecheck
-npx.cmd tsc -p apps/mobile/tsconfig.json --noEmit
-npx.cmd tsc -p apps/restaurant-web/tsconfig.json --noEmit
-npx.cmd tsc -p apps/admin-web/tsconfig.json --noEmit
-npx.cmd tsc -p apps/mobile/tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters
 ```
 
-The root `npm run typecheck` does not currently include app-level tsconfigs. No lint script currently exists. Add tooling only after agreeing on rules so it does not churn the entire MVP.
+Other app surfaces:
 
-## Handoff Safety Rules
+```powershell
+npm.cmd run restaurant
+npm.cmd run admin
+```
 
-- Preserve stable IDs: `profileId`, `buddyId`, `cardId`, `sessionId`, `tableId`, `chatThreadId`, `restaurantId`.
-- Do not create a second chat, profile, Meal Buddy card, or four-person-table data system.
-- Keep planned meals visually and semantically distinct from confirmed consumed meals.
-- Keep user-facing copy in Traditional Chinese.
-- Avoid deleting uncertain legacy routes/components; document and migrate callers first.
+`npm run mobile` uses `scripts/start-mobile.mjs`, which starts Expo with dependency validation disabled to avoid the current Expo CLI doctor `Body is unusable` startup bug.
+
+## Main Mobile Routes
+
+- `/`: demo entry and reset actions.
+- `/meal-photo`: meal photo / AI analysis entry.
+- `/analysis`: AI analysis result, correction, meal save, guilt/calorie sharing entry.
+- `/today-intake`: today nutrition from canonical meal records.
+- `/meal-log`: Food Memory / diary from canonical meal records.
+- `/restaurants`: canonical restaurant/menu browsing and restaurant-created Meal Buddy cards.
+- `/meal-buddies`: Meal Buddy cards, candidates, invitations, matches, chats, meal sessions, group dining shell.
+- `/group-tables`: compatibility redirect into `/meal-buddies?section=tables`.
+- `/community-card`: current user's Community Card.
+- `/community-profile/[profileId]`: Community Profile detail route.
+- `/me`, `/permissions`, `/settings`: profile/settings/demo controls.
+
+## Critical Identity Rules
+
+- `profileId` is the only canonical person identity.
+- Do not use `tableId`, `chatId`, `sessionId`, `buddyId`, `candidateUserId`, `friend.id`, `invite.id`, or `userName` as a Community Profile route id.
+- `restaurantId` is the canonical restaurant identity.
+- `menuItemId` is the canonical dish/menu item identity.
+- `mealId` is the canonical meal-record identity.
+- Free mode hides real avatar/photo and sensitive details only; it must not change the person's `displayName`.
+- Paid mode shows `realAvatar` / fake human placeholder when available.
+- Meal Buddy Cards are generated from Community Profiles plus canonical restaurant/menu data. They should not independently invent person identity.
+
+## Canonical Data Sources Today
+
+| Domain | Current mock source | Future backend |
+| --- | --- | --- |
+| Community Profile | `apps/mobile/features/meal-buddy-card/mealBuddyFlowMock.ts` | Supabase `users`, `community_profiles` |
+| Community Profile display | `apps/mobile/features/display-resolvers/communityProfileDisplayResolver.ts` | profile display API/read model |
+| Meal Buddy Card | `apps/mobile/features/meal-buddy-card/mealBuddyCardMock.ts`, `mealBuddyCardStore.ts` | `meal_buddy_cards` |
+| Candidates / matches / chat seed | `mealBuddyFlowMock.ts`, `mealBuddySocialStore.ts` | `invitations`, `matches`, `chat_threads`, `chat_messages` |
+| Group Dining | `apps/mobile/features/group-tables/groupTableStore.ts` for active table state; `mealBuddyFlowMock.ts` for table participant seed profiles; `mealBuddySocialStore.ts` for group chat/invite transitions | `group_tables`, `group_table_members`, `group_table_messages` |
+| Restaurant/Menu | `apps/mobile/features/restaurants/restaurantBackendMock.ts` | `restaurants`, `menu_items`, `nutrition_estimates` |
+| Meal Records | `apps/mobile/features/analysis/analysisMealRecordStore.ts` | `meal_records`, `meal_photos`, `meal_ratings`, `planned_meals` |
+| AI Analysis Sample Data | `apps/mobile/features/analysis/analysisCorrectionData.ts` plus analysis copy | AI analysis jobs/results/corrections |
+| Calorie/Guilt Sharing | `apps/mobile/features/calorie-sharing/calorieSharingMock.ts` | `meal_sharing_sessions`, `sharing_participants` |
+| Demo clock | `apps/mobile/features/demo-time/demoTimeStore.ts` | server time / scheduled jobs |
+
+## Mock/Demo Markers
+
+Mock files are marked with one or more of:
+
+- `DEMO_ONLY`
+- `MOCK_DATA`
+- `TODO_BACKEND_REPLACE`
+- `TODO_SUPABASE_REPLACE`
+
+Important marked files:
+
+- `mealBuddyFlowMock.ts`: Community Profiles, matched buddies, social graph, group participants.
+- `mealBuddyCardMock.ts`: generated Meal Buddy Card builder.
+- `mealBuddyCardStore.ts`: mutable active card pool.
+- `mealBuddySocialStore.ts`: invitations, chats, match/session transitions.
+- `restaurantBackendMock.ts`: canonical restaurant/menu mock.
+- `analysisMealRecordStore.ts`: canonical meal-record demo store.
+- `analysisCorrectionData.ts`: AI analysis correction/sample data.
+- `calorieSharingMock.ts`: calorie/guilt sharing mock state.
+- `groupTableStore.ts`: active group dining table demo state.
+
+## Integration Boundaries
+
+### A. Community Profile
+
+Current:
+
+- `profileId` is canonical.
+- `resolveCommunityProfileDisplay(profileId)` resolves display name/avatar/tags.
+
+Future:
+
+- Supabase `users` and `community_profiles`.
+- Keep route `/community-profile/[profileId]` stable.
+
+### B. Meal Buddy Card
+
+Current:
+
+- Cards generated by `buildMealBuddyCardFromProfile(profileId, restaurantId, menuItemId, options)`.
+- Active demo cards stored in `mealBuddyCardStore.ts`.
+
+Future:
+
+- `meal_buddy_cards`.
+- Store `profileId`, `restaurantId`, `menuItemId`, meal date/time, dining mode, payment preference, note, and status.
+
+### C. Invitations / Matches / Chats
+
+Current:
+
+- `mealBuddySocialStore.ts` owns invitations, matched state, chat previews/messages, and local persistence.
+
+Future:
+
+- `invitations`, `matches`, `chat_threads`, `chat_messages`.
+- Realtime delivery, moderation, notifications, and auth ownership checks.
+
+### D. Group Dining
+
+Current:
+
+- Active table state in `groupTableStore.ts`.
+- Group chat and table invites in `mealBuddySocialStore.ts`.
+- Participants must use `participantProfileIds`.
+- `participantIds` is accepted only as a legacy persisted-storage read shim inside `groupTableStore.ts`; new active table records must not write it.
+
+Future:
+
+- `group_tables`, `group_table_members`, `group_table_messages`.
+
+### E. Restaurant/Menu
+
+Current:
+
+- `restaurantBackendMock.ts` is the canonical restaurant/menu mock.
+- i18n is UI copy only, not restaurant database.
+
+Future:
+
+- `restaurants`, `menu_items`, `nutrition_estimates`.
+
+### F. Meal Records
+
+Current:
+
+- `analysisMealRecordStore.ts` is canonical for visible meals, ratings, completion, planned dinner settlement, and sharing references.
+
+Future:
+
+- `meal_records`, `meal_photos`, `meal_ratings`, `planned_meals`.
+
+### G. Calorie/Guilt Sharing
+
+Current:
+
+- `calorieSharingMock.ts` and meal-record fields.
+
+Future:
+
+- `meal_sharing_sessions`, `sharing_participants`.
+
+## UI-Only / Presentation Areas
+
+- `apps/mobile/app/*.tsx` route files compose screens and navigation.
+- `apps/mobile/components/DemoUi.tsx` and `apps/mobile/theme` are presentation primitives.
+- `MealBuddyCardComponents.tsx` is UI rendering for cards/candidates; keep data generation in stores/mocks.
+- `lib/i18n/zh-TW.ts` should provide labels/copy only. Do not use its old social candidate copy as data.
+
+## Compatibility Fields
+
+Keep until screens and persistence are fully migrated:
+
+- Meal Buddy Card: `userId`, `preferredFoodName`, `restaurantName`, `foodCategory`, `preferredTime`, `diningDate`, `visibilityStatus`.
+- Social/chat: `buddyId`, `candidateUserId`, `userName`, `restaurantName`. In direct-chat/invite records these fields must carry canonical profile ids, not copied display names.
+- Group dining: `participantIds` only for legacy persisted table hydration; active code should use `participantProfileIds`.
+
+These fields are compatibility/persistence shims. Canonical references remain `profileId`, `restaurantId`, `menuItemId`, `mealId`, `tableId`, and `chatThreadId`.
+
+## Social Architecture Map
+
+```text
+Community Profile
+  apps/mobile/features/meal-buddy-card/mealBuddyFlowMock.ts
+  apps/mobile/features/display-resolvers/communityProfileDisplayResolver.ts
+    -> Meal Buddy Card
+       apps/mobile/features/meal-buddy-card/mealBuddyCardMock.ts
+       apps/mobile/features/meal-buddy-card/mealBuddyCardStore.ts
+    -> Invitation
+       apps/mobile/features/meal-buddy-card/mealBuddySocialStore.ts
+    -> Match
+       apps/mobile/features/meal-buddy-card/mealBuddyFlowMock.ts
+       apps/mobile/app/meal-buddies.tsx
+    -> Chat
+       apps/mobile/features/meal-buddy-card/mealBuddySocialStore.ts
+    -> Group Table
+       apps/mobile/features/group-tables/groupTableStore.ts
+       apps/mobile/features/meal-buddy-card/mealBuddyFlowMock.ts
+       apps/mobile/app/group-tables.tsx
+```
+
+## Known Limitations
+
+- Several route files are still large: `meal-buddies.tsx`, `group-tables.tsx`, `restaurants.tsx`, `meal-log.tsx`.
+- Local storage is synchronous at the feature API boundary; native hydration needs a proper loading lifecycle before production.
+- `/social` and `/group-tables` remain compatibility routes.
+- The old `lib/i18n/zh-TW.ts` social candidate array has been emptied. Meal Buddy data now comes from feature-owned mock sources.
+- Some strings in older restaurant/meal mocks have encoding damage from previous data imports; replace at backend integration time rather than patching unrelated UI copy.
+- No lint script exists yet. Add linting only after the team agrees on rules to avoid whole-MVP churn.
+
+## Recommended Backend Integration Order
+
+1. Community Profile auth/read model: `users`, `community_profiles`.
+2. Restaurant/Menu: `restaurants`, `menu_items`, `nutrition_estimates`.
+3. Meal Records: `meal_records`, `meal_photos`, `meal_ratings`, `planned_meals`.
+4. Meal Buddy Cards: `meal_buddy_cards` generated from profile + restaurant/menu.
+5. Invitations/Matches/Chats: realtime social tables.
+6. Group Dining: group tables, members, group messages.
+7. Calorie/Guilt Sharing: sharing sessions and participants.
+8. Remove legacy i18n social candidate copy and compatibility mirror fields after all screens use backend records.

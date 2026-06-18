@@ -1,6 +1,14 @@
 import { getCanonicalMenuItemById, getCanonicalRestaurantById, getDefaultRestaurantForProfileTags, getPrimaryMenuItemForRestaurant } from "../restaurants";
 import type { ChatId, RankedMealBuddyCandidate, TableId, UserId } from "./types";
 
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Canonical Community Profile and social graph seed data for the MVP.
+// Critical identity rules:
+// - profileId is the only canonical person identity.
+// - Do not use buddyId, tableId, chatId, sessionId, or userName as profile identity.
+// - Meal Buddy Cards/candidates are generated from Community Profiles + restaurant/menu IDs.
+// - Free mode may hide avatar/photo or sensitive details, but must not change displayName.
+
 export type MockCommunityProfile = {
   id: string;
   profileId: string;
@@ -35,19 +43,10 @@ export type MockCommunityProfile = {
 export type MockMatchedBuddy = {
   id: UserId;
   profileId: UserId;
-  avatar: string;
-  name: string;
-  verified: boolean;
-  tags: string[];
-  recentMealStatus: string;
   mealCount: number;
   knownSince: string;
   lastTable: string;
-  commonInterests: string[];
-  areas: string[];
-  intro: string;
   chatThreadId: ChatId;
-  mascotId?: string;
 };
 
 export type MockChatThread = {
@@ -56,7 +55,7 @@ export type MockChatThread = {
   buddyId?: UserId;
   participantProfileId?: UserId;
   tableId?: TableId;
-  title: string;
+  title?: string;
   lastMessage: string;
   relatedMeal: string;
   time: string;
@@ -73,14 +72,13 @@ export type MockGatheringRecord = {
   status: string;
   payment: string;
   source: "meal_session" | "group_table";
-  withPerson: string;
   buddyId?: UserId;
   participantProfileId?: UserId;
   tableId?: TableId;
   hostProfileId?: UserId;
   participantProfileIds?: UserId[];
   chatThreadId: ChatId;
-  chatName: string;
+  chatName?: string;
   notes?: string;
   matchReasons?: string[];
 };
@@ -97,7 +95,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 29,
     ageRange: "25-34",
     gender: "other",
-    area: "Da'an",
+    area: "大安",
     distanceKm: 0,
     verificationStatus: "verified",
     healthGoal: "穩定精神與體力",
@@ -121,7 +119,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 28,
     ageRange: "25-34",
     gender: "female",
-    area: "Da'an",
+    area: "大安",
     distanceKm: 0.6,
     verificationStatus: "verified",
     healthGoal: "維持均衡活力",
@@ -145,7 +143,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 26,
     ageRange: "25-34",
     gender: "female",
-    area: "Xinyi",
+    area: "信義",
     distanceKm: 1.1,
     verificationStatus: "verified",
     healthGoal: "建立蔬食習慣",
@@ -169,7 +167,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 30,
     ageRange: "25-34",
     gender: "male",
-    area: "Xinyi",
+    area: "信義",
     distanceKm: 0.8,
     verificationStatus: "unverified",
     healthGoal: "控制份量",
@@ -193,7 +191,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 29,
     ageRange: "25-34",
     gender: "male",
-    area: "Songshan",
+    area: "松山",
     distanceKm: 0.8,
     verificationStatus: "verified",
     healthGoal: "增加肌肉量",
@@ -217,7 +215,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 27,
     ageRange: "25-34",
     gender: "female",
-    area: "Da'an",
+    area: "大安",
     distanceKm: 1.0,
     verificationStatus: "verified",
     healthGoal: "維持穩定作息",
@@ -241,7 +239,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 25,
     ageRange: "25-34",
     gender: "male",
-    area: "Songshan",
+    area: "松山",
     distanceKm: 0.7,
     verificationStatus: "unverified",
     healthGoal: "吃得健康也控制預算",
@@ -265,7 +263,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 24,
     ageRange: "18-24",
     gender: "female",
-    area: "Xinyi",
+    area: "信義",
     distanceKm: 1.3,
     verificationStatus: "unverified",
     healthGoal: "點心更清爽",
@@ -289,7 +287,7 @@ export const mockCommunityProfiles: MockCommunityProfile[] = [
     age: 31,
     ageRange: "25-34",
     gender: "male",
-    area: "Da'an",
+    area: "大安",
     distanceKm: 0.9,
     verificationStatus: "unverified",
     healthGoal: "晚餐選擇更穩定",
@@ -354,9 +352,8 @@ export const mockGatheringRecords = {
       time: "今晚 19:00",
       people: "3/4 人",
       status: "招募中",
-      payment: "AA split",
+      payment: "AA 制",
       source: "group_table",
-      withPerson: "米娜、阿博、安",
       tableId: "table-balanced-dinner",
       hostProfileId: "mina",
       participantProfileIds: ["mina", "bo", "an"],
@@ -374,7 +371,6 @@ export const mockGatheringRecords = {
       status: "已確認",
       payment: "各付各的",
       source: "meal_session",
-      withPerson: "里歐",
       buddyId: "leo",
       participantProfileId: "leo",
       chatThreadId: "chat-direct-leo",
@@ -391,9 +387,8 @@ export const mockGatheringRecords = {
       time: "今晚 18:30",
       people: "2 人",
       status: "已確認",
-      payment: "AA split",
+      payment: "AA 制",
       source: "meal_session",
-      withPerson: "米娜",
       buddyId: "mina",
       participantProfileId: "mina",
       chatThreadId: "chat-direct-mina",
@@ -408,9 +403,8 @@ export const mockGatheringRecords = {
       time: "明天 12:10",
       people: "3/4 人",
       status: "開放中",
-      payment: "AA split",
+      payment: "AA 制",
       source: "group_table",
-      withPerson: "小艾、優娜、尚恩",
       tableId: "table-light-lunch",
       hostProfileId: "ivy",
       participantProfileIds: ["ivy", "yuna", "sean"],
@@ -428,9 +422,8 @@ export const mockGatheringRecords = {
       time: "昨天 12:30",
       people: "4 人",
       status: "已完成",
-      payment: "AA split",
+      payment: "AA 制",
       source: "group_table",
-      withPerson: "凱、里歐、安",
       tableId: "table-protein-lunch",
       hostProfileId: "leo",
       participantProfileIds: ["leo", "kai", "an", "bo"],
@@ -448,7 +441,6 @@ export const mockGatheringRecords = {
       status: "已完成",
       payment: "各付各的",
       source: "meal_session",
-      withPerson: "安",
       buddyId: "an",
       participantProfileId: "an",
       chatThreadId: "chat-direct-an",
@@ -464,7 +456,8 @@ export function getMockProfile(profileId: string) {
 }
 
 export function getMockChatThreadByName(name: string) {
-  return mockChatThreads.find((thread) => thread.title === name || thread.title.includes(name) || name.includes(thread.title));
+  const profile = getMockProfile(name);
+  return mockChatThreads.find((thread) => thread.participantProfileId === profile?.profileId || thread.buddyId === profile?.profileId || thread.title === name || (thread.title ? thread.title.includes(name) || name.includes(thread.title) : false));
 }
 
 export function getMockMealBuddyCandidates(): RankedMealBuddyCandidate[] {
@@ -475,12 +468,12 @@ export function getMockMealBuddyCandidates(): RankedMealBuddyCandidate[] {
 }
 
 export function getMockTableParticipantCandidates(tableId = "table-balanced-dinner"): RankedMealBuddyCandidate[] {
-  const participantIdsByTable: Record<string, string[]> = {
+  const participantProfileIdsByTable: Record<string, string[]> = {
     "table-balanced-dinner": ["mina", "bo", "an"],
     "table-light-lunch": ["ivy", "yuna", "sean"],
     "table-protein-lunch": ["leo", "kai", "an", "bo"]
   };
-  return (participantIdsByTable[tableId] ?? participantIdsByTable["table-balanced-dinner"])
+  return (participantProfileIdsByTable[tableId] ?? participantProfileIdsByTable["table-balanced-dinner"])
     .map(getMockProfile)
     .filter((profileItem): profileItem is MockCommunityProfile => Boolean(profileItem))
     .map(profileToCandidate);
@@ -511,7 +504,6 @@ function directChat(profileId: string, chatId: string, lastMessage: string, rela
     type: "direct",
     buddyId: profileId,
     participantProfileId: profileId,
-    title: profileItem.displayName,
     lastMessage,
     relatedMeal,
     time,
@@ -521,26 +513,16 @@ function directChat(profileId: string, chatId: string, lastMessage: string, rela
 }
 
 function buildMatchedBuddy(profileId: string, mealCount: number, knownSince: string, lastTable: string, chatThreadId: string): MockMatchedBuddy {
-  const profileItem = getMockProfile(profileId);
-  if (!profileItem) {
+  if (!getMockProfile(profileId)) {
     throw new Error(`Missing mock community profile: ${profileId}`);
   }
   return {
-    id: profileItem.profileId,
-    profileId: profileItem.profileId,
-    avatar: profileItem.avatar,
-    name: profileItem.displayName,
-    verified: profileItem.verified,
-    tags: profileItem.tags,
-    recentMealStatus: profileItem.recentMealStyle,
+    id: profileId,
+    profileId,
     mealCount,
     knownSince,
     lastTable,
-    commonInterests: profileItem.commonInterests,
-    areas: [profileItem.area],
-    intro: profileItem.intro,
-    chatThreadId,
-    mascotId: profileItem.mascotId
+    chatThreadId
   };
 }
 

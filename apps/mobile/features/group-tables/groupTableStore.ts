@@ -1,6 +1,10 @@
 import { storage } from "../../lib/storage";
 import type { ChatId, TableId, UserId } from "../meal-buddy-card/types";
 
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Local active group-table state. profileId/participantProfileIds are person identities;
+// tableId is only the group-table identity and must never be used as profileId.
+
 export type ActiveFourPersonTable = {
   tableId: TableId;
   restaurantId: string;
@@ -11,9 +15,12 @@ export type ActiveFourPersonTable = {
   maxParticipants: 4 | 6 | 8;
   hostProfileId?: UserId;
   participantProfileIds: UserId[];
-  participantIds?: UserId[];
   status: "招募中" | "已成團";
   groupChatThreadId?: ChatId;
+};
+
+type StoredActiveFourPersonTable = ActiveFourPersonTable & {
+  participantIds?: UserId[];
 };
 
 // TODO(engineering):
@@ -43,9 +50,8 @@ export function createRestaurantFourPersonTable(input: {
     cuisineTags: input.cuisineTags,
     suggestedTime: input.suggestedTime,
     maxParticipants: 4,
-    hostProfileId: "demo-user",
-    participantProfileIds: ["demo-user"],
-    participantIds: ["demo-user"],
+    hostProfileId: "current-user",
+    participantProfileIds: ["current-user"],
     status: "招募中"
   };
   persistActiveTable();
@@ -72,7 +78,7 @@ function readStoredActiveTable(): ActiveFourPersonTable | null {
     return null;
   }
   try {
-    return normalizeActiveTable(JSON.parse(raw) as ActiveFourPersonTable);
+    return normalizeActiveTable(JSON.parse(raw) as StoredActiveFourPersonTable);
   } catch {
     return null;
   }
@@ -90,12 +96,19 @@ function safeId(value: string) {
   return encodeURIComponent(value).replace(/%/g, "").toLowerCase();
 }
 
-function normalizeActiveTable(table: ActiveFourPersonTable): ActiveFourPersonTable {
+function normalizeActiveTable(table: StoredActiveFourPersonTable): ActiveFourPersonTable {
   const participantProfileIds = table.participantProfileIds ?? table.participantIds ?? [];
   return {
-    ...table,
-    hostProfileId: table.hostProfileId ?? participantProfileIds[0] ?? "demo-user",
+    tableId: table.tableId,
+    restaurantId: table.restaurantId,
+    restaurantName: table.restaurantName,
+    location: table.location,
+    cuisineTags: table.cuisineTags,
+    suggestedTime: table.suggestedTime,
+    maxParticipants: table.maxParticipants,
+    hostProfileId: table.hostProfileId ?? participantProfileIds[0] ?? "current-user",
     participantProfileIds,
-    participantIds: table.participantIds ?? participantProfileIds
+    status: table.status,
+    groupChatThreadId: table.groupChatThreadId
   };
 }

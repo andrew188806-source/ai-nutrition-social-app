@@ -4,6 +4,9 @@ import { getEffectiveDateKey } from "../demo-time";
 import { buildMealBuddyCardFromProfile } from "./mealBuddyCardMock";
 import { getMealBuddyCardId, type MealBuddyCard, type MealBuddyCardType, type RankedMealBuddyCandidate } from "./types";
 
+// DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
+// Mutable local Meal Buddy card pool. Seed cards are generated from profileId +
+// canonical restaurantId/menuItemId. Keep compatibility fields because the UI still reads them.
 const activeCardsStorageKey = "haocu.mealBuddy.activeCards.v2";
 const dailyStateStorageKey = "haocu.mealBuddy.dailyState.v1";
 
