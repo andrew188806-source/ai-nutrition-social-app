@@ -307,20 +307,14 @@ export default function MealBuddyHomeScreen() {
           onInviteEat={(candidate, card) => {
             createMealBuddyInvite(candidate, "meal", card);
             setSocialVersion((version) => version + 1);
-            setFriendInitialTab("invitations");
-            setActiveSection("friends");
           }}
           onInviteTable={(candidate, card) => {
             createMealBuddyInvite(candidate, "table", card);
             setSocialVersion((version) => version + 1);
-            setFriendInitialTab("invitations");
-            setActiveSection("tables");
           }}
           onOpenChat={(candidate, card) => {
             createMealBuddyInvite(candidate, "chat", card);
             setSocialVersion((version) => version + 1);
-            setFriendInitialTab("invitations");
-            setActiveSection("friends");
           }}
           onOpenPremium={() => setShowFreeQuotaModal(true)}
           onViewCandidateCard={() => undefined}
