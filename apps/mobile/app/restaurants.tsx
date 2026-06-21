@@ -160,10 +160,6 @@ export default function RestaurantsScreen() {
     });
   }
 
-  function updateQuickFilter(key: "diningGoal" | "cuisineType", value: string) {
-    setFilters((current) => ({ ...current, [key]: value }));
-  }
-
   function openRestaurantDetail(restaurant: Restaurant) {
     setDetailRestaurant(restaurant);
   }
@@ -228,23 +224,6 @@ export default function RestaurantsScreen() {
         </View>
         <PrimaryButton icon="target" label="調整推薦條件" onPress={openRecommendationModal} />
       </SnowCard>
-
-      <View style={styles.filterRow}>
-        <Text style={styles.filterRowLabel}>目標</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowScroll}>
-          {diningGoals.map((goal) => (
-            <Chip key={goal} label={goal} active={filters.diningGoal === goal} onPress={() => updateQuickFilter("diningGoal", goal)} />
-          ))}
-        </ScrollView>
-      </View>
-      <View style={styles.filterRow}>
-        <Text style={styles.filterRowLabel}>種類</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRowScroll}>
-          {cuisineTypes.map((type) => (
-            <Chip key={type} label={type} tone="ai" active={filters.cuisineType === type} onPress={() => updateQuickFilter("cuisineType", type)} />
-          ))}
-        </ScrollView>
-      </View>
 
       <SnowSectionHeader title="推薦餐廳" subtitle={`共 ${recommendedRestaurants.length} 間餐廳，依符合度排序`} />
       <View style={styles.cardList}>
@@ -1508,22 +1487,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 18
   },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 10
-  },
-  filterRowLabel: {
-    color: snow.sub,
-    fontSize: 12,
-    fontFamily: fonts.bold,
-    fontWeight: "800",
-    minWidth: 28
-  },
-  filterRowScroll: {
-    flexDirection: "row",
-    gap: 8,
-    paddingVertical: 2
-  }
 });

@@ -274,7 +274,13 @@ export default function MealBuddyHomeScreen() {
       />
       <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
 
-      {activeSection !== "discover" ? <SecondaryButton icon="home" label="回到找飯友" onPress={() => setActiveSection("discover")} /> : null}
+      {activeSection !== "discover" ? (
+        <View style={styles.snowChipRow}>
+          <Chip label="飯友" active={activeSection === "friends" && friendInitialTab !== "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("matched"); }} />
+          <Chip label="聊天" active={activeSection === "friends" && friendInitialTab === "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("chats"); setFocusedChatId(""); setFocusedChatName(""); }} />
+          <Chip label="飯局" active={activeSection === "gatherings" || activeSection === "tables"} onPress={() => setActiveSection("gatherings")} />
+        </View>
+      ) : null}
 
       {activeSection === "discover" ? (
         <DiscoverSection
@@ -407,7 +413,7 @@ export default function MealBuddyHomeScreen() {
           }}
           onOpenChat={(record) => {
             let targetChat;
-            if (record.source === "四人桌" || record.tableId) {
+            if (record.source === "group_table" || record.tableId) {
               targetChat = createOrOpenGroupTableChat(record.chatName, record.tableId, record.chatThreadId);
             } else {
               targetChat = createOrOpenMealSessionChat({
@@ -541,17 +547,6 @@ function DiscoverSection({
   const [expandedGroups, setExpandedGroups] = useState({ all: true });
   const [highlightCardId, setHighlightCardId] = useState("");
   const [cardQuotaMessage, setCardQuotaMessage] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredCards = normalizedQuery
-    ? activeCards.filter((card) =>
-        [card.preferredFoodName, card.restaurantName, card.foodCategory, card.area]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery)
-      )
-    : activeCards;
   useEffect(() => {
     const targetCard = activeCards.find((card) => card.createdAt === highlightCardCreatedAt) ?? activeCards.find((card) => card.sourceType === "ai_recommendation");
     if (!targetCard) return;
@@ -615,14 +610,6 @@ function DiscoverSection({
               <Icon name="table4" size={16} color={snow.ink} />
               <Text style={styles.actionButtonLabel}>多人飯局</Text>
             </Pressable>
-            <Pressable style={[styles.actionButton, styles.actionButtonCoral]} onPress={() => requestCreateCard("general")}>
-              <Icon name="plus" size={16} color="#B83030" />
-              <Text style={[styles.actionButtonLabel, styles.actionButtonLabelCoral]}>建立飯友卡</Text>
-            </Pressable>
-            <Pressable style={[styles.actionButton, styles.actionButtonAmber]} onPress={() => requestCreateCard("restaurant")}>
-              <Icon name="plate" size={16} color="#A05010" />
-              <Text style={[styles.actionButtonLabel, styles.actionButtonLabelAmber]}>建立餐廳卡</Text>
-            </Pressable>
           </View>
 
           <View style={styles.statGrid}>
@@ -643,29 +630,46 @@ function DiscoverSection({
             </View>
           </View>
 
-          <TextInput
-            placeholder="搜尋飯友卡、餐點或地區"
-            placeholderTextColor={snow.faint}
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-
-          {cardQuotaMessage ? <Text style={styles.message}>{cardQuotaMessage}</Text> : null}
-          {formTarget ? <InlineMealBuddyCardForm card={formTarget.card} cardType={formTarget.cardType} mode={formTarget.mode} onCancel={() => setFormTarget(null)} onSave={saveInlineCard} /> : null}
-          <MealBuddyCardGroup
-            cards={filteredCards}
-            emptyBody={normalizedQuery ? "找不到符合搜尋條件的飯友卡。" : "目前還沒有飯友卡。可以先建立一張，或從 AI 分析、餐廳頁快速產生。"}
-            emptyTitle={normalizedQuery ? "沒有符合的飯友卡" : "尚未建立飯友卡"}
-            expanded={expandedGroups.all}
-            highlightCardId={highlightCardId}
-            label="卡片列表"
-            onCreate={() => requestCreateCard("general")}
-            onDelete={onDeleteCard}
-            onEdit={(card) => setFormTarget({ card, cardType: card.cardType, mode: "edit" })}
-            onToggle={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}
-            onUse={onUseCard}
-          />
+          <View style={styles.cardGroup}>
+            <Pressable style={[styles.groupHeaderRow, { marginTop: 0 }]} onPress={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}>
+              <Text style={styles.groupTitleSnow}>卡片列表（{activeCards.length}）</Text>
+            </Pressable>
+            {expandedGroups.all ? (
+              <>
+                <View style={styles.cardCreateRow}>
+                  <Pressable style={[styles.actionButton, styles.actionButtonCoral]} onPress={() => requestCreateCard("general")}>
+                    <Icon name="plus" size={16} color="#B83030" />
+                    <Text style={[styles.actionButtonLabel, styles.actionButtonLabelCoral]}>建立飯友卡</Text>
+                  </Pressable>
+                  <Pressable style={[styles.actionButton, styles.actionButtonAmber]} onPress={() => requestCreateCard("restaurant")}>
+                    <Icon name="plate" size={16} color="#A05010" />
+                    <Text style={[styles.actionButtonLabel, styles.actionButtonLabelAmber]}>建立餐廳卡</Text>
+                  </Pressable>
+                </View>
+                {cardQuotaMessage ? <Text style={styles.message}>{cardQuotaMessage}</Text> : null}
+                {formTarget ? <InlineMealBuddyCardForm card={formTarget.card} cardType={formTarget.cardType} mode={formTarget.mode} onCancel={() => setFormTarget(null)} onSave={saveInlineCard} /> : null}
+                {activeCards.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateTitle}>尚未建立飯友卡</Text>
+                    <Text style={styles.emptyStateBody}>目前還沒有飯友卡。可以先建立一張，或從 AI 分析、餐廳頁快速產生。</Text>
+                  </View>
+                ) : (
+                  <View style={styles.cardList}>
+                    {activeCards.map((card) => (
+                      <MealBuddyCardEntry key={getMealBuddyCardId(card)} card={card} highlighted={highlightCardId === card.createdAt} onDelete={() => onDeleteCard(card)} onEdit={() => setFormTarget({ card, cardType: card.cardType, mode: "edit" })} onUse={() => onUseCard(card)} />
+                    ))}
+                  </View>
+                )}
+                <Pressable style={styles.collapseToggle} onPress={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}>
+                  <Text style={styles.collapseToggleText}>收合卡片列表</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable style={styles.collapseToggle} onPress={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}>
+                <Text style={styles.collapseToggleText}>展開卡片列表</Text>
+              </Pressable>
+            )}
+          </View>
         </SnowCard>
       </View>
 
@@ -774,55 +778,6 @@ function DiscoverSection({
   );
 }
 
-function MealBuddyCardGroup({
-  cards,
-  emptyBody,
-  emptyTitle,
-  expanded,
-  highlightCardId,
-  label,
-  onCreate,
-  onDelete,
-  onEdit,
-  onToggle,
-  onUse
-}: {
-  cards: MealBuddyCard[];
-  emptyBody: string;
-  emptyTitle: string;
-  expanded: boolean;
-  highlightCardId: string;
-  label: string;
-  onCreate?: () => void;
-  onDelete: (card: MealBuddyCard) => void;
-  onEdit: (card: MealBuddyCard) => void;
-  onToggle: () => void;
-  onUse: (card: MealBuddyCard) => void;
-}) {
-  return (
-    <View style={styles.cardGroup}>
-      <View style={styles.groupHeaderRow}>
-        <Text style={styles.groupTitleSnow}>{label}（{cards.length}）</Text>
-        <Chip label={expanded ? "收合" : "展開"} onPress={onToggle} />
-      </View>
-      {expanded ? (
-        cards.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>{emptyTitle}</Text>
-            <Text style={styles.emptyStateBody}>{emptyBody}</Text>
-            {onCreate ? <SecondaryButton icon="plus" label="建立飯友卡" onPress={onCreate} /> : null}
-          </View>
-        ) : (
-          <View style={styles.cardList}>
-            {cards.map((card) => (
-              <MealBuddyCardEntry key={getMealBuddyCardId(card)} card={card} highlighted={highlightCardId === card.createdAt} onDelete={() => onDelete(card)} onEdit={() => onEdit(card)} onUse={() => onUse(card)} />
-            ))}
-          </View>
-        )
-      ) : null}
-    </View>
-  );
-}
 
 type MealBuddyCardFormValue = {
   area: string;
@@ -1149,10 +1104,20 @@ function MyFriendsSection({
   const [selectedInvite, setSelectedInvite] = useState<ReturnType<typeof getMealBuddyInvites>[number] | null>(null);
   const [sort, setSort] = useState<FriendSort>("飯局數");
   const [expandedFriendCardId, setExpandedFriendCardId] = useState("");
+  const [friendsSubTab, setFriendsSubTab] = useState<"matched" | "invitations">("matched");
+  const [friendSearchQuery, setFriendSearchQuery] = useState("");
+  const normalizedFriendQuery = friendSearchQuery.trim().toLowerCase();
 
   useEffect(() => {
     setActiveTab(initialTab);
+    if (initialTab === "invitations") {
+      setFriendsSubTab("invitations");
+      setMode("list");
+      setSelectedChat(null);
+      return;
+    }
     if (initialTab !== "chats") {
+      setFriendsSubTab("matched");
       setMode("list");
       setSelectedChat(null);
       return;
@@ -1199,25 +1164,43 @@ function MyFriendsSection({
     return <FriendCommunityCard friend={selectedFriend} isPremium={isPremium} onBack={() => setMode("list")} />;
   }
 
-  const friendsTabHeader: Record<MyFriendsTab, { title: string; subtitle: string }> = {
-    matched: { title: "已配對", subtitle: "這裡只放已成功配對的飯友，不包含待回覆邀請。" },
-    invitations: { title: "邀請中", subtitle: "顯示你送出與收到的待回覆邀請，未接受的邀請不會出現在聊天列表。" },
-    chats: { title: "聊天", subtitle: "顯示目前已建立的聊天室列表。" }
-  };
+  const sectionTab = activeTab === "chats" ? "chats" : "friends";
+  const filteredFriends = normalizedFriendQuery
+    ? sortedFriends.filter((friend) => {
+        const profile = resolveMatchedFriendProfileDisplay(friend);
+        return [profile?.displayName, profile?.shortProfileSummary]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedFriendQuery);
+      })
+    : sortedFriends;
 
   return (
     <>
-      <SnowSectionHeader title={friendsTabHeader[activeTab].title} subtitle={friendsTabHeader[activeTab].subtitle} />
+      {sectionTab === "friends" ? (
+        <View style={styles.snowChipRow}>
+          <Chip label="已配對" active={friendsSubTab === "matched"} onPress={() => setFriendsSubTab("matched")} />
+          <Chip label="邀請中" active={friendsSubTab === "invitations"} onPress={() => setFriendsSubTab("invitations")} />
+        </View>
+      ) : null}
 
-      {activeTab === "matched" ? (
+      {sectionTab === "friends" && friendsSubTab === "matched" ? (
         <>
+          <TextInput
+            placeholder="搜尋飯友、餐廳或地區"
+            placeholderTextColor={snow.faint}
+            style={styles.searchInput}
+            value={friendSearchQuery}
+            onChangeText={setFriendSearchQuery}
+          />
           <View style={styles.snowChipRow}>
             {(["飯局數", "認識時間", "最近同桌"] as FriendSort[]).map((item) => (
               <Chip key={item} label={item} active={sort === item} onPress={() => setSort(item)} />
             ))}
           </View>
           <View style={styles.cardList}>
-            {sortedFriends.map((friend) => {
+            {filteredFriends.map((friend) => {
               const profile = resolveMatchedFriendProfileDisplay(friend);
               if (expandedFriendCardId === friend.id) {
                 return <FriendCommunityCard key={friend.id} friend={friend} isPremium={isPremium} onBack={() => setExpandedFriendCardId("")} />;
@@ -1264,92 +1247,95 @@ function MyFriendsSection({
         </>
       ) : null}
 
-      {activeTab === "invitations" ? (
+      {sectionTab === "friends" && friendsSubTab === "invitations" ? (
         <View style={styles.cardList}>
           {visibleInvites.length === 0 ? (
             <Card>
               <Text style={styles.limitHint}>目前沒有等待中的邀請。從推薦飯友結果送出聊天或吃飯邀請後，會出現在這裡。</Text>
             </Card>
           ) : null}
-          {visibleInvites.map((invite) => {
-            const profile = resolveInvitationProfileDisplay(invite);
-            const displayName = invitationDisplayName(invite, profile);
-            return (
-              <View key={invite.id} style={styles.previewCard}>
-                <Text style={styles.meta}>{invite.direction === "received" ? "收到邀請" : "我送出的邀請"} · {invite.type === "chat" ? "先聊聊" : invite.type === "table" ? "四人飯局邀請" : "一起吃飯"}</Text>
-                <PremiumBadge label={invite.demoLabel} variant="free" />
-                <Text style={styles.name}>{invite.type === "table" ? `四人飯局邀請｜${invite.mealName}` : invite.direction === "received" ? `${displayName} 邀請你` : `你邀請 ${displayName}`}</Text>
-                <Text style={styles.message}>{invite.type === "table" ? `${displayName} 邀請你加入四人桌 · 目前 ${invite.currentParticipants ?? 3}/${invite.requiredParticipants ?? 4} 人` : `${invite.mealName} · ${invite.time}`}</Text>
-                <Text style={styles.meta}>{invite.status === "pending" ? "等待回覆" : invite.status === "accepted" ? "已接受" : invite.status === "declined" ? "已拒絕" : "已過期"} · {invite.matchReasons.slice(0, 2).join("、")}</Text>
-                <View style={styles.actionRow}>
-                  <Pressable style={styles.secondaryButton} onPress={() => setSelectedInvite(invite)}>
-                    <Text style={styles.secondaryButtonText}>查看詳情</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.secondaryButton}
-                    onPress={() => {
-                      onOpenProfile(invite.profileId);
-                    }}
-                  >
-                    <Text style={styles.secondaryButtonText}>查看社群卡</Text>
-                  </Pressable>
-                  {invite.direction === "received" && invite.status === "pending" ? (
-                    <>
-                      <Pressable style={styles.primaryButton} onPress={() => onAcceptInvite(invite)}>
-                        <Text style={styles.primaryButtonText}>{invite.type === "table" ? "接受邀請" : "接受"}</Text>
-                      </Pressable>
-                      <Pressable style={styles.secondaryButton} onPress={() => onDeclineInvite(invite)}>
-                        <Text style={styles.secondaryButtonText}>{invite.type === "table" ? "婉拒" : "拒絕"}</Text>
-                      </Pressable>
-                    </>
-                  ) : (
-                    <Pressable style={styles.secondaryButton} onPress={() => onDeleteInvite(invite)}>
-                      <Text style={styles.secondaryButtonText}>{invite.status === "declined" ? "刪除" : "取消邀請"}</Text>
+            {visibleInvites.map((invite) => {
+              const profile = resolveInvitationProfileDisplay(invite);
+              const displayName = invitationDisplayName(invite, profile);
+              return (
+                <View key={invite.id} style={styles.previewCard}>
+                  <Text style={styles.meta}>{invite.direction === "received" ? "收到邀請" : "我送出的邀請"} · {invite.type === "chat" ? "先聊聊" : invite.type === "table" ? "四人飯局邀請" : "一起吃飯"}</Text>
+                  <PremiumBadge label={invite.demoLabel} variant="free" />
+                  <Text style={styles.name}>{invite.type === "table" ? `四人飯局邀請｜${invite.mealName}` : invite.direction === "received" ? `${displayName} 邀請你` : `你邀請 ${displayName}`}</Text>
+                  <Text style={styles.message}>{invite.type === "table" ? `${displayName} 邀請你加入四人桌 · 目前 ${invite.currentParticipants ?? 3}/${invite.requiredParticipants ?? 4} 人` : `${invite.mealName} · ${invite.time}`}</Text>
+                  <Text style={styles.meta}>{invite.status === "pending" ? "等待回覆" : invite.status === "accepted" ? "已接受" : invite.status === "declined" ? "已拒絕" : "已過期"} · {invite.matchReasons.slice(0, 2).join("、")}</Text>
+                  <View style={styles.actionRow}>
+                    <Pressable style={styles.secondaryButton} onPress={() => setSelectedInvite(invite)}>
+                      <Text style={styles.secondaryButtonText}>查看詳情</Text>
                     </Pressable>
-                  )}
+                    <Pressable
+                      style={styles.secondaryButton}
+                      onPress={() => {
+                        onOpenProfile(invite.profileId);
+                      }}
+                    >
+                      <Text style={styles.secondaryButtonText}>查看社群卡</Text>
+                    </Pressable>
+                    {invite.direction === "received" && invite.status === "pending" ? (
+                      <>
+                        <Pressable style={styles.primaryButton} onPress={() => onAcceptInvite(invite)}>
+                          <Text style={styles.primaryButtonText}>{invite.type === "table" ? "接受邀請" : "接受"}</Text>
+                        </Pressable>
+                        <Pressable style={styles.secondaryButton} onPress={() => onDeclineInvite(invite)}>
+                          <Text style={styles.secondaryButtonText}>{invite.type === "table" ? "婉拒" : "拒絕"}</Text>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <Pressable style={styles.secondaryButton} onPress={() => onDeleteInvite(invite)}>
+                        <Text style={styles.secondaryButtonText}>{invite.status === "declined" ? "刪除" : "取消邀請"}</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
       ) : null}
 
-      {activeTab === "chats" ? (
-        <View style={styles.cardList}>
-          {sortedChats.map((chat) => {
-            const profile = resolveChatProfileDisplay(chat);
-            const displayName = chatDisplayName(chat, profile);
-            const summary = chatSummaryText(chat, profile);
-            return (
-              <View key={chat.id} style={styles.previewCard}>
-                <View style={styles.friendHeader}>
-                  <View style={styles.avatar}>
-                    <ChatProfileAvatar avatarSource={profile?.avatarSource} />
+      {sectionTab === "chats" ? (
+        <>
+          <SnowSectionHeader title="聊天" subtitle="顯示目前已建立的聊天室列表。" />
+          <View style={styles.cardList}>
+            {sortedChats.map((chat) => {
+              const profile = resolveChatProfileDisplay(chat);
+              const displayName = chatDisplayName(chat, profile);
+              const summary = chatSummaryText(chat, profile);
+              return (
+                <View key={chat.id} style={styles.previewCard}>
+                  <View style={styles.friendHeader}>
+                    <View style={styles.avatar}>
+                      <ChatProfileAvatar avatarSource={profile?.avatarSource} />
+                    </View>
+                    <View style={styles.flex}>
+                      <Text style={styles.meta}>{chat.unread ? "新訊息" : "聊天"}{profile?.isPremium ? " · Premium" : ""}</Text>
+                      <Text style={styles.name}>{displayName}</Text>
+                      {summary ? <Text style={styles.message}>{summary}</Text> : null}
+                    </View>
                   </View>
-                  <View style={styles.flex}>
-                    <Text style={styles.meta}>{chat.unread ? "新訊息" : "聊天"}{profile?.isPremium ? " · Premium" : ""}</Text>
-                    <Text style={styles.name}>{displayName}</Text>
-                    {summary ? <Text style={styles.message}>{summary}</Text> : null}
-                  </View>
+                  {profile?.tags.length ? <TagRow tags={profile.tags} /> : null}
+                  <Text style={styles.message}>{chat.lastMessage}</Text>
+                  <Text style={styles.meta}>{chat.time}</Text>
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={() => {
+                      const friend = findFriendForChat(friends, chat) ?? createFriendFromChat(chat);
+                      setSelectedFriend(friend);
+                      setSelectedChat(chat);
+                      setMode("chat");
+                    }}
+                  >
+                    <Text style={styles.primaryButtonText}>進入聊天</Text>
+                  </Pressable>
                 </View>
-                {profile?.tags.length ? <TagRow tags={profile.tags} /> : null}
-                <Text style={styles.message}>{chat.lastMessage}</Text>
-                <Text style={styles.meta}>{chat.time}</Text>
-                <Pressable
-                  style={styles.primaryButton}
-                  onPress={() => {
-                    const friend = findFriendForChat(friends, chat) ?? createFriendFromChat(chat);
-                    setSelectedFriend(friend);
-                    setSelectedChat(chat);
-                    setMode("chat");
-                  }}
-                >
-                  <Text style={styles.primaryButtonText}>進入聊天</Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        </>
       ) : null}
 
       <InvitationDetailModal invite={selectedInvite} onAccept={onAcceptInvite} onClose={() => setSelectedInvite(null)} onDecline={onDeclineInvite} onDelete={onDeleteInvite} />
@@ -1598,18 +1584,15 @@ function GatheringsSection({
 
   return (
     <>
-      <SnowCard tone="primary">
-        <SnowSectionHeader title="飯友桌" subtitle="配對好還沒吃的飯局（進行中）與已經吃完的飯局（已結束）分開管理，邀請中的飯局也能在這裡追蹤。" />
-        <View style={styles.snowChipRow}>
-          {([
-            { id: "ongoing", label: "進行中" },
-            { id: "inviting", label: "邀請中" },
-            { id: "ended", label: "已結束" }
-          ] as Array<{ id: GatheringTab; label: string }>).map((item) => (
-            <Chip key={item.id} label={item.label} active={activeTab === item.id} onPress={() => setActiveTab(item.id)} />
-          ))}
-        </View>
-      </SnowCard>
+      <View style={styles.snowChipRow}>
+        {([
+          { id: "ongoing", label: "進行中" },
+          { id: "inviting", label: "邀請中" },
+          { id: "ended", label: "已結束" }
+        ] as Array<{ id: GatheringTab; label: string }>).map((item) => (
+          <Chip key={item.id} label={item.label} active={activeTab === item.id} onPress={() => setActiveTab(item.id)} />
+        ))}
+      </View>
 
       {activeTab === "ongoing" ? (
         <>
@@ -1701,7 +1684,7 @@ function GatheringsSection({
         record={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onSubmit={(record, reason) => {
-          const isGroupTable = record.source === "四人桌" || record.people.includes("4");
+          const isGroupTable = record.source === "group_table" || record.people.includes("4");
           addMealBuddyChatSystemMessage({
             chatUserName: isGroupTable ? undefined : record.participantProfileId,
             groupTableName: isGroupTable ? record.name : undefined,
@@ -1749,7 +1732,7 @@ function GatheringCategory({
           ) : (
             <View key={record.id} nativeID={mealEventElementId(record.id)} style={styles.previewCard}>
               <View style={styles.badgeRow}>
-                <PremiumBadge label={mealEventTypeLabel(record)} variant={record.source === "四人桌" ? "premium" : "free"} />
+                <PremiumBadge label={mealEventTypeLabel(record)} variant={record.source === "group_table" ? "premium" : "free"} />
               </View>
               <Text style={styles.name}>{record.name}</Text>
               <Text style={styles.message}>{record.location}｜{record.time}</Text>
@@ -1903,8 +1886,8 @@ function ProfileAvatarImage({ avatarSource }: { avatarSource?: AvatarSource }) {
 function MealEventDetail({ invite, onBack, onCancel, onOpenChat, onViewInviteDetail, record }: { invite: ReturnType<typeof getMealBuddyInvites>[number] | null; onBack: () => void; onCancel: () => void; onOpenChat: (record: GatheringRecord) => void; onViewInviteDetail: () => void; record: GatheringRecord }) {
   const [showParticipants, setShowParticipants] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<RankedMealBuddyCandidate | null>(null);
-  const isGroupTable = record.source === "四人桌" || record.people.includes("4");
-  const matchReasons = invite?.matchReasons.slice(0, 3).join("、") || (record.source === "飯友邀請" ? "餐點偏好與用餐時段接近" : "");
+  const isGroupTable = record.source === "group_table" || record.people.includes("4");
+  const matchReasons = invite?.matchReasons.slice(0, 3).join("、") || (record.source === "meal_session" ? "餐點偏好與用餐時段接近" : "");
   const participantProfiles = isGroupTable ? getMockTableParticipantCandidates(record.tableId) : [];
   return (
     <Card tone="mint">
@@ -2036,7 +2019,7 @@ function CancelMealEventModal({
 }
 
 function mealEventTypeLabel(record: GatheringRecord) {
-  return record.source === "四人桌" || record.people.includes("4") ? "四人桌" : "一般飯友飯局";
+  return record.source === "group_table" || record.people.includes("4") ? "四人桌" : "一般飯友飯局";
 }
 
 function mealEventElementId(recordId: string) {
@@ -2928,5 +2911,18 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontFamily: fonts.body,
     textAlign: "center"
+  },
+  cardCreateRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+  collapseToggle: {
+    alignItems: "center",
+    paddingVertical: 10
+  },
+  collapseToggleText: {
+    color: snow.faint,
+    fontSize: 12,
+    fontFamily: fonts.body
   }
 });

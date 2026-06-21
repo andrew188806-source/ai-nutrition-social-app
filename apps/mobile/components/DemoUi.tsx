@@ -507,7 +507,7 @@ export function BottomNav() {
   return (
     <View style={styles.bottomNav}>
       {items.map((item) => {
-        const active = item.match.some((path) => (path === "/" ? pathname === "/" : pathname.startsWith(path)));
+        const active = item.match.some((path) => path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/"));
 
         return (
           <Pressable key={item.href} onPress={() => router.push(item.href)} style={[styles.navItem, active && styles.navItemActive]}>

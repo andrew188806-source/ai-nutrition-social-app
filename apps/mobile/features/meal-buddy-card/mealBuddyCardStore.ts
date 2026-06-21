@@ -1,13 +1,12 @@
 import type { DemoMode } from "../../components/DemoUi";
 import { storage } from "../../lib/storage";
 import { getEffectiveDateKey } from "../demo-time";
-import { buildMealBuddyCardFromProfile } from "./mealBuddyCardMock";
 import { getMealBuddyCardId, type MealBuddyCard, type MealBuddyCardType, type RankedMealBuddyCandidate } from "./types";
 
 // DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
 // Mutable local Meal Buddy card pool. Seed cards are generated from profileId +
 // canonical restaurantId/menuItemId. Keep compatibility fields because the UI still reads them.
-const activeCardsStorageKey = "haocu.mealBuddy.activeCards.v2";
+const activeCardsStorageKey = "haocu.mealBuddy.activeCards.v3";
 const dailyStateStorageKey = "haocu.mealBuddy.dailyState.v1";
 
 let activeCards: MealBuddyCard[] = readStoredActiveCards();
@@ -230,31 +229,7 @@ function persistActiveCards() {
 }
 
 function buildDefaultActiveCards(): MealBuddyCard[] {
-  return [
-    buildMealBuddyCardFromProfile("current-user", "restaurant-mori-veggie", "dish-mori-1", {
-      sourceType: "ai_recommendation",
-      intentionType: "chat_first",
-      diningMode: "chatFirst",
-      mealTime: "今晚 18:30",
-      mealDate: getEffectiveDateKey(),
-      paymentPreference: "AA 制",
-      note: "想找同樣想吃清爽蔬食的人，先聊聊再決定是否一起吃。",
-      status: "active",
-      createdAt: "2026-06-01T12:00:00+08:00#seed-current-dinner"
-    }),
-    buildMealBuddyCardFromProfile("current-user", "restaurant-haochu-bowl", "dish-haochu-2", {
-      cardType: "restaurant",
-      sourceType: "restaurant_page",
-      intentionType: "eat_together",
-      diningMode: "eatTogether",
-      mealTime: "明天 12:30",
-      mealDate: getEffectiveDateKey(),
-      paymentPreference: "AA 制",
-      note: "從餐廳頁建立，想找午餐時間相近的飯友。",
-      status: "active",
-      createdAt: "2026-06-01T12:05:00+08:00#seed-current-lunch"
-    })
-  ];
+  return [];
 }
 
 function isUsableStoredCard(card: MealBuddyCard) {
