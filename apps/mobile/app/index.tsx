@@ -80,10 +80,10 @@ export default function LandingScreen() {
 
         <View style={styles.actionRow}>
           <View style={styles.actionPrimary}>
-            <PrimaryButton icon="camera" label={homeFocus.photoAnalysis} onPress={() => router.push("/meal-photo")} />
+            <PrimaryButton icon="camera" label={homeFocus.photoAnalysis} onPress={() => router.push({ pathname: "/meal-photo", params: { autoOpen: "true" } })} />
           </View>
           <View style={styles.actionSecondary}>
-            <SecondaryButton icon="buddies" label={homeFocus.findMealPartners} onPress={() => router.push("/recommendation")} />
+            <SecondaryButton icon="buddies" label={homeFocus.findMealPartners} onPress={() => router.push({ pathname: "/meal-buddies", params: { section: "cards" } })} />
           </View>
         </View>
 

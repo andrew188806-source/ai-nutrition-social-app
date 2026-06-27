@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -16,9 +16,9 @@ const plannedDinnerTypes: readonly PlannedDinnerType[] = helperCopy.mealTypes;
 
 export default function MealPhotoScreen() {
   const router = useRouter();
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const { autoOpen } = useLocalSearchParams<{ autoOpen?: string }>();
+  const [isSheetOpen, setIsSheetOpen] = useState(() => autoOpen === "true");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [mealSlot, setMealSlot] = useState<string>(zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1]);
   const [source, setSource] = useState<ImageSource | null>(null);
   const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(() => getPlannedDinner());
   const [isDinnerFormOpen, setIsDinnerFormOpen] = useState(false);
@@ -52,7 +52,7 @@ export default function MealPhotoScreen() {
 
   function navigateToDemoResult() {
     // TODO: Replace static demo nutrition result with dynamic AI result.
-    router.push({ pathname: "/analysis", params: { mealSlot } });
+    router.push("/analysis");
   }
 
   function savePlannedDinnerDraft() {
@@ -89,7 +89,7 @@ export default function MealPhotoScreen() {
     }
     const timeout = setTimeout(navigateToDemoResult, 1400);
     return () => clearTimeout(timeout);
-  }, [isAnalyzing, mealSlot]);
+  }, [isAnalyzing]);
 
   return (
     <PlaceholderScreen
@@ -115,17 +115,6 @@ export default function MealPhotoScreen() {
 
       <Card>
         <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.actionTitle} subtitle={zhTW.mobile.analysisSubtitle} />
-        <View style={styles.slotPanel}>
-          <SectionTitle title={zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotTitle} />
-          <View style={styles.slotRow}>
-            {zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions.map((slot) => (
-              <Pressable key={slot} style={[styles.slotChip, mealSlot === slot && styles.slotChipActive]} onPress={() => setMealSlot(slot)}>
-                <Text style={[styles.slotChipText, mealSlot === slot && styles.slotChipTextActive]}>{slot}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
         <Pressable style={styles.mainAction} onPress={() => setIsSheetOpen(true)}>
           <Text style={styles.mainActionText}>{zhTW.mobile.refinedLogic.aiEntry.actionTitle}</Text>
         </Pressable>

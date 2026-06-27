@@ -48,7 +48,7 @@ import { useDemoUserPlan } from "../features/demo-user-plan";
 import { storage } from "../lib/storage";
 import { GroupTablesContent } from "./group-tables";
 
-type MealBuddySection = "discover" | "friends" | "gatherings" | "tables";
+type MealBuddySection = "discover" | "cards" | "friends" | "gatherings" | "tables";
 type MyFriendsTab = "matched" | "invitations" | "chats";
 type FriendSort = "飯局數" | "認識時間" | "最近同桌";
 
@@ -67,7 +67,7 @@ type RecommendationGroup = {
 const recommendationStorageKey = "haocu.mealBuddy.recommendationGroups.v1";
 
 function parseMealBuddySection(section?: string): MealBuddySection {
-  if (section === "friends" || section === "gatherings" || section === "tables") {
+  if (section === "friends" || section === "gatherings" || section === "tables" || section === "cards") {
     return section;
   }
   return "discover";
@@ -274,7 +274,7 @@ export default function MealBuddyHomeScreen() {
       />
       <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
 
-      {activeSection !== "discover" ? (
+      {activeSection !== "discover" && activeSection !== "cards" ? (
         <View style={styles.snowChipRow}>
           <Chip label="飯友" active={activeSection === "friends" && friendInitialTab !== "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("matched"); }} />
           <Chip label="聊天" active={activeSection === "friends" && friendInitialTab === "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("chats"); setFocusedChatId(""); setFocusedChatName(""); }} />
@@ -282,8 +282,9 @@ export default function MealBuddyHomeScreen() {
         </View>
       ) : null}
 
-      {activeSection === "discover" ? (
+      {activeSection === "discover" || activeSection === "cards" ? (
         <DiscoverSection
+          hideRecommendations={activeSection === "cards"}
           activeCards={activeCards}
           cardUsage={cardUsage}
           chats={chats}
@@ -489,6 +490,7 @@ function DiscoverSection({
   cardUsage,
   chats,
   dailyUsage,
+  hideRecommendations,
   invites,
   highlightCardCreatedAt,
   isPremium,
@@ -514,6 +516,7 @@ function DiscoverSection({
   cardUsage: ReturnType<typeof getActiveCardUsage>;
   chats: ReturnType<typeof getMealBuddyChats>;
   dailyUsage: ReturnType<typeof getDailyVisibleUsage>;
+  hideRecommendations?: boolean;
   invites: ReturnType<typeof getMealBuddyInvites>;
   highlightCardCreatedAt?: string;
   isPremium: boolean;
@@ -667,47 +670,51 @@ function DiscoverSection({
         </SnowCard>
       </View>
 
-      <SnowSectionHeader title="今日推薦飯友" subtitle={`${isPremium ? "依你選擇的飯友卡推薦" : "免費版推薦"} · 今日已看 ${dailyUsage.used}/${dailyUsage.limit}`} />
+      {!hideRecommendations ? (
+        <>
+          <SnowSectionHeader title="今日推薦飯友" subtitle={`${isPremium ? "依你選擇的飯友卡推薦" : "免費版推薦"} · 今日已看 ${dailyUsage.used}/${dailyUsage.limit}`} />
 
-      {recommendationGroups.length > 0 ? (
-        <View style={styles.cardList}>
-          {recommendationGroups.map((group) =>
-            group.quotaFull ? (
-              <SnowCard key={group.id} tone="primary">
-                <SnowSectionHeader title="今日額度已用完" subtitle={`這張卡：${group.card.preferredFoodName || group.card.restaurantName || "飯友卡"} · ${group.card.preferredTime || "尚未設定時間"}`} />
-                <Text style={styles.message}>{isPremium ? "今天的推薦額度已用完，可以明天再補看。" : "免費版今日推薦額度已用完，升級後可查看更多飯友。"}</Text>
-                {!isPremium ? <SecondaryButton icon="lock" label="查看更多" onPress={onOpenPremium} /> : null}
-              </SnowCard>
-            ) : (
-              <View key={group.id} nativeID={recommendationGroupElementId(group.id)} style={group.highlight ? styles.highlightedResultGroup : undefined}>
-                <MealBuddyRecommendationList
-                  card={group.card}
-                  isPremiumMode={isPremium}
-                  items={group.items}
-                  onChat={(candidate) => onOpenChat(candidate, group.card)}
-                  onEatTogether={(candidate) => onInviteEat(candidate, group.card)}
-                  onInviteTable={(candidate) => onInviteTable(candidate, group.card)}
-                  pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, getMealBuddyCardId(group.card))?.type ?? null}
-                  onViewCard={(candidate) => {
-                    onOpenProfile(candidate.userId);
-                    onViewCandidateCard(candidate);
-                  }}
-                />
-                {!isPremium ? (
-                  <SnowCard tone="primary">
-                    <Text style={styles.message}>免費版每次最多顯示 3 位飯友。升級後可一次查看 5 位，並提高每日推薦額度。</Text>
-                    <SecondaryButton icon="lock" label="查看更多" onPress={onOpenPremium} />
+          {recommendationGroups.length > 0 ? (
+            <View style={styles.cardList}>
+              {recommendationGroups.map((group) =>
+                group.quotaFull ? (
+                  <SnowCard key={group.id} tone="primary">
+                    <SnowSectionHeader title="今日額度已用完" subtitle={`這張卡：${group.card.preferredFoodName || group.card.restaurantName || "飯友卡"} · ${group.card.preferredTime || "尚未設定時間"}`} />
+                    <Text style={styles.message}>{isPremium ? "今天的推薦額度已用完，可以明天再補看。" : "免費版今日推薦額度已用完，升級後可查看更多飯友。"}</Text>
+                    {!isPremium ? <SecondaryButton icon="lock" label="查看更多" onPress={onOpenPremium} /> : null}
                   </SnowCard>
-                ) : null}
-              </View>
-            )
-          )}
-        </View>
-      ) : null}
-      {paidQuotaMessage ? (
-        <SnowCard tone="ai">
-          <SnowSectionHeader title="推薦額度提醒" subtitle={paidQuotaMessage} />
-        </SnowCard>
+                ) : (
+                  <View key={group.id} nativeID={recommendationGroupElementId(group.id)} style={group.highlight ? styles.highlightedResultGroup : undefined}>
+                    <MealBuddyRecommendationList
+                      card={group.card}
+                      isPremiumMode={isPremium}
+                      items={group.items}
+                      onChat={(candidate) => onOpenChat(candidate, group.card)}
+                      onEatTogether={(candidate) => onInviteEat(candidate, group.card)}
+                      onInviteTable={(candidate) => onInviteTable(candidate, group.card)}
+                      pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, getMealBuddyCardId(group.card))?.type ?? null}
+                      onViewCard={(candidate) => {
+                        onOpenProfile(candidate.userId);
+                        onViewCandidateCard(candidate);
+                      }}
+                    />
+                    {!isPremium ? (
+                      <SnowCard tone="primary">
+                        <Text style={styles.message}>免費版每次最多顯示 3 位飯友。升級後可一次查看 5 位，並提高每日推薦額度。</Text>
+                        <SecondaryButton icon="lock" label="查看更多" onPress={onOpenPremium} />
+                      </SnowCard>
+                    ) : null}
+                  </View>
+                )
+              )}
+            </View>
+          ) : null}
+          {paidQuotaMessage ? (
+            <SnowCard tone="ai">
+              <SnowSectionHeader title="推薦額度提醒" subtitle={paidQuotaMessage} />
+            </SnowCard>
+          ) : null}
+        </>
       ) : null}
 
       <CandidateCommunityModal
