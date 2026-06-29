@@ -5,6 +5,7 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, ScanningBar, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getPlannedDinnerEstimateOptions, type DinnerEstimate } from "../features/analysis/analysisMealRecordStore";
+import { resetAnalysisSession } from "../features/analysis";
 import { clearPlannedDinner, getPlannedDinner, savePlannedDinner, type PlannedMeal } from "../features/planned-meal";
 
 type ImageSource = "camera" | "gallery";
@@ -33,6 +34,12 @@ export default function MealPhotoScreen() {
   const selectedEstimate = estimateOptions.find((option) => option.name === selectedDishName) ?? estimateOptions[0];
   const hasSpecificMockData = plannedType !== "其他" || restaurantName.trim().length > 0;
 
+  function startAiAnalysis() {
+    // Tapping "開始 AI 分析" is itself a new-session trigger, even before a source is chosen.
+    resetAnalysisSession();
+    setIsSheetOpen(true);
+  }
+
   function openCamera() {
     // TODO: Connect camera image pipeline.
     startFakeAnalysis("camera");
@@ -45,6 +52,8 @@ export default function MealPhotoScreen() {
 
   function startFakeAnalysis(nextSource: ImageSource) {
     // TODO: Replace fake demo analysis with real AI image analysis API.
+    // A new photo means a new AI Analysis session: clear any previously completed analysis.
+    resetAnalysisSession();
     setSource(nextSource);
     setIsSheetOpen(false);
     setIsAnalyzing(true);
@@ -91,6 +100,14 @@ export default function MealPhotoScreen() {
     return () => clearTimeout(timeout);
   }, [isAnalyzing]);
 
+  useEffect(() => {
+    // Home's "拍照分析" shortcut opens the sheet directly (autoOpen=true), which is the
+    // same "start a new analysis" intent as tapping 開始 AI 分析 manually.
+    if (autoOpen === "true") {
+      resetAnalysisSession();
+    }
+  }, [autoOpen]);
+
   return (
     <PlaceholderScreen
       title={zhTW.mobile.refinedLogic.aiEntry.title}
@@ -115,7 +132,7 @@ export default function MealPhotoScreen() {
 
       <Card>
         <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.actionTitle} subtitle={zhTW.mobile.analysisSubtitle} />
-        <Pressable style={styles.mainAction} onPress={() => setIsSheetOpen(true)}>
+        <Pressable style={styles.mainAction} onPress={startAiAnalysis}>
           <Text style={styles.mainActionText}>{zhTW.mobile.refinedLogic.aiEntry.actionTitle}</Text>
         </Pressable>
         <Pressable style={styles.todayIntakeAction} onPress={() => router.push("/today-intake")}>

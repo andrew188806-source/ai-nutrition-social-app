@@ -1,6 +1,6 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -8,7 +8,7 @@ import { PremiumBadge, colors } from "../components/DemoUi";
 import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getEffectiveCurrentDate } from "../features/demo-time";
-import { getCanonicalRestaurantMenuItems, getCanonicalRestaurants, type CanonicalRestaurant, type CanonicalRestaurantMenuItem } from "../features/restaurants";
+import { getCanonicalRestaurantById, getCanonicalRestaurantMenuItems, getCanonicalRestaurants, type CanonicalRestaurant, type CanonicalRestaurantMenuItem } from "../features/restaurants";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -74,6 +74,7 @@ function getDishStatusLabel(dish: CanonicalRestaurantMenuItem) {
 
 export default function RestaurantsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ restaurantId?: string }>();
   const [demoMode] = useDemoUserPlan();
   const [filters, setFilters] = useState<RestaurantFilters>(defaultFilters);
   const [draftFilters, setDraftFilters] = useState<RestaurantFilters>(filters);
@@ -94,6 +95,21 @@ export default function RestaurantsScreen() {
   const recommendedRestaurants = useMemo(() => {
     return [...getCanonicalRestaurants()].sort((a, b) => restaurantScore(b, filters) - restaurantScore(a, filters));
   }, [filters]);
+
+  // Arriving with a specific restaurant (e.g. "查看餐廳" from a recommendation card)
+  // should show that restaurant immediately instead of a generic list the user has
+  // to search through — reset filters and open its detail directly.
+  useEffect(() => {
+    if (!params.restaurantId) {
+      return;
+    }
+    const restaurant = getCanonicalRestaurantById(params.restaurantId);
+    if (!restaurant) {
+      return;
+    }
+    setFilters(defaultFilters);
+    setDetailRestaurant(restaurant);
+  }, [params.restaurantId]);
 
   function openRecommendationModal() {
     setDraftFilters(filters);

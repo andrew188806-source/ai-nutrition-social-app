@@ -1,25 +1,39 @@
-import { useMemo, useState } from "react";
-import { zhTW } from "../../../../lib/i18n/zh-TW";
+import { useEffect, useMemo, useState } from "react";
 import { buildCorrectionSections, buildNutritionSummary } from "./analysisCorrectionData";
+import { getAnalysisSession } from "./analysisSessionStore";
 import type { CorrectionSectionKey, MatchState, MealAnalysisMode } from "./types";
 
 export function useAnalysisCorrectionState() {
-  const [matchState, setMatchState] = useState<MatchState>("pending");
-  const [mode, setMode] = useState<MealAnalysisMode>("restaurant");
-  const [expandedCorrection, setExpandedCorrection] = useState<string | null>(null);
-  const [addSection, setAddSection] = useState<CorrectionSectionKey | null>(null);
-  const [addedSections, setAddedSections] = useState<Record<CorrectionSectionKey, boolean>>({
-    ingredients: false,
-    portions: false,
-    cooking: false
+  const session = getAnalysisSession();
+  const [matchState, setMatchState] = useState<MatchState>(session.matchState);
+  const [mode, setMode] = useState<MealAnalysisMode>(session.mode);
+  const [expandedCorrection, setExpandedCorrection] = useState<string | null>(session.expandedCorrection);
+  const [addSection, setAddSection] = useState<CorrectionSectionKey | null>(session.addSection);
+  const [addedSections, setAddedSections] = useState<Record<CorrectionSectionKey, boolean>>(session.addedSections);
+  const [nutritionRefreshed, setNutritionRefreshed] = useState(session.nutritionRefreshed);
+  const [correctionCompleted, setCorrectionCompleted] = useState(session.correctionCompleted);
+  const [showExternalBreakdown, setShowExternalBreakdown] = useState(session.showExternalBreakdown);
+  const [externalBreakdownTriggered, setExternalBreakdownTriggered] = useState(session.externalBreakdownTriggered);
+  const [restaurantName, setRestaurantName] = useState<string>(session.restaurantName);
+  const [mealName, setMealName] = useState<string>(session.mealName);
+  const [correctedRows, setCorrectedRows] = useState<Record<string, boolean>>(session.correctedRows);
+
+  // Keep the session store in sync so a remount (navigating away and back) restores
+  // this exact state instead of starting the correction flow over.
+  useEffect(() => {
+    session.matchState = matchState;
+    session.mode = mode;
+    session.expandedCorrection = expandedCorrection;
+    session.addSection = addSection;
+    session.addedSections = addedSections;
+    session.nutritionRefreshed = nutritionRefreshed;
+    session.correctionCompleted = correctionCompleted;
+    session.showExternalBreakdown = showExternalBreakdown;
+    session.externalBreakdownTriggered = externalBreakdownTriggered;
+    session.restaurantName = restaurantName;
+    session.mealName = mealName;
+    session.correctedRows = correctedRows;
   });
-  const [nutritionRefreshed, setNutritionRefreshed] = useState(false);
-  const [correctionCompleted, setCorrectionCompleted] = useState(false);
-  const [showExternalBreakdown, setShowExternalBreakdown] = useState(false);
-  const [externalBreakdownTriggered, setExternalBreakdownTriggered] = useState(false);
-  const [restaurantName, setRestaurantName] = useState<string>(zhTW.mobile.analysis.candidates[0].restaurant);
-  const [mealName, setMealName] = useState<string>(zhTW.mobile.analysis.candidates[0].meal);
-  const [correctedRows, setCorrectedRows] = useState<Record<string, boolean>>({});
 
   const isSelfCooked = mode === "selfCooked";
   const correctionSections = useMemo(() => buildCorrectionSections(addedSections), [addedSections]);

@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, IconBubble, PremiumBadge, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { useDemoUserPlan } from "../features/demo-user-plan";
 import {
   DailyNutritionPlanner,
   NextMealRecommendationWithPlan,
@@ -16,18 +15,12 @@ import {
   savePlannedDinner,
   type PlannedMeal
 } from "../features/planned-meal";
-import {
-  getAiRecommendationMealBuddyCard,
-  setPendingMatchRequest,
-  upsertMealBuddyCardWithQuota
-} from "../features/meal-buddy-card";
 
 export default function RecommendationScreen() {
   const router = useRouter();
   const [planExpanded, setPlanExpanded] = useState(false);
   const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(() => getPlannedDinner());
   const [draftPlan, setDraftPlan] = useState<PlannedMeal>(() => getPlannedDinner() ?? getDefaultPlannedDinner());
-  const [demoMode] = useDemoUserPlan();
   const [rerunCount, setRerunCount] = useState(0);
 
   function savePlan() {
@@ -41,20 +34,6 @@ export default function RecommendationScreen() {
     setPlannedDinner(null);
     setDraftPlan(getDefaultPlannedDinner());
     setPlanExpanded(false);
-  }
-
-  function createAiMealBuddyCard() {
-    const card = getAiRecommendationMealBuddyCard();
-    upsertMealBuddyCardWithQuota(card, demoMode);
-    setPendingMatchRequest(card, demoMode === "premium" ? 5 : 3, false, demoMode);
-    router.push("/meal-buddies");
-  }
-
-  function confirmAiMealBuddyCard() {
-    Alert.alert(zhTW.mobile.refinedLogic.mealBuddyCard.aiCreateQuestion, zhTW.mobile.refinedLogic.mealBuddyCard.withAiPrompt, [
-      { text: zhTW.common.close, style: "cancel" },
-      { text: zhTW.mobile.refinedLogic.mealBuddyCard.confirmCreate, onPress: createAiMealBuddyCard }
-    ]);
   }
 
   return (
@@ -86,13 +65,6 @@ export default function RecommendationScreen() {
       <DailyNutritionPlanner plan={plannedDinner} />
 
       <NextMealRecommendationWithPlan plan={plannedDinner} onRerun={() => setRerunCount((count) => count + 1)} />
-
-      <Card tone="mint">
-        <SectionTitle title={zhTW.mobile.refinedLogic.mealBuddyCard.preciseRecommendationTitle} subtitle={zhTW.mobile.refinedLogic.mealBuddyCard.withAiPrompt} />
-        <Pressable style={styles.groupButton} onPress={confirmAiMealBuddyCard}>
-          <Text style={styles.groupButtonText}>{zhTW.mobile.refinedLogic.mealBuddyCard.useThisMealCta}</Text>
-        </Pressable>
-      </Card>
 
       {rerunCount > 0 ? (
         <Card tone="mint">

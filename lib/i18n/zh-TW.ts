@@ -499,8 +499,10 @@ export const zhTW = {
       imageLabel: "餐點照片預覽",
       scanning: "AI 正在分析餐點與營養比例",
       modeTitle: "餐點輸入模式",
-      restaurantMode: "外食模式",
-      selfCookedMode: "自己動手做模式",
+      restaurantMode: "🍴 外食餐廳",
+      restaurantModeSubtitle: "使用餐廳資料庫分析",
+      selfCookedMode: "👨‍🍳 自己料理",
+      selfCookedModeSubtitle: "AI分析食材與份量",
       selfCookedTitle: "自煮餐點估算",
       selfCookedBody: "自煮模式會估算食材、份量、烹調方式與營養，再由你確認後保存到 Food Memory。",
       nutritionDisclaimer: "此功能為生活化營養估算，非醫療診斷建議。",
@@ -1491,7 +1493,13 @@ export const zhTW = {
         goMyGatherings: "查看我的飯局",
         saveMealRecord: "加入今日飲食",
         viewNutritionRecord: "美食日記",
-        finishAndViewRecord: "完成並查看紀錄"
+        finishAndViewRecord: "完成並查看紀錄",
+        nextMealCarouselTitle: "下一餐推薦",
+        aiRecommendedBadge: "AI 推薦",
+        aiReasonToggleLabel: "💡 AI推薦原因",
+        matchLabelSuffix: "符合今天需求",
+        viewRestaurantCta: "查看餐廳",
+        premiumMoreHint: "升級 Premium 可看到更多下一餐推薦"
       },
       mealExperienceRating: {
         title: "上一餐吃得怎麼樣？",

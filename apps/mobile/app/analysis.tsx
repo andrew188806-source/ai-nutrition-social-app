@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,34 +6,107 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, useAnalysisCorrectionState } from "../features/analysis";
+import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, getAnalysisSession, useAnalysisCorrectionState } from "../features/analysis";
 import { getTodayMealRecords, saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
 import { getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
-import { getAiRecommendationMealBuddyCard, resetMealBuddyVisibleQuotaForDemo, setPendingMatchRequest, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
+import { createMealBuddyCard, getCommunityMealTime, getDefaultInteractionPreference, resetMealBuddyVisibleQuotaForDemo, setPendingMatchRequest, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
+import { getCanonicalRestaurants } from "../features/restaurants";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
+
+type NextMealRecommendationCard = {
+  menuItemId: string;
+  restaurantId: string;
+  dishName: string;
+  calories: number;
+  restaurantName: string;
+  distance: string;
+  emoji: string;
+  reason: string;
+  matchPercent: number;
+};
+
+// Short, demo-friendly explanation derived from existing fields only (protein content
+// and how close this dish's calories are to the user's current nutrition state) — not a
+// new recommendation algorithm, just picking one of a few canned sentences.
+function buildRecommendationReason(calories: number, protein: number, referenceCalories: number): string {
+  if (protein >= 25) {
+    return "今天蛋白質不足，這餐能補充高蛋白。";
+  }
+  if (Math.abs(calories - referenceCalories) <= 80) {
+    return "熱量接近下一餐建議範圍。";
+  }
+  return "比較符合目前的營養缺口。";
+}
+
+// Cosmetic "match" percentage derived from the same calorie-proximity value already
+// used to rank the list — not a separate scoring algorithm.
+function buildMatchPercent(calories: number, referenceCalories: number): number {
+  const delta = Math.abs(calories - referenceCalories);
+  return Math.max(70, Math.min(99, 100 - Math.round(delta / 8)));
+}
+
+// Ranks every canonical menu item by how close its calories are to the user's
+// current nutrition state (the just-analyzed meal, or the post-guilt-sharing
+// adjusted calories) instead of forcing one dish per restaurant. This means the
+// list naturally changes whenever that reference calorie value changes.
+function buildNextMealRecommendationCards(limit: number, referenceCalories: number): NextMealRecommendationCard[] {
+  const restaurants = getCanonicalRestaurants();
+  const allItems = restaurants.flatMap((restaurant) =>
+    restaurant.menuItems.map((item) => ({
+      menuItemId: item.menuItemId,
+      restaurantId: restaurant.restaurantId,
+      dishName: item.name,
+      calories: item.calories,
+      restaurantName: restaurant.name,
+      distance: restaurant.distanceDisplay,
+      emoji: item.emoji || "🍽️",
+      reason: buildRecommendationReason(item.calories, item.protein, referenceCalories),
+      matchPercent: buildMatchPercent(item.calories, referenceCalories)
+    }))
+  );
+  return allItems.sort((a, b) => Math.abs(a.calories - referenceCalories) - Math.abs(b.calories - referenceCalories)).slice(0, limit);
+}
+
+// mealSlotOptions ("早餐（第一餐）"...) and mealBuddyCard.mealPeriods ("早餐"...) are two
+// differently-worded, index-parallel label sets; map between them by position.
+function resolveMealPeriodForBuddyCard(selectedMealPeriod: string) {
+  const slotOptions: readonly string[] = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions;
+  const periods = zhTW.mobile.refinedLogic.mealBuddyCard.mealPeriods;
+  const index = slotOptions.indexOf(selectedMealPeriod);
+  return index >= 0 ? periods[index] : periods[2];
+}
 
 export default function AnalysisScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mealSlot?: string }>();
   const analysis = useAnalysisCorrectionState();
   const [demoMode] = useDemoUserPlan();
-  const [mealSaved, setMealSaved] = useState(false);
+  const session = getAnalysisSession();
+  const [mealSaved, setMealSaved] = useState(session.mealSaved);
   const defaultMealPeriod = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1];
-  const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : defaultMealPeriod;
+  const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : session.selectedMealPeriod || defaultMealPeriod;
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(initialMealPeriod);
-  const [autoSavedConfirmedMeal, setAutoSavedConfirmedMeal] = useState(false);
-  const [showMealBuddyConfirm, setShowMealBuddyConfirm] = useState(false);
+  const [autoSavedConfirmedMeal, setAutoSavedConfirmedMeal] = useState(session.autoSavedConfirmedMeal);
+  const [pendingMealBuddySource, setPendingMealBuddySource] = useState<NextMealRecommendationCard | null>(null);
   const [showMealBuddySuccess, setShowMealBuddySuccess] = useState(false);
   const isAnalysisConfirmed = analysis.matchState === "confirmed";
   // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
-  const [mealId] = useState(() => generateMealId());
-  const [preMealPhotoIds] = useState(() => [generatePhotoId("pre")]);
-  const [guiltSharingResult, setGuiltSharingResult] = useState<{ peopleCount: number; sharedCaloriesPerPerson: number } | null>(null);
+  // Reused across remounts within the same AI Analysis session (see analysisSessionStore).
+  const [mealId] = useState(() => session.mealId || generateMealId());
+  const [preMealPhotoIds] = useState(() => (session.preMealPhotoIds.length ? session.preMealPhotoIds : [generatePhotoId("pre")]));
+  const [guiltSharingResult, setGuiltSharingResult] = useState<{ peopleCount: number; sharedCaloriesPerPerson: number } | null>(session.guiltSharingResult);
+  // Recalculated whenever guiltSharingResult changes, so completing Guilt Sharing
+  // immediately replaces the recommendation list with one based on the updated calories.
+  const referenceCalories = guiltSharingResult?.sharedCaloriesPerPerson ?? analysis.nutritionSummary.calories;
+  const nextMealRecommendations = useMemo(
+    () => buildNextMealRecommendationCards(demoMode === "premium" ? 10 : 3, referenceCalories),
+    [demoMode, referenceCalories]
+  );
 
   useEffect(() => {
     if (typeof params.mealSlot === "string") {
@@ -48,6 +121,17 @@ export default function AnalysisScreen() {
     persistMealRecordToTodayIntake();
     setAutoSavedConfirmedMeal(true);
   }, [isAnalysisConfirmed, autoSavedConfirmedMeal]);
+
+  // Keep the session store in sync so visiting another screen and coming back
+  // restores this exact state instead of starting a new AI Analysis session.
+  useEffect(() => {
+    session.mealSaved = mealSaved;
+    session.selectedMealPeriod = selectedMealPeriod;
+    session.autoSavedConfirmedMeal = autoSavedConfirmedMeal;
+    session.mealId = mealId;
+    session.preMealPhotoIds = preMealPhotoIds;
+    session.guiltSharingResult = guiltSharingResult;
+  });
 
   function persistMealRecordToTodayIntake() {
     // Integration entry: AI Analysis -> Today Intake.
@@ -105,17 +189,29 @@ export default function AnalysisScreen() {
     return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={saveMealRecordToMockDatabase} onOpenSocial={() => router.push("/meal-buddies")} />;
   }
 
-  function confirmCreateMealBuddyCard() {
-    setShowMealBuddyConfirm(true);
-  }
-
-  function createMealBuddyCardFromCurrentRecommendation() {
-    // Integration entry: AI Analysis -> Meal Buddy Card matching pool.
-    const card = getAiRecommendationMealBuddyCard();
+  function createMealBuddyCardFromRecommendation() {
+    // Integration entry: tapping a Next Meal Recommendation card -> Meal Buddy Card matching pool.
+    if (!pendingMealBuddySource) {
+      return;
+    }
+    const meal = pendingMealBuddySource;
+    const card = createMealBuddyCard({
+      cardType: "general",
+      sourceType: "ai_recommendation",
+      intentionType: getDefaultInteractionPreference(),
+      restaurantId: meal.restaurantId,
+      menuItemId: meal.menuItemId,
+      restaurantName: meal.restaurantName,
+      preferredFoodName: meal.dishName,
+      preferredTime: getCommunityMealTime(resolveMealPeriodForBuddyCard(selectedMealPeriod)),
+      mealTime: getCommunityMealTime(resolveMealPeriodForBuddyCard(selectedMealPeriod)),
+      nutritionGoal: "依下一餐推薦建立，符合目前營養狀態。",
+      note: `依 AI 分析（${analysis.mealName}）後的下一餐推薦建立。`
+    });
     resetMealBuddyVisibleQuotaForDemo(demoMode);
     upsertMealBuddyCardWithQuota(card, demoMode);
     setPendingMatchRequest(card, demoMode === "premium" ? 5 : 3, false, demoMode);
-    setShowMealBuddyConfirm(false);
+    setPendingMealBuddySource(null);
     setShowMealBuddySuccess(true);
     setTimeout(() => {
       router.push("/meal-buddies");
@@ -128,9 +224,9 @@ export default function AnalysisScreen() {
       subtitle={zhTW.mobile.analysisSubtitle}
     >
       <MealBuddyCreateConfirmModal
-        onCancel={() => setShowMealBuddyConfirm(false)}
-        onConfirm={createMealBuddyCardFromCurrentRecommendation}
-        visible={showMealBuddyConfirm}
+        onCancel={() => setPendingMealBuddySource(null)}
+        onConfirm={createMealBuddyCardFromRecommendation}
+        visible={Boolean(pendingMealBuddySource)}
       />
       <MealBuddySuccessToast visible={showMealBuddySuccess} />
       {mealSaved ? (
@@ -178,12 +274,24 @@ export default function AnalysisScreen() {
                 <Chip key={period} label={period} active={selectedMealPeriod === period} onPress={() => setSelectedMealPeriod(period)} />
               ))}
             </View>
-            <View style={styles.segmentTrack}>
-              <Pressable style={[styles.segmentOption, !analysis.isSelfCooked && styles.segmentOptionActive]} onPress={() => analysis.setMode("restaurant")}>
-                <Text style={[styles.segmentText, !analysis.isSelfCooked && styles.segmentTextActive]}>{zhTW.mobile.analysis.restaurantMode}</Text>
+            <View style={styles.mealSourceRow}>
+              <Pressable style={[styles.mealSourceCard, !analysis.isSelfCooked && styles.mealSourceCardActive]} onPress={() => analysis.setMode("restaurant")}>
+                {!analysis.isSelfCooked ? (
+                  <View style={styles.mealSourceCheck}>
+                    <Icon name="check" size={12} color="#FFFFFF" />
+                  </View>
+                ) : null}
+                <Text style={[styles.mealSourceTitle, !analysis.isSelfCooked && styles.mealSourceTitleActive]}>{zhTW.mobile.analysis.restaurantMode}</Text>
+                <Text style={styles.mealSourceSubtitle}>{zhTW.mobile.analysis.restaurantModeSubtitle}</Text>
               </Pressable>
-              <Pressable style={[styles.segmentOption, analysis.isSelfCooked && styles.segmentOptionActive]} onPress={() => analysis.setMode("selfCooked")}>
-                <Text style={[styles.segmentText, analysis.isSelfCooked && styles.segmentTextActive]}>{zhTW.mobile.analysis.selfCookedMode}</Text>
+              <Pressable style={[styles.mealSourceCard, analysis.isSelfCooked && styles.mealSourceCardActive]} onPress={() => analysis.setMode("selfCooked")}>
+                {analysis.isSelfCooked ? (
+                  <View style={styles.mealSourceCheck}>
+                    <Icon name="check" size={12} color="#FFFFFF" />
+                  </View>
+                ) : null}
+                <Text style={[styles.mealSourceTitle, analysis.isSelfCooked && styles.mealSourceTitleActive]}>{zhTW.mobile.analysis.selfCookedMode}</Text>
+                <Text style={styles.mealSourceSubtitle}>{zhTW.mobile.analysis.selfCookedModeSubtitle}</Text>
               </Pressable>
             </View>
           </SnowCard>
@@ -195,10 +303,13 @@ export default function AnalysisScreen() {
               nutritionSummary={analysis.nutritionSummary}
               mealName={analysis.mealName}
               guiltSharingResult={guiltSharingResult}
-              onFindBuddy={confirmCreateMealBuddyCard}
               onOpenMealLog={saveMealRecordToMockDatabase}
               onOpenNutritionRecord={() => router.push("/meal-log")}
               onGuiltShare={handleGuiltSharingConfirm}
+              nextMealRecommendations={nextMealRecommendations}
+              isPremium={demoMode === "premium"}
+              onSelectMeal={(item) => setPendingMealBuddySource(item)}
+              onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
             />
           ) : (
             <ExternalDiningAnalysis analysis={analysis} />
@@ -369,21 +480,25 @@ function CompletedAnalysisHero({
   nutritionSummary,
   mealName,
   guiltSharingResult,
-  onFindBuddy,
   onOpenMealLog,
   onOpenNutritionRecord,
-  onGuiltShare
+  onGuiltShare,
+  nextMealRecommendations,
+  isPremium,
+  onSelectMeal,
+  onViewRestaurant
 }: {
   nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"];
   mealName: string;
   guiltSharingResult: { peopleCount: number; sharedCaloriesPerPerson: number } | null;
-  onFindBuddy: () => void;
   onOpenMealLog: () => void;
   onOpenNutritionRecord: () => void;
   onGuiltShare: (result: { peopleCount: number; sharedCaloriesPerPerson: number }) => void;
+  nextMealRecommendations: NextMealRecommendationCard[];
+  isPremium: boolean;
+  onSelectMeal: (item: NextMealRecommendationCard) => void;
+  onViewRestaurant: (restaurantId: string) => void;
 }) {
-  const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
-
   return (
     <SnowCard tone="primary">
       <View style={styles.completedHeroVisual}>
@@ -393,16 +508,7 @@ function CompletedAnalysisHero({
       </View>
       <SnowSectionHeader title={zhTW.mobile.refinedLogic.analysisFlow.bridgeTitle} subtitle={zhTW.mobile.refinedLogic.analysisFlow.bridgeBody} />
       <MacroChipsRow nutritionSummary={nutritionSummary} />
-      <View style={styles.nextMealPanel}>
-        <Text style={styles.nextMealEyebrow}>{daily.nextMealSocialTitle}</Text>
-        <Text style={styles.nextMealTitle}>{daily.nextMealRecommendation}</Text>
-        <Text style={styles.nextMealBody}>{daily.nextMealReason}</Text>
-        <View style={styles.chipRow}>
-          {daily.plannedMeal.tags.map((tag) => (
-            <Chip key={tag} label={tag} tone="primary" />
-          ))}
-        </View>
-      </View>
+      <NextMealRecommendationCarousel recommendations={nextMealRecommendations} isPremium={isPremium} onSelectMeal={onSelectMeal} onViewRestaurant={onViewRestaurant} />
       <SingleMealGuiltShare
         estimatedCalories={nutritionSummary.calories}
         mealName={mealName}
@@ -411,7 +517,6 @@ function CompletedAnalysisHero({
         onShare={onGuiltShare}
       />
       <View style={styles.ctaColumn}>
-        <PrimaryButton icon="buddies" label={zhTW.mobile.refinedLogic.mealBuddyCard.findPeopleCta} onPress={onFindBuddy} />
         <View style={styles.ctaRow2}>
           <View style={styles.ctaItem}>
             <SecondaryButton icon="check" label={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord} onPress={onOpenMealLog} />
@@ -422,6 +527,57 @@ function CompletedAnalysisHero({
         </View>
       </View>
     </SnowCard>
+  );
+}
+
+function NextMealRecommendationCarousel({
+  recommendations,
+  isPremium,
+  onSelectMeal,
+  onViewRestaurant
+}: {
+  recommendations: NextMealRecommendationCard[];
+  isPremium: boolean;
+  onSelectMeal: (item: NextMealRecommendationCard) => void;
+  onViewRestaurant: (restaurantId: string) => void;
+}) {
+  const [expandedReasonId, setExpandedReasonId] = useState("");
+  const copy = zhTW.mobile.refinedLogic.analysisFlow;
+
+  return (
+    <View style={styles.nextMealPanel}>
+      <Text style={styles.nextMealEyebrow}>{zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.nextMealSocialTitle}</Text>
+      <Text style={styles.nextMealTitle}>{copy.nextMealCarouselTitle}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recoTrack}>
+        {recommendations.map((item) => {
+          const reasonExpanded = expandedReasonId === item.menuItemId;
+          return (
+            <View key={item.menuItemId} style={styles.recoCard}>
+              <Pressable style={styles.recoCardTapArea} onPress={() => onSelectMeal(item)}>
+                <View style={styles.recoPhoto}>
+                  <Text style={styles.recoEmoji}>{item.emoji}</Text>
+                </View>
+                <Chip label={copy.aiRecommendedBadge} tone="primary" />
+                <Text style={styles.recoMatchLabel}>{item.matchPercent}% {copy.matchLabelSuffix}</Text>
+                <Text style={styles.recoName}>{item.dishName}</Text>
+                <Text style={styles.recoCalories}>{item.calories} kcal</Text>
+                <Text style={styles.recoRestaurant}>{item.restaurantName}</Text>
+                <Text style={styles.recoDistance}>{item.distance}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.recoReasonToggle}
+                onPress={() => setExpandedReasonId((current) => (current === item.menuItemId ? "" : item.menuItemId))}
+              >
+                <Text style={styles.recoReasonToggleText}>{copy.aiReasonToggleLabel}</Text>
+              </Pressable>
+              {reasonExpanded ? <Text style={styles.recoReasonText}>{item.reason}</Text> : null}
+              <SecondaryButton icon="plate" label={copy.viewRestaurantCta} onPress={() => onViewRestaurant(item.restaurantId)} />
+            </View>
+          );
+        })}
+      </ScrollView>
+      {!isPremium ? <Text style={styles.recoPremiumHint}>{copy.premiumMoreHint}</Text> : null}
+    </View>
   );
 }
 
@@ -1167,6 +1323,87 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900"
   },
+  recoTrack: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 10,
+    paddingRight: 6,
+    paddingVertical: 4
+  },
+  recoCard: {
+    width: 188,
+    gap: 10,
+    borderRadius: radius.lg,
+    backgroundColor: "#ffffff",
+    padding: 12,
+    ...shadows.soft
+  },
+  recoCardTapArea: {
+    gap: 6
+  },
+  recoPhoto: {
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    width: 52,
+    height: 52,
+    borderRadius: radius.pill,
+    backgroundColor: snow.primarySoft
+  },
+  recoEmoji: {
+    fontSize: 24
+  },
+  recoName: {
+    color: snow.ink,
+    fontSize: 14,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  recoCalories: {
+    color: snow.primaryDeep,
+    fontSize: 12.5,
+    fontFamily: fonts.bold,
+    fontWeight: "800"
+  },
+  recoRestaurant: {
+    color: snow.sub,
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  recoDistance: {
+    color: snow.sub,
+    fontSize: 11,
+    fontFamily: fonts.body
+  },
+  recoMatchLabel: {
+    color: snow.primaryDeep,
+    fontSize: 11,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  recoReasonToggle: {
+    alignSelf: "flex-start"
+  },
+  recoReasonToggleText: {
+    color: snow.sub,
+    fontSize: 11,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  recoReasonText: {
+    color: snow.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: fonts.body
+  },
+  recoPremiumHint: {
+    color: snow.sub,
+    fontSize: 11.5,
+    fontFamily: fonts.medium,
+    fontWeight: "700",
+    marginTop: 10
+  },
   reasonItem: {
     color: colors.muted,
     fontSize: 13,
@@ -1493,32 +1730,54 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12
   },
-  segmentTrack: {
+  mealSourceRow: {
     flexDirection: "row",
-    gap: 6,
-    borderRadius: radius.pill,
-    backgroundColor: snow.bg2,
-    padding: 4,
+    gap: 12,
     marginTop: 14
   },
-  segmentOption: {
+  // Matches recoCard's visual language (radius.lg + shadows.soft + white background)
+  // so the meal-source picker reads as the same card style as the recommendation cards.
+  mealSourceCard: {
     flex: 1,
-    alignItems: "center",
-    borderRadius: radius.pill,
-    paddingVertical: 10
-  },
-  segmentOptionActive: {
-    backgroundColor: snow.card,
+    gap: 6,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: snow.line,
+    backgroundColor: "#ffffff",
+    padding: 16,
+    minHeight: 108,
+    position: "relative",
     ...shadows.soft
   },
-  segmentText: {
-    color: snow.sub,
-    fontSize: 13,
+  mealSourceCardActive: {
+    borderColor: snow.primary,
+    backgroundColor: snow.primarySoft
+  },
+  mealSourceCheck: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    width: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    backgroundColor: snow.primary
+  },
+  mealSourceTitle: {
+    color: snow.ink,
+    fontSize: 15,
     fontFamily: fonts.bold,
     fontWeight: "800"
   },
-  segmentTextActive: {
-    color: snow.ink
+  mealSourceTitleActive: {
+    color: snow.primaryDeep
+  },
+  mealSourceSubtitle: {
+    color: snow.sub,
+    fontSize: 12,
+    fontFamily: fonts.body,
+    lineHeight: 17
   },
   statGrid: {
     flexDirection: "row",
