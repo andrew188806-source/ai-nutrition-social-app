@@ -1,8 +1,7 @@
-import { type ReactNode, useMemo, useState } from "react";
-import { useEffect } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
@@ -29,6 +28,8 @@ type NextMealRecommendationCard = {
   reason: string;
   matchPercent: number;
 };
+
+let hasPlayedRecommendationCardCue = false;
 
 // Short, demo-friendly explanation derived from existing fields only (protein content
 // and how close this dish's calories are to the user's current nutrition state) — not a
@@ -92,7 +93,6 @@ export default function AnalysisScreen() {
   const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : session.selectedMealPeriod || defaultMealPeriod;
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(initialMealPeriod);
   const [autoSavedConfirmedMeal, setAutoSavedConfirmedMeal] = useState(session.autoSavedConfirmedMeal);
-  const [pendingMealBuddySource, setPendingMealBuddySource] = useState<NextMealRecommendationCard | null>(null);
   const [showMealBuddySuccess, setShowMealBuddySuccess] = useState(false);
   const isAnalysisConfirmed = analysis.matchState === "confirmed";
   // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
@@ -189,12 +189,8 @@ export default function AnalysisScreen() {
     return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={saveMealRecordToMockDatabase} onOpenSocial={() => router.push("/meal-buddies")} />;
   }
 
-  function createMealBuddyCardFromRecommendation() {
+  function createMealBuddyCardFromRecommendation(meal: NextMealRecommendationCard) {
     // Integration entry: tapping a Next Meal Recommendation card -> Meal Buddy Card matching pool.
-    if (!pendingMealBuddySource) {
-      return;
-    }
-    const meal = pendingMealBuddySource;
     const card = createMealBuddyCard({
       cardType: "general",
       sourceType: "ai_recommendation",
@@ -211,7 +207,6 @@ export default function AnalysisScreen() {
     resetMealBuddyVisibleQuotaForDemo(demoMode);
     upsertMealBuddyCardWithQuota(card, demoMode);
     setPendingMatchRequest(card, demoMode === "premium" ? 5 : 3, false, demoMode);
-    setPendingMealBuddySource(null);
     setShowMealBuddySuccess(true);
     setTimeout(() => {
       router.push("/meal-buddies");
@@ -223,11 +218,6 @@ export default function AnalysisScreen() {
       title={zhTW.mobile.analysisTitle}
       subtitle={zhTW.mobile.analysisSubtitle}
     >
-      <MealBuddyCreateConfirmModal
-        onCancel={() => setPendingMealBuddySource(null)}
-        onConfirm={createMealBuddyCardFromRecommendation}
-        visible={Boolean(pendingMealBuddySource)}
-      />
       <MealBuddySuccessToast visible={showMealBuddySuccess} />
       {mealSaved ? (
         <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
@@ -308,7 +298,7 @@ export default function AnalysisScreen() {
               onGuiltShare={handleGuiltSharingConfirm}
               nextMealRecommendations={nextMealRecommendations}
               isPremium={demoMode === "premium"}
-              onSelectMeal={(item) => setPendingMealBuddySource(item)}
+              onSelectMeal={createMealBuddyCardFromRecommendation}
               onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
             />
           ) : (
@@ -398,26 +388,6 @@ export default function AnalysisScreen() {
         </>
       )}
     </PlaceholderScreen>
-  );
-}
-
-function MealBuddyCreateConfirmModal({ onCancel, onConfirm, visible }: { onCancel: () => void; onConfirm: () => void; visible: boolean }) {
-  return (
-    <Modal animationType="fade" transparent visible={visible} onRequestClose={onCancel}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.confirmModalCard}>
-          <SectionTitle title="要用這餐建立飯友卡並尋找飯友嗎？" subtitle="系統會使用下一餐推薦、餐點類型與你的社群卡用餐時間，幫你找適合的飯友。" />
-          <View style={styles.modalButtonRow}>
-            <Pressable style={styles.modalSecondaryButton} onPress={onCancel}>
-              <Text style={styles.modalSecondaryButtonText}>取消</Text>
-            </Pressable>
-            <Pressable style={styles.modalPrimaryButton} onPress={onConfirm}>
-              <Text style={styles.modalPrimaryButtonText}>建立飯友卡</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -543,6 +513,19 @@ function NextMealRecommendationCarousel({
 }) {
   const [expandedReasonId, setExpandedReasonId] = useState("");
   const copy = zhTW.mobile.refinedLogic.analysisFlow;
+  const cueScale = useMemo(() => new Animated.Value(hasPlayedRecommendationCardCue ? 1 : 0.985), []);
+
+  useEffect(() => {
+    if (hasPlayedRecommendationCardCue || recommendations.length === 0) {
+      return;
+    }
+
+    hasPlayedRecommendationCardCue = true;
+    Animated.sequence([
+      Animated.timing(cueScale, { toValue: 1.012, duration: 180, useNativeDriver: true }),
+      Animated.timing(cueScale, { toValue: 1, duration: 180, useNativeDriver: true })
+    ]).start();
+  }, [cueScale, recommendations.length]);
 
   return (
     <View style={styles.nextMealPanel}>
@@ -552,8 +535,13 @@ function NextMealRecommendationCarousel({
         {recommendations.map((item) => {
           const reasonExpanded = expandedReasonId === item.menuItemId;
           return (
-            <View key={item.menuItemId} style={styles.recoCard}>
-              <Pressable style={styles.recoCardTapArea} onPress={() => onSelectMeal(item)}>
+            <Animated.View key={item.menuItemId} style={[styles.recoCard, { transform: [{ scale: cueScale }] }]}>
+              <Pressable
+                accessibilityHint="點擊後會建立飯友卡"
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.recoCardTapArea, pressed && styles.recoCardTapAreaPressed]}
+                onPress={() => onSelectMeal(item)}
+              >
                 <View style={styles.recoPhoto}>
                   <Text style={styles.recoEmoji}>{item.emoji}</Text>
                 </View>
@@ -572,7 +560,8 @@ function NextMealRecommendationCarousel({
               </Pressable>
               {reasonExpanded ? <Text style={styles.recoReasonText}>{item.reason}</Text> : null}
               <SecondaryButton icon="plate" label={copy.viewRestaurantCta} onPress={() => onViewRestaurant(item.restaurantId)} />
-            </View>
+              <Text style={styles.recoTapHint}>點擊餐點即可建立飯友卡</Text>
+            </Animated.View>
           );
         })}
       </ScrollView>
@@ -1234,65 +1223,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
-  modalBackdrop: {
-    alignItems: "center",
-    backgroundColor: "rgba(45,40,35,0.42)",
-    bottom: 0,
-    flex: 1,
-    justifyContent: "center",
-    left: 0,
-    padding: 20,
-    position: "absolute",
-    right: 0,
-    top: 0
-  },
-  confirmModalCard: {
-    gap: 16,
-    borderColor: "#EEDAC2",
-    borderRadius: 28,
-    borderWidth: 1,
-    backgroundColor: colors.paper,
-    maxWidth: 440,
-    padding: 20,
-    shadowColor: "#3f2d12",
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.2,
-    shadowRadius: 28,
-    width: "100%"
-  },
-  modalButtonRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  modalPrimaryButton: {
-    alignItems: "center",
-    borderRadius: 999,
-    backgroundColor: colors.coral,
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 13
-  },
-  modalPrimaryButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "900"
-  },
-  modalSecondaryButton: {
-    alignItems: "center",
-    borderColor: colors.line,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: "#ffffff",
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 13
-  },
-  modalSecondaryButtonText: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: "900"
-  },
   nextMealBody: {
     color: colors.muted,
     fontSize: 13,
@@ -1340,6 +1270,10 @@ const styles = StyleSheet.create({
   },
   recoCardTapArea: {
     gap: 6
+  },
+  recoCardTapAreaPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.99 }]
   },
   recoPhoto: {
     alignItems: "center",
@@ -1396,6 +1330,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     fontFamily: fonts.body
+  },
+  recoTapHint: {
+    color: snow.sub,
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontFamily: fonts.body,
+    fontWeight: "600",
+    textAlign: "center",
+    opacity: 0.72
   },
   recoPremiumHint: {
     color: snow.sub,

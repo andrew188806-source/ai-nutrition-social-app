@@ -122,9 +122,6 @@ export function CorrectionSuccessActions({ hasRestaurantContext, onOpenMealLog, 
         <Pressable style={styles.actionButton} onPress={onOpenMealLog}>
           <Text style={styles.actionButtonText}>{zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord}</Text>
         </Pressable>
-        <Pressable style={styles.actionButton} onPress={onOpenMealLog}>
-          <Text style={styles.actionButtonText}>{zhTW.mobile.refinedLogic.analysisFlow.viewNutritionRecord}</Text>
-        </Pressable>
       </View>
     </View>
   );
