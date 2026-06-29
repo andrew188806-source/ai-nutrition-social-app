@@ -482,7 +482,7 @@ const MASCOTS = {
   latenight: require("../assets/mascots/latenight.png"),
   lowcarb: require("../assets/mascots/lowcarb.png"),
   protein: require("../assets/mascots/protein.png"),
-  veggie: require("../assets/mascots/veggie.png")
+  veggie: require("../assets/mascots/veggie.jpg")
 } as const;
 
 export type MascotName = keyof typeof MASCOTS;
