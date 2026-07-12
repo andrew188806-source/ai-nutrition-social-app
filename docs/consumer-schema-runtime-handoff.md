@@ -189,3 +189,33 @@ Current live read table allowlist: `consumer_profiles`.
 Current live read API: `getCurrentProfile()` only. The live repository rejects arbitrary user-id lookup instead of querying.
 
 No real Supabase URL/key, email, password, user ID, token, session, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, profile bootstrap, automatic profile creation, UI change, navigation change, Restaurant Web runtime change, or Admin runtime change was made. Consumer Runtime Phase 2 was not started.
+
+## Phase 2A Meal Records Read Architecture Result
+
+Consumer Runtime Integration Phase 2A Meal Records Read Architecture and Development Live Read Preparation is implementation-complete and guard-complete.
+
+Completed:
+
+- `apps/mobile/features/consumer-meals/*` read-only meal records boundary.
+- canonical `ConsumerMealRecord` and `ConsumerMealRecordItem` types.
+- bounded current-user read contract with date range and limit.
+- mock repository mapping existing demo meal records into the canonical read contract.
+- Supabase live repository contract for `meal_records` with nested `meal_record_items`.
+- row-to-canonical mappers with owner, parent, enum, timestamp, and numeric validation.
+- meal source switching with mock default and explicit live preparation flags.
+- typed meal read errors.
+- Phase 2A guard script: `npm run test:consumer-phase2a`.
+- Development live meal read smoke placeholder: `npm run test:consumer-phase2a-live-smoke`.
+
+Still not done:
+
+- Home / Today Intake / Meal Log cutover.
+- Daily Nutrition Summary runtime recalculation.
+- Development live meal read verification.
+- Meal writes, updates, deletes, corrections, consumption adjustments, ratings, favorites, recommendation feedback, social, orders, payments, Admin governance, or production deployment.
+- Any schema, RLS, grant, seed, or fixture change.
+- Phase 2B.
+
+Current live read table allowlist: `meal_records` through the Phase 2A meal read adapter. Nested `meal_record_items` are selected only as child rows in the explicit column allowlist.
+
+No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, raw SQL, RPC, profile bootstrap, automatic profile creation, UI change, navigation change, Restaurant Web runtime change, or Admin runtime change was made. Consumer Runtime Phase 2B was not started.

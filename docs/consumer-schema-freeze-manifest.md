@@ -259,3 +259,13 @@ Consumer Runtime Phase 2 was not started.
 No UI or navigation changes were made.
 No Consumer Runtime write operation was implemented or executed.
 No profile bootstrap or automatic profile creation was implemented.
+
+## 19. Phase 2A Follow-Up
+
+Consumer Runtime Integration Phase 2A Meal Records Read Architecture and Development Live Read Preparation is implementation-complete and guard-complete.
+
+Phase 2A prepares a read-only current-user Meal Records boundary for `meal_records` and nested `meal_record_items`. It does not execute development live meal read verification; the live meal smoke is intentionally `SKIPPED - Consumer Runtime Phase 2B has not started.`
+
+Phase 2A adds no schema migration, RLS migration, grant migration, seed, fixture, write path, RPC, raw SQL path, UI wiring, navigation wiring, Home/Today Intake cutover, Daily Nutrition Summary runtime, social runtime, recommendation runtime, ratings/favorites runtime, Admin Consumer Governance, production deployment, or Phase 2B work.
+
+The live read preparation preserves the current-user ownership boundary: the repository obtains the canonical session from the Auth boundary, filters `meal_records.user_id` by the current session user, and validates both meal record and meal item ownership while mapping rows into canonical types.

@@ -13,6 +13,16 @@ export type ConsumerAuthErrorCode =
   | "profile_transport_failed"
   | "profile_configuration_invalid"
   | "profile_source_unavailable"
+  | "meal_source_configuration_invalid"
+  | "meal_session_missing"
+  | "meal_session_expired"
+  | "meal_unauthorized"
+  | "meal_not_found"
+  | "meal_read_invalid_range"
+  | "meal_record_mapping_failed"
+  | "meal_item_mapping_failed"
+  | "meal_transport_failed"
+  | "meal_source_unavailable"
   | "session_expired"
   | "account_disabled"
   | "configuration_error";
@@ -110,6 +120,66 @@ export class ConsumerProfileConfigurationInvalidError extends ConsumerAuthError 
 export class ConsumerProfileSourceUnavailableError extends ConsumerAuthError {
   constructor(message = "Consumer profile source is unavailable in this runtime.") {
     super("profile_source_unavailable", message);
+  }
+}
+
+export class ConsumerMealSourceConfigurationInvalidError extends ConsumerAuthError {
+  constructor(message = "Consumer meal runtime configuration is invalid.") {
+    super("meal_source_configuration_invalid", message, false);
+  }
+}
+
+export class ConsumerMealSessionMissingError extends ConsumerAuthError {
+  constructor(message = "Consumer meal read requires an authenticated session.") {
+    super("meal_session_missing", message);
+  }
+}
+
+export class ConsumerMealSessionExpiredError extends ConsumerAuthError {
+  constructor(message = "Consumer meal read requires a current authenticated session.") {
+    super("meal_session_expired", message);
+  }
+}
+
+export class ConsumerMealUnauthorizedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal read was not authorized.") {
+    super("meal_unauthorized", message);
+  }
+}
+
+export class ConsumerMealNotFoundError extends ConsumerAuthError {
+  constructor(message = "Consumer meal records were not found.") {
+    super("meal_not_found", message);
+  }
+}
+
+export class ConsumerMealReadInvalidRangeError extends ConsumerAuthError {
+  constructor(message = "Consumer meal read range is invalid.") {
+    super("meal_read_invalid_range", message, false);
+  }
+}
+
+export class ConsumerMealRecordMappingFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal record response could not be mapped.") {
+    super("meal_record_mapping_failed", message);
+  }
+}
+
+export class ConsumerMealItemMappingFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal item response could not be mapped.") {
+    super("meal_item_mapping_failed", message);
+  }
+}
+
+export class ConsumerMealTransportFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal read transport failed.") {
+    super("meal_transport_failed", message);
+  }
+}
+
+export class ConsumerMealSourceUnavailableError extends ConsumerAuthError {
+  constructor(message = "Consumer meal source is unavailable in this runtime.") {
+    super("meal_source_unavailable", message);
   }
 }
 

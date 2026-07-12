@@ -682,3 +682,39 @@ Boundary:
 - Local and remote migration history are aligned by development operator action.
 - RLS remains enabled and `auth.uid() = user_id` remains the ownership boundary.
 - No production project was touched.
+
+## 32. Consumer Runtime Integration Phase 2A Status
+
+Consumer Runtime Integration Phase 2A Meal Records Read Architecture and Development Live Read Preparation is implementation-complete and guard-complete.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Meal Records source: `mock`.
+- Default Consumer Auth enabled flag: `false`.
+- Default Consumer writes enabled flag: `false`.
+- Development live meal read path: prepared only with explicit Phase 2A flags.
+- Development live meal read smoke: skipped because Consumer Runtime Phase 2B has not started.
+- Home / Today Intake / Meal Log cutover: not started.
+- Daily Nutrition Summary runtime: not started.
+- Meal writes, updates, deletes, corrections, ratings, favorites, recommendation feedback, social, orders, payments, and Admin Consumer Governance: not started.
+- Phase 2B: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-2a-meal-records-read-architecture.md`
+- `apps/mobile/features/consumer-meals/*`
+- `scripts/consumer-meal-records-phase-2a-guard.mjs`
+- `scripts/consumer-meal-records-phase-2a-live-smoke.mjs`
+
+Runtime boundary:
+
+- Approved live read API: `ConsumerMealRecordsService.listCurrentUserMealRecords()`.
+- Approved table: `meal_records`.
+- Approved nested rows: `meal_record_items` through explicit column allowlist.
+- Ownership source: current authenticated session `userId`.
+- Arbitrary user-id meal lookup: not exposed.
+- Empty result: canonical empty list.
+- Malformed row: typed mapping error, no fallback.
+
+No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, schema migration, RLS migration, grant migration, seed, fixture, Consumer Runtime write, RPC, raw SQL, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, raw row, row contents, or fixture contents were recorded in the repository.

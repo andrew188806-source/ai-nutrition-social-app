@@ -15,6 +15,8 @@
     "test:consumer-phase1c-live-smoke": "node scripts/consumer-auth-phase-1c-live-smoke.mjs",
     "test:consumer-phase1d": "node scripts/consumer-profile-phase-1d-guard.mjs",
     "test:consumer-phase1d-live-smoke": "node scripts/consumer-profile-phase-1d-live-smoke.mjs",
+    "test:consumer-phase2a": "node scripts/consumer-meal-records-phase-2a-guard.mjs",
+    "test:consumer-phase2a-live-smoke": "node scripts/consumer-meal-records-phase-2a-live-smoke.mjs",
     "test:consumer-schema-phase1.3": "node scripts/consumer-schema-phase-1-3-guard.mjs",
     "validate:consumer-schema": "node scripts/validate-consumer-schema.mjs",
     "audit:canonical": "node scripts/audit-canonical-data.mjs"
