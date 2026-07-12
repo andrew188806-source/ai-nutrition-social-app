@@ -13,6 +13,8 @@
     "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs",
     "test:consumer-phase1c": "node scripts/consumer-auth-phase-1c-guard.mjs",
     "test:consumer-phase1c-live-smoke": "node scripts/consumer-auth-phase-1c-live-smoke.mjs",
+    "test:consumer-phase1d": "node scripts/consumer-profile-phase-1d-guard.mjs",
+    "test:consumer-phase1d-live-smoke": "node scripts/consumer-profile-phase-1d-live-smoke.mjs",
     "validate:consumer-schema": "node scripts/validate-consumer-schema.mjs",
     "audit:canonical": "node scripts/audit-canonical-data.mjs"
   },

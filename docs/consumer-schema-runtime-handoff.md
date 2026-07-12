@@ -156,4 +156,32 @@ Still not done:
 - Consumer database writes.
 - Phase 1D.
 
-No real Supabase URL/key, email, password, user ID, token, or session was printed. No SQL, migration, seed, Consumer Profile write, UI change, Restaurant Web runtime change, or Admin runtime change was made. Phase 1C is a freeze candidate; Phase 1D has not started.
+No real Supabase URL/key, email, password, user ID, token, or session was printed. No SQL, migration, seed, Consumer Profile write, UI change, Restaurant Web runtime change, or Admin runtime change was made. Phase 1C is a freeze candidate.
+
+## Phase 1D Development Live Profile Read Result
+
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete. Development live verification remains pending until an opted-in smoke reads an existing development `user_profiles` row.
+
+Completed:
+
+- Current-user Consumer Profile service boundary: `ConsumerProfileService.getCurrentProfile()`.
+- Supabase profile row contract and canonical mapper.
+- Development live profile repository with session-bound ownership.
+- Live profile factory guard requiring live Auth, Auth enabled, writes disabled, explicit Auth port, and explicit profile client.
+- Typed profile read errors for missing session, expired session, unauthorized, not found, mapping failure, transport failure, invalid configuration, and unavailable source.
+- Phase 1D guard script: `npm run test:consumer-phase1d`.
+- Opt-in development live profile smoke script: `npm run test:consumer-phase1d-live-smoke`.
+
+Still not done:
+
+- Mobile UI wiring.
+- Consumer Profile writes/bootstrap.
+- Consumer private profile/preferences/taste reads.
+- Meal, recommendation, social, orders, payments, or sharing runtime reads/writes.
+- SQL, migration, seed, RLS verification, or production readiness.
+- Phase 2.
+
+Current live read table allowlist: `user_profiles`.
+Current live read API: `getCurrentProfile()` only. The live repository rejects arbitrary user-id lookup instead of querying.
+
+No real Supabase URL/key, email, password, user ID, token, or session is recorded in this repository. No SQL, migration, seed, Consumer Profile write, UI change, Restaurant Web runtime change, or Admin runtime change was made.

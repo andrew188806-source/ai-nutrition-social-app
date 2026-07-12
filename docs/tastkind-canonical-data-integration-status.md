@@ -604,4 +604,44 @@ Artifacts:
 
 No Mobile UI, Restaurant Web runtime, Admin runtime, SQL, migration, seed, Consumer Profile write, database query, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, or full session was recorded in the repository.
 
-Do not start Phase 1D without explicit approval.
+Phase 1D was later started by explicit approval. See the Phase 1D status section below.
+
+## 30. Consumer Runtime Integration Phase 1D Status
+
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Profile source: `mock`.
+- Default Consumer Auth enabled flag: `false`.
+- Default Consumer writes enabled flag: `false`.
+- Development live profile path: available only with explicit Phase 1D flags.
+- Consumer Profile writes/bootstrap: disabled.
+- Consumer private profile, preferences, taste profile, meal, recommendation, social, order, payment, and sharing runtime: not started.
+- Development live smoke: pending until an opted-in run reads an existing development `user_profiles` row.
+- Phase 1D freeze status: pending live profile read verification.
+- Phase 2: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-1d-development-live-profile-read.md`
+- `apps/mobile/features/consumer-auth/consumerProfileService.ts`
+- `apps/mobile/features/consumer-auth/supabaseProfileContracts.ts`
+- `apps/mobile/features/consumer-auth/supabaseProfileMappers.ts`
+- `apps/mobile/features/consumer-auth/adapters/supabaseConsumerProfileRepository.ts`
+- `apps/mobile/features/consumer-auth/errors.ts`
+- `apps/mobile/features/consumer-auth/featureFlags.ts`
+- `apps/mobile/features/consumer-auth/factories.ts`
+- `scripts/consumer-profile-phase-1d-guard.mjs`
+- `scripts/consumer-profile-phase-1d-live-smoke.mjs`
+
+Runtime boundary:
+
+- Approved live read API: `getCurrentProfile()`.
+- Approved table allowlist: `user_profiles`.
+- Ownership filter: current authenticated session `userId`.
+- Arbitrary user-id profile lookup: rejected in the live repository.
+- Missing profile row: typed `profile_not_found`, with no bootstrap/write/fallback.
+
+No Mobile UI, Restaurant Web runtime, Admin runtime, SQL, migration, seed, Consumer Profile write, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, or full session was recorded in the repository.

@@ -13,6 +13,7 @@ const approvedReactNativeBoundaryFiles = new Set([
   "apps/mobile/features/consumer-auth/asyncStorageConsumerAuthStorage.ts",
   "apps/mobile/features/consumer-auth/reactNativeAppStateSource.ts"
 ]);
+const approvedProfileReadFiles = new Set(["apps/mobile/features/consumer-auth/adapters/supabaseConsumerProfileRepository.ts"]);
 const issues = [];
 const checks = [];
 
@@ -85,7 +86,6 @@ const forbiddenSourcePatterns = [
   [/service[_-]?role/i, "Service-role wording must not appear in Mobile Consumer source."],
   [new RegExp("SUPABASE_" + "SERVICE", "i"), "Privileged Supabase env vars must not appear in Mobile Consumer source."],
   [new RegExp("SECRET_" + "KEY", "i"), "Secret env vars must not appear in Mobile Consumer source."],
-  [/\bsupabase\s*\.\s*from\s*\(|\bauthClient\s*\.\s*from\s*\(|\bclient\s*\.\s*from\s*\(/, "Consumer Phase 1C must not add database query calls."],
   [/\.(insert|upsert|update|rpc)\s*\(/, "Consumer Phase 1C must not add database write/RPC calls."],
   [/storage\.from\s*\(/, "Consumer Phase 1C must not add Supabase Storage calls."]
 ];
@@ -95,6 +95,11 @@ for (const [pattern, message] of forbiddenSourcePatterns) {
   if (matches.length) fail(`forbidden source pattern: ${pattern}`, message, { matches });
   else pass(`forbidden source pattern absent: ${pattern}`);
 }
+
+const databaseQueryMatches = sourceText.filter((item) => /\.\s*from\s*\(/.test(item.text)).map((item) => item.rel);
+const unapprovedDatabaseQueries = databaseQueryMatches.filter((file) => !approvedProfileReadFiles.has(file));
+if (unapprovedDatabaseQueries.length) fail("database query calls limited to Phase 1D profile adapter", "Consumer database queries may only appear in the approved Phase 1D read-only profile adapter.", { matches: unapprovedDatabaseQueries });
+else pass("database query calls limited to Phase 1D profile adapter", { matches: databaseQueryMatches });
 
 const uiFiles = [
   ...walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx")),
@@ -279,9 +284,9 @@ async function fakeLiveAuthTests() {
 
   try {
     phase1c.createConsumerProfileRepository({ ...liveFlags, profileSource: "supabase-live", issues: [] });
-    throw new Error("live profile repository must remain disabled");
+    throw new Error("live profile repository without dependencies should fail closed");
   } catch (error) {
-    if (!(error instanceof phase1c.ConsumerAuthConfigurationError)) throw error;
+    if (!(error instanceof phase1c.ConsumerAuthError)) throw error;
   }
 
   const env = phase1c.getSupabaseConsumerEnvironment({

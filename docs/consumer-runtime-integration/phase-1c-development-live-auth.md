@@ -3,6 +3,8 @@
 Date: 2026-07-12
 Status: Implementation complete. Guard complete. Development live verification complete. Phase 1D not started.
 
+Note: this document records the Phase 1C freeze state. Phase 1D was started later by explicit approval and is documented in `docs/consumer-runtime-integration/phase-1d-development-live-profile-read.md`.
+
 ## Scope
 
 Phase 1C enables the Mobile Consumer Auth transport architecture for development-only Supabase email Auth. It does not wire UI, activate Consumer Profile live reads/writes, execute database queries, execute SQL, create migrations, seed data, enable anonymous Auth, enable password reset, or start Phase 1D.

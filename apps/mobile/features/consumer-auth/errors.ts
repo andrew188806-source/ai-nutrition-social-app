@@ -3,9 +3,16 @@ export type ConsumerAuthErrorCode =
   | "provider_not_configured"
   | "operation_not_enabled"
   | "email_confirmation_required"
+  | "profile_session_missing"
+  | "profile_session_expired"
+  | "profile_unauthorized"
   | "profile_not_found"
   | "profile_write_not_enabled"
   | "profile_mapping_error"
+  | "profile_mapping_failed"
+  | "profile_transport_failed"
+  | "profile_configuration_invalid"
+  | "profile_source_unavailable"
   | "session_expired"
   | "account_disabled"
   | "configuration_error";
@@ -52,6 +59,24 @@ export class ConsumerProfileNotFoundError extends ConsumerAuthError {
   }
 }
 
+export class ConsumerProfileSessionMissingError extends ConsumerAuthError {
+  constructor(message = "Consumer profile read requires an authenticated session.") {
+    super("profile_session_missing", message);
+  }
+}
+
+export class ConsumerProfileSessionExpiredError extends ConsumerAuthError {
+  constructor(message = "Consumer profile read requires a current authenticated session.") {
+    super("profile_session_expired", message);
+  }
+}
+
+export class ConsumerProfileUnauthorizedError extends ConsumerAuthError {
+  constructor(message = "Consumer profile read was not authorized.") {
+    super("profile_unauthorized", message);
+  }
+}
+
 export class ConsumerProfileWriteNotEnabledError extends ConsumerAuthError {
   constructor(message = "Consumer profile writes are not enabled in this phase.") {
     super("profile_write_not_enabled", message);
@@ -61,6 +86,30 @@ export class ConsumerProfileWriteNotEnabledError extends ConsumerAuthError {
 export class ConsumerProfileMappingError extends ConsumerAuthError {
   constructor(message = "Consumer profile response could not be mapped.") {
     super("profile_mapping_error", message);
+  }
+}
+
+export class ConsumerProfileMappingFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer profile response could not be mapped.") {
+    super("profile_mapping_failed", message);
+  }
+}
+
+export class ConsumerProfileTransportFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer profile transport failed.") {
+    super("profile_transport_failed", message);
+  }
+}
+
+export class ConsumerProfileConfigurationInvalidError extends ConsumerAuthError {
+  constructor(message = "Consumer profile runtime configuration is invalid.") {
+    super("profile_configuration_invalid", message, false);
+  }
+}
+
+export class ConsumerProfileSourceUnavailableError extends ConsumerAuthError {
+  constructor(message = "Consumer profile source is unavailable in this runtime.") {
+    super("profile_source_unavailable", message);
   }
 }
 

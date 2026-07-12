@@ -215,3 +215,17 @@ Phase 1C added live Auth factory wiring, official SDK lazy loading with `process
 Development live smoke passed for email sign-in, session restore, session refresh, auth observer, sign-out, restore after sign-out, observer unsubscribe, and AppState lifecycle. Optional live email sign-up smoke was skipped because explicit sign-up opt-in was not enabled; sign-up mapping and `email_confirmation_required` remain verified by the Phase 1C guard.
 
 Phase 1C did not wire UI, enable Consumer Profile live read/write, execute SQL, create migrations, seed data, verify RLS, enable anonymous Auth, enable password reset, or start Phase 1D. No real Supabase URL/key, email, password, user ID, token, or session is recorded in this repository. Consumer Runtime Integration Phase 1C is a freeze candidate.
+
+## 17. Phase 1D Follow-Up
+
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete after the Phase 1C freeze candidate.
+
+Phase 1D keeps mock defaults and allows only development live current-profile reads when `AUTH_SOURCE=supabase-live`, `AUTH_ENABLED=true`, `PROFILE_SOURCE=supabase-live`, and `WRITES_ENABLED=false`.
+
+Phase 1D added a current-profile service boundary, Supabase profile row contract, canonical profile mapper, live current-profile repository, stricter factory validation, typed profile read errors, `scripts/consumer-profile-phase-1d-guard.mjs`, and the opt-in live smoke script `scripts/consumer-profile-phase-1d-live-smoke.mjs`.
+
+Phase 1D reads only the current authenticated user's profile through `getCurrentProfile()`. The live read table allowlist is `user_profiles`, and arbitrary user-id lookup is rejected by the live repository compatibility method.
+
+Development live verification is pending until an opted-in live smoke reads an existing development `user_profiles` row. A missing row is reported as typed `profile_not_found`; Phase 1D does not auto-create, bootstrap, insert, upsert, update, execute SQL, create migrations, seed data, or fall back to mock profile data.
+
+No Mobile UI, navigation, Consumer Profile write, private profile read, meal/recommendation/social/order/payment runtime, Restaurant Web runtime, Admin runtime, production credential, real URL/key/email/password/user ID/token, or full session is recorded in this repository. Phase 2 has not started.

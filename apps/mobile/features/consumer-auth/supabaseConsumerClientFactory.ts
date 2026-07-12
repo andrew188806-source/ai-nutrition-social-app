@@ -34,11 +34,8 @@ export class SupabaseConsumerClientFactory {
     if (!this.options.flags.supabaseAuthEnabled) {
       throw new ConsumerAuthOperationNotEnabledError("Supabase Auth transport is not enabled.");
     }
-    if (this.options.flags.profileSource === "supabase-live") {
-      throw new ConsumerAuthOperationNotEnabledError("Consumer Profile live runtime is not enabled in Consumer Phase 1C.");
-    }
     if (this.options.flags.supabaseWritesEnabled) {
-      throw new ConsumerAuthOperationNotEnabledError("Consumer Supabase writes are not enabled in Consumer Phase 1C.");
+      throw new ConsumerAuthOperationNotEnabledError("Consumer Supabase writes are not enabled in Consumer Runtime Phase 1D.");
     }
     if (!this.options.env.url || !this.options.env.publishableKey) {
       throw new ConsumerAuthConfigurationError("Consumer Supabase URL and publishable key are required before client creation.");
