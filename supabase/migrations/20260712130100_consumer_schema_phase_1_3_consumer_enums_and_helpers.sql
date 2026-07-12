@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 001.
+-- Consumer Schema Phase 1.3 formal migration 001.
 -- Promoted from docs/supabase-consumer-schema-drafts/001_consumer_enums_and_helpers.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

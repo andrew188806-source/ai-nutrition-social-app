@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 003.
+-- Consumer Schema Phase 1.3 formal migration 003.
 -- Promoted from docs/supabase-consumer-schema-drafts/003_consumer_preferences_and_goals.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

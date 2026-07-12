@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 007.
+-- Consumer Schema Phase 1.3 formal migration 007.
 -- Promoted from docs/supabase-consumer-schema-drafts/007_planned_meals_and_daily_summaries.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 009.
+-- Consumer Schema Phase 1.3 formal migration 009.
 -- Promoted from docs/supabase-consumer-schema-drafts/009_recommendation_feedback.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

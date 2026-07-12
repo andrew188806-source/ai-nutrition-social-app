@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 013.
+-- Consumer Schema Phase 1.3 formal migration 013.
 -- Promoted from docs/supabase-consumer-schema-drafts/013_consumer_public_private_views.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

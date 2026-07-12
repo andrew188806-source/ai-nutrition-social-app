@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 010.
+-- Consumer Schema Phase 1.3 formal migration 010.
 -- Promoted from docs/supabase-consumer-schema-drafts/010_consumer_privacy_and_consents.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

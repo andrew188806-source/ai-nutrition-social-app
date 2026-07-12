@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 005.
+-- Consumer Schema Phase 1.3 formal migration 005.
 -- Promoted from docs/supabase-consumer-schema-drafts/005_meal_analysis_and_corrections.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

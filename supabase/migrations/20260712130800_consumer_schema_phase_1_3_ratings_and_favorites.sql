@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 008.
+-- Consumer Schema Phase 1.3 formal migration 008.
 -- Promoted from docs/supabase-consumer-schema-drafts/008_ratings_and_favorites.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

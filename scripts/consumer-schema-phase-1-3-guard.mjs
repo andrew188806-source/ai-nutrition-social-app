@@ -93,6 +93,10 @@ function read(file) {
   return fs.readFileSync(file, "utf8");
 }
 
+function readBytes(file) {
+  return fs.readFileSync(file);
+}
+
 function stripComments(sql) {
   return sql.replace(/--.*$/gm, "");
 }
@@ -136,9 +140,29 @@ else pass("draft files remain review-only");
 const activeTexts = [];
 for (const fileName of migrationFiles) {
   const file = path.join(migrationsDir, fileName);
-  activeTexts.push({ fileName, rel: relative(file), text: read(file), clean: stripComments(read(file)) });
+  const bytes = readBytes(file);
+  const text = read(file);
+  activeTexts.push({ fileName, rel: relative(file), bytes, text, clean: stripComments(text) });
 }
 const allActiveSql = activeTexts.map((item) => item.clean).join("\n");
+
+const bomByteFailures = activeTexts
+  .filter((item) => item.bytes.length >= 3 && item.bytes[0] === 0xef && item.bytes[1] === 0xbb && item.bytes[2] === 0xbf)
+  .map((item) => item.rel);
+if (bomByteFailures.length) fail("active migrations do not start with UTF-8 BOM bytes", "Active migration SQL must be UTF-8 without BOM.", { matches: bomByteFailures });
+else pass("active migrations do not start with UTF-8 BOM bytes");
+
+const unicodeBomFailures = activeTexts
+  .filter((item) => item.text.codePointAt(0) === 0xfeff)
+  .map((item) => item.rel);
+if (unicodeBomFailures.length) fail("active migrations first code point is not U+FEFF", "Active migration SQL must not start with U+FEFF.", { matches: unicodeBomFailures });
+else pass("active migrations first code point is not U+FEFF");
+
+const utf8WithoutBomFailures = activeTexts
+  .filter((item) => item.bytes.length >= 3 && item.bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])))
+  .map((item) => item.rel);
+if (utf8WithoutBomFailures.length) fail("active migrations are encoded as UTF-8 without BOM", "Active migration files must not include a UTF-8 BOM prefix.", { matches: utf8WithoutBomFailures });
+else pass("active migrations are encoded as UTF-8 without BOM", { count: activeTexts.length });
 
 const markdownFenceFailures = activeTexts
   .filter((item) => item.text.includes("```"))

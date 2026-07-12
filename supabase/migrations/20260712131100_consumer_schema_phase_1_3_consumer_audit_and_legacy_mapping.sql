@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 011.
+-- Consumer Schema Phase 1.3 formal migration 011.
 -- Promoted from docs/supabase-consumer-schema-drafts/011_consumer_audit_and_legacy_mapping.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

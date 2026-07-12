@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 014.
+-- Consumer Schema Phase 1.3 formal migration 014.
 -- Promoted from docs/supabase-consumer-schema-drafts/014_consumer_rls_policy_drafts.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 

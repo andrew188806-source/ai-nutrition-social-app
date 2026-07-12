@@ -1,4 +1,4 @@
-﻿-- Consumer Schema Phase 1.3 formal migration 006.
+-- Consumer Schema Phase 1.3 formal migration 006.
 -- Promoted from docs/supabase-consumer-schema-drafts/006_meal_consumption_and_sharing.sql.
 -- No seed, fixture, Auth user, remote execution, or production credential is included.
 
