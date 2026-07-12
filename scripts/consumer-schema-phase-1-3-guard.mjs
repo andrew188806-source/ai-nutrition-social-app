@@ -71,6 +71,15 @@ const requiredTables = [
   "legacy_consumer_entity_mappings"
 ];
 
+const expectedObjectCounts = {
+  tables: 25,
+  views: 3,
+  indexes: 28,
+  policies: 24,
+  types: 13,
+  functions: 1
+};
+
 function pass(name, extra = {}) {
   checks.push({ name, pass: true, ...extra });
 }
@@ -131,9 +140,46 @@ for (const fileName of migrationFiles) {
 }
 const allActiveSql = activeTexts.map((item) => item.clean).join("\n");
 
+const markdownFenceFailures = activeTexts
+  .filter((item) => item.text.includes("```"))
+  .map((item) => item.rel);
+if (markdownFenceFailures.length) fail("active migrations contain no Markdown code fences", "Active migration SQL must not contain Markdown code fences.", { matches: markdownFenceFailures });
+else pass("active migrations contain no Markdown code fences");
+
+const backtickFailures = activeTexts
+  .filter((item) => item.text.includes("`"))
+  .map((item) => item.rel);
+if (backtickFailures.length) fail("active migrations contain no backticks", "Active migration SQL must not contain Markdown backticks or SQL wrapper characters.", { matches: backtickFailures });
+else pass("active migrations contain no backticks");
+
+const standaloneBacktickFailures = activeTexts
+  .filter((item) => /(^|\r?\n)\s*`\s*(\r?\n|$)/.test(item.text))
+  .map((item) => item.rel);
+if (standaloneBacktickFailures.length) fail("active migrations contain no standalone backtick wrapper lines", "Active migration SQL must not start or end a Markdown wrapper with a standalone backtick line.", { matches: standaloneBacktickFailures });
+else pass("active migrations contain no standalone backtick wrapper lines");
+
+const sqlPackagingFailures = activeTexts
+  .filter((item) => {
+    const firstSqlLine = item.text.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0);
+    return !firstSqlLine || firstSqlLine.startsWith("```") || firstSqlLine === "`";
+  })
+  .map((item) => item.rel);
+if (sqlPackagingFailures.length) fail("active migrations are pure PostgreSQL SQL files", "Active migration files must be directly parseable as PostgreSQL SQL, not Markdown-wrapped content.", { matches: sqlPackagingFailures });
+else pass("active migrations are pure PostgreSQL SQL files", { count: activeTexts.length });
+
 const activeDraftMarkers = activeTexts.filter((item) => /DRAFT ONLY|NOT AN ACTIVE MIGRATION|DO NOT APPLY TO PRODUCTION/i.test(item.text)).map((item) => item.rel);
 if (activeDraftMarkers.length) fail("active migrations have formal headers", "Active migration files must not keep draft-only warning headers.", { matches: activeDraftMarkers });
 else pass("active migrations have formal headers");
+
+const draftMarkdownFenceFailures = [];
+for (const fileName of expectedDraftFiles) {
+  const file = path.join(draftsDir, fileName);
+  if (!fs.existsSync(file)) continue;
+  const text = read(file);
+  if (text.startsWith("```") || /(^|\r?\n)\s*```\w*\s*(\r?\n|$)/.test(text)) draftMarkdownFenceFailures.push(fileName);
+}
+if (draftMarkdownFenceFailures.length) fail("draft headers are not Markdown-fenced", "Draft review headers must remain SQL comments, not Markdown-fenced blocks.", { matches: draftMarkdownFenceFailures });
+else pass("draft headers are not Markdown-fenced");
 
 const validationSelectPromoted = migrationFiles.filter((name) => name.includes("validation_queries"));
 if (validationSelectPromoted.length) fail("validation queries excluded from active migrations", "Validation-only SELECT SQL must not be in active migration state.", { matches: validationSelectPromoted });
@@ -155,6 +201,20 @@ for (const item of activeTexts) {
   for (const match of matches(item.clean, /create\s+type\s+([a-z_][a-z0-9_]*)\s+as\s+enum/gi)) objectCounts.types.add(match[1]);
   for (const match of matches(item.clean, /create\s+(?:or\s+replace\s+)?function\s+([a-z_][a-z0-9_]*)\s*\(/gi)) objectCounts.functions.add(match[1]);
 }
+
+const actualObjectCounts = {
+  tables: objectCounts.tables.size,
+  views: objectCounts.views.size,
+  indexes: objectCounts.indexes.size,
+  policies: objectCounts.policies.size,
+  types: objectCounts.types.size,
+  functions: objectCounts.functions.size
+};
+const inventoryMismatches = Object.entries(expectedObjectCounts)
+  .filter(([key, expected]) => actualObjectCounts[key] !== expected)
+  .map(([key, expected]) => ({ key, expected, actual: actualObjectCounts[key] }));
+if (inventoryMismatches.length) fail("active migration object inventory unchanged", "Active migration object inventory changed unexpectedly.", { expectedObjectCounts, actualObjectCounts, inventoryMismatches });
+else pass("active migration object inventory unchanged", { objectCounts: actualObjectCounts });
 
 const missingTables = requiredTables.filter((table) => !objectCounts.tables.has(table));
 if (missingTables.length) fail("required Consumer tables present", "Active migration package is missing required Consumer tables.", { missingTables });
