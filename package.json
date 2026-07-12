@@ -10,7 +10,11 @@
     "demo": "node scripts/start-demo.mjs",
     "typecheck": "tsc --noEmit",
     "test:consumer-phase1a": "node scripts/consumer-auth-phase-1a-guard.mjs",
-    "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs"
+    "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs",
+    "test:consumer-phase1c": "node scripts/consumer-auth-phase-1c-guard.mjs",
+    "test:consumer-phase1c-live-smoke": "node scripts/consumer-auth-phase-1c-live-smoke.mjs",
+    "validate:consumer-schema": "node scripts/validate-consumer-schema.mjs",
+    "audit:canonical": "node scripts/audit-canonical-data.mjs"
   },
   "workspaces": [
     "apps/*",

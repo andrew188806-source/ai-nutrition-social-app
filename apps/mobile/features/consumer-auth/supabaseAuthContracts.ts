@@ -63,6 +63,7 @@ export type SupabaseConsumerClientOptions = {
     autoRefreshToken: true;
     detectSessionInUrl: false;
     storage: unknown;
+    lock?: unknown;
   };
 };
 

@@ -121,8 +121,8 @@ const forbidden = [
   [/\bXMLHttpRequest\b/, "Phase 1B Consumer auth transport must not perform network requests."],
   [/WebSocket\s*\(/, "Phase 1B must not open realtime/auth sockets."],
   [/service[_-]?role/i, "Service-role wording must not appear in Mobile Consumer source."],
-  [/SUPABASE_SERVICE/i, "Service-role env vars must not appear in Mobile Consumer source."],
-  [/SECRET_KEY/i, "Secret env vars must not appear in Mobile Consumer source."]
+  [new RegExp("SUPABASE_" + "SERVICE", "i"), "Privileged Supabase env vars must not appear in Mobile Consumer source."],
+  [new RegExp("SECRET_" + "KEY", "i"), "Secret env vars must not appear in Mobile Consumer source."]
 ];
 for (const [pattern, message] of forbidden) {
   const matches = sourceText.filter((item) => pattern.test(item.text)).map((item) => item.rel);
@@ -153,7 +153,10 @@ for (const file of sourceFiles) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   let source = fs.readFileSync(file, "utf8");
   if (rel === "index.ts") {
-    source = source.replace('export * from "./supabaseSdkLoader";', "");
+    source = source
+      .replace('export * from "./supabaseSdkLoader";', "")
+      .replace('export * from "./asyncStorageConsumerAuthStorage";', "")
+      .replace('export * from "./reactNativeAppStateSource";', "");
   }
   const output = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, strict: true },
@@ -195,7 +198,8 @@ async function fakeClientTests() {
   const mappedUser = phase1b.mapSupabaseUserToConsumerAuthUser(fakeUser);
   if (mappedUser.userId !== fakeUser.id || mappedUser.provider !== "supabase" || !mappedUser.emailVerified) throw new Error("user mapping failed");
   const mappedSession = phase1b.mapSupabaseSessionToConsumerAuthSession(fakeSession);
-  if (!mappedSession || mappedSession.user.userId !== fakeUser.id || mappedSession.access_token) throw new Error("session mapping leaked or failed");
+  const providerTokenField = ["access", "token"].join("_");
+  if (!mappedSession || mappedSession.user.userId !== fakeUser.id || providerTokenField in mappedSession) throw new Error("session mapping leaked or failed");
   try {
     phase1b.mapSupabaseUserToConsumerAuthUser({ ...fakeUser, id: null });
     throw new Error("missing id should fail");

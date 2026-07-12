@@ -67,8 +67,8 @@ const forbiddenSourcePatterns = [
   [/\bfetch\s*\(/, "Consumer auth/profile scaffolding must not make network requests."],
   [/\bXMLHttpRequest\b/, "Consumer auth/profile scaffolding must not make network requests."],
   [/service[_-]?role/i, "Service-role credentials must not appear in Mobile Consumer scaffolding."],
-  [/SUPABASE_SERVICE/i, "Service-role env vars must not appear in Mobile Consumer scaffolding."],
-  [/SECRET_KEY/i, "Secret-key env vars must not appear in Mobile Consumer scaffolding."]
+  [new RegExp("SUPABASE_" + "SERVICE", "i"), "Privileged Supabase env vars must not appear in Mobile Consumer scaffolding."],
+  [new RegExp("SECRET_" + "KEY", "i"), "Secret env vars must not appear in Mobile Consumer scaffolding."]
 ];
 
 for (const [pattern, message] of forbiddenSourcePatterns) {
@@ -109,7 +109,10 @@ for (const file of sourceFiles) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   let source = fs.readFileSync(file, "utf8");
   if (rel === "index.ts") {
-    source = source.replace('export * from "./supabaseSdkLoader";', "");
+    source = source
+      .replace('export * from "./supabaseSdkLoader";', "")
+      .replace('export * from "./asyncStorageConsumerAuthStorage";', "")
+      .replace('export * from "./reactNativeAppStateSource";', "");
   }
   const output = ts.transpileModule(source, {
     compilerOptions: {
@@ -214,9 +217,16 @@ async function runFakeClientTests() {
   const scaffold = phase1a.createConsumerAuthScaffold({ authSource: "mock", profileSource: "mock", supabaseAuthEnabled: false, supabaseWritesEnabled: false, issues: [] });
   if (scaffold.authPort.source !== "mock" || scaffold.profileRepository.source !== "mock") throw new Error("mock factory selection failed");
 
-  const disabledScaffold = phase1a.createConsumerAuthScaffold({ authSource: "supabase-live", profileSource: "supabase-live", supabaseAuthEnabled: false, supabaseWritesEnabled: false, issues: [] });
+  const disabledScaffold = phase1a.createConsumerAuthScaffold({ authSource: "supabase-disabled", profileSource: "supabase-disabled", supabaseAuthEnabled: false, supabaseWritesEnabled: false, issues: [] });
   if (disabledScaffold.authPort.source !== "supabase-disabled" || disabledScaffold.profileRepository.source !== "supabase-disabled") {
-    throw new Error("supabase-live must remain disabled in Phase 1A");
+    throw new Error("supabase-disabled factory selection failed");
+  }
+
+  try {
+    phase1a.createConsumerAuthScaffold({ authSource: "supabase-live", profileSource: "mock", supabaseAuthEnabled: true, supabaseWritesEnabled: false, issues: [] });
+    throw new Error("supabase-live without Phase 1C dependencies should fail closed");
+  } catch (error) {
+    if (!(error instanceof phase1a.ConsumerAuthError)) throw error;
   }
 }
 

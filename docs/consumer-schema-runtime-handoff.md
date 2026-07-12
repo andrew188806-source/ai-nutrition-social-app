@@ -129,3 +129,31 @@ Completed:
 - no-network/no-secret/no-write guards.
 
 No real Supabase URL/key was read, no real client was created, no network request was made, no SQL/migration/seed ran, and live Auth activation remains disallowed until a later approved phase.
+
+## Phase 1C Development Live Auth Result
+
+Consumer Runtime Integration Phase 1C Development Live Auth is implementation-complete, guard-complete, and development-live-verified.
+
+Completed:
+
+- Development live Auth flag validation.
+- Supabase Auth client factory fail-closed checks.
+- Official SDK lazy loader with React Native URL polyfill and `processLock`.
+- Supabase email Auth adapter path for sign-in, sign-up, sign-out, restore, refresh, and auth observer.
+- Email confirmation required typed result for sign-up responses without a session.
+- AsyncStorage and AppState boundary adapters.
+- Session state store sign-up and refresh methods.
+- Phase 1C guard script: `npm run test:consumer-phase1c`.
+- Opt-in development live smoke script: `npm run test:consumer-phase1c-live-smoke`.
+- Development live smoke passed for email sign-in, session restore, session refresh, auth observer, sign-out, restore after sign-out, observer unsubscribe, and AppState lifecycle.
+- Optional live email sign-up smoke was skipped because explicit sign-up opt-in was not enabled.
+- Sign-up mapping and `email_confirmation_required` are verified by the Phase 1C guard.
+
+Still not done:
+
+- Mobile UI wiring.
+- Consumer Profile live read/write.
+- Consumer database writes.
+- Phase 1D.
+
+No real Supabase URL/key, email, password, user ID, token, or session was printed. No SQL, migration, seed, Consumer Profile write, UI change, Restaurant Web runtime change, or Admin runtime change was made. Phase 1C is a freeze candidate; Phase 1D has not started.

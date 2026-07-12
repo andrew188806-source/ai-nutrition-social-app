@@ -203,3 +203,15 @@ Status: Supabase Auth Transport Preparation Complete.
 The workspace dependency installation was completed manually by the user. Installed Mobile versions are `@supabase/supabase-js@2.110.2` and `react-native-url-polyfill@3.0.0`; `apps/mobile/package.json` and root `package-lock.json` are consistent.
 
 Phase 1B added SDK-independent provider contracts, canonical mappings, lazy factory shell, official SDK lazy loader, AppState lifecycle boundary, fake-client tests, and guards. It did not read real credentials, create a real client, execute SQL, create migrations, seed data, verify RLS, activate live Supabase Auth, change UI, or enable Consumer writes.
+
+## 16. Phase 1C Follow-Up
+
+Consumer Runtime Integration Phase 1C Development Live Auth is implementation-complete, guard-complete, and development-live-verified.
+
+Phase 1C keeps mock defaults and allows only development live Auth when `AUTH_SOURCE=supabase-live`, `AUTH_ENABLED=true`, `PROFILE_SOURCE=mock` or `supabase-disabled`, and `WRITES_ENABLED=false`.
+
+Phase 1C added live Auth factory wiring, official SDK lazy loading with `processLock`, AsyncStorage and AppState boundaries, sign-in/sign-up/sign-out/restore/refresh/observer adapter behavior, email-confirmation-required mapping, session store refresh/sign-up helpers, `scripts/consumer-auth-phase-1c-guard.mjs`, and the opt-in live smoke script `scripts/consumer-auth-phase-1c-live-smoke.mjs`.
+
+Development live smoke passed for email sign-in, session restore, session refresh, auth observer, sign-out, restore after sign-out, observer unsubscribe, and AppState lifecycle. Optional live email sign-up smoke was skipped because explicit sign-up opt-in was not enabled; sign-up mapping and `email_confirmation_required` remain verified by the Phase 1C guard.
+
+Phase 1C did not wire UI, enable Consumer Profile live read/write, execute SQL, create migrations, seed data, verify RLS, enable anonymous Auth, enable password reset, or start Phase 1D. No real Supabase URL/key, email, password, user ID, token, or session is recorded in this repository. Consumer Runtime Integration Phase 1C is a freeze candidate.

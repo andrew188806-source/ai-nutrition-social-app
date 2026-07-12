@@ -1,5 +1,5 @@
 import type { ConsumerAuthPort, ConsumerAuthStateListener } from "./ports";
-import type { ConsumerAuthState, ConsumerSignInInput } from "./types";
+import type { ConsumerAuthState, ConsumerSignInInput, ConsumerSignUpInput } from "./types";
 
 export class ConsumerAuthStateStore {
   private state: ConsumerAuthState = { status: "initializing", session: null };
@@ -43,6 +43,22 @@ export class ConsumerAuthStateStore {
   async signIn(input: ConsumerSignInInput = {}) {
     const result = await this.authPort.signIn(input);
     if (!result.ok) this.setState({ status: "error", session: null, error: result.error });
+    return result;
+  }
+
+  async signUp(input: ConsumerSignUpInput = {}) {
+    const result = await this.authPort.signUp(input);
+    if (!result.ok) this.setState({ status: "error", session: null, error: result.error });
+    return result;
+  }
+
+  async refresh() {
+    const result = await this.authPort.refreshSession();
+    if (result.ok) {
+      this.setState(result.value ? { status: "signedIn", session: result.value } : { status: "signedOut", session: null });
+    } else {
+      this.setState({ status: "error", session: null, error: result.error });
+    }
     return result;
   }
 

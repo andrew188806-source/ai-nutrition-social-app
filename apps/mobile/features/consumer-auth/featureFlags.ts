@@ -44,16 +44,16 @@ export function getConsumerRuntimeFlags(env: RuntimeEnv = readEnv()): ConsumerRu
   );
 
   if (authSource === "supabase-live" && !supabaseAuthEnabled) {
-    issues.push("Supabase live auth source requires EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true in a later phase.");
+    issues.push("Supabase live auth source requires EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true in Consumer Phase 1C.");
+  }
+  if (authSource !== "supabase-live" && supabaseAuthEnabled) {
+    issues.push("Consumer Supabase Auth can only be enabled when EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE=supabase-live.");
   }
   if (profileSource === "supabase-live") {
-    issues.push("Supabase live profile reads/writes are not enabled in Consumer Phase 1B.");
-  }
-  if (supabaseAuthEnabled) {
-    issues.push("Consumer Supabase Auth is not enabled for live requests in Consumer Phase 1B.");
+    issues.push("Supabase live profile reads/writes are not enabled in Consumer Phase 1C.");
   }
   if (supabaseWritesEnabled) {
-    issues.push("Consumer Supabase writes are not enabled in Consumer Phase 1B.");
+    issues.push("Consumer Supabase writes are not enabled in Consumer Phase 1C.");
   }
 
   return { authSource, profileSource, supabaseAuthEnabled, supabaseWritesEnabled, issues };

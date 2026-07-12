@@ -15,6 +15,7 @@ export type SupabaseConsumerClientFactoryOptions = {
   flags: ConsumerRuntimeFlags;
   storage: ConsumerAuthStorage;
   sdkLoader?: SupabaseConsumerSdkLoader;
+  lock?: unknown;
 };
 
 export class SupabaseConsumerClientFactory {
@@ -24,17 +25,26 @@ export class SupabaseConsumerClientFactory {
 
   getOrCreateClient(): SupabaseConsumerClientFactoryResult {
     if (this.singleton) return this.singleton;
+    if (this.options.flags.issues.length) {
+      throw new ConsumerAuthConfigurationError(this.options.flags.issues.join(" "));
+    }
     if (this.options.flags.authSource !== "supabase-live") {
       throw new ConsumerAuthOperationNotEnabledError("Supabase Auth client is disabled by feature flag.");
     }
-    if (!this.options.flags.issues.length && !this.options.flags.supabaseWritesEnabled) {
-      // Auth transport preparation can create an auth client later, but Phase 1B still does not enable operations.
+    if (!this.options.flags.supabaseAuthEnabled) {
+      throw new ConsumerAuthOperationNotEnabledError("Supabase Auth transport is not enabled.");
+    }
+    if (this.options.flags.profileSource === "supabase-live") {
+      throw new ConsumerAuthOperationNotEnabledError("Consumer Profile live runtime is not enabled in Consumer Phase 1C.");
+    }
+    if (this.options.flags.supabaseWritesEnabled) {
+      throw new ConsumerAuthOperationNotEnabledError("Consumer Supabase writes are not enabled in Consumer Phase 1C.");
     }
     if (!this.options.env.url || !this.options.env.publishableKey) {
       throw new ConsumerAuthConfigurationError("Consumer Supabase URL and publishable key are required before client creation.");
     }
     if (!this.options.sdkLoader) {
-      throw new ConsumerAuthOperationNotEnabledError("Supabase SDK loader is not installed/configured in Phase 1B.");
+      throw new ConsumerAuthOperationNotEnabledError("Supabase SDK loader is not installed/configured in Consumer Phase 1C.");
     }
     const clientOptions: SupabaseConsumerClientOptions = {
       url: this.options.env.url,
@@ -43,7 +53,8 @@ export class SupabaseConsumerClientFactory {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
-        storage: this.options.storage
+        storage: this.options.storage,
+        lock: this.options.lock
       }
     };
     this.singleton = { client: this.options.sdkLoader(clientOptions), options: clientOptions };

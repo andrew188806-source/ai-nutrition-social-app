@@ -2,6 +2,7 @@ export type ConsumerAuthErrorCode =
   | "authentication_required"
   | "provider_not_configured"
   | "operation_not_enabled"
+  | "email_confirmation_required"
   | "profile_not_found"
   | "profile_write_not_enabled"
   | "profile_mapping_error"
@@ -36,6 +37,12 @@ export class ConsumerAuthProviderNotConfiguredError extends ConsumerAuthError {
 export class ConsumerAuthOperationNotEnabledError extends ConsumerAuthError {
   constructor(message = "Consumer auth operation is not enabled in this phase.") {
     super("operation_not_enabled", message);
+  }
+}
+
+export class ConsumerEmailConfirmationRequiredError extends ConsumerAuthError {
+  constructor(message = "Email confirmation is required before a session is available.") {
+    super("email_confirmation_required", message);
   }
 }
 

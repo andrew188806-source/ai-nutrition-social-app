@@ -568,3 +568,40 @@ Boundary remains unchanged:
 - No UI, MealRecord, social, orders, payments, Restaurant runtime, or Admin runtime was changed for Consumer integration.
 
 Next step must not start automatically. A later approved phase may explicitly activate live Auth transport; do not enable Consumer Profile writes, RLS verification claims, or production readiness in Phase 1B.
+
+## 29. Consumer Runtime Integration Phase 1C Status
+
+Consumer Runtime Integration Phase 1C Development Live Auth is implementation-complete, guard-complete, and development-live-verified.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Profile source: `mock`.
+- Default Consumer Auth enabled flag: `false`.
+- Default Consumer writes enabled flag: `false`.
+- Development live Auth path: available only with explicit Phase 1C flags.
+- Consumer Profile live runtime: disabled.
+- Consumer database writes: disabled.
+- Development live smoke: complete.
+- Optional live email sign-up smoke: skipped because explicit sign-up opt-in was not enabled.
+- Sign-up mapping and `email_confirmation_required`: verified by Phase 1C guard.
+- Phase 1C freeze status: freeze candidate.
+- Phase 1D: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-1c-development-live-auth.md`
+- `apps/mobile/features/consumer-auth/featureFlags.ts`
+- `apps/mobile/features/consumer-auth/factories.ts`
+- `apps/mobile/features/consumer-auth/supabaseConsumerClientFactory.ts`
+- `apps/mobile/features/consumer-auth/supabaseSdkLoader.ts`
+- `apps/mobile/features/consumer-auth/adapters/supabaseConsumerAuthAdapter.ts`
+- `apps/mobile/features/consumer-auth/asyncStorageConsumerAuthStorage.ts`
+- `apps/mobile/features/consumer-auth/reactNativeAppStateSource.ts`
+- `apps/mobile/features/consumer-auth/sessionStateStore.ts`
+- `scripts/consumer-auth-phase-1c-guard.mjs`
+- `scripts/consumer-auth-phase-1c-live-smoke.mjs`
+
+No Mobile UI, Restaurant Web runtime, Admin runtime, SQL, migration, seed, Consumer Profile write, database query, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, or full session was recorded in the repository.
+
+Do not start Phase 1D without explicit approval.
