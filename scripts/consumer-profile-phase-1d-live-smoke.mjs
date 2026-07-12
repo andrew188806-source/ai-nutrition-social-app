@@ -159,7 +159,7 @@ try {
   const profile = await profileRepository.getCurrentProfile();
   if (!profile.ok && profile.error.code === "profile_not_found") {
     await authPort.signOut();
-    blocked("Phase 1D live profile read is pending because the authenticated user has no user_profiles row.", [], {
+    blocked("Phase 1D live profile read is pending because the authenticated user has no consumer_profiles row.", [], {
       liveAuthVerified: true,
       liveProfileReadResult: "profile_not_found"
     });

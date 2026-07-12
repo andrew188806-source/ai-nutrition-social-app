@@ -160,7 +160,7 @@ No real Supabase URL/key, email, password, user ID, token, or session was printe
 
 ## Phase 1D Development Live Profile Read Result
 
-Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete. Development live verification remains pending until an opted-in smoke reads an existing development `user_profiles` row.
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete. Development live verification remains pending until an opted-in smoke reads an existing development `consumer_profiles` row.
 
 Completed:
 
@@ -181,7 +181,7 @@ Still not done:
 - SQL, migration, seed, RLS verification, or production readiness.
 - Phase 2.
 
-Current live read table allowlist: `user_profiles`.
+Current live read table allowlist: `consumer_profiles`.
 Current live read API: `getCurrentProfile()` only. The live repository rejects arbitrary user-id lookup instead of querying.
 
 No real Supabase URL/key, email, password, user ID, token, or session is recorded in this repository. No SQL, migration, seed, Consumer Profile write, UI change, Restaurant Web runtime change, or Admin runtime change was made.

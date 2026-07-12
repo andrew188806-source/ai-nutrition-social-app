@@ -43,7 +43,7 @@ The live profile read path is current-user only:
 
 - successful API: `getCurrentProfile()`.
 - query owner: current authenticated canonical session `userId`.
-- table allowlist: `user_profiles`.
+- table allowlist: `consumer_profiles`.
 - filter: `user_id = session.user.userId`.
 - arbitrary user-id lookup: rejected by the live repository compatibility method.
 
@@ -74,7 +74,7 @@ Phase 1D adds profile-specific typed errors:
 - SDK imports and `createClient` remain limited to `supabaseSdkLoader.ts`.
 - Mobile UI, Restaurant Web, and Admin Web do not import Consumer Auth/Profile.
 - database reads are limited to the approved Phase 1D profile adapter.
-- the only approved profile table is `user_profiles`.
+- the only approved profile table is `consumer_profiles`.
 - no profile writes, RPC, Storage, Realtime, direct fetch, secret, or privileged key is introduced.
 - fake transport verifies current-session ownership, canonical mapping, not-found, missing session, expired session, unauthorized, mapping failure, transport failure, read-disabled, and arbitrary lookup rejection.
 
@@ -112,4 +112,4 @@ The script signs in through the Phase 1C Auth adapter, reads the authenticated u
 
 ## Result
 
-Consumer Runtime Integration Phase 1D is implementation-complete and guard-verified for the development live current-profile read architecture. It is not frozen until an opted-in live smoke successfully reads an existing development `user_profiles` row. Phase 2 has not started.
+Consumer Runtime Integration Phase 1D is implementation-complete and guard-verified for the development live current-profile read architecture. It is not frozen until an opted-in live smoke successfully reads an existing development `consumer_profiles` row. Phase 2 has not started.

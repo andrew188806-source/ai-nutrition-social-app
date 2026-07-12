@@ -14,9 +14,9 @@ const approvedReactNativeBoundaryFiles = new Set([
   "apps/mobile/features/consumer-auth/asyncStorageConsumerAuthStorage.ts",
   "apps/mobile/features/consumer-auth/reactNativeAppStateSource.ts"
 ]);
-const allowedProfileTables = new Set(["user_profiles"]);
+const allowedProfileTables = new Set(["consumer_profiles"]);
 const prohibitedTableNames = [
-  "consumer_profiles",
+  "user_profiles",
   "consumer_private_profiles",
   "meal_records",
   "meal_record_items",
@@ -289,7 +289,7 @@ async function fakeProfileReadTests() {
   const fromCall = calls.find((call) => call.op === "from");
   const eqCall = calls.find((call) => call.op === "eq");
   const selectCall = calls.find((call) => call.op === "select");
-  if (fromCall?.table !== "user_profiles" || eqCall?.column !== "user_id" || eqCall?.value !== userId || !selectCall?.columns.includes("display_name")) {
+  if (fromCall?.table !== "consumer_profiles" || eqCall?.column !== "user_id" || eqCall?.value !== userId || !selectCall?.columns.includes("display_name")) {
     throw new Error("profile read did not bind to current session user and allowed table");
   }
 

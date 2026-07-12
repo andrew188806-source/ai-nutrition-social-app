@@ -48,6 +48,31 @@ Status: Draft order. Not an execution plan.
 
 No rollback SQL is provided in Phase 1 because no active migration is authorized. Any future migration package must include import batch IDs, rollback metadata, and destructive-operation review.
 
+## Phase 1.3 Active Migration Package
+
+Consumer Schema Phase 1.3 promotes the frozen draft SQL package into local active migration files under `supabase/migrations/`.
+
+Active migration order:
+
+1. `20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql`
+2. `20260712130200_consumer_schema_phase_1_3_consumer_profiles.sql`
+3. `20260712130300_consumer_schema_phase_1_3_consumer_preferences_and_goals.sql`
+4. `20260712130400_consumer_schema_phase_1_3_meal_records.sql`
+5. `20260712130500_consumer_schema_phase_1_3_meal_analysis_and_corrections.sql`
+6. `20260712130600_consumer_schema_phase_1_3_meal_consumption_and_sharing.sql`
+7. `20260712130700_consumer_schema_phase_1_3_planned_meals_and_daily_summaries.sql`
+8. `20260712130800_consumer_schema_phase_1_3_ratings_and_favorites.sql`
+9. `20260712130900_consumer_schema_phase_1_3_recommendation_feedback.sql`
+10. `20260712131000_consumer_schema_phase_1_3_consumer_privacy_and_consents.sql`
+11. `20260712131100_consumer_schema_phase_1_3_consumer_audit_and_legacy_mapping.sql`
+12. `20260712131200_consumer_schema_phase_1_3_consumer_indexes.sql`
+13. `20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql`
+14. `20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql`
+
+Validation-only draft `015_consumer_validation_queries.sql` is intentionally not promoted into the active migration package.
+
+Phase 1.3 does not execute remote Supabase migration, seed data, create fixtures, modify `auth.users`, touch production, or start Consumer Runtime Phase 2.
+
 ## Blockers Before Runtime
 
 - generated DB types or approved row types.

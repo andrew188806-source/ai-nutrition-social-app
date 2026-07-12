@@ -1,4 +1,4 @@
-export const SUPABASE_CONSUMER_PROFILE_TABLE = "user_profiles" as const;
+export const SUPABASE_CONSUMER_PROFILE_TABLE = "consumer_profiles" as const;
 
 export const SUPABASE_CONSUMER_PROFILE_SELECT_COLUMNS = [
   "id",

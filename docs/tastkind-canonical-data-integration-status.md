@@ -619,7 +619,7 @@ Status:
 - Development live profile path: available only with explicit Phase 1D flags.
 - Consumer Profile writes/bootstrap: disabled.
 - Consumer private profile, preferences, taste profile, meal, recommendation, social, order, payment, and sharing runtime: not started.
-- Development live smoke: pending until an opted-in run reads an existing development `user_profiles` row.
+- Development live smoke: pending until an opted-in run reads an existing development `consumer_profiles` row.
 - Phase 1D freeze status: pending live profile read verification.
 - Phase 2: not started.
 
@@ -639,9 +639,38 @@ Artifacts:
 Runtime boundary:
 
 - Approved live read API: `getCurrentProfile()`.
-- Approved table allowlist: `user_profiles`.
+- Approved table allowlist: `consumer_profiles`.
 - Ownership filter: current authenticated session `userId`.
 - Arbitrary user-id profile lookup: rejected in the live repository.
 - Missing profile row: typed `profile_not_found`, with no bootstrap/write/fallback.
 
 No Mobile UI, Restaurant Web runtime, Admin runtime, SQL, migration, seed, Consumer Profile write, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, or full session was recorded in the repository.
+
+## 31. Consumer Schema Phase 1.3 Formal Migration Activation Status
+
+Consumer Schema Phase 1.3 Formal Migration Activation and Runtime Table Alignment is prepared locally.
+
+Status:
+
+- Formal migration package: prepared under `supabase/migrations/`.
+- Canonical physical profile table: `consumer_profiles`.
+- Phase 1D runtime profile table target: aligned to `consumer_profiles`.
+- Runtime public API remains: `getCurrentProfile()`.
+- Ownership filter remains: `user_id = current authenticated session userId`.
+- `user_profiles` compatibility table/view/alias: not created.
+- Development remote deployment: not executed.
+- Seed/fixture/Auth user creation: not executed.
+- Consumer Runtime Phase 2: not started.
+
+Artifacts:
+
+- `docs/consumer-schema-phase-1-3-formal-migrations.md`
+- `supabase/migrations/20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql` through `20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql`
+- `scripts/consumer-schema-phase-1-3-guard.mjs`
+
+Boundary:
+
+- Draft SQL files remain review history.
+- Validation-only SQL is not part of the active migration package.
+- Restaurant schema/data are not modified.
+- No remote Supabase command was executed.

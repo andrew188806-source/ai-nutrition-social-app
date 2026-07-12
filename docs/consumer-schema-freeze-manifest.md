@@ -224,8 +224,22 @@ Phase 1D keeps mock defaults and allows only development live current-profile re
 
 Phase 1D added a current-profile service boundary, Supabase profile row contract, canonical profile mapper, live current-profile repository, stricter factory validation, typed profile read errors, `scripts/consumer-profile-phase-1d-guard.mjs`, and the opt-in live smoke script `scripts/consumer-profile-phase-1d-live-smoke.mjs`.
 
-Phase 1D reads only the current authenticated user's profile through `getCurrentProfile()`. The live read table allowlist is `user_profiles`, and arbitrary user-id lookup is rejected by the live repository compatibility method.
+Phase 1D reads only the current authenticated user's profile through `getCurrentProfile()`. Phase 1.3 aligns the live read table allowlist to the canonical physical table `consumer_profiles`, and arbitrary user-id lookup is rejected by the live repository compatibility method.
 
-Development live verification is pending until an opted-in live smoke reads an existing development `user_profiles` row. A missing row is reported as typed `profile_not_found`; Phase 1D does not auto-create, bootstrap, insert, upsert, update, execute SQL, create migrations, seed data, or fall back to mock profile data.
+Development live verification is pending until an opted-in live smoke reads an existing development `consumer_profiles` row. A missing row is reported as typed `profile_not_found`; Phase 1D does not auto-create, bootstrap, insert, upsert, update, execute SQL, create migrations, seed data, or fall back to mock profile data.
+
+## 18. Phase 1.3 Follow-Up
+
+Consumer Schema Phase 1.3 Formal Migration Activation and Runtime Table Alignment promotes the frozen Consumer Schema draft package into local active migration files under `supabase/migrations/` for future development deployment review.
+
+Phase 1.3 makes the canonical physical profile table decision explicit:
+
+- Database physical table: `consumer_profiles`.
+- Ownership column: `consumer_profiles.user_id`.
+- Runtime public API: `getCurrentProfile()`.
+- Runtime ownership filter: `user_id = canonical session userId`.
+- No `user_profiles` compatibility table, alias, or view is introduced.
+
+Phase 1.3 does not execute remote Supabase migration, seed data, create fixtures, modify `auth.users`, deploy to development, deploy to production, start Consumer Runtime Phase 2, or change Mobile UI/navigation.
 
 No Mobile UI, navigation, Consumer Profile write, private profile read, meal/recommendation/social/order/payment runtime, Restaurant Web runtime, Admin runtime, production credential, real URL/key/email/password/user ID/token, or full session is recorded in this repository. Phase 2 has not started.

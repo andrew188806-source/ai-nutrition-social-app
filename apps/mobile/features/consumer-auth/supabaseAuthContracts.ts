@@ -53,7 +53,7 @@ export type SupabaseAuthClientLike = {
 
 export type SupabaseConsumerClientLike = {
   auth: SupabaseAuthClientLike;
-  from?: (table: "user_profiles") => unknown;
+  from?: (table: "consumer_profiles") => unknown;
 };
 
 export type SupabaseConsumerClientOptions = {
