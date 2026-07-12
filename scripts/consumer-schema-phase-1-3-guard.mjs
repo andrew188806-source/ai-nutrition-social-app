@@ -40,7 +40,8 @@ const expectedMigrationFiles = [
   "20260712131100_consumer_schema_phase_1_3_consumer_audit_and_legacy_mapping.sql",
   "20260712131200_consumer_schema_phase_1_3_consumer_indexes.sql",
   "20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql",
-  "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql"
+  "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
+  "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql"
 ];
 
 const requiredTables = [
@@ -145,6 +146,8 @@ for (const fileName of migrationFiles) {
   activeTexts.push({ fileName, rel: relative(file), bytes, text, clean: stripComments(text) });
 }
 const allActiveSql = activeTexts.map((item) => item.clean).join("\n");
+const grantMigrationName = "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql";
+const grantMigration = activeTexts.find((item) => item.fileName === grantMigrationName);
 
 const bomByteFailures = activeTexts
   .filter((item) => item.bytes.length >= 3 && item.bytes[0] === 0xef && item.bytes[1] === 0xbb && item.bytes[2] === 0xbf)
@@ -208,6 +211,37 @@ else pass("draft headers are not Markdown-fenced");
 const validationSelectPromoted = migrationFiles.filter((name) => name.includes("validation_queries"));
 if (validationSelectPromoted.length) fail("validation queries excluded from active migrations", "Validation-only SELECT SQL must not be in active migration state.", { matches: validationSelectPromoted });
 else pass("validation queries excluded from active migrations");
+
+if (grantMigration && /^grant\s+select\s+on\s+table\s+public\.consumer_profiles\s+to\s+authenticated\s*;\s*$/i.test(grantMigration.clean.trim())) {
+  pass("authenticated consumer_profiles SELECT grant is forward-only and minimal");
+} else {
+  fail("authenticated consumer_profiles SELECT grant is forward-only and minimal", "Forward-only grant migration must contain only GRANT SELECT ON TABLE public.consumer_profiles TO authenticated.");
+}
+
+const grantStatements = matches(allActiveSql, /\bgrant\b[\s\S]*?;/gi).map((match) => match[0].replace(/\s+/g, " ").trim().toLowerCase());
+const expectedGrant = "grant select on table public.consumer_profiles to authenticated;";
+const unexpectedGrants = grantStatements.filter((statement) => statement !== expectedGrant);
+if (unexpectedGrants.length) fail("no unexpected grants in active migrations", "Only the authenticated consumer_profiles SELECT grant is allowed in active Phase 1.3 migrations.", { unexpectedGrants });
+else pass("no unexpected grants in active migrations", { grantCount: grantStatements.length });
+
+if (grantStatements.includes(expectedGrant)) pass("authenticated has SELECT on consumer_profiles");
+else fail("authenticated has SELECT on consumer_profiles", "Missing authenticated SELECT grant for public.consumer_profiles.");
+
+const anonConsumerProfileGrants = grantStatements.filter((statement) => /\bto\s+anon\b/.test(statement) && /\bconsumer_profiles\b/.test(statement));
+if (anonConsumerProfileGrants.length) fail("anon has no consumer_profiles privileges", "Consumer profile privileges must not be granted to anon.", { matches: anonConsumerProfileGrants });
+else pass("anon has no consumer_profiles privileges");
+
+const authenticatedWriteGrants = grantStatements.filter((statement) => /\bto\s+authenticated\b/.test(statement) && /\b(insert|update|delete|all)\b/.test(statement));
+if (authenticatedWriteGrants.length) fail("authenticated has no consumer_profiles write privileges", "Consumer Runtime Phase 1D may not grant INSERT, UPDATE, DELETE, or ALL privileges.", { matches: authenticatedWriteGrants });
+else pass("authenticated has no consumer_profiles write privileges");
+
+const otherConsumerTableGrants = grantStatements.filter((statement) => /\bto\s+authenticated\b/.test(statement) && /\bconsumer_|meal_|favorite_|recommendation_|nutrition_|taste_|dietary_|subscription_|planned_|daily_|user_/i.test(statement) && statement !== expectedGrant);
+if (otherConsumerTableGrants.length) fail("no other Consumer table grants", "Forward-only privilege migration must not grant access to other Consumer tables.", { matches: otherConsumerTableGrants });
+else pass("no other Consumer table grants");
+
+const grantAllStatements = grantStatements.filter((statement) => /\bgrant\s+all\b/.test(statement));
+if (grantAllStatements.length) fail("no GRANT ALL in active migrations", "Consumer Phase 1.3 corrective migration must not use GRANT ALL.", { matches: grantAllStatements });
+else pass("no GRANT ALL in active migrations");
 
 const objectCounts = {
   tables: new Set(),
@@ -287,6 +321,17 @@ const missingPolicyFragments = requiredPolicyFragments.filter((fragment) => !all
 if (missingPolicyFragments.length) fail("ownership policy fragments present", "Required owner policies are missing.", { missingPolicyFragments });
 else pass("ownership policy fragments present");
 
+const consumerProfileReadPolicy = allActiveSql.match(/create\s+policy\s+consumer_profiles_owner_read\s+on\s+consumer_profiles\s+for\s+select(?:\s+to\s+([a-z_,\s]+?))?\s+using\s*\(\s*auth\.uid\(\)\s*=\s*user_id\s*\)\s*;/i);
+if (consumerProfileReadPolicy) pass("consumer_profiles owner read policy uses auth.uid equals user_id");
+else fail("consumer_profiles owner read policy uses auth.uid equals user_id", "consumer_profiles_owner_read must remain a current-user SELECT policy using auth.uid() = user_id.");
+
+const readPolicyRoles = consumerProfileReadPolicy?.[1]?.split(",").map((role) => role.trim().toLowerCase()).filter(Boolean) ?? ["public"];
+if (readPolicyRoles.includes("authenticated") || readPolicyRoles.includes("public")) {
+  pass("consumer_profiles owner read policy includes authenticated role", { roles: readPolicyRoles });
+} else {
+  fail("consumer_profiles owner read policy includes authenticated role", "consumer_profiles_owner_read must apply to authenticated users.", { roles: readPolicyRoles });
+}
+
 const consumerAuthFiles = walk(consumerAuthDir, (file) => file.endsWith(".ts"));
 const consumerAuthText = consumerAuthFiles.map((file) => ({ rel: relative(file), text: read(file) }));
 const runtimeUserProfileRefs = consumerAuthText.filter((item) => /\buser_profiles\b/.test(item.text)).map((item) => item.rel);
@@ -296,6 +341,12 @@ else pass("Phase 1D runtime no longer targets user_profiles");
 const contractText = read(path.join(consumerAuthDir, "supabaseProfileContracts.ts"));
 if (/SUPABASE_CONSUMER_PROFILE_TABLE\s*=\s*"consumer_profiles"/.test(contractText)) pass("Phase 1D runtime table target is consumer_profiles");
 else fail("Phase 1D runtime table target is consumer_profiles", "supabaseProfileContracts.ts must target consumer_profiles.");
+
+const phase1dUnneededTables = consumerAuthText
+  .filter((item) => /\b(consumer_preferences|taste_profiles)\b/.test(item.text))
+  .map((item) => item.rel);
+if (phase1dUnneededTables.length) fail("Phase 1D runtime does not require preference or taste tables", "Current live profile smoke must only require consumer_profiles reads.", { matches: phase1dUnneededTables });
+else pass("Phase 1D runtime does not require preference or taste tables");
 
 const uiFiles = [
   ...walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx")),
