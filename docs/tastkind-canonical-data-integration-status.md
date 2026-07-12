@@ -608,7 +608,7 @@ Phase 1D was later started by explicit approval. See the Phase 1D status section
 
 ## 30. Consumer Runtime Integration Phase 1D Status
 
-Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete.
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete, guard-complete, development-live-verified, and frozen.
 
 Status:
 
@@ -619,8 +619,8 @@ Status:
 - Development live profile path: available only with explicit Phase 1D flags.
 - Consumer Profile writes/bootstrap: disabled.
 - Consumer private profile, preferences, taste profile, meal, recommendation, social, order, payment, and sharing runtime: not started.
-- Development live smoke: pending until an opted-in run reads an existing development `consumer_profiles` row.
-- Phase 1D freeze status: pending live profile read verification.
+- Development live smoke: passed with authenticated sign-in, canonical session mapping, current-user-only `consumer_profiles` read, canonical profile mapping, and sign-out.
+- Phase 1D freeze status: frozen.
 - Phase 2: not started.
 
 Artifacts:
@@ -643,29 +643,35 @@ Runtime boundary:
 - Ownership filter: current authenticated session `userId`.
 - Arbitrary user-id profile lookup: rejected in the live repository.
 - Missing profile row: typed `profile_not_found`, with no bootstrap/write/fallback.
+- Development profile fixture: operator-created in the development database; no fixture row contents, email, password, UUID, token, or session values are stored in the repository.
 
-No Mobile UI, Restaurant Web runtime, Admin runtime, SQL, migration, seed, Consumer Profile write, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, or full session was recorded in the repository.
+No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, Consumer Runtime SQL execution, seed, repository fixture creation, Consumer Profile write, profile bootstrap, automatic profile creation, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, row contents, or fixture contents were recorded in the repository.
 
 ## 31. Consumer Schema Phase 1.3 Formal Migration Activation Status
 
-Consumer Schema Phase 1.3 Formal Migration Activation and Runtime Table Alignment is prepared locally.
+Consumer Schema Phase 1.3 Formal Migration Activation and Runtime Table Alignment is deployed to development and aligned with Phase 1D live profile verification.
 
 Status:
 
-- Formal migration package: prepared under `supabase/migrations/`.
+- Formal migration package: prepared under `supabase/migrations/` and development-deployed by operator action.
 - Canonical physical profile table: `consumer_profiles`.
 - Phase 1D runtime profile table target: aligned to `consumer_profiles`.
 - Runtime public API remains: `getCurrentProfile()`.
 - Ownership filter remains: `user_id = current authenticated session userId`.
 - `user_profiles` compatibility table/view/alias: not created.
-- Development remote deployment: not executed.
-- Seed/fixture/Auth user creation: not executed.
+- Development remote deployment: complete.
+- Corrective migration: `20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`.
+- Corrective privilege: authenticated SELECT on `public.consumer_profiles` only.
+- `anon` profile table grant: not added.
+- authenticated write privilege: not added.
+- Seed/repository fixture/Auth user creation: not executed by repository code.
 - Consumer Runtime Phase 2: not started.
 
 Artifacts:
 
 - `docs/consumer-schema-phase-1-3-formal-migrations.md`
 - `supabase/migrations/20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql` through `20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql`
+- `supabase/migrations/20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`
 - `scripts/consumer-schema-phase-1-3-guard.mjs`
 
 Boundary:
@@ -673,4 +679,6 @@ Boundary:
 - Draft SQL files remain review history.
 - Validation-only SQL is not part of the active migration package.
 - Restaurant schema/data are not modified.
-- No remote Supabase command was executed.
+- Local and remote migration history are aligned by development operator action.
+- RLS remains enabled and `auth.uid() = user_id` remains the ownership boundary.
+- No production project was touched.

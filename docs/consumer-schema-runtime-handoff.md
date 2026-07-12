@@ -160,7 +160,7 @@ No real Supabase URL/key, email, password, user ID, token, or session was printe
 
 ## Phase 1D Development Live Profile Read Result
 
-Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete. Development live verification remains pending until an opted-in smoke reads an existing development `consumer_profiles` row.
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete, guard-complete, development-live-verified, and frozen.
 
 Completed:
 
@@ -171,6 +171,10 @@ Completed:
 - Typed profile read errors for missing session, expired session, unauthorized, not found, mapping failure, transport failure, invalid configuration, and unavailable source.
 - Phase 1D guard script: `npm run test:consumer-phase1d`.
 - Opt-in development live profile smoke script: `npm run test:consumer-phase1d-live-smoke`.
+- Development live smoke passed for authenticated sign-in, canonical session mapping, current-user-only `consumer_profiles` read, canonical profile mapping, and sign-out.
+- Consumer Schema Phase 1.3 was deployed to the development project by operator action before the passing smoke.
+- Forward-only corrective migration `20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql` grants only authenticated SELECT on `public.consumer_profiles`.
+- The profile fixture used for live verification was development operator-created and is not stored in the repository.
 
 Still not done:
 
@@ -178,10 +182,10 @@ Still not done:
 - Consumer Profile writes/bootstrap.
 - Consumer private profile/preferences/taste reads.
 - Meal, recommendation, social, orders, payments, or sharing runtime reads/writes.
-- SQL, migration, seed, RLS verification, or production readiness.
+- Consumer Runtime SQL execution, seed, fixture creation, profile bootstrap, automatic profile creation, or production readiness.
 - Phase 2.
 
 Current live read table allowlist: `consumer_profiles`.
 Current live read API: `getCurrentProfile()` only. The live repository rejects arbitrary user-id lookup instead of querying.
 
-No real Supabase URL/key, email, password, user ID, token, or session is recorded in this repository. No SQL, migration, seed, Consumer Profile write, UI change, Restaurant Web runtime change, or Admin runtime change was made.
+No real Supabase URL/key, email, password, user ID, token, session, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, profile bootstrap, automatic profile creation, UI change, navigation change, Restaurant Web runtime change, or Admin runtime change was made. Consumer Runtime Phase 2 was not started.

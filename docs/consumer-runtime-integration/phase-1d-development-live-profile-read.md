@@ -1,13 +1,13 @@
 # Consumer Runtime Integration Phase 1D - Development Live Profile Read
 
-Date: 2026-07-12
-Status: Implementation complete. Guard complete. Development live verification pending until an opted-in smoke reads an existing development profile row. Phase 2 not started.
+Date: 2026-07-13
+Status: Implementation complete. Guard complete. Development live verification complete. Phase 1D freeze candidate. Phase 2 not started.
 
 ## Scope
 
 Phase 1D adds a development-only authenticated Consumer Profile read path for the current signed-in user. It uses the Phase 1C Auth session lifecycle, reads only the approved profile table, maps the row into the canonical `ConsumerProfile` type, and fails closed on missing session, expired session, not-found rows, mapping failures, configuration failures, or transport failures.
 
-Phase 1D does not wire Mobile UI, execute SQL, create migrations, seed data, bootstrap profiles, write profiles, read meal records, read recommendations, change social data, change Restaurant Web, or change Admin Web.
+Phase 1D does not wire Mobile UI, seed data, bootstrap profiles, write profiles, read meal records, read recommendations, change social data, change Restaurant Web, change Admin Web, or start Phase 2.
 
 ## Defaults
 
@@ -98,6 +98,23 @@ The script is opt-in only. It requires local, uncommitted environment values:
 
 The script signs in through the Phase 1C Auth adapter, reads the authenticated user's current profile through the Phase 1D repository, and signs out. It does not print URL, key, email, password, access token, refresh token, user ID, or session values. If the profile row is missing, it reports a blocked `profile_not_found` result and does not write or bootstrap.
 
+## Development Live Verification Result
+
+Consumer Runtime Phase 1D development live profile read smoke passed after the Consumer Schema Phase 1.3 development deployment and forward-only authenticated profile SELECT grant were applied by the development operator.
+
+Verified:
+
+- live profile flags accepted.
+- authenticated email sign-in succeeded.
+- canonical session mapping succeeded.
+- current-user-only `consumer_profiles` read succeeded.
+- canonical profile mapping succeeded.
+- sign-out succeeded.
+- no credentials, tokens, session values, user IDs, emails, passwords, or row contents were printed or recorded.
+- no database write, SQL execution, migration creation, seed, fixture, profile bootstrap, or automatic profile creation was performed by runtime smoke.
+
+The development profile fixture was operator-created in the development database. The repository does not contain the fixture row contents or the test identity values.
+
 ## Not Done
 
 - Mobile UI wiring.
@@ -105,11 +122,17 @@ The script signs in through the Phase 1C Auth adapter, reads the authenticated u
 - Consumer Profile write/bootstrap.
 - Consumer private profile reads.
 - Consumer preferences, taste profile, meal, recommendation, social, order, payment, or sharing reads.
-- SQL, migration, seed, RLS verification.
+- additional SQL, seed, fixture, or runtime migration execution.
 - Supabase Storage, Realtime, anonymous Auth, password reset.
 - Restaurant Web or Admin runtime changes.
 - Production credentials or production readiness.
 
 ## Result
 
-Consumer Runtime Integration Phase 1D is implementation-complete and guard-verified for the development live current-profile read architecture. It is not frozen until an opted-in live smoke successfully reads an existing development `consumer_profiles` row. Phase 2 has not started.
+Consumer Runtime Integration Phase 1D is implementation-complete, guard-complete, and development-live-verified for the current-user `consumer_profiles` read path. It is a freeze candidate. Phase 2 has not started.
+
+Consumer Runtime Phase 1D is frozen.
+Consumer Runtime Phase 2 was not started.
+No UI or navigation changes were made.
+No Consumer Runtime write operation was implemented or executed.
+No profile bootstrap or automatic profile creation was implemented.

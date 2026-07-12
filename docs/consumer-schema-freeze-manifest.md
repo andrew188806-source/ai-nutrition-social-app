@@ -218,7 +218,7 @@ Phase 1C did not wire UI, enable Consumer Profile live read/write, execute SQL, 
 
 ## 17. Phase 1D Follow-Up
 
-Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete and guard-complete after the Phase 1C freeze candidate.
+Consumer Runtime Integration Phase 1D Development Live Profile Read is implementation-complete, guard-complete, development-live-verified, and frozen after the Phase 1C freeze candidate.
 
 Phase 1D keeps mock defaults and allows only development live current-profile reads when `AUTH_SOURCE=supabase-live`, `AUTH_ENABLED=true`, `PROFILE_SOURCE=supabase-live`, and `WRITES_ENABLED=false`.
 
@@ -226,7 +226,9 @@ Phase 1D added a current-profile service boundary, Supabase profile row contract
 
 Phase 1D reads only the current authenticated user's profile through `getCurrentProfile()`. Phase 1.3 aligns the live read table allowlist to the canonical physical table `consumer_profiles`, and arbitrary user-id lookup is rejected by the live repository compatibility method.
 
-Development live verification is pending until an opted-in live smoke reads an existing development `consumer_profiles` row. A missing row is reported as typed `profile_not_found`; Phase 1D does not auto-create, bootstrap, insert, upsert, update, execute SQL, create migrations, seed data, or fall back to mock profile data.
+Development live verification passed with an authenticated session, current-user-only `consumer_profiles` read, canonical profile mapping, and sign-out. No credentials, tokens, sessions, user IDs, emails, passwords, or row contents are recorded in this repository. The development profile fixture was operator-created in the development database.
+
+A missing row remains reported as typed `profile_not_found`; Phase 1D does not auto-create, bootstrap, insert, upsert, update, execute SQL, create migrations, seed data, or fall back to mock profile data.
 
 ## 18. Phase 1.3 Follow-Up
 
@@ -240,6 +242,20 @@ Phase 1.3 makes the canonical physical profile table decision explicit:
 - Runtime ownership filter: `user_id = canonical session userId`.
 - No `user_profiles` compatibility table, alias, or view is introduced.
 
-Phase 1.3 does not execute remote Supabase migration, seed data, create fixtures, modify `auth.users`, deploy to development, deploy to production, start Consumer Runtime Phase 2, or change Mobile UI/navigation.
+Phase 1.3 development deployment is complete for the formal migration package plus the forward-only authenticated profile SELECT corrective migration. It does not create seed data, create fixtures, modify `auth.users`, deploy to production, start Consumer Runtime Phase 2, or change Mobile UI/navigation.
 
-No Mobile UI, navigation, Consumer Profile write, private profile read, meal/recommendation/social/order/payment runtime, Restaurant Web runtime, Admin runtime, production credential, real URL/key/email/password/user ID/token, or full session is recorded in this repository. Phase 2 has not started.
+Corrective migration:
+
+- `20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`
+- Grants only `SELECT` on `public.consumer_profiles` to `authenticated`.
+- Does not grant `anon`, write privileges, `GRANT ALL`, or other Consumer table access.
+
+Local and remote migration history have been aligned by the development operator. RLS remains enabled and the `auth.uid() = user_id` ownership boundary remains active.
+
+No Mobile UI, navigation, Consumer Profile write, private profile read, meal/recommendation/social/order/payment runtime, Restaurant Web runtime, Admin runtime, production credential, real URL/key/email/password/user ID/token, full session, row contents, or fixture contents are recorded in this repository. Phase 2 has not started.
+
+Consumer Runtime Phase 1D is frozen.
+Consumer Runtime Phase 2 was not started.
+No UI or navigation changes were made.
+No Consumer Runtime write operation was implemented or executed.
+No profile bootstrap or automatic profile creation was implemented.

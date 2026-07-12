@@ -68,6 +68,8 @@ Active migration order:
 12. `20260712131200_consumer_schema_phase_1_3_consumer_indexes.sql`
 13. `20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql`
 14. `20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql`
+15. `20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`
+    - forward-only corrective grant: authenticated SELECT on `public.consumer_profiles` only.
 
 Validation-only draft `015_consumer_validation_queries.sql` is intentionally not promoted into the active migration package.
 

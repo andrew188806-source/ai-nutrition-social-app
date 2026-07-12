@@ -1,7 +1,7 @@
 # Consumer Schema Phase 1.3 - Formal Migration Activation and Runtime Table Alignment
 
-Date: 2026-07-12
-Status: Implementation complete. Migration package complete. Static validation pending until guard/regression suite passes. Development deployment pending. Phase 1D live verification pending.
+Date: 2026-07-13
+Status: Implementation complete. Migration package complete. Development deployment complete. Phase 1D development live verification complete. Phase 1D freeze candidate.
 
 ## Scope
 
@@ -22,6 +22,7 @@ Formal migration files live in:
 - `supabase/migrations/20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql`
 - through
 - `supabase/migrations/20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql`
+- plus forward-only corrective migration `supabase/migrations/20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`
 
 The active package promotes draft files `001` through `014`. Draft file `015_consumer_validation_queries.sql` remains review-only and is intentionally excluded from active migration state.
 
@@ -61,6 +62,7 @@ No compatibility table, alias, or view named `user_profiles` is created. Phase 1
 12. `20260712131200_consumer_schema_phase_1_3_consumer_indexes.sql`
 13. `20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql`
 14. `20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql`
+15. `20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`
 
 ## Created Object Inventory
 
@@ -108,18 +110,26 @@ Consumer Runtime Phase 1D uses read-only runtime behavior. The update policy exi
 
 ## Grants
 
-The frozen Consumer Schema drafts did not define explicit grants. Phase 1.3 does not invent new grants. Development deployment must review Supabase default privileges, RLS behavior, and anon/authenticated boundaries before remote execution.
+The frozen Consumer Schema drafts did not define explicit grants. Development live profile read verification showed the minimal table-level grant needed for the authenticated current-profile read path.
+
+Forward-only corrective migration:
+
+```sql
+grant select on table public.consumer_profiles to authenticated;
+```
+
+No `anon` privilege, `INSERT`, `UPDATE`, `DELETE`, `GRANT ALL`, or other Consumer table grant is included. RLS and the `auth.uid() = user_id` ownership policy continue to define which row the authenticated user can read.
 
 ## Explicit Exclusions
 
 Phase 1.3 excludes:
 
-- remote Supabase migration execution.
-- `supabase db push`.
+- additional remote Supabase migration execution by runtime code.
+- runtime `supabase db push`.
 - remote `psql`.
 - Dashboard SQL execution.
 - seed data.
-- fixture data.
+- repository-created fixture data.
 - Auth user creation or modification.
 - `consumer_profiles` row creation.
 - `user_profiles` table/view/alias creation.
@@ -140,6 +150,15 @@ Before applying this package to `tastkind-development`, an operator must verify:
 - Restaurant schema/data are protected.
 - no seed or Auth user changes are included.
 - RLS and ownership behavior can be tested with authenticated development users.
+
+## Development Deployment Result
+
+Consumer Schema Phase 1.3 development deployment is complete. The development operator applied:
+
+- the 14 formal Phase 1.3 Consumer migrations.
+- forward-only corrective migration `20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql`.
+
+Local and remote migration history are aligned. The development profile fixture used for Phase 1D live verification was operator-created and is not stored in the repository. No seed package, repository fixture, Auth user creation, production deployment, UI change, navigation change, or Consumer Runtime Phase 2 work is included.
 
 ## Roll-Forward Strategy
 
@@ -164,6 +183,6 @@ Remote execution commands are intentionally excluded from Phase 1.3 validation.
 
 ## Result
 
-Phase 1.3 prepares the formal local Consumer migration package and resolves the Phase 1D `user_profiles` versus `consumer_profiles` mismatch in favor of the frozen canonical schema: `consumer_profiles`.
+Phase 1.3 prepares and development-deploys the formal Consumer migration package, resolves the Phase 1D `user_profiles` versus `consumer_profiles` mismatch in favor of the frozen canonical schema, and adds the minimal authenticated SELECT grant needed for Phase 1D current-profile reads.
 
-No remote Supabase migration was executed. No seed or fixture data was created. No Auth user was modified. Consumer Runtime Phase 2 was not started.
+No seed or repository fixture data was created. No Auth user was modified by repository code. Consumer Runtime Phase 2 was not started.
