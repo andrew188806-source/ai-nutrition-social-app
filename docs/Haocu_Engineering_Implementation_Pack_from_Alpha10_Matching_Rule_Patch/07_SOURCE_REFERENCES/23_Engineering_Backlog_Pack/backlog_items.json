@@ -1,0 +1,392 @@
+[
+  {
+    "id": "HOC-E0-001",
+    "epic": "E0 Repo & Demo Stabilization",
+    "title": "Fix mobile TypeScript errors",
+    "priority": "P0",
+    "owner": "Mobile",
+    "description": "TypeScript compile errors block safe iteration; run typecheck, fix imports/types/null states, do not change product logic unless required.",
+    "acceptance": "typecheck passes; no new any-heavy workaround; route smoke test passes",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E0-002",
+    "epic": "E0 Repo & Demo Stabilization",
+    "title": "Confirm Expo Web demo path",
+    "priority": "P0",
+    "owner": "Mobile",
+    "description": "Verify demo route from Home -> AI Analysis -> Result -> Today Intake -> Meal Buddy -> Restaurant -> My page.",
+    "acceptance": "3-minute demo can be performed twice after refresh",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E0-003",
+    "epic": "E0 Repo & Demo Stabilization",
+    "title": "Create deterministic demo seed reset",
+    "priority": "P0",
+    "owner": "Platform",
+    "description": "Add seed reset helper for mock data and local storage adapter.",
+    "acceptance": "Reset returns same mock users/meals/cards/chats/tables",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E0-004",
+    "epic": "E0 Repo & Demo Stabilization",
+    "title": "Audit centralized i18n",
+    "priority": "P1",
+    "owner": "Mobile/Web",
+    "description": "Move remaining visible Traditional Chinese text into zh-TW i18n file.",
+    "acceptance": "No new hardcoded UI copy in touched files",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E1-001",
+    "epic": "E1 Core Data Foundation",
+    "title": "Replace latestCorrectedMealRecord with meal collection",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "Introduce mealRecords repository/collection and update all readers/writers.",
+    "acceptance": "Today Intake and nutrition report read same records",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E1-002",
+    "epic": "E1 Core Data Foundation",
+    "title": "Unify Meal Buddy and Group Table identities",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "Use one mockUsers/socialCards source for meal buddy cards, matches, chats, and group tables.",
+    "acceptance": "Accept invite updates friend/match state; group participants link to same social cards",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E1-003",
+    "epic": "E1 Core Data Foundation",
+    "title": "Create cross-platform storage adapter",
+    "priority": "P0",
+    "owner": "Mobile",
+    "description": "Implement localStorage on web and AsyncStorage on native behind same interface.",
+    "acceptance": "Adapter tests/smoke checks pass; demo data persists consistently",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E1-004",
+    "epic": "E1 Core Data Foundation",
+    "title": "Normalize planned dinner state",
+    "priority": "P1",
+    "owner": "Mobile/Data",
+    "description": "Represent scheduled dinner as a planned meal state linked to daily summary.",
+    "acceptance": "Planned dinner appears as planned, not eaten, and can be converted/cleared",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E2-001",
+    "epic": "E2 AI Meal Analysis Loop",
+    "title": "Implement analysis result type and candidate selection",
+    "priority": "P0",
+    "owner": "AI/Mobile",
+    "description": "Define result, candidates, ingredient breakdown, nutrition estimate, confidence, source metadata.",
+    "acceptance": "Candidate selection controls final record payload",
+    "target_sprint": "S1"
+  },
+  {
+    "id": "HOC-E2-002",
+    "epic": "E2 AI Meal Analysis Loop",
+    "title": "Manual correction form and recalculation",
+    "priority": "P0",
+    "owner": "Mobile/AI",
+    "description": "Build correction flow for restaurant, dish, ingredients, portion, cooking method, nutrition fields.",
+    "acceptance": "Corrected record shows updated nutrition and correction event",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E2-003",
+    "epic": "E2 AI Meal Analysis Loop",
+    "title": "Save confirmed analysis to meal records",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "Persist analysis into meal collection and update dependent surfaces.",
+    "acceptance": "One save creates one record; no duplicate on navigation",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E2-004",
+    "epic": "E2 AI Meal Analysis Loop",
+    "title": "AI analysis page state retention",
+    "priority": "P1",
+    "owner": "Mobile",
+    "description": "When leaving and returning before next action, keep the same analysis result screen.",
+    "acceptance": "Tab away/back preserves current analysis state",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E3-001",
+    "epic": "E3 Today Intake & Food Diary",
+    "title": "Fix Today Intake / full report sync",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "Ensure home summary, Today Intake page, full nutrition report, and diary use mealRecords aggregation.",
+    "acceptance": "No zero-report bug when meals exist",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E3-002",
+    "epic": "E3 Today Intake & Food Diary",
+    "title": "Implement food rating placeholder",
+    "priority": "P1",
+    "owner": "Mobile",
+    "description": "Add post-meal rating state and entry points, with deferred notification integration.",
+    "acceptance": "Rating can be saved/edited in demo state",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E3-003",
+    "epic": "E3 Today Intake & Food Diary",
+    "title": "Implement free/premium diary windows",
+    "priority": "P2",
+    "owner": "Mobile",
+    "description": "Demo logic for free 14-day history and premium Top10 saved lists.",
+    "acceptance": "Free/premium toggle visibly changes history/toplist scope",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E4-001",
+    "epic": "E4 Recommendation Engine v1",
+    "title": "Build intake-aware next-meal rule engine",
+    "priority": "P0",
+    "owner": "AI/Backend/Mobile",
+    "description": "Use calories/macros/fiber gap and meal timing to generate safe next-meal suggestion.",
+    "acceptance": "Changing current intake changes recommendation reason",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E4-002",
+    "epic": "E4 Recommendation Engine v1",
+    "title": "Restaurant recommendation filter flow",
+    "priority": "P1",
+    "owner": "Mobile/Data",
+    "description": "Location/search/type/meal-period filters update restaurant list on same page.",
+    "acceptance": "Filters update cards without route confusion",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E4-003",
+    "epic": "E4 Recommendation Engine v1",
+    "title": "Taste similarity placeholder",
+    "priority": "P2",
+    "owner": "AI/Data",
+    "description": "Prepare rating-based similar-taste recommendation interface without full ML dependency.",
+    "acceptance": "Interface exists; fallback rules work when sparse data",
+    "target_sprint": "S5"
+  },
+  {
+    "id": "HOC-E5-001",
+    "epic": "E5 Meal Buddy Flow",
+    "title": "Create Meal Buddy card from AI analysis",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "After analysis save, create card and route to Meal Buddy card area.",
+    "acceptance": "Created card is visible and references saved meal",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E5-002",
+    "epic": "E5 Meal Buddy Flow",
+    "title": "Create Meal Buddy card from restaurant card",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "Restaurant list/detail card CTA creates meal buddy card with date selector near restaurant card.",
+    "acceptance": "Card appears in correct page and created confirmation is obvious",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E5-003",
+    "epic": "E5 Meal Buddy Flow",
+    "title": "Enforce free/premium card and invite limits",
+    "priority": "P1",
+    "owner": "Mobile/Data",
+    "description": "Implement daily limits and overwrite-oldest behavior for demo mode.",
+    "acceptance": "Free=2/day, premium=5/day; clear disabled/limit states",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E5-004",
+    "epic": "E5 Meal Buddy Flow",
+    "title": "Fix chat sorting and return routing",
+    "priority": "P0",
+    "owner": "Mobile",
+    "description": "Latest message moves chat to top; return from chat goes to chat list, not matched tab.",
+    "acceptance": "BO/LEO/Ivy regression cases pass",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E5-005",
+    "epic": "E5 Meal Buddy Flow",
+    "title": "Accept invitation updates friend/match list",
+    "priority": "P0",
+    "owner": "Mobile/Data",
+    "description": "Accepting chat/meal invite creates or updates match/friend state.",
+    "acceptance": "Accepted user appears in friends/matches and chat remains available",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E6-001",
+    "epic": "E6 Group Table Flow",
+    "title": "Separate group table state from one-to-one chat",
+    "priority": "P1",
+    "owner": "Mobile/Data",
+    "description": "Create groupTables repository and groupChat linkage separate from matches/chats.",
+    "acceptance": "多人飯局 does not route to one-to-one chat incorrectly",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E6-002",
+    "epic": "E6 Group Table Flow",
+    "title": "Group participant social-card display",
+    "priority": "P1",
+    "owner": "Mobile",
+    "description": "Participants render from shared social card/user objects.",
+    "acceptance": "Participant card click opens correct community/social card",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E6-003",
+    "epic": "E6 Group Table Flow",
+    "title": "Cancellation reason system message",
+    "priority": "P2",
+    "owner": "Mobile/Data",
+    "description": "Cancel participation requires reason and posts system message.",
+    "acceptance": "Cancellation updates table state and group chat system event",
+    "target_sprint": "S5"
+  },
+  {
+    "id": "HOC-E7-001",
+    "epic": "E7 Restaurant Surface",
+    "title": "Restaurant card UI cleanup",
+    "priority": "P1",
+    "owner": "Mobile/UI",
+    "description": "Make restaurant cards match target layout; remove duplicate CTAs; keep card readable.",
+    "acceptance": "Recommended dish CTA asks to create Meal Buddy card; no duplicate option",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E7-002",
+    "epic": "E7 Restaurant Surface",
+    "title": "Menu item nutrition card integration",
+    "priority": "P1",
+    "owner": "Mobile/Data",
+    "description": "Menu items show calories/macros/tags and source confidence/verification state.",
+    "acceptance": "Menu card feeds AI/restaurant/meal-buddy flows consistently",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E8-001",
+    "epic": "E8 Restaurant Admin",
+    "title": "Menu CRUD demo surface",
+    "priority": "P1",
+    "owner": "Web/Backend",
+    "description": "Create/edit menu item with ingredients, portion, cooking, nutrition estimate, price, tags.",
+    "acceptance": "Admin-created item appears in restaurant menu demo data",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E8-002",
+    "epic": "E8 Restaurant Admin",
+    "title": "Nutrition disclosure review status",
+    "priority": "P2",
+    "owner": "Web/Admin",
+    "description": "Add status draft/submitted/approved/rejected and admin review placeholder.",
+    "acceptance": "Status controls consumer verified badge display",
+    "target_sprint": "S5"
+  },
+  {
+    "id": "HOC-E9-001",
+    "epic": "E9 Supabase Backend Migration",
+    "title": "Create core Postgres migrations",
+    "priority": "P0",
+    "owner": "Backend/Data",
+    "description": "Implement users/profiles/meals/restaurants/menu_items/social_cards/meal_buddy/matches/chats/group_tables schema.",
+    "acceptance": "Migration runs cleanly in empty Supabase project",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E9-002",
+    "epic": "E9 Supabase Backend Migration",
+    "title": "Implement RLS policy baseline",
+    "priority": "P0",
+    "owner": "Backend/Security",
+    "description": "Add least-privilege RLS for user-owned data and role-gated restaurant/admin data.",
+    "acceptance": "No table containing user data is public without explicit policy",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E9-003",
+    "epic": "E9 Supabase Backend Migration",
+    "title": "Storage buckets and photo metadata",
+    "priority": "P1",
+    "owner": "Backend/Data",
+    "description": "Create buckets for meal photos/restaurant assets and link metadata to records.",
+    "acceptance": "Upload metadata can be associated with meal/restaurant item",
+    "target_sprint": "S3"
+  },
+  {
+    "id": "HOC-E9-004",
+    "epic": "E9 Supabase Backend Migration",
+    "title": "Edge Function contract stubs",
+    "priority": "P1",
+    "owner": "Backend/AI",
+    "description": "Stub analyzeMeal, recommendNextMeal, recommendBuddyCandidates, geocode/search if needed.",
+    "acceptance": "Mobile can call typed client with mock response fallback",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E10-001",
+    "epic": "E10 QA Analytics Release",
+    "title": "Manual regression suite",
+    "priority": "P0",
+    "owner": "QA",
+    "description": "Create route-by-route regression checklist for AI, intake, meal buddy, restaurant, chat.",
+    "acceptance": "QA checklist can be run by non-engineer",
+    "target_sprint": "S2"
+  },
+  {
+    "id": "HOC-E10-002",
+    "epic": "E10 QA Analytics Release",
+    "title": "Core analytics event map implementation",
+    "priority": "P1",
+    "owner": "Mobile/Backend",
+    "description": "Log events for analysis_started, meal_saved, buddy_card_created, invite_sent, chat_started, table_joined.",
+    "acceptance": "Events visible in debug logger or analytics sink",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E10-003",
+    "epic": "E10 QA Analytics Release",
+    "title": "Release checklist and feature flags",
+    "priority": "P1",
+    "owner": "Platform",
+    "description": "Add demo/prod flags and release checklist gates.",
+    "acceptance": "Demo mode can be locked for investor presentation",
+    "target_sprint": "S5"
+  },
+  {
+    "id": "HOC-E11-001",
+    "epic": "E11 Investor Demo",
+    "title": "3-minute demo route hardening",
+    "priority": "P1",
+    "owner": "Product/Engineering",
+    "description": "Ensure narrative demo path has seed data, clear CTA, no dead links.",
+    "acceptance": "Founder can run demo without engineering help",
+    "target_sprint": "S4"
+  },
+  {
+    "id": "HOC-E11-002",
+    "epic": "E11 Investor Demo",
+    "title": "Investor web demo content alignment",
+    "priority": "P2",
+    "owner": "Web/Product",
+    "description": "Align landing/demo text with pitch and avoid unreviewed claims.",
+    "acceptance": "Investor page labels projections/demo data clearly",
+    "target_sprint": "S6"
+  }
+]

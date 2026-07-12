@@ -1,0 +1,24 @@
+item,filename,title,audience,sensitivity,status
+001,001_FOUNDER_BRIEF.md,001 Founder Brief,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+002,002_COMPANY_OVERVIEW.md,002 Company Overview,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+003,003_PRODUCT_OVERVIEW.md,003 Product Overview,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+004,004_MVP_SCOPE_SUMMARY.md,004 MVP Scope Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+005,005_MARKET_OPPORTUNITY_SUMMARY.md,005 Market Opportunity Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+006,006_BUSINESS_MODEL_SUMMARY.md,006 Business Model Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+007,007_GO_TO_MARKET_SUMMARY.md,007 Go-To-Market Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+008,008_FUNDRAISING_SUMMARY.md,008 Fundraising Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+009,009_USE_OF_FUNDS_SUMMARY.md,009 Use Of Funds Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+010,010_MILESTONE_ROADMAP.md,010 Milestone Roadmap,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+011,011_PRODUCT_DEMO_SCRIPT.md,011 Product Demo Script,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+012,012_ENGINEERING_READINESS_SUMMARY.md,012 Engineering Readiness Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+013,013_LEGAL_IP_STATUS_SUMMARY.md,013 Legal IP Status Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+014,014_PRIVACY_COMPLIANCE_STATUS_SUMMARY.md,014 Privacy Compliance Status Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+015,015_FINANCE_STATUS_SUMMARY.md,015 Finance Status Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+016,016_RISK_AND_MITIGATION_SUMMARY.md,016 Risk And Mitigation Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+017,017_RESTAURANT_PARTNER_SUMMARY.md,017 Restaurant Partner Summary,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+018,018_ADVISOR_REVIEWER_PACKET.md,018 Advisor Reviewer Packet,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+019,019_INVESTOR_FAQ_CLEAN_VERSION.md,019 Investor FAQ Clean Version,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+020,020_DOCUMENT_ACCESS_GUIDE.md,020 Document Access Guide,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+021,021_SENSITIVE_INFORMATION_EXCLUSION_LIST.md,021 Sensitive Information Exclusion List,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+022,022_NEXT_STEP_MEETING_CHECKLIST.md,022 Next-Step Meeting Checklist,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use
+000,README.md,Investor Data Room README,"investors, advisors, accelerators, restaurant partners",external-clean-summary,draft_requires_review_before_public_use

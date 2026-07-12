@@ -57,6 +57,7 @@ export function GroupTablesContent({
   onOpenChat?: (target: GroupTableChatTarget) => void;
   restaurantContext?: RestaurantTableContext;
 }) {
+  const router = useRouter();
   const [demoMode] = useDemoUserPlan();
   const [joinedTable, setJoinedTable] = useState<string | null>(null);
   const [showCreateUpgrade, setShowCreateUpgrade] = useState(false);

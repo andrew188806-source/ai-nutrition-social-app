@@ -1,0 +1,27 @@
+id,title,purpose,sharing_status,owner
+001,Investor One-Pager,First investor/advisor overview,External after review,Founder / fundraising
+002,30-Second Elevator Pitch,Introductions and quick calls,External after founder edit,Founder
+003,3-Minute Pitch Script,First meetings,External after review,Founder
+004,8-Minute Pitch Script,Longer investor/advisor meetings,External after review,Founder
+005,Pitch Deck Text Version,Deck production source,Needs design + review,Founder / designer
+006,Demo Day Script,Accelerator/demo day use,Needs demo alignment,Founder
+007,Investor FAQ,Objection and Q&A prep,External after review,Founder
+008,Fundraising Narrative,Storyline and framing,Internal/external excerpt,Founder
+009,Market Opportunity Summary,Market framing without unsupported numbers,Needs sourced market model,Founder / finance
+010,Problem/Solution/Why Now,Deck and campaign copy,External after review,Founder
+011,Product Differentiation,Competitive explanation,External after review,Product
+012,Business Model Summary,Revenue framing,Needs finance review,Business
+013,Go-To-Market Plan,Pilot/campaign launch sequence,External excerpt,Growth
+014,Use of Funds,Budget narrative,Needs finance/securities review,Finance
+015,Milestone-Based Funding Plan,Round logic,Needs finance/securities review,Finance
+016,Team / Hiring Plan,Early team needs,Internal/external excerpt,Founder
+017,Risk and Mitigation Summary,Investor risk framing,External after review,Founder / legal
+018,Restaurant Partner Pitch,Restaurant pilot outreach,External after commercial/legal review,Founder / BD
+019,Accelerator Application Draft,Applications,External after founder edit,Founder
+020,Crowdfunding Platform Summary,Campaign preparation,Needs crowdfunding/legal review,Founder / marketing
+021,Data Room Index For Investors,Clean data room assembly,Internal guide,Founder
+022,Investor Email Outreach Templates,Fundraising communications,External after edit,Founder
+023,Advisor / Angel Intro Message Templates,Warm intros,External after edit,Founder
+024,Objection Handling Guide,Meeting prep,Internal/external excerpt,Founder
+025,Metrics And Traction Plan,Pilot evidence planning,External after data exists,Product / analytics
+026,Alpha7C Handoff Summary,Repository transition,Internal,Repository owner

@@ -8,7 +8,9 @@
     "restaurant": "npm --workspace @haocu/restaurant-web run dev",
     "admin": "npm --workspace @haocu/admin-web run dev",
     "demo": "node scripts/start-demo.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:consumer-phase1a": "node scripts/consumer-auth-phase-1a-guard.mjs",
+    "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs"
   },
   "workspaces": [
     "apps/*",

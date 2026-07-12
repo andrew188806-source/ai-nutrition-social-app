@@ -1,0 +1,146 @@
+[
+  {
+    "id": "REVQ-001",
+    "reviewer_type": "Legal/IP",
+    "topic": "Terms",
+    "question": "What legal documents are required before public beta launch?",
+    "risk_level": "High",
+    "source_file": "002_LEGAL_IP_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-002",
+    "reviewer_type": "Legal/IP",
+    "topic": "IP Ownership",
+    "question": "Should founder-owned IP be assigned to the company or licensed?",
+    "risk_level": "High",
+    "source_file": "002_LEGAL_IP_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-003",
+    "reviewer_type": "Patent",
+    "topic": "Patentability",
+    "question": "Which AI/personalization/taste-memory mechanisms are patentable?",
+    "risk_level": "High",
+    "source_file": "003_PATENT_DISCLOSURE_REVIEW_QUEUE.md"
+  },
+  {
+    "id": "REVQ-004",
+    "reviewer_type": "Patent",
+    "topic": "Disclosure",
+    "question": "What must be filed before public demo, crowdfunding, or investor sharing?",
+    "risk_level": "Critical",
+    "source_file": "003_PATENT_DISCLOSURE_REVIEW_QUEUE.md"
+  },
+  {
+    "id": "REVQ-005",
+    "reviewer_type": "Privacy",
+    "topic": "Consent",
+    "question": "What consent is required for photo upload, AI analysis, meal history, matching, and analytics?",
+    "risk_level": "Critical",
+    "source_file": "004_PRIVACY_DATA_PROTECTION_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-006",
+    "reviewer_type": "Privacy",
+    "topic": "Retention",
+    "question": "What retention/deletion rules apply to photos, chats, meal records, and analytics?",
+    "risk_level": "Critical",
+    "source_file": "004_PRIVACY_DATA_PROTECTION_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-007",
+    "reviewer_type": "Terms",
+    "topic": "Social Safety",
+    "question": "What community and offline-meetup terms are required?",
+    "risk_level": "High",
+    "source_file": "005_TERMS_CONSUMER_PLATFORM_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-008",
+    "reviewer_type": "Nutrition",
+    "topic": "Claims",
+    "question": "What AI nutrition and health-goal language is safe?",
+    "risk_level": "Critical",
+    "source_file": "006_AI_NUTRITION_HEALTH_CLAIMS_REVIEW.md"
+  },
+  {
+    "id": "REVQ-009",
+    "reviewer_type": "Security",
+    "topic": "RLS",
+    "question": "Are Supabase RLS policies sufficient for user, restaurant, admin, chat, and storage data?",
+    "risk_level": "Critical",
+    "source_file": "007_SECURITY_TECHNICAL_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-010",
+    "reviewer_type": "Security",
+    "topic": "Storage",
+    "question": "Are private photo storage and signed URL policies safe?",
+    "risk_level": "Critical",
+    "source_file": "007_SECURITY_TECHNICAL_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-011",
+    "reviewer_type": "Finance",
+    "topic": "Accounting",
+    "question": "How should crowdfunding rewards, subscriptions, and restaurant fees be accounted for?",
+    "risk_level": "High",
+    "source_file": "008_FINANCE_ACCOUNTING_TAX_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-012",
+    "reviewer_type": "Finance",
+    "topic": "Tax",
+    "question": "What Taiwan/US tax issues should be checked before fundraising?",
+    "risk_level": "High",
+    "source_file": "008_FINANCE_ACCOUNTING_TAX_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-013",
+    "reviewer_type": "Fundraising",
+    "topic": "Securities",
+    "question": "What public statements are unsafe before securities/legal review?",
+    "risk_level": "Critical",
+    "source_file": "009_FUNDRAISING_SECURITIES_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-014",
+    "reviewer_type": "Fundraising",
+    "topic": "Valuation",
+    "question": "What valuation/IP/traction claims must be softened or supported?",
+    "risk_level": "High",
+    "source_file": "009_FUNDRAISING_SECURITIES_REVIEW_BRIEF.md"
+  },
+  {
+    "id": "REVQ-015",
+    "reviewer_type": "Restaurant",
+    "topic": "Pilot Terms",
+    "question": "What restaurant pilot terms and data-responsibility clauses are required?",
+    "risk_level": "High",
+    "source_file": "010_RESTAURANT_PARTNER_COMMERCIAL_REVIEW.md"
+  },
+  {
+    "id": "REVQ-016",
+    "reviewer_type": "ESG",
+    "topic": "Food Safety",
+    "question": "What legal/food-safety controls are required before surplus-food operations?",
+    "risk_level": "Critical",
+    "source_file": "011_ESG_SUPPLY_CHAIN_REVIEW.md"
+  },
+  {
+    "id": "REVQ-017",
+    "reviewer_type": "Insurance",
+    "topic": "Coverage",
+    "question": "What insurance is required before launch and before fundraising?",
+    "risk_level": "High",
+    "source_file": "012_INSURANCE_LIABILITY_REVIEW.md"
+  },
+  {
+    "id": "REVQ-018",
+    "reviewer_type": "Cross-Border",
+    "topic": "Entity/Tax",
+    "question": "What Taiwan/US entity, tax, IP, and investor issues require counsel?",
+    "risk_level": "High",
+    "source_file": "013_CROSS_BORDER_TAIWAN_US_REVIEW.md"
+  }
+]

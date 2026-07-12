@@ -1,0 +1,184 @@
+[
+  {
+    "id": "001",
+    "title": "Investor One-Pager",
+    "purpose": "First investor/advisor overview",
+    "sharing_status": "External after review",
+    "owner": "Founder / fundraising"
+  },
+  {
+    "id": "002",
+    "title": "30-Second Elevator Pitch",
+    "purpose": "Introductions and quick calls",
+    "sharing_status": "External after founder edit",
+    "owner": "Founder"
+  },
+  {
+    "id": "003",
+    "title": "3-Minute Pitch Script",
+    "purpose": "First meetings",
+    "sharing_status": "External after review",
+    "owner": "Founder"
+  },
+  {
+    "id": "004",
+    "title": "8-Minute Pitch Script",
+    "purpose": "Longer investor/advisor meetings",
+    "sharing_status": "External after review",
+    "owner": "Founder"
+  },
+  {
+    "id": "005",
+    "title": "Pitch Deck Text Version",
+    "purpose": "Deck production source",
+    "sharing_status": "Needs design + review",
+    "owner": "Founder / designer"
+  },
+  {
+    "id": "006",
+    "title": "Demo Day Script",
+    "purpose": "Accelerator/demo day use",
+    "sharing_status": "Needs demo alignment",
+    "owner": "Founder"
+  },
+  {
+    "id": "007",
+    "title": "Investor FAQ",
+    "purpose": "Objection and Q&A prep",
+    "sharing_status": "External after review",
+    "owner": "Founder"
+  },
+  {
+    "id": "008",
+    "title": "Fundraising Narrative",
+    "purpose": "Storyline and framing",
+    "sharing_status": "Internal/external excerpt",
+    "owner": "Founder"
+  },
+  {
+    "id": "009",
+    "title": "Market Opportunity Summary",
+    "purpose": "Market framing without unsupported numbers",
+    "sharing_status": "Needs sourced market model",
+    "owner": "Founder / finance"
+  },
+  {
+    "id": "010",
+    "title": "Problem/Solution/Why Now",
+    "purpose": "Deck and campaign copy",
+    "sharing_status": "External after review",
+    "owner": "Founder"
+  },
+  {
+    "id": "011",
+    "title": "Product Differentiation",
+    "purpose": "Competitive explanation",
+    "sharing_status": "External after review",
+    "owner": "Product"
+  },
+  {
+    "id": "012",
+    "title": "Business Model Summary",
+    "purpose": "Revenue framing",
+    "sharing_status": "Needs finance review",
+    "owner": "Business"
+  },
+  {
+    "id": "013",
+    "title": "Go-To-Market Plan",
+    "purpose": "Pilot/campaign launch sequence",
+    "sharing_status": "External excerpt",
+    "owner": "Growth"
+  },
+  {
+    "id": "014",
+    "title": "Use of Funds",
+    "purpose": "Budget narrative",
+    "sharing_status": "Needs finance/securities review",
+    "owner": "Finance"
+  },
+  {
+    "id": "015",
+    "title": "Milestone-Based Funding Plan",
+    "purpose": "Round logic",
+    "sharing_status": "Needs finance/securities review",
+    "owner": "Finance"
+  },
+  {
+    "id": "016",
+    "title": "Team / Hiring Plan",
+    "purpose": "Early team needs",
+    "sharing_status": "Internal/external excerpt",
+    "owner": "Founder"
+  },
+  {
+    "id": "017",
+    "title": "Risk and Mitigation Summary",
+    "purpose": "Investor risk framing",
+    "sharing_status": "External after review",
+    "owner": "Founder / legal"
+  },
+  {
+    "id": "018",
+    "title": "Restaurant Partner Pitch",
+    "purpose": "Restaurant pilot outreach",
+    "sharing_status": "External after commercial/legal review",
+    "owner": "Founder / BD"
+  },
+  {
+    "id": "019",
+    "title": "Accelerator Application Draft",
+    "purpose": "Applications",
+    "sharing_status": "External after founder edit",
+    "owner": "Founder"
+  },
+  {
+    "id": "020",
+    "title": "Crowdfunding Platform Summary",
+    "purpose": "Campaign preparation",
+    "sharing_status": "Needs crowdfunding/legal review",
+    "owner": "Founder / marketing"
+  },
+  {
+    "id": "021",
+    "title": "Data Room Index For Investors",
+    "purpose": "Clean data room assembly",
+    "sharing_status": "Internal guide",
+    "owner": "Founder"
+  },
+  {
+    "id": "022",
+    "title": "Investor Email Outreach Templates",
+    "purpose": "Fundraising communications",
+    "sharing_status": "External after edit",
+    "owner": "Founder"
+  },
+  {
+    "id": "023",
+    "title": "Advisor / Angel Intro Message Templates",
+    "purpose": "Warm intros",
+    "sharing_status": "External after edit",
+    "owner": "Founder"
+  },
+  {
+    "id": "024",
+    "title": "Objection Handling Guide",
+    "purpose": "Meeting prep",
+    "sharing_status": "Internal/external excerpt",
+    "owner": "Founder"
+  },
+  {
+    "id": "025",
+    "title": "Metrics And Traction Plan",
+    "purpose": "Pilot evidence planning",
+    "sharing_status": "External after data exists",
+    "owner": "Product / analytics"
+  },
+  {
+    "id": "026",
+    "title": "Alpha7C Handoff Summary",
+    "purpose": "Repository transition",
+    "sharing_status": "Internal",
+    "owner": "Repository owner"
+  }
+]

@@ -10,6 +10,11 @@
   "include": [
     "app",
     "components",
+    "features",
+    "adapters",
+    "repositories",
+    "services",
+    "view-models",
     "../../lib",
     "../../packages",
     ".expo/types/**/*.ts",

@@ -12,7 +12,7 @@ import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../featur
 import { createMealBuddyCard, getCommunityMealTime, getDefaultInteractionPreference, resetMealBuddyVisibleQuotaForDemo, setPendingMatchRequest, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
-import { getCanonicalRestaurants } from "../features/restaurants";
+import { mobileMenuItemService } from "../services/mobile-menu-item-service";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -56,21 +56,7 @@ function buildMatchPercent(calories: number, referenceCalories: number): number 
 // adjusted calories) instead of forcing one dish per restaurant. This means the
 // list naturally changes whenever that reference calorie value changes.
 function buildNextMealRecommendationCards(limit: number, referenceCalories: number): NextMealRecommendationCard[] {
-  const restaurants = getCanonicalRestaurants();
-  const allItems = restaurants.flatMap((restaurant) =>
-    restaurant.menuItems.map((item) => ({
-      menuItemId: item.menuItemId,
-      restaurantId: restaurant.restaurantId,
-      dishName: item.name,
-      calories: item.calories,
-      restaurantName: restaurant.name,
-      distance: restaurant.distanceDisplay,
-      emoji: item.emoji || "🍽️",
-      reason: buildRecommendationReason(item.calories, item.protein, referenceCalories),
-      matchPercent: buildMatchPercent(item.calories, referenceCalories)
-    }))
-  );
-  return allItems.sort((a, b) => Math.abs(a.calories - referenceCalories) - Math.abs(b.calories - referenceCalories)).slice(0, limit);
+  return mobileMenuItemService.getRecommendedMenuItemsForNextMeal(limit, referenceCalories);
 }
 
 // mealSlotOptions ("早餐（第一餐）"...) and mealBuddyCard.mealPeriods ("早餐"...) are two

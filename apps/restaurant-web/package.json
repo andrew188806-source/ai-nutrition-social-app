@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "set NEXT_IGNORE_INCORRECT_LOCKFILE=1&& next dev -p 3001",
     "build": "set NEXT_IGNORE_INCORRECT_LOCKFILE=1&& next build",
-    "start": "set NEXT_IGNORE_INCORRECT_LOCKFILE=1&& next start -p 3001"
+    "start": "set NEXT_IGNORE_INCORRECT_LOCKFILE=1&& next start -p 3001",
+    "test:phase1a": "node ../../scripts/restaurant-supabase-phase-1a-guard.mjs",
+    "test:phase1b-rest": "node ../../scripts/restaurant-supabase-phase-1b-rest-guard.mjs",
+    "test:phase1c-smoke": "node ../../scripts/restaurant-supabase-phase-1c-public-read-smoke.mjs",
+    "test:phase1d-live": "node ../../scripts/restaurant-supabase-phase-1d-live-read-parity.mjs"
   },
   "dependencies": {
     "next": "^14.2.35",

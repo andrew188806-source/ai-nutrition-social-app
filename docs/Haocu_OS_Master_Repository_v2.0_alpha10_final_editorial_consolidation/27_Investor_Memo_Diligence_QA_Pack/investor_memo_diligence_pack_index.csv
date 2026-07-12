@@ -1,0 +1,28 @@
+file,purpose,audience,notes
+README.md,Entry point for Alpha 9 investor memo and diligence pack,Internal / external after review,Read first
+001_INVESTOR_MEMO_MASTER.md,Formal long investor memo,Serious investors / advisors,Requires current fundraising terms before sending
+002_INVESTOR_MEMO_SHORT_VERSION.md,Short memo for warm intros and screens,Warm intros / accelerators,Replace placeholders
+003_DILIGENCE_QA_MASTER.md,Master diligence Q&A answer bank,Internal; selective external sharing,Update after repeated investor questions
+004_DILIGENCE_QA_BY_TOPIC.md,Topic-organized Q&A map,Internal / diligence,Routes to source folders
+005_INVESTOR_MEETING_AGENDA_AND_NOTES.md,Meeting agenda and notes template,Internal,Duplicate per meeting
+006_INVESTOR_FOLLOW_UP_EMAIL_TEMPLATES.md,Email templates for investor follow-up,Internal,Customize before sending
+007_INVESTOR_PIPELINE_TRACKER_TEMPLATE.md,Fundraising CRM schema,Internal only,Use CSV companion
+008_INVESTOR_RESPONSE_TRACKER_TEMPLATE.md,Investor questions and response tracker,Internal only,Use to keep answers consistent
+009_DEMO_EVIDENCE_INDEX.md,Demo evidence capture guide,Internal / selective external,Attach actual screenshots/videos later
+010_DEMO_SESSION_LOG_TEMPLATE.md,Demo session notes template,Internal,Use after demos
+011_PILOT_EVIDENCE_PLAN.md,Pilot evidence plan,Internal / investor-friendly after review,Do not overclaim
+012_RESTAURANT_PILOT_QA.md,Restaurant pilot Q&A,Restaurant / investor review,Check commercial/legal terms
+013_PILOT_LOI_INTEREST_TRACKER.md,Restaurant interest and LOI tracker,Internal,Use CSV companion
+014_TRACTION_METRICS_EVIDENCE_TEMPLATE.md,Metrics definitions and traction evidence template,Internal / investor after data exists,Separate demo/pilot/live
+015_DILIGENCE_REQUEST_LIST.md,Investor diligence request checklist,Internal / diligence,Track status
+016_DOCUMENT_EVIDENCE_MAP.md,Claim-to-evidence map,Internal / diligence,Prevents overclaiming
+017_RISK_RESPONSE_AND_RED_FLAGS.md,Risk and red flag response guide,Internal / selective external,Update from investor feedback
+018_COMPLIANCE_AND_CLAIMS_QA.md,Compliance and claims answer prep,Internal / professional review,Not legal advice
+019_FINANCE_AND_FUNDRAISING_QA.md,Finance and fundraising answer prep,Internal / professional review,Not securities/tax advice
+020_TECH_AI_DATA_QA.md,"Technical, AI, and data diligence prep",Internal / technical investors,Control sensitive details
+021_COMPETITION_AND_MARKET_QA.md,Competition and market Q&A,Internal / investor,Add market evidence later
+022_FOUNDING_TEAM_AND_HIRING_QA.md,Team and hiring Q&A,Internal / investor,Use milestone hiring logic
+023_DATA_ROOM_UPDATE_LOG.md,Data room version and sharing log,Internal,Update every share
+024_INVESTOR_OBJECTION_RESPONSE_BANK.md,Objection handling bank,Internal,Update after calls
+025_BOARD_ADVISOR_UPDATE_TEMPLATE.md,Monthly advisor/investor update template,Internal / external after edit,Use post-pilot
+026_ALPHA9_HANDOFF_SUMMARY.md,Alpha 9 completion summary,Internal,Use for next chat

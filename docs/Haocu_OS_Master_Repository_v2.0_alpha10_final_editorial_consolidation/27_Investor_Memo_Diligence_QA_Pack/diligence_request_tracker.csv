@@ -1,0 +1,2 @@
+date,requester,request,category,priority,status,owner,due_date,source_file_or_link,review_required,sent_date,notes
+,,,Company / Product / Tech / AI / Legal / Finance / Pilot / Market,P0 / P1 / P2,Open / In Progress / Sent / Blocked / Closed,,,,Yes / No,,

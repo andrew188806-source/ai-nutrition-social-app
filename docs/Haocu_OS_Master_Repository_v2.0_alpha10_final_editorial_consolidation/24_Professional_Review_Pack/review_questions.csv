@@ -1,0 +1,19 @@
+id,reviewer_type,topic,question,risk_level,source_file
+REVQ-001,Legal/IP,Terms,What legal documents are required before public beta launch?,High,002_LEGAL_IP_REVIEW_BRIEF.md
+REVQ-002,Legal/IP,IP Ownership,Should founder-owned IP be assigned to the company or licensed?,High,002_LEGAL_IP_REVIEW_BRIEF.md
+REVQ-003,Patent,Patentability,Which AI/personalization/taste-memory mechanisms are patentable?,High,003_PATENT_DISCLOSURE_REVIEW_QUEUE.md
+REVQ-004,Patent,Disclosure,"What must be filed before public demo, crowdfunding, or investor sharing?",Critical,003_PATENT_DISCLOSURE_REVIEW_QUEUE.md
+REVQ-005,Privacy,Consent,"What consent is required for photo upload, AI analysis, meal history, matching, and analytics?",Critical,004_PRIVACY_DATA_PROTECTION_REVIEW_BRIEF.md
+REVQ-006,Privacy,Retention,"What retention/deletion rules apply to photos, chats, meal records, and analytics?",Critical,004_PRIVACY_DATA_PROTECTION_REVIEW_BRIEF.md
+REVQ-007,Terms,Social Safety,What community and offline-meetup terms are required?,High,005_TERMS_CONSUMER_PLATFORM_REVIEW_BRIEF.md
+REVQ-008,Nutrition,Claims,What AI nutrition and health-goal language is safe?,Critical,006_AI_NUTRITION_HEALTH_CLAIMS_REVIEW.md
+REVQ-009,Security,RLS,"Are Supabase RLS policies sufficient for user, restaurant, admin, chat, and storage data?",Critical,007_SECURITY_TECHNICAL_REVIEW_BRIEF.md
+REVQ-010,Security,Storage,Are private photo storage and signed URL policies safe?,Critical,007_SECURITY_TECHNICAL_REVIEW_BRIEF.md
+REVQ-011,Finance,Accounting,"How should crowdfunding rewards, subscriptions, and restaurant fees be accounted for?",High,008_FINANCE_ACCOUNTING_TAX_REVIEW_BRIEF.md
+REVQ-012,Finance,Tax,What Taiwan/US tax issues should be checked before fundraising?,High,008_FINANCE_ACCOUNTING_TAX_REVIEW_BRIEF.md
+REVQ-013,Fundraising,Securities,What public statements are unsafe before securities/legal review?,Critical,009_FUNDRAISING_SECURITIES_REVIEW_BRIEF.md
+REVQ-014,Fundraising,Valuation,What valuation/IP/traction claims must be softened or supported?,High,009_FUNDRAISING_SECURITIES_REVIEW_BRIEF.md
+REVQ-015,Restaurant,Pilot Terms,What restaurant pilot terms and data-responsibility clauses are required?,High,010_RESTAURANT_PARTNER_COMMERCIAL_REVIEW.md
+REVQ-016,ESG,Food Safety,What legal/food-safety controls are required before surplus-food operations?,Critical,011_ESG_SUPPLY_CHAIN_REVIEW.md
+REVQ-017,Insurance,Coverage,What insurance is required before launch and before fundraising?,High,012_INSURANCE_LIABILITY_REVIEW.md
+REVQ-018,Cross-Border,Entity/Tax,"What Taiwan/US entity, tax, IP, and investor issues require counsel?",High,013_CROSS_BORDER_TAIWAN_US_REVIEW.md

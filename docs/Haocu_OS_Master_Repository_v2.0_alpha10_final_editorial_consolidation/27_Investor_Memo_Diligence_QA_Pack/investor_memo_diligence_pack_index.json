@@ -1,0 +1,164 @@
+[
+  {
+    "file": "README.md",
+    "purpose": "Entry point for Alpha 9 investor memo and diligence pack",
+    "audience": "Internal / external after review",
+    "notes": "Read first"
+  },
+  {
+    "file": "001_INVESTOR_MEMO_MASTER.md",
+    "purpose": "Formal long investor memo",
+    "audience": "Serious investors / advisors",
+    "notes": "Requires current fundraising terms before sending"
+  },
+  {
+    "file": "002_INVESTOR_MEMO_SHORT_VERSION.md",
+    "purpose": "Short memo for warm intros and screens",
+    "audience": "Warm intros / accelerators",
+    "notes": "Replace placeholders"
+  },
+  {
+    "file": "003_DILIGENCE_QA_MASTER.md",
+    "purpose": "Master diligence Q&A answer bank",
+    "audience": "Internal; selective external sharing",
+    "notes": "Update after repeated investor questions"
+  },
+  {
+    "file": "004_DILIGENCE_QA_BY_TOPIC.md",
+    "purpose": "Topic-organized Q&A map",
+    "audience": "Internal / diligence",
+    "notes": "Routes to source folders"
+  },
+  {
+    "file": "005_INVESTOR_MEETING_AGENDA_AND_NOTES.md",
+    "purpose": "Meeting agenda and notes template",
+    "audience": "Internal",
+    "notes": "Duplicate per meeting"
+  },
+  {
+    "file": "006_INVESTOR_FOLLOW_UP_EMAIL_TEMPLATES.md",
+    "purpose": "Email templates for investor follow-up",
+    "audience": "Internal",
+    "notes": "Customize before sending"
+  },
+  {
+    "file": "007_INVESTOR_PIPELINE_TRACKER_TEMPLATE.md",
+    "purpose": "Fundraising CRM schema",
+    "audience": "Internal only",
+    "notes": "Use CSV companion"
+  },
+  {
+    "file": "008_INVESTOR_RESPONSE_TRACKER_TEMPLATE.md",
+    "purpose": "Investor questions and response tracker",
+    "audience": "Internal only",
+    "notes": "Use to keep answers consistent"
+  },
+  {
+    "file": "009_DEMO_EVIDENCE_INDEX.md",
+    "purpose": "Demo evidence capture guide",
+    "audience": "Internal / selective external",
+    "notes": "Attach actual screenshots/videos later"
+  },
+  {
+    "file": "010_DEMO_SESSION_LOG_TEMPLATE.md",
+    "purpose": "Demo session notes template",
+    "audience": "Internal",
+    "notes": "Use after demos"
+  },
+  {
+    "file": "011_PILOT_EVIDENCE_PLAN.md",
+    "purpose": "Pilot evidence plan",
+    "audience": "Internal / investor-friendly after review",
+    "notes": "Do not overclaim"
+  },
+  {
+    "file": "012_RESTAURANT_PILOT_QA.md",
+    "purpose": "Restaurant pilot Q&A",
+    "audience": "Restaurant / investor review",
+    "notes": "Check commercial/legal terms"
+  },
+  {
+    "file": "013_PILOT_LOI_INTEREST_TRACKER.md",
+    "purpose": "Restaurant interest and LOI tracker",
+    "audience": "Internal",
+    "notes": "Use CSV companion"
+  },
+  {
+    "file": "014_TRACTION_METRICS_EVIDENCE_TEMPLATE.md",
+    "purpose": "Metrics definitions and traction evidence template",
+    "audience": "Internal / investor after data exists",
+    "notes": "Separate demo/pilot/live"
+  },
+  {
+    "file": "015_DILIGENCE_REQUEST_LIST.md",
+    "purpose": "Investor diligence request checklist",
+    "audience": "Internal / diligence",
+    "notes": "Track status"
+  },
+  {
+    "file": "016_DOCUMENT_EVIDENCE_MAP.md",
+    "purpose": "Claim-to-evidence map",
+    "audience": "Internal / diligence",
+    "notes": "Prevents overclaiming"
+  },
+  {
+    "file": "017_RISK_RESPONSE_AND_RED_FLAGS.md",
+    "purpose": "Risk and red flag response guide",
+    "audience": "Internal / selective external",
+    "notes": "Update from investor feedback"
+  },
+  {
+    "file": "018_COMPLIANCE_AND_CLAIMS_QA.md",
+    "purpose": "Compliance and claims answer prep",
+    "audience": "Internal / professional review",
+    "notes": "Not legal advice"
+  },
+  {
+    "file": "019_FINANCE_AND_FUNDRAISING_QA.md",
+    "purpose": "Finance and fundraising answer prep",
+    "audience": "Internal / professional review",
+    "notes": "Not securities/tax advice"
+  },
+  {
+    "file": "020_TECH_AI_DATA_QA.md",
+    "purpose": "Technical, AI, and data diligence prep",
+    "audience": "Internal / technical investors",
+    "notes": "Control sensitive details"
+  },
+  {
+    "file": "021_COMPETITION_AND_MARKET_QA.md",
+    "purpose": "Competition and market Q&A",
+    "audience": "Internal / investor",
+    "notes": "Add market evidence later"
+  },
+  {
+    "file": "022_FOUNDING_TEAM_AND_HIRING_QA.md",
+    "purpose": "Team and hiring Q&A",
+    "audience": "Internal / investor",
+    "notes": "Use milestone hiring logic"
+  },
+  {
+    "file": "023_DATA_ROOM_UPDATE_LOG.md",
+    "purpose": "Data room version and sharing log",
+    "audience": "Internal",
+    "notes": "Update every share"
+  },
+  {
+    "file": "024_INVESTOR_OBJECTION_RESPONSE_BANK.md",
+    "purpose": "Objection handling bank",
+    "audience": "Internal",
+    "notes": "Update after calls"
+  },
+  {
+    "file": "025_BOARD_ADVISOR_UPDATE_TEMPLATE.md",
+    "purpose": "Monthly advisor/investor update template",
+    "audience": "Internal / external after edit",
+    "notes": "Use post-pilot"
+  },
+  {
+    "file": "026_ALPHA9_HANDOFF_SUMMARY.md",
+    "purpose": "Alpha 9 completion summary",
+    "audience": "Internal",
+    "notes": "Use for next chat"
+  }
+]

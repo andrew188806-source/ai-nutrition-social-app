@@ -8,6 +8,7 @@ import { fonts, hexA, radius, shadows, snowPalette } from "../theme/tokens";
 // Bright White / Warm Minimal ("snow") palette, re-exported under the legacy
 // key names so existing screens keep working while picking up the new look.
 export const colors = {
+  bg: snowPalette.bg,
   ink: snowPalette.ink,
   muted: snowPalette.sub,
   line: snowPalette.line,

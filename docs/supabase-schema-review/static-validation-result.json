@@ -1,0 +1,50 @@
+﻿{
+  "filesReviewed": 15,
+  "objectCounts": {
+    "types": 21,
+    "tables": 45,
+    "views": 5,
+    "materializedViews": 3,
+    "functions": 4,
+    "indexes": 31,
+    "policies": 12
+  },
+  "issues": [],
+  "warnings": [
+    {
+      "file": "docs/supabase-schema-drafts/001_extensions.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.uid(); requires Supabase environment or test stub."
+    },
+    {
+      "file": "docs/supabase-schema-drafts/013_rls_policy_drafts.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.uid(); requires Supabase environment or test stub."
+    },
+    {
+      "file": "docs/supabase-schema-drafts/013_rls_policy_drafts.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.uid(); requires Supabase environment or test stub."
+    },
+    {
+      "file": "docs/supabase-schema-drafts/013_rls_policy_drafts.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.uid(); requires Supabase environment or test stub."
+    },
+    {
+      "file": "docs/supabase-schema-drafts/013_rls_policy_drafts.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.jwt(); requires Supabase environment or test stub."
+    },
+    {
+      "file": "docs/supabase-schema-drafts/013_rls_policy_drafts.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.jwt(); requires Supabase environment or test stub."
+    },
+    {
+      "file": "docs/supabase-schema-drafts/013_rls_policy_drafts.sql",
+      "kind": "supabase_auth_dependency",
+      "message": "Uses Supabase auth helper auth.jwt(); requires Supabase environment or test stub."
+    }
+  ]
+}

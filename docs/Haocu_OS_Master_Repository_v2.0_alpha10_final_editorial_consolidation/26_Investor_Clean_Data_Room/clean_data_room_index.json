@@ -1,0 +1,186 @@
+[
+  {
+    "item": "001",
+    "filename": "001_FOUNDER_BRIEF.md",
+    "title": "001 Founder Brief",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "002",
+    "filename": "002_COMPANY_OVERVIEW.md",
+    "title": "002 Company Overview",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "003",
+    "filename": "003_PRODUCT_OVERVIEW.md",
+    "title": "003 Product Overview",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "004",
+    "filename": "004_MVP_SCOPE_SUMMARY.md",
+    "title": "004 MVP Scope Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "005",
+    "filename": "005_MARKET_OPPORTUNITY_SUMMARY.md",
+    "title": "005 Market Opportunity Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "006",
+    "filename": "006_BUSINESS_MODEL_SUMMARY.md",
+    "title": "006 Business Model Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "007",
+    "filename": "007_GO_TO_MARKET_SUMMARY.md",
+    "title": "007 Go-To-Market Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "008",
+    "filename": "008_FUNDRAISING_SUMMARY.md",
+    "title": "008 Fundraising Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "009",
+    "filename": "009_USE_OF_FUNDS_SUMMARY.md",
+    "title": "009 Use Of Funds Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "010",
+    "filename": "010_MILESTONE_ROADMAP.md",
+    "title": "010 Milestone Roadmap",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "011",
+    "filename": "011_PRODUCT_DEMO_SCRIPT.md",
+    "title": "011 Product Demo Script",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "012",
+    "filename": "012_ENGINEERING_READINESS_SUMMARY.md",
+    "title": "012 Engineering Readiness Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "013",
+    "filename": "013_LEGAL_IP_STATUS_SUMMARY.md",
+    "title": "013 Legal IP Status Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "014",
+    "filename": "014_PRIVACY_COMPLIANCE_STATUS_SUMMARY.md",
+    "title": "014 Privacy Compliance Status Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "015",
+    "filename": "015_FINANCE_STATUS_SUMMARY.md",
+    "title": "015 Finance Status Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "016",
+    "filename": "016_RISK_AND_MITIGATION_SUMMARY.md",
+    "title": "016 Risk And Mitigation Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "017",
+    "filename": "017_RESTAURANT_PARTNER_SUMMARY.md",
+    "title": "017 Restaurant Partner Summary",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "018",
+    "filename": "018_ADVISOR_REVIEWER_PACKET.md",
+    "title": "018 Advisor Reviewer Packet",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "019",
+    "filename": "019_INVESTOR_FAQ_CLEAN_VERSION.md",
+    "title": "019 Investor FAQ Clean Version",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "020",
+    "filename": "020_DOCUMENT_ACCESS_GUIDE.md",
+    "title": "020 Document Access Guide",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "021",
+    "filename": "021_SENSITIVE_INFORMATION_EXCLUSION_LIST.md",
+    "title": "021 Sensitive Information Exclusion List",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "022",
+    "filename": "022_NEXT_STEP_MEETING_CHECKLIST.md",
+    "title": "022 Next-Step Meeting Checklist",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  },
+  {
+    "item": "000",
+    "filename": "README.md",
+    "title": "Investor Data Room README",
+    "audience": "investors, advisors, accelerators, restaurant partners",
+    "sensitivity": "external-clean-summary",
+    "status": "draft_requires_review_before_public_use"
+  }
+]
