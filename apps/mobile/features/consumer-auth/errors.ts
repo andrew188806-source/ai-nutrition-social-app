@@ -53,6 +53,14 @@ export type ConsumerAuthErrorCode =
   | "daily_summary_invalid_nutrition"
   | "daily_summary_rule_unavailable"
   | "daily_summary_parity_mismatch"
+  | "today_intake_overview_configuration_invalid"
+  | "today_intake_overview_authentication_required"
+  | "today_intake_overview_invalid_date"
+  | "today_intake_overview_meal_read_failed"
+  | "today_intake_overview_summary_read_failed"
+  | "today_intake_overview_calculation_failed"
+  | "today_intake_overview_planned_runtime_unavailable"
+  | "today_intake_overview_partial"
   | "session_expired"
   | "account_disabled"
   | "configuration_error";
@@ -390,6 +398,54 @@ export class ConsumerDailySummaryRuleUnavailableError extends ConsumerAuthError 
 export class ConsumerDailySummaryParityMismatchError extends ConsumerAuthError {
   constructor(message = "Consumer stored and calculated daily nutrition summaries do not match.") {
     super("daily_summary_parity_mismatch", message, false);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewConfigurationInvalidError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview runtime configuration is invalid.") {
+    super("today_intake_overview_configuration_invalid", message, false);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewAuthenticationRequiredError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview requires an authenticated session.") {
+    super("today_intake_overview_authentication_required", message);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewInvalidDateError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview date is invalid.") {
+    super("today_intake_overview_invalid_date", message, false);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewMealReadFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview meal read failed.") {
+    super("today_intake_overview_meal_read_failed", message);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewSummaryReadFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview summary read failed.") {
+    super("today_intake_overview_summary_read_failed", message);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewCalculationFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview calculation failed.") {
+    super("today_intake_overview_calculation_failed", message, false);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewPlannedMealsUnavailableError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview planned meals are unavailable.") {
+    super("today_intake_overview_planned_runtime_unavailable", message);
+  }
+}
+
+export class ConsumerTodayIntakeOverviewPartialError extends ConsumerAuthError {
+  constructor(message = "Consumer Today Intake overview is partial.") {
+    super("today_intake_overview_partial", message);
   }
 }
 

@@ -1,5 +1,6 @@
 import {
   ConsumerDailySummaryConfigurationInvalidError,
+  ConsumerTodayIntakeOverviewConfigurationInvalidError,
   ConsumerMealSourceConfigurationInvalidError,
   ConsumerMealWriteConfigurationInvalidError
 } from "../consumer-auth/errors";
@@ -17,12 +18,20 @@ import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supa
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
+import { ConsumerTodayIntakeOverviewService, type ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOverviewService";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
-import type { ConsumerMealRuntimeFlags } from "./types";
+import type { ConsumerMealRuntimeFlags, ConsumerPlannedMealsRepository } from "./types";
 
 export type ConsumerMealFactoryDependencies = {
   authPort?: ConsumerAuthPort;
   mealClient?: SupabaseConsumerMealClientLike;
+  plannedMealsRepository?: ConsumerPlannedMealsRepository;
+  clock?: ConsumerTodayIntakeOverviewClock;
+  timezone?: string;
+};
+
+const systemClock: ConsumerTodayIntakeOverviewClock = {
+  now: () => new Date()
 };
 
 export function assertConsumerMealRuntimeFlags(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
@@ -138,5 +147,35 @@ export function createConsumerDailyNutritionSummaryService(
 ) {
   return new ConsumerDailyNutritionSummaryService({
     repository: createConsumerDailyNutritionSummaryRepository(flags, dependencies)
+  });
+}
+
+export function assertConsumerTodayIntakeOverviewRuntimeFlags(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+  if (flags.issues.length) {
+    return { ok: false as const, error: new ConsumerTodayIntakeOverviewConfigurationInvalidError(flags.issues.join(" ")) };
+  }
+  if (flags.mealRecordsSource !== flags.dailyNutritionSource) {
+    return { ok: false as const, error: new ConsumerTodayIntakeOverviewConfigurationInvalidError("Consumer Today Intake overview requires meal and daily nutrition sources to match.") };
+  }
+  if (flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled || flags.mealRecordLiveWriteOptIn) {
+    return { ok: false as const, error: new ConsumerTodayIntakeOverviewConfigurationInvalidError("Consumer Today Intake overview is read-only and requires writes to remain disabled.") };
+  }
+  return { ok: true as const, value: flags };
+}
+
+export function createConsumerTodayIntakeOverviewService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  const flagCheck = assertConsumerTodayIntakeOverviewRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  return new ConsumerTodayIntakeOverviewService({
+    mealRecordsService: createConsumerMealRecordsService(flags, dependencies),
+    dailyNutritionSummaryService: createConsumerDailyNutritionSummaryService(flags, dependencies),
+    plannedMealsRepository: dependencies.plannedMealsRepository,
+    clock: dependencies.clock ?? systemClock,
+    mealRecordsSource: flags.mealRecordsSource,
+    dailyNutritionSource: flags.dailyNutritionSource,
+    timezone: dependencies.timezone
   });
 }

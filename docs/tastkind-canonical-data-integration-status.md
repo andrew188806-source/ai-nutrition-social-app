@@ -912,3 +912,42 @@ Completed in repository:
 Still excluded:
 
 - Summary write-back, insert, update, upsert, delete, seed, fixture, bootstrap, automatic summary creation, UI wiring, navigation wiring, Home/Today Intake cutover, ratings/favorites/recommendation feedback runtime, social runtime, Restaurant Web runtime, Admin runtime, production deployment, and Phase 2G.
+
+## 38. Consumer Runtime Integration Phase 2G Status
+
+Consumer Runtime Integration Phase 2G Home / Today Intake Shared Runtime Read Model Preparation is implementation-complete, guard-complete, live-shared-model-skipped, and freeze-ready.
+
+Completed in repository:
+
+- Existing Home and Today Intake data-origin audit.
+- Canonical `ConsumerTodayIntakeOverview` type.
+- Shared `ConsumerTodayIntakeOverviewService`.
+- Factory wiring through `createConsumerTodayIntakeOverviewService(...)`.
+- Reuse of current-user Meal Records service.
+- Reuse of Daily Nutrition Summary service.
+- Reuse of Phase 2E deterministic calculator and parity helper.
+- Optional planned meals repository boundary.
+- Deterministic clock injection and `Asia/Taipei` default timezone semantics.
+- Empty, partial, and error metadata.
+- Phase 2G guard script: `npm run test:consumer-phase2g`.
+- Phase 2G live smoke script: `npm run test:consumer-phase2g-live-smoke`, hard-skipped by design.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-2g-home-today-intake-shared-read-model.md`
+- `apps/mobile/features/consumer-meals/consumerTodayIntakeOverviewService.ts`
+- `apps/mobile/features/consumer-meals/types.ts`
+- `apps/mobile/features/consumer-meals/factories.ts`
+- `scripts/consumer-meal-records-phase-2g-guard.mjs`
+- `scripts/consumer-meal-records-phase-2g-live-smoke.mjs`
+
+Boundary:
+
+- No Mobile UI or navigation wiring.
+- No Home or Today Intake cutover.
+- No Supabase SDK import in UI or the shared overview service.
+- No query construction in the shared overview service.
+- No summary persistence, write-back, insert, update, upsert, delete, RPC, raw SQL, seed, fixture, migration, grant, remote Supabase operation, production deployment, push, or next phase work.
+- Planned meals are separated from actual consumed totals.
+- Stored summary missing is metadata, not an empty-day substitute or transport failure.
+- Empty actual consumed day is not an error.

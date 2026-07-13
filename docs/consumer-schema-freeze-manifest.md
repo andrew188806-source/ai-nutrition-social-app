@@ -327,3 +327,15 @@ The migration grants only authenticated SELECT on `public.daily_nutrition_summar
 The runtime remains mock by default and live summary reads require explicit development opt-in with writes disabled. Development live verification passed: current-user meal reads succeeded, the stored summary read was authorized and returned typed not-found for the selected date, in-memory recalculation succeeded, and stored/calculated parity was skipped because no stored row existed. Stored item count is marked unavailable because the frozen table does not persist it.
 
 Phase 2F does not wire Mobile UI or navigation, does not write summaries back, does not use RPC, does not touch Restaurant Web or Admin runtime, does not deploy to production, and does not start Phase 2G.
+
+## 25. Phase 2G Follow-Up
+
+Consumer Runtime Integration Phase 2G Home / Today Intake Shared Runtime Read Model Preparation is implementation-complete, guard-complete, live-shared-model-skipped, and freeze-ready.
+
+Phase 2G adds no active migration, RLS change, grant change, remote Supabase operation, development live shared-model read, summary write, meal write, RPC, raw SQL execution, seed, fixture, UI wiring, navigation wiring, Home/Today Intake cutover, Restaurant Web runtime, Admin runtime, production deployment, or next phase work.
+
+The phase adds a canonical shared read model, `ConsumerTodayIntakeOverview`, plus `getCurrentUserTodayIntakeOverview(input?)` orchestration through the Consumer Meal Records service, Daily Nutrition Summary service, Phase 2E calculator, and optional planned meals repository.
+
+Stored summaries remain cached projections. Stored summary not-found is metadata, not failure. Stored item count unavailable remains explicit. Planned meals stay separate from actual consumed totals. The factory rejects mixed meal/summary sources and write-enabled flags.
+
+The Phase 2G live smoke is hard-skipped with `SKIPPED - Consumer Runtime Home/Today Intake shared live verification has not started.`

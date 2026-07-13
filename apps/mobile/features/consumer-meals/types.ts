@@ -182,3 +182,60 @@ export interface ConsumerDailyNutritionSummaryRepository {
   readonly source: ConsumerDailyNutritionSource;
   getCurrentUserDailyNutritionSummary(input: ConsumerDailyNutritionSummaryReadInput): Promise<ConsumerAuthResult<ConsumerDailyNutritionSummary>>;
 }
+
+export type ConsumerTodayIntakeOverviewInput = {
+  date?: string;
+};
+
+export type ConsumerTodayIntakeOverviewStatus = "complete" | "empty" | "partial" | "error";
+export type ConsumerActualConsumedStatus = "available" | "empty" | "unavailable" | "error";
+export type ConsumerStoredSummaryStatus = "available" | "missing" | "unavailable" | "error";
+export type ConsumerPlannedMealsStatus = "available" | "empty" | "unavailable" | "error";
+
+export type ConsumerTodayIntakeOverviewWarning =
+  | "stored_summary_missing"
+  | "stored_summary_unavailable"
+  | "stored_summary_error"
+  | "stored_summary_parity_mismatch"
+  | "planned_meals_unavailable"
+  | "planned_meals_error"
+  | "calculation_unavailable";
+
+export type ConsumerPlannedMealOverview = {
+  plannedMealId?: string;
+  date: string;
+  mealTime?: string;
+  mealType?: string;
+  title: string;
+  restaurantName?: string | null;
+  note?: string | null;
+};
+
+export type ConsumerTodayIntakeOverviewProvenance = {
+  meals: ConsumerMealRecordsSource;
+  calculatedNutrition: "calculated";
+  storedNutrition: ConsumerDailyNutritionSource | "unavailable";
+  plannedMeals: "injected" | "unavailable";
+};
+
+export type ConsumerTodayIntakeOverview = {
+  date: string;
+  timezone: string;
+  meals: ConsumerMealRecord[];
+  calculatedNutrition: ConsumerDailyNutritionSummary;
+  storedNutrition: ConsumerDailyNutritionSummary | null;
+  storedSummaryStatus: ConsumerStoredSummaryStatus;
+  mealCount: number;
+  itemCount: number;
+  actualConsumedStatus: ConsumerActualConsumedStatus;
+  plannedMeals: ConsumerPlannedMealOverview[];
+  plannedMealsStatus: ConsumerPlannedMealsStatus;
+  provenance: ConsumerTodayIntakeOverviewProvenance;
+  warnings: ConsumerTodayIntakeOverviewWarning[];
+  status: ConsumerTodayIntakeOverviewStatus;
+  generatedAt: string;
+};
+
+export interface ConsumerPlannedMealsRepository {
+  listCurrentUserPlannedMeals(input: { date: string }): Promise<ConsumerAuthResult<ConsumerPlannedMealOverview[]>>;
+}

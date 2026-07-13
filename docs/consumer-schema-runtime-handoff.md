@@ -326,3 +326,15 @@ The runtime remains mock by default. Live summary reads require explicit develop
 Stored summaries are treated as cached projections. The live smoke passed with current-user meal reads, authorized stored-summary transport, typed not-found for a missing stored summary row, in-memory recalculation, parity skipped because no stored row existed, and sign-out. Stored `itemCount` is explicitly unavailable because the frozen summary table does not persist it, so item-count parity is skipped instead of inventing zero.
 
 Phase 2F does not implement summary write-back, insert/update/upsert/delete, RPC, UI wiring, navigation wiring, Home/Today Intake cutover, ratings/favorites/recommendation feedback runtime, social runtime, Restaurant Web runtime, Admin runtime, production deployment, or Phase 2G.
+
+## Phase 2G Home / Today Intake Shared Read Model Preparation Result
+
+Consumer Runtime Integration Phase 2G Home / Today Intake Shared Runtime Read Model Preparation is implementation-complete, guard-complete, live-shared-model-skipped, and freeze-ready.
+
+Phase 2G adds `ConsumerTodayIntakeOverview`, `ConsumerTodayIntakeOverviewService`, and `createConsumerTodayIntakeOverviewService(...)`. The shared read model composes current-user meal records, deterministic calculated nutrition, optional stored daily summary data, optional planned meals, provenance, warnings, and empty / partial / error metadata.
+
+The shared service reuses the Phase 2A / 2B meal read service, the Phase 2E calculator, and the Phase 2F daily nutrition summary read service. It does not import the Supabase SDK, construct queries, create a client, write summaries, call RPC, execute SQL, expose arbitrary user identity, or leak raw rows.
+
+Home and Today Intake remain unwired in Phase 2G. Their current route-local view models still use the existing analysis meal record store until a future UI cutover. The live shared-model smoke is intentionally hard-skipped with `SKIPPED - Consumer Runtime Home/Today Intake shared live verification has not started.`
+
+Phase 2G does not add a migration, modify schema/RLS/grants, execute a remote Supabase operation, create seed/fixture/bootstrap data, change UI or navigation, touch Restaurant Web or Admin runtime, deploy to production, or start the next phase.
