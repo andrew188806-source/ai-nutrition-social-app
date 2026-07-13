@@ -315,3 +315,15 @@ Phase 2E adds no active migration, RLS change, grant change, remote Supabase ope
 The Phase 2E live smoke is hard-skipped with `SKIPPED - Consumer Runtime Daily Nutrition Summary live verification has not started.`
 
 Known next prerequisite: add and verify a minimal authenticated SELECT grant for `daily_nutrition_summaries` before development live summary read verification.
+
+## 24. Phase 2F Follow-Up
+
+Consumer Runtime Integration Phase 2F Development Live Daily Nutrition Summary Read is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready. It adds a development-only read path for the cached daily nutrition summary projection.
+
+Phase 2F adds one forward-only active migration: `20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql`.
+
+The migration grants only authenticated SELECT on `public.daily_nutrition_summaries` and revokes anon privileges on that table. It does not grant INSERT, UPDATE, DELETE, ALL, or anon access; does not modify RLS policy semantics; does not change existing schema objects; and does not create seed, fixture, or consumer rows.
+
+The runtime remains mock by default and live summary reads require explicit development opt-in with writes disabled. Development live verification passed: current-user meal reads succeeded, the stored summary read was authorized and returned typed not-found for the selected date, in-memory recalculation succeeded, and stored/calculated parity was skipped because no stored row existed. Stored item count is marked unavailable because the frozen table does not persist it.
+
+Phase 2F does not wire Mobile UI or navigation, does not write summaries back, does not use RPC, does not touch Restaurant Web or Admin runtime, does not deploy to production, and does not start Phase 2G.

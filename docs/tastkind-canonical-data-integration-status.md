@@ -891,3 +891,24 @@ Known prerequisite:
 - A future phase must add and verify the minimal authenticated SELECT grant for `daily_nutrition_summaries` before development live summary reads.
 
 No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, schema migration, RLS change, grant migration, remote migration, summary write, RPC, raw SQL runtime, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token/full session/raw row output, seed, fixture, production deployment, push, or next phase work was created by Phase 2E.
+
+## 37. Consumer Runtime Integration Phase 2F Status
+
+Consumer Runtime Integration Phase 2F Development Live Daily Nutrition Summary Read is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Completed in repository:
+
+- Forward-only migration `20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql`.
+- Authenticated SELECT grant for `public.daily_nutrition_summaries`.
+- Anon privilege revoke for `public.daily_nutrition_summaries`.
+- Development-only summary live read opt-in flag.
+- Factory wiring for the prepared Supabase daily summary read adapter.
+- Stored summary `itemCount` unavailable semantics.
+- Stored/calculated parity skip behavior when no stored summary exists or item count is unavailable.
+- Phase 2F guard script: `npm run test:consumer-phase2f`.
+- Phase 2F opt-in live smoke script: `npm run test:consumer-phase2f-live-smoke`.
+- Development live smoke passed with current-user meal reads, authorized stored-summary transport, typed not-found for the selected stored summary, in-memory recalculation, parity skipped because no stored row existed, and sign-out.
+
+Still excluded:
+
+- Summary write-back, insert, update, upsert, delete, seed, fixture, bootstrap, automatic summary creation, UI wiring, navigation wiring, Home/Today Intake cutover, ratings/favorites/recommendation feedback runtime, social runtime, Restaurant Web runtime, Admin runtime, production deployment, and Phase 2G.

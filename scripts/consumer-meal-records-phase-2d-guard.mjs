@@ -240,7 +240,7 @@ function mealClientFor(response, calls) {
 
 async function fakeMealWriteTests() {
   const defaults = flagsModule.getConsumerMealRuntimeFlags({});
-  if (defaults.authSource !== "mock" || defaults.mealRecordsSource !== "mock" || defaults.supabaseAuthEnabled || defaults.supabaseWritesEnabled || defaults.mealRecordWritesEnabled || defaults.mealRecordLiveWriteOptIn || defaults.issues.length) {
+  if (defaults.authSource !== "mock" || defaults.mealRecordsSource !== "mock" || defaults.supabaseAuthEnabled || defaults.supabaseWritesEnabled || defaults.mealRecordWritesEnabled || defaults.mealRecordLiveWriteOptIn || defaults.dailyNutritionLiveReadOptIn || defaults.issues.length) {
     throw new Error("default flags should remain fully disabled");
   }
   const liveWriteFlags = flagsModule.getConsumerMealRuntimeFlags({

@@ -33,7 +33,8 @@ const expectedMigrationFiles = [
   "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
-  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql"
+  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
+  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -231,7 +232,7 @@ function expectErrorCode(fn, code, label) {
 
 async function fakeMealWriteTests() {
   const defaults = flagsModule.getConsumerMealRuntimeFlags({});
-  if (defaults.authSource !== "mock" || defaults.mealRecordsSource !== "mock" || defaults.supabaseAuthEnabled || defaults.supabaseWritesEnabled || defaults.mealRecordWritesEnabled || defaults.issues.length) {
+  if (defaults.authSource !== "mock" || defaults.mealRecordsSource !== "mock" || defaults.supabaseAuthEnabled || defaults.supabaseWritesEnabled || defaults.mealRecordWritesEnabled || defaults.dailyNutritionLiveReadOptIn || defaults.issues.length) {
     throw new Error("default meal flags should remain mock/read-only/write-disabled");
   }
   const mockWriteFlags = flagsModule.getConsumerMealRuntimeFlags({

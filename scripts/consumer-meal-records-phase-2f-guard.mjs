@@ -11,12 +11,7 @@ const migrationsDir = path.join(root, "supabase", "migrations");
 const issues = [];
 const checks = [];
 
-const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
-const approvedMealQueryFiles = new Set([
-  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts",
-  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts"
-]);
-const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
+const dailySummaryGrantMigrationName = "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql";
 const expectedMigrationFiles = [
   "20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql",
   "20260712130200_consumer_schema_phase_1_3_consumer_profiles.sql",
@@ -35,8 +30,14 @@ const expectedMigrationFiles = [
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
-  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
+  dailySummaryGrantMigrationName
 ];
+const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
+const approvedMealQueryFiles = new Set([
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts"
+]);
+const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
 
 function pass(name, extra = {}) {
   checks.push({ name, pass: true, ...extra });
@@ -60,6 +61,10 @@ function walk(dir, predicate = () => true) {
 
 function relative(file) {
   return path.relative(root, file).replaceAll(path.sep, "/");
+}
+
+function stripComments(sql) {
+  return sql.replace(/--.*$/gm, "");
 }
 
 const sourceFiles = [
@@ -102,42 +107,56 @@ if (unapprovedMealRpc.length) fail("RPC calls limited to atomic meal write adapt
 else pass("RPC calls limited to atomic meal write adapter", { matches: mealRpcMatches });
 
 const migrationFiles = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
-if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory unchanged", { count: migrationFiles.length });
-else fail("migration inventory allowlist includes completed Phase 2F grant", "Historical Phase 2E guard must allow the approved forward-only Phase 2F daily summary read grant.", { migrationFiles });
+if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory includes only approved Phase 2F grant", { count: migrationFiles.length });
+else fail("migration inventory includes only approved Phase 2F grant", "Phase 2F may only add the forward-only daily summary read grant migration.", { migrationFiles, expectedMigrationFiles });
+
+const grantPath = path.join(migrationsDir, dailySummaryGrantMigrationName);
+if (!fs.existsSync(grantPath)) {
+  fail("daily summary grant migration exists", "Missing Phase 2F daily summary read grant migration.");
+} else {
+  const clean = stripComments(fs.readFileSync(grantPath, "utf8")).trim().toLowerCase().replace(/\s+/g, " ");
+  const expected = "grant select on table public.daily_nutrition_summaries to authenticated; revoke all on table public.daily_nutrition_summaries from anon;";
+  if (clean === expected) pass("daily summary grant migration is minimal");
+  else fail("daily summary grant migration is minimal", "Migration must contain only authenticated SELECT grant and anon revoke for daily_nutrition_summaries.");
+  if (!/\bgrant\s+all\b|\bgrant\s+(insert|update|delete)\b/i.test(clean)) pass("daily summary migration grants no writes");
+  else fail("daily summary migration grants no writes", "Phase 2F must not grant INSERT, UPDATE, DELETE, or ALL.");
+}
 
 const summaryContract = fs.readFileSync(path.join(mealRoot, "supabaseMealContracts.ts"), "utf8");
 if (/SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE\s*=\s*"daily_nutrition_summaries"/.test(summaryContract) && /SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARY_SELECT_COLUMNS/.test(summaryContract)) pass("daily summary Supabase contract uses table and column allowlist");
-else fail("daily summary Supabase contract uses table and column allowlist", "Summary read preparation must target daily_nutrition_summaries with explicit columns.");
+else fail("daily summary Supabase contract uses table and column allowlist", "Summary read must target daily_nutrition_summaries with explicit columns.");
 
 const summaryAdapter = fs.readFileSync(path.join(mealRoot, "adapters", "supabaseConsumerDailyNutritionSummaryRepository.ts"), "utf8");
 if (/readEnabled/.test(summaryAdapter) && /ConsumerDailySummarySourceUnavailableError/.test(summaryAdapter)) pass("Supabase summary adapter is read-gated");
-else fail("Supabase summary adapter is read-gated", "Phase 2E live summary reads must remain disabled unless explicitly enabled in a future phase.");
-if (/\.eq\("user_id", userId\)/.test(summaryAdapter) && /\.eq\("local_date", input\.summaryDate\)/.test(summaryAdapter) && /\.limit\(1\)/.test(summaryAdapter)) pass("Supabase summary adapter filters current user and exact date");
-else fail("Supabase summary adapter filters current user and exact date", "Summary read preparation must be current-user and exact-date bounded.");
+else fail("Supabase summary adapter is read-gated", "Phase 2F live summary reads must stay explicitly gated.");
+if (/\.eq\("user_id", userId\)/.test(summaryAdapter) && /\.eq\("local_date", input\.summaryDate\)/.test(summaryAdapter) && /\.eq\("timezone", input\.timezone \?\? "Asia\/Taipei"\)/.test(summaryAdapter) && /\.limit\(1\)/.test(summaryAdapter)) pass("Supabase summary adapter filters current user, exact date, timezone, and current row");
+else fail("Supabase summary adapter filters current user, exact date, timezone, and current row", "Summary read must be current-user and exact-date bounded.");
+
+const mapper = fs.readFileSync(path.join(mealRoot, "dailyNutritionSummaryMappers.ts"), "utf8");
+if (/itemCount:\s*null/.test(mapper) && /itemCountAvailable:\s*false/.test(mapper)) pass("stored summary itemCount is marked unavailable");
+else fail("stored summary itemCount is marked unavailable", "Frozen stored summary rows do not carry item count; mapper must not invent zero.");
 
 const calculator = fs.readFileSync(path.join(mealRoot, "dailyNutritionSummaryCalculator.ts"), "utf8");
 if (!/Date\.now\(|new Date\(|process\.env|localStorage|AsyncStorage|fetch\s*\(/.test(calculator)) pass("recalculation engine is pure and deterministic");
 else fail("recalculation engine is pure and deterministic", "Calculator must not use clock, environment, storage, or network.");
-if (/record\.items/.test(calculator) && !/record\.nutrition/.test(calculator)) pass("calculator uses item totals and avoids record total double counting");
-else fail("calculator uses item totals and avoids record total double counting", "Calculator must use meal items as authoritative nutrition source.");
-if (/corrections\?\.length/.test(calculator) && /consumptionAdjustments\?\.length/.test(calculator) && /RuleUnavailable/.test(calculator)) pass("correction and adjustment rules fail closed");
-else fail("correction and adjustment rules fail closed", "Unfrozen correction and adjustment rules must fail closed.");
+if (/itemCountAvailable:\s*true/.test(calculator) && /itemCountDiff/.test(calculator)) pass("parity skips unavailable itemCount");
+else fail("parity skips unavailable itemCount", "Stored itemCount parity must be skipped when the stored table lacks item count.");
 
 const uiFiles = [
   ...walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx")),
   ...walk(path.join(root, "apps", "mobile", "components"), (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
 ];
 const uiImports = uiFiles.filter((file) => /consumer-meals|dailyNutrition|@supabase\/supabase-js|react-native-url-polyfill/.test(fs.readFileSync(file, "utf8"))).map(relative);
-if (uiImports.length) fail("UI does not import Consumer Meals or SDK", "Mobile UI must not be wired to Consumer daily summaries in Phase 2E.", { matches: uiImports });
+if (uiImports.length) fail("UI does not import Consumer Meals or SDK", "Mobile UI must not be wired to Consumer daily summaries in Phase 2F.", { matches: uiImports });
 else pass("UI does not import Consumer Meals or SDK");
 
 const navigationImports = walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
   .filter((file) => /consumer-meals|DAILY_NUTRITION_SOURCE|dailyNutrition/.test(fs.readFileSync(file, "utf8")))
   .map(relative);
-if (navigationImports.length) fail("Navigation remains unchanged", "Phase 2E must not wire routes/navigation to Consumer daily summaries.", { matches: navigationImports });
+if (navigationImports.length) fail("Navigation remains unchanged", "Phase 2F must not wire routes/navigation to Consumer daily summaries.", { matches: navigationImports });
 else pass("Navigation remains unchanged");
 
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "consumer-meal-phase2e-"));
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "consumer-meal-phase2f-"));
 for (const file of sourceFiles) {
   const rel = path.relative(path.join(root, "apps", "mobile", "features"), file).replaceAll(path.sep, "/");
   const target = path.join(tempRoot, rel).replace(/\.ts$/, ".js");
@@ -163,25 +182,39 @@ let networkCalls = 0;
 const previousFetch = globalThis.fetch;
 globalThis.fetch = () => {
   networkCalls += 1;
-  throw new Error("Phase 2E guard trapped fetch.");
+  throw new Error("Phase 2F guard trapped fetch.");
 };
 
 const requireFromTemp = createRequire(path.join(tempRoot, "consumer-meals", "index.js"));
 const auth = requireFromTemp("../consumer-auth/types.js");
 const flagsModule = requireFromTemp("./featureFlags.js");
 const factories = requireFromTemp("./factories.js");
-const serviceModule = requireFromTemp("./consumerDailyNutritionSummaryService.js");
-const disabledRepoModule = requireFromTemp("./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository.js");
-const liveRepoModule = requireFromTemp("./adapters/supabaseConsumerDailyNutritionSummaryRepository.js");
 const calculatorModule = requireFromTemp("./dailyNutritionSummaryCalculator.js");
 const mapperModule = requireFromTemp("./dailyNutritionSummaryMappers.js");
+const liveRepoModule = requireFromTemp("./adapters/supabaseConsumerDailyNutritionSummaryRepository.js");
 
-const currentUserId = "00000000-0000-4000-8000-000000002e00";
+const currentUserId = "00000000-0000-4000-8000-000000002f00";
 const validSession = {
   user: { userId: currentUserId, provider: "supabase", isAnonymous: false, emailVerified: true, createdAt: "2026-07-13T00:00:00.000Z" },
   provider: "supabase",
   issuedAt: "2026-07-13T00:01:00.000Z",
   expiresAt: "2099-01-01T00:00:00.000Z"
+};
+const summaryRow = {
+  id: "summary-a",
+  user_id: currentUserId,
+  local_date: "2026-07-13",
+  timezone: "Asia/Taipei",
+  calculation_version: "consumer-daily-summary-v1",
+  total_calories: "400",
+  total_protein_g: "25",
+  total_carbohydrates_g: "40",
+  total_fat_g: "10",
+  total_fiber_g: "4",
+  meal_count: 1,
+  source_cutoff_at: "2026-07-13T15:00:00.000Z",
+  recalculated_at: "2026-07-13T15:00:00.000Z",
+  is_current: true
 };
 const records = [
   {
@@ -197,7 +230,7 @@ const records = [
       {
         mealRecordItemId: "item-a",
         displayName: "item a",
-        nutrition: { calories: 300, protein: 20, carbohydrates: 30, fat: 8, fiber: 3 },
+        nutrition: { calories: 400, protein: 25, carbohydrates: 40, fat: 10, fiber: 4 },
         nutritionSource: "manual",
         nutritionSchemaVersion: "consumer-nutrition-snapshot-v1",
         occurredAt: "2026-07-13T04:00:00.000Z",
@@ -206,32 +239,8 @@ const records = [
         correctionStatus: "none",
         createdAt: "2026-07-13T04:00:00.000Z",
         updatedAt: "2026-07-13T04:00:00.000Z"
-      },
-      {
-        mealRecordItemId: "item-b",
-        displayName: "item b",
-        nutrition: { calories: 200, protein: 10, carbohydrates: 20, fat: 4, fiber: 2 },
-        nutritionSource: "manual",
-        nutritionSchemaVersion: "consumer-nutrition-snapshot-v1",
-        occurredAt: "2026-07-13T04:10:00.000Z",
-        timezone: "Asia/Taipei",
-        consumedRatio: 0.5,
-        correctionStatus: "none",
-        createdAt: "2026-07-13T04:10:00.000Z",
-        updatedAt: "2026-07-13T04:10:00.000Z"
       }
     ]
-  },
-  {
-    mealRecordId: "meal-other-day",
-    mealType: "dinner",
-    occurredAt: "2026-07-12T12:00:00.000Z",
-    mealDate: "2026-07-12",
-    timezone: "Asia/Taipei",
-    source: "manual",
-    createdAt: "2026-07-12T12:00:00.000Z",
-    updatedAt: "2026-07-12T12:00:00.000Z",
-    items: []
   }
 ];
 
@@ -291,125 +300,97 @@ function queryClientFor(row, calls) {
   };
 }
 
-async function fakeSummaryTests() {
+async function fakeSummaryReadTests() {
   const defaults = flagsModule.getConsumerMealRuntimeFlags({});
-  if (defaults.authSource !== "mock" || defaults.mealRecordsSource !== "mock" || defaults.dailyNutritionSource !== "mock" || defaults.supabaseAuthEnabled || defaults.supabaseWritesEnabled || defaults.dailyNutritionLiveReadOptIn || defaults.issues.length) {
-    throw new Error("default flags should keep daily summaries on mock and disabled live transport");
+  if (defaults.authSource !== "mock" || defaults.mealRecordsSource !== "mock" || defaults.dailyNutritionSource !== "mock" || defaults.supabaseAuthEnabled || defaults.supabaseWritesEnabled || defaults.mealRecordWritesEnabled || defaults.dailyNutritionLiveReadOptIn || defaults.issues.length) {
+    throw new Error("default flags should keep daily summaries on mock and live read disabled");
   }
-  const unknown = flagsModule.getConsumerMealRuntimeFlags({ EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: "unknown" });
-  if (!unknown.issues.some((issue) => issue.includes("Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE"))) throw new Error("unknown daily summary source must fail closed");
-  const live = flagsModule.getConsumerMealRuntimeFlags({
+  const missingOptIn = flagsModule.getConsumerMealRuntimeFlags({
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: "development",
     EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: "supabase-live",
     EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: "true",
     EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: "supabase-live"
   });
-  if (!live.issues.some((issue) => issue.includes("DAILY_NUTRITION_LIVE_READ_OPT_IN"))) throw new Error("live summary reads must require explicit Phase 2F opt-in");
-  const disabledRepo = new disabledRepoModule.SupabaseDisabledConsumerDailyNutritionSummaryRepository();
-  const disabled = await disabledRepo.getCurrentUserDailyNutritionSummary({ summaryDate: "2026-07-13" });
-  if (disabled.ok || disabled.error.code !== "daily_summary_source_unavailable") throw new Error("disabled summary repository must fail closed");
-  const service = new serviceModule.ConsumerDailyNutritionSummaryService({ repository: disabledRepo });
-  const invalidDate = await service.getCurrentUserDailyNutritionSummary({ summaryDate: "20260713" });
-  if (invalidDate.ok || invalidDate.error.code !== "daily_summary_invalid_date") throw new Error("summary service must reject invalid dates");
-  const factoryLiveBlocked = factories.assertConsumerDailyNutritionSummaryRuntimeFlags(live);
-  if (factoryLiveBlocked.ok || factoryLiveBlocked.error.code !== "daily_summary_configuration_invalid") throw new Error("summary live flags must fail closed");
+  if (!missingOptIn.issues.some((issue) => issue.includes("DAILY_NUTRITION_LIVE_READ_OPT_IN"))) throw new Error("live summary reads must require explicit opt-in");
+  const writesEnabled = flagsModule.getConsumerMealRuntimeFlags({
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: "development",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: "supabase-live",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: "true",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: "supabase-live",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN: "true",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED: "true"
+  });
+  if (!writesEnabled.issues.some((issue) => issue.includes("writes to remain disabled"))) throw new Error("live summary reads must reject write-enabled flags");
+  const production = flagsModule.getConsumerMealRuntimeFlags({
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: "production",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: "supabase-live",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: "true",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: "supabase-live",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN: "true"
+  });
+  if (!production.issues.some((issue) => issue.includes("development-only"))) throw new Error("production live summary read must fail closed");
+  const liveFlags = flagsModule.getConsumerMealRuntimeFlags({
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: "development",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: "supabase-live",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: "true",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: "supabase-live",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN: "true",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED: "false",
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED: "false"
+  });
+  if (liveFlags.issues.length) throw new Error("Phase 2F live summary read flags should be accepted in development with writes disabled");
 
+  const factoryBlocked = factories.assertConsumerDailyNutritionSummaryRuntimeFlags(missingOptIn);
+  if (factoryBlocked.ok || factoryBlocked.error.code !== "daily_summary_configuration_invalid") throw new Error("missing opt-in must fail factory flag assertion");
+
+  const calls = [];
+  const repository = factories.createConsumerDailyNutritionSummaryRepository(liveFlags, {
+    authPort: authPortFor(() => auth.ok(validSession)),
+    mealClient: queryClientFor(summaryRow, calls)
+  });
+  const liveResult = await repository.getCurrentUserDailyNutritionSummary({ summaryDate: "2026-07-13", timezone: "Asia/Taipei" });
+  if (!liveResult.ok || liveResult.value.calories !== 400 || liveResult.value.itemCount !== null || liveResult.value.itemCountAvailable !== false) throw new Error("factory live summary read did not map stored result");
+  if (!calls.some((call) => call[0] === "from" && call[1] === "daily_nutrition_summaries")) throw new Error("live summary read did not target summary table");
+  if (!calls.some((call) => call[0] === "select" && !call[1].includes("*"))) throw new Error("live summary read must use explicit columns");
+  if (!calls.some((call) => call[0] === "eq" && call[1] === "user_id" && call[2] === currentUserId)) throw new Error("live summary read must filter current user");
+  if (!calls.some((call) => call[0] === "eq" && call[1] === "local_date" && call[2] === "2026-07-13")) throw new Error("live summary read must filter exact date");
+
+  const notFound = await new liveRepoModule.SupabaseConsumerDailyNutritionSummaryRepository({
+    authPort: authPortFor(() => auth.ok(validSession)),
+    mealClient: queryClientFor(null, []),
+    readEnabled: true
+  }).getCurrentUserDailyNutritionSummary({ summaryDate: "2026-07-13" });
+  if (notFound.ok || notFound.error.code !== "daily_summary_not_found") throw new Error("missing stored summary must be a typed not-found result");
+
+  const mapped = mapperModule.mapSupabaseDailyNutritionSummaryRowToConsumerSummary(summaryRow, currentUserId);
+  if (mapped.itemCount !== null || mapped.itemCountAvailable !== false) throw new Error("stored mapper must not invent item count");
   const calculated = calculatorModule.calculateDailyNutritionSummary({
     summaryDate: "2026-07-13",
     timezone: "Asia/Taipei",
     calculatedAt: "2026-07-13T15:00:00.000Z",
     mealRecords: records
   });
-  if (!calculated.ok) throw new Error(`summary calculation failed: ${calculated.error.code}`);
-  if (calculated.value.calories !== 400 || calculated.value.protein !== 25 || calculated.value.carbohydrates !== 40 || calculated.value.fat !== 10 || calculated.value.fiber !== 4 || calculated.value.mealCount !== 1 || calculated.value.itemCount !== 2) {
-    throw new Error("summary calculation did not use item totals and consumed ratio correctly");
-  }
-  const empty = calculatorModule.calculateDailyNutritionSummary({
-    summaryDate: "2026-07-14",
-    calculatedAt: "2026-07-14T00:00:00.000Z",
-    mealRecords: records
-  });
-  if (!empty.ok || empty.value.calories !== 0 || empty.value.calculationStatus !== "missing") throw new Error("empty day calculation must return zero missing summary");
-  const invalidNutrition = calculatorModule.calculateDailyNutritionSummary({
-    summaryDate: "2026-07-13",
-    calculatedAt: "2026-07-13T00:00:00.000Z",
-    mealRecords: [{ ...records[0], items: [{ ...records[0].items[0], nutrition: { calories: Number.NaN } }] }]
-  });
-  if (invalidNutrition.ok || invalidNutrition.error.code !== "daily_summary_invalid_nutrition") throw new Error("invalid nutrition must fail closed");
-  const adjustment = calculatorModule.calculateDailyNutritionSummary({
-    summaryDate: "2026-07-13",
-    calculatedAt: "2026-07-13T00:00:00.000Z",
-    mealRecords: records,
-    consumptionAdjustments: [{ mealRecordId: "meal-a", completionRatio: 0.5 }]
-  });
-  if (adjustment.ok || adjustment.error.code !== "daily_summary_rule_unavailable") throw new Error("unfrozen adjustment rule must fail closed");
-  const parityMatch = calculatorModule.compareStoredAndCalculatedDailyNutritionSummary(calculated.value, { ...calculated.value, provenance: "stored" });
-  if (!parityMatch.ok || !parityMatch.value.matches) throw new Error("matching summaries should pass parity");
-  const parityMismatch = calculatorModule.compareStoredAndCalculatedDailyNutritionSummary({ ...calculated.value, calories: 399, provenance: "stored" }, calculated.value);
-  if (!parityMismatch.ok || parityMismatch.value.matches || parityMismatch.value.differences[0].metric !== "calories") throw new Error("mismatched summaries should report deterministic differences");
-
-  const row = {
-    id: "summary-a",
-    user_id: currentUserId,
-    local_date: "2026-07-13",
-    timezone: "Asia/Taipei",
-    calculation_version: "consumer-daily-summary-v1",
-    total_calories: "400",
-    total_protein_g: "25",
-    total_carbohydrates_g: "40",
-    total_fat_g: "10",
-    total_fiber_g: "4",
-    meal_count: 1,
-    source_cutoff_at: "2026-07-13T15:00:00.000Z",
-    recalculated_at: "2026-07-13T15:00:00.000Z",
-    is_current: true
-  };
-  const mapped = mapperModule.mapSupabaseDailyNutritionSummaryRowToConsumerSummary(row, currentUserId);
-  if (mapped.summaryDate !== "2026-07-13" || mapped.provenance !== "stored" || mapped.itemCount !== null || mapped.itemCountAvailable !== false) throw new Error("summary mapper did not produce canonical stored summary");
-  let ownerRejected = false;
-  try {
-    mapperModule.mapSupabaseDailyNutritionSummaryRowToConsumerSummary({ ...row, user_id: "other" }, currentUserId);
-  } catch {
-    ownerRejected = true;
-  }
-  if (!ownerRejected) throw new Error("summary mapper must reject owner mismatch");
-
-  const noReadCalls = [];
-  const readDisabled = await new liveRepoModule.SupabaseConsumerDailyNutritionSummaryRepository({
-    authPort: authPortFor(() => auth.ok(validSession)),
-    mealClient: queryClientFor(row, noReadCalls),
-    readEnabled: false
-  }).getCurrentUserDailyNutritionSummary({ summaryDate: "2026-07-13" });
-  if (readDisabled.ok || readDisabled.error.code !== "daily_summary_source_unavailable" || noReadCalls.length !== 0) throw new Error("disabled live summary adapter must not query");
-
-  const calls = [];
-  const liveRepo = new liveRepoModule.SupabaseConsumerDailyNutritionSummaryRepository({
-    authPort: authPortFor(() => auth.ok(validSession)),
-    mealClient: queryClientFor(row, calls),
-    readEnabled: true
-  });
-  const liveResult = await liveRepo.getCurrentUserDailyNutritionSummary({ summaryDate: "2026-07-13", timezone: "Asia/Taipei" });
-  if (!liveResult.ok || liveResult.value.calories !== 400) throw new Error("fake live summary read did not map");
-  if (!calls.some((call) => call[0] === "from" && call[1] === "daily_nutrition_summaries")) throw new Error("fake live summary read did not target summary table");
-  if (!calls.some((call) => call[0] === "select" && !call[1].includes("*"))) throw new Error("fake live summary read must use explicit columns");
-  if (!calls.some((call) => call[0] === "eq" && call[1] === "user_id" && call[2] === currentUserId)) throw new Error("fake live summary read must filter current user");
+  if (!calculated.ok || calculated.value.itemCount !== 1 || calculated.value.itemCountAvailable !== true) throw new Error("calculated summary must provide item count");
+  const parity = calculatorModule.compareStoredAndCalculatedDailyNutritionSummary(mapped, calculated.value);
+  if (!parity.ok || !parity.value.matches || parity.value.differences.some((difference) => difference.metric === "itemCount")) throw new Error("parity must skip unavailable stored itemCount");
 }
 
 try {
-  await fakeSummaryTests();
-  pass("fake daily summary contract tests");
+  await fakeSummaryReadTests();
+  pass("fake daily summary live read contract tests");
 } catch (error) {
-  fail("fake daily summary contract tests", error instanceof Error ? error.message : String(error));
+  fail("fake daily summary live read contract tests", error instanceof Error ? error.message : String(error));
 } finally {
   globalThis.fetch = previousFetch;
 }
 
 if (networkCalls === 0) pass("guard made no direct network request");
-else fail("guard made no direct network request", "fetch was called during Phase 2E guard.", { networkCalls });
+else fail("guard made no direct network request", "fetch was called during Phase 2F guard.", { networkCalls });
 
 const result = {
   status: issues.length ? "failed" : "passed",
-  phase: "Consumer Runtime Integration Phase 2E",
-  reason: issues.length ? "Phase 2E guard failed" : "Daily nutrition summary read architecture and recalculation design verified with fake transport",
+  phase: "Consumer Runtime Integration Phase 2F",
+  reason: issues.length ? "Phase 2F guard failed" : "Development live daily nutrition summary read architecture verified with fake transport",
   filesScanned: sourceFiles.length,
   uiFilesScanned: uiFiles.length,
   checks,
@@ -419,7 +400,7 @@ const result = {
   databaseWriteUsed: false,
   rpcUsed: false,
   sqlExecuted: false,
-  migrationCreated: false,
+  migrationCreated: true,
   seedExecuted: false,
   fixtureCreated: false,
   productionTouched: false,

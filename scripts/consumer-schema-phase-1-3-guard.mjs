@@ -43,7 +43,8 @@ const expectedMigrationFiles = [
   "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
-  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql"
+  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
+  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
 ];
 
 const requiredTables = [
@@ -153,6 +154,8 @@ const grantMigration = activeTexts.find((item) => item.fileName === grantMigrati
 const mealGrantMigrationName = "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql";
 const mealGrantMigration = activeTexts.find((item) => item.fileName === mealGrantMigrationName);
 const atomicMealWriteMigrationName = "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql";
+const dailySummaryGrantMigrationName = "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql";
+const dailySummaryGrantMigration = activeTexts.find((item) => item.fileName === dailySummaryGrantMigrationName);
 
 const bomByteFailures = activeTexts
   .filter((item) => item.bytes.length >= 3 && item.bytes[0] === 0xef && item.bytes[1] === 0xbb && item.bytes[2] === 0xbf)
@@ -227,10 +230,11 @@ const grantStatements = matches(allActiveSql, /\bgrant\b[\s\S]*?;/gi).map((match
 const expectedGrant = "grant select on table public.consumer_profiles to authenticated;";
 const expectedMealRecordGrant = "grant select on table public.meal_records to authenticated;";
 const expectedMealRecordItemGrant = "grant select on table public.meal_record_items to authenticated;";
+const expectedDailySummaryGrant = "grant select on table public.daily_nutrition_summaries to authenticated;";
 const expectedMealWriteFunctionGrant = "grant execute on function public.create_current_user_meal_record( public.meal_type, timestamptz, date, text, text, text, public.meal_source_type, jsonb ) to authenticated;";
-const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedMealWriteFunctionGrant];
+const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedDailySummaryGrant, expectedMealWriteFunctionGrant];
 const unexpectedGrants = grantStatements.filter((statement) => !allowedGrantStatements.includes(statement));
-if (unexpectedGrants.length) fail("no unexpected grants in active migrations", "Only authenticated SELECT grants for consumer_profiles, meal_records, and meal_record_items are allowed in active Phase 1.3 migrations.", { unexpectedGrants });
+if (unexpectedGrants.length) fail("no unexpected grants in active migrations", "Only authenticated SELECT grants for consumer_profiles, meal_records, meal_record_items, daily_nutrition_summaries, and the approved atomic write function execute grant are allowed in active Phase 1.3 migrations.", { unexpectedGrants });
 else pass("no unexpected grants in active migrations", { grantCount: grantStatements.length });
 
 if (grantStatements.includes(expectedGrant)) pass("authenticated has SELECT on consumer_profiles");
@@ -252,6 +256,20 @@ if (mealGrantSql === expectedMealGrantSql) {
 if (grantStatements.includes(expectedMealRecordGrant) && grantStatements.includes(expectedMealRecordItemGrant)) pass("authenticated has SELECT on meal read tables");
 else fail("authenticated has SELECT on meal read tables", "Missing authenticated SELECT grants for meal_records and meal_record_items.");
 
+const dailySummaryGrantSql = dailySummaryGrantMigration?.clean.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+const expectedDailySummaryGrantSql = [
+  expectedDailySummaryGrant,
+  "revoke all on table public.daily_nutrition_summaries from anon;"
+].join(" ");
+if (dailySummaryGrantSql === expectedDailySummaryGrantSql) {
+  pass("authenticated daily summary SELECT grant is forward-only and minimal");
+} else {
+  fail("authenticated daily summary SELECT grant is forward-only and minimal", "Forward-only daily summary read grant migration must contain only authenticated SELECT grant and anon revoke for daily_nutrition_summaries.");
+}
+
+if (grantStatements.includes(expectedDailySummaryGrant)) pass("authenticated has SELECT on daily_nutrition_summaries");
+else fail("authenticated has SELECT on daily_nutrition_summaries", "Missing authenticated SELECT grant for daily_nutrition_summaries.");
+
 const anonConsumerProfileGrants = grantStatements.filter((statement) => /\bto\s+anon\b/.test(statement) && /\bconsumer_profiles\b/.test(statement));
 if (anonConsumerProfileGrants.length) fail("anon has no consumer_profiles privileges", "Consumer profile privileges must not be granted to anon.", { matches: anonConsumerProfileGrants });
 else pass("anon has no consumer_profiles privileges");
@@ -259,6 +277,10 @@ else pass("anon has no consumer_profiles privileges");
 const anonMealGrants = grantStatements.filter((statement) => /\bto\s+anon\b/.test(statement) && /\b(meal_records|meal_record_items)\b/.test(statement));
 if (anonMealGrants.length) fail("anon has no meal table SELECT privileges", "Consumer meal table privileges must not be granted to anon.", { matches: anonMealGrants });
 else pass("anon has no meal table SELECT privileges");
+
+const anonDailySummaryGrants = grantStatements.filter((statement) => /\bto\s+anon\b/.test(statement) && /\bdaily_nutrition_summaries\b/.test(statement));
+if (anonDailySummaryGrants.length) fail("anon has no daily_nutrition_summaries privileges", "Consumer daily summary privileges must not be granted to anon.", { matches: anonDailySummaryGrants });
+else pass("anon has no daily_nutrition_summaries privileges");
 
 const authenticatedWriteGrants = grantStatements.filter((statement) => /\bto\s+authenticated\b/.test(statement) && /\b(insert|update|delete|all)\b/.test(statement));
 if (authenticatedWriteGrants.length) fail("authenticated has no consumer_profiles write privileges", "Consumer Runtime Phase 1D may not grant INSERT, UPDATE, DELETE, or ALL privileges.", { matches: authenticatedWriteGrants });

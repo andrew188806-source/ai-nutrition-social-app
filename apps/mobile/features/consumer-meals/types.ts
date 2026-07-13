@@ -17,6 +17,7 @@ export type ConsumerMealRuntimeFlags = {
   supabaseWritesEnabled: boolean;
   mealRecordWritesEnabled: boolean;
   mealRecordLiveWriteOptIn: boolean;
+  dailyNutritionLiveReadOptIn: boolean;
   issues: string[];
 };
 
@@ -131,7 +132,8 @@ export type ConsumerDailyNutritionSummary = {
   fat: number;
   fiber: number | null;
   mealCount: number;
-  itemCount: number;
+  itemCount: number | null;
+  itemCountAvailable: boolean;
   sourceCutoffAt: string | null;
   recalculatedAt: string;
   isCurrent: boolean;

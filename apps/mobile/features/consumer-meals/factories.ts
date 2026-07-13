@@ -13,6 +13,7 @@ import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/su
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
+import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
@@ -108,16 +109,34 @@ export function assertConsumerDailyNutritionSummaryRuntimeFlags(flags: ConsumerM
   return { ok: true as const, value: flags };
 }
 
-export function createConsumerDailyNutritionSummaryRepository(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+export function createConsumerDailyNutritionSummaryRepository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
   if (flags.dailyNutritionSource === "mock") return new MockConsumerDailyNutritionSummaryRepository();
   if (flags.dailyNutritionSource === "supabase-disabled") return new SupabaseDisabledConsumerDailyNutritionSummaryRepository();
   const flagCheck = assertConsumerDailyNutritionSummaryRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
-  throw new ConsumerDailySummaryConfigurationInvalidError("Consumer daily nutrition summary live reads are not enabled in Consumer Runtime Phase 2E.");
+  if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled || flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled) {
+    throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require live Auth, Auth enabled, and all writes disabled.");
+  }
+  if (!flags.dailyNutritionLiveReadOptIn) {
+    throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require explicit Phase 2F live read opt-in.");
+  }
+  if (!dependencies.authPort) throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require an authenticated ConsumerAuthPort.");
+  if (!dependencies.mealClient) throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require an explicit meal client.");
+  return new SupabaseConsumerDailyNutritionSummaryRepository({
+    authPort: dependencies.authPort,
+    mealClient: dependencies.mealClient,
+    readEnabled: flags.dailyNutritionLiveReadOptIn
+  });
 }
 
-export function createConsumerDailyNutritionSummaryService(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+export function createConsumerDailyNutritionSummaryService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
   return new ConsumerDailyNutritionSummaryService({
-    repository: createConsumerDailyNutritionSummaryRepository(flags)
+    repository: createConsumerDailyNutritionSummaryRepository(flags, dependencies)
   });
 }

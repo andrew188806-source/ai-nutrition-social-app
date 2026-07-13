@@ -75,6 +75,7 @@ export function calculateDailyNutritionSummary(
     fiber: itemCount > 0 ? roundNutrition(fiber) : 0,
     mealCount: mealIds.size,
     itemCount,
+    itemCountAvailable: true,
     sourceCutoffAt: input.sourceCutoffAt ?? input.calculatedAt,
     recalculatedAt: input.calculatedAt,
     isCurrent: true,
@@ -101,7 +102,7 @@ export function compareStoredAndCalculatedDailyNutritionSummary(
     diff("fat", stored.fat, calculated.fat, tolerance),
     diff("fiber", stored.fiber ?? 0, calculated.fiber ?? 0, tolerance),
     diff("mealCount", stored.mealCount, calculated.mealCount, tolerance),
-    diff("itemCount", stored.itemCount, calculated.itemCount, tolerance)
+    itemCountDiff(stored, calculated, tolerance)
   ].filter((value): value is NonNullable<typeof value> => Boolean(value));
   return ok({ matches: differences.length === 0, tolerance, differences });
 }
@@ -131,6 +132,13 @@ function finiteNonNegative(value: number, label: string): number {
 function diff(metric: ConsumerDailySummaryParityMetric, stored: number, calculated: number, tolerance: number) {
   const delta = roundNutrition(calculated - stored);
   return Math.abs(delta) > tolerance ? { metric, stored, calculated, delta } : null;
+}
+
+function itemCountDiff(stored: ConsumerDailyNutritionSummary, calculated: ConsumerDailyNutritionSummary, tolerance: number) {
+  if (!stored.itemCountAvailable || !calculated.itemCountAvailable || stored.itemCount === null || calculated.itemCount === null) {
+    return null;
+  }
+  return diff("itemCount", stored.itemCount, calculated.itemCount, tolerance);
 }
 
 function roundNutrition(value: number): number {

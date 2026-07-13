@@ -64,6 +64,11 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN,
     issues
   );
+  const dailyNutritionLiveReadOptIn = parseBooleanFlag(
+    "EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN",
+    env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN,
+    issues
+  );
   const runtimeEnvironment = env.EXPO_PUBLIC_TASTKIND_ENVIRONMENT ?? env.TASTKIND_ENVIRONMENT ?? "development";
 
   if (authSource === "supabase-live" && !supabaseAuthEnabled) {
@@ -78,14 +83,26 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (mealRecordsSource === "supabase-live" && !supabaseAuthEnabled) {
     issues.push("Supabase live meal reads require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
   }
-  if (dailyNutritionSource === "supabase-live") {
-    issues.push("Supabase live daily nutrition summary reads are not enabled in Consumer Runtime Phase 2E.");
-  }
   if (dailyNutritionSource === "supabase-live" && authSource !== "supabase-live") {
     issues.push("Supabase live daily nutrition summary reads require EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE=supabase-live.");
   }
   if (dailyNutritionSource === "supabase-live" && !supabaseAuthEnabled) {
     issues.push("Supabase live daily nutrition summary reads require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
+  }
+  if (dailyNutritionSource === "supabase-live" && !dailyNutritionLiveReadOptIn) {
+    issues.push("Supabase live daily nutrition summary reads require EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN=true in Consumer Runtime Phase 2F.");
+  }
+  if (dailyNutritionSource !== "supabase-live" && dailyNutritionLiveReadOptIn) {
+    issues.push("Consumer daily nutrition summary live read opt-in requires EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE=supabase-live.");
+  }
+  if (dailyNutritionSource === "supabase-live" && supabaseWritesEnabled) {
+    issues.push("Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled.");
+  }
+  if (dailyNutritionSource === "supabase-live" && mealRecordWritesEnabled) {
+    issues.push("Supabase live daily nutrition summary reads require Consumer meal record writes to remain disabled.");
+  }
+  if (dailyNutritionSource === "supabase-live" && runtimeEnvironment !== "development") {
+    issues.push("Supabase live daily nutrition summary reads are development-only in Consumer Runtime Phase 2F.");
   }
   if (mealRecordWritesEnabled && !supabaseWritesEnabled) {
     issues.push("Consumer meal record writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
@@ -103,5 +120,15 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     issues.push("Supabase live meal writes are development-only in Consumer Runtime Phase 2D.");
   }
 
-  return { authSource, mealRecordsSource, dailyNutritionSource, supabaseAuthEnabled, supabaseWritesEnabled, mealRecordWritesEnabled, mealRecordLiveWriteOptIn, issues };
+  return {
+    authSource,
+    mealRecordsSource,
+    dailyNutritionSource,
+    supabaseAuthEnabled,
+    supabaseWritesEnabled,
+    mealRecordWritesEnabled,
+    mealRecordLiveWriteOptIn,
+    dailyNutritionLiveReadOptIn,
+    issues
+  };
 }

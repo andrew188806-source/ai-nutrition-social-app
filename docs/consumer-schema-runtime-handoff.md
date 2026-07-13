@@ -314,3 +314,15 @@ Still not done:
 - Home / Today Intake / Meal Log cutover, Daily Summary UI, ratings, favorites, recommendation feedback, social runtime, Admin Consumer Governance, production deployment, or next phase work.
 
 No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No migration, remote operation, Consumer Runtime summary write, RPC, raw SQL execution, seed, fixture, UI change, navigation change, production deployment, or next phase work was implemented.
+
+## Phase 2F Development Live Daily Nutrition Summary Read Result
+
+Consumer Runtime Integration Phase 2F Development Live Daily Nutrition Summary Read is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready. It adds a development-only live read of `daily_nutrition_summaries` and a no-write parity check against current-user meal records.
+
+Phase 2F adds the forward-only migration `20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql`, which grants only authenticated SELECT on `public.daily_nutrition_summaries` and revokes anon privileges on that table. It does not grant writes, change RLS policies, create data, seed, fixture, bootstrap, or touch production.
+
+The runtime remains mock by default. Live summary reads require explicit development flags, live Auth, Auth enabled, daily summary source set to `supabase-live`, daily summary live read opt-in, and Consumer writes disabled. The live repository continues to derive ownership from the current session and filters by `user_id`, `local_date`, `timezone`, and `is_current`.
+
+Stored summaries are treated as cached projections. The live smoke passed with current-user meal reads, authorized stored-summary transport, typed not-found for a missing stored summary row, in-memory recalculation, parity skipped because no stored row existed, and sign-out. Stored `itemCount` is explicitly unavailable because the frozen summary table does not persist it, so item-count parity is skipped instead of inventing zero.
+
+Phase 2F does not implement summary write-back, insert/update/upsert/delete, RPC, UI wiring, navigation wiring, Home/Today Intake cutover, ratings/favorites/recommendation feedback runtime, social runtime, Restaurant Web runtime, Admin runtime, production deployment, or Phase 2G.

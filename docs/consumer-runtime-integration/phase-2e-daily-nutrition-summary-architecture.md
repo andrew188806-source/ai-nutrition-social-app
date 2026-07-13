@@ -152,5 +152,5 @@ Guard coverage:
 - Authenticated SELECT grant for `daily_nutrition_summaries` is not deployed yet.
 - Development live summary read is not verified.
 - Correction and consumption adjustment application rules are deferred.
-- Stored summary `itemCount` is not present in the frozen table; stored-row mapping returns `itemCount: 0` and parity should compare item count only when a calculated summary is available.
+- Stored summary `itemCount` is not present in the frozen table; Phase 2F marks stored item count unavailable and skips item-count parity instead of inventing zero.
 - Phase 2D created one persistent development smoke meal record; Phase 2E does not read it live.
