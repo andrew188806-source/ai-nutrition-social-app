@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -13,7 +13,10 @@ const checks = [];
 
 const atomicMigrationName = "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql";
 const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
-const approvedMealQueryFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts"]);
+const approvedMealQueryFiles = new Set([
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts"
+]);
 const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
 
 function pass(name, extra = {}) {

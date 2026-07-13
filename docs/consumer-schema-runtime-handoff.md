@@ -289,3 +289,28 @@ Still not done:
 - UI wiring, Home/Today Intake cutover, Daily Nutrition Summary runtime, corrections, consumption adjustments, planned meal writes, ratings, favorites, recommendation feedback, social runtime, Admin Consumer Governance, production deployment, or Phase 3.
 
 No real Supabase URL/key, email, password, user ID, token, session, record ID, item ID, raw RPC payload, raw database row, row contents, or fixture contents are recorded in this repository. No direct sequential insert, update, delete, upsert, seed, fixture, profile bootstrap, automatic meal bootstrap, UI change, navigation change, production deployment, or next phase work was implemented.
+
+## Phase 2E Daily Nutrition Summary Architecture Result
+
+Consumer Runtime Integration Phase 2E Daily Nutrition Summary Read Architecture and Recalculation Design is implementation-complete, guard-complete, live-summary-skipped, and freeze-ready.
+
+Completed:
+
+- Canonical daily nutrition summary type and current-user read service boundary.
+- `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE` source flag with frozen default `mock`.
+- Mock and disabled daily nutrition summary repositories.
+- Prepared Supabase read adapter for `daily_nutrition_summaries` with explicit column allowlist, current-user filter, exact date filter, timezone filter, and `limit(1)`.
+- Pure deterministic `calculateDailyNutritionSummary(input)` engine.
+- Stored vs calculated parity comparison helper.
+- Phase 2E guard script: `npm run test:consumer-phase2e`.
+- Phase 2E live smoke script: `npm run test:consumer-phase2e-live-smoke`, hard-skipped because live summary verification has not started.
+
+Still not done:
+
+- Authenticated SELECT grant migration for `daily_nutrition_summaries`.
+- Development live summary read verification.
+- Summary persistence or recalculation writes.
+- Correction and consumption adjustment application rules.
+- Home / Today Intake / Meal Log cutover, Daily Summary UI, ratings, favorites, recommendation feedback, social runtime, Admin Consumer Governance, production deployment, or next phase work.
+
+No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No migration, remote operation, Consumer Runtime summary write, RPC, raw SQL execution, seed, fixture, UI change, navigation change, production deployment, or next phase work was implemented.

@@ -845,3 +845,49 @@ Boundary:
 - Read-after-write: verified through the current-user meal read service.
 
 No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, Restaurant schema change, seed, fixture, profile bootstrap, automatic meal bootstrap, direct sequential meal write, update, delete, upsert, raw SQL runtime, Storage upload, Realtime connection, production credential, URL/key/email/password/user ID/token/full session/raw row/record ID/item ID output, production deployment, push, or next phase work was created by Phase 2D.
+
+## 36. Consumer Runtime Integration Phase 2E Status
+
+Consumer Runtime Integration Phase 2E Daily Nutrition Summary Read Architecture and Recalculation Design is implementation-complete, guard-complete, live-summary-skipped, and freeze-ready.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Meal Records source: `mock`.
+- Default Consumer Daily Nutrition source: `mock`.
+- Development live summary read: not started.
+- Summary writes and persistence: not started.
+- Summary recalculation engine: pure deterministic local contract only.
+- Stored summary role: derived projection/cache.
+- Actual consumed source of truth: `meal_records` plus `meal_record_items`.
+- Planned meals: not included in actual consumed totals.
+- Corrections and consumption adjustments: fail closed until rules are frozen.
+- Home / Today Intake / Meal Log cutover: not started.
+- Ratings, favorites, recommendation feedback, social, orders, payments, and Admin Consumer Governance: not started.
+- Next phase: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-2e-daily-nutrition-summary-architecture.md`
+- `apps/mobile/features/consumer-meals/consumerDailyNutritionSummaryService.ts`
+- `apps/mobile/features/consumer-meals/dailyNutritionSummaryCalculator.ts`
+- `apps/mobile/features/consumer-meals/dailyNutritionSummaryMappers.ts`
+- `apps/mobile/features/consumer-meals/adapters/mockConsumerDailyNutritionSummaryRepository.ts`
+- `apps/mobile/features/consumer-meals/adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository.ts`
+- `apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts`
+- `scripts/consumer-meal-records-phase-2e-guard.mjs`
+- `scripts/consumer-meal-records-phase-2e-live-smoke.mjs`
+
+Boundary:
+
+- Summary read input does not accept arbitrary user identity.
+- Prepared live adapter derives identity from the current authenticated session.
+- Prepared live adapter uses `daily_nutrition_summaries` with explicit column allowlist.
+- Public factory keeps `supabase-live` daily summary reads fail-closed in Phase 2E.
+- Live smoke is skipped and creates no Supabase client, network request, SQL, RPC, read, write, seed, or fixture.
+
+Known prerequisite:
+
+- A future phase must add and verify the minimal authenticated SELECT grant for `daily_nutrition_summaries` before development live summary reads.
+
+No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, schema migration, RLS change, grant migration, remote migration, summary write, RPC, raw SQL runtime, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token/full session/raw row output, seed, fixture, production deployment, push, or next phase work was created by Phase 2E.

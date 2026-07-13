@@ -40,6 +40,19 @@ export type ConsumerAuthErrorCode =
   | "meal_write_atomicity_not_supported"
   | "meal_write_partial_write_prevented"
   | "meal_write_read_after_write_failed"
+  | "daily_summary_configuration_invalid"
+  | "daily_summary_session_missing"
+  | "daily_summary_session_expired"
+  | "daily_summary_unauthorized"
+  | "daily_summary_not_found"
+  | "daily_summary_invalid_date"
+  | "daily_summary_mapping_failed"
+  | "daily_summary_transport_failed"
+  | "daily_summary_source_unavailable"
+  | "daily_summary_calculation_failed"
+  | "daily_summary_invalid_nutrition"
+  | "daily_summary_rule_unavailable"
+  | "daily_summary_parity_mismatch"
   | "session_expired"
   | "account_disabled"
   | "configuration_error";
@@ -299,6 +312,84 @@ export class ConsumerMealWritePartialWritePreventedError extends ConsumerAuthErr
 export class ConsumerMealWriteReadAfterWriteFailedError extends ConsumerAuthError {
   constructor(message = "Consumer meal write could not be verified after creation.") {
     super("meal_write_read_after_write_failed", message);
+  }
+}
+
+export class ConsumerDailySummaryConfigurationInvalidError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary runtime configuration is invalid.") {
+    super("daily_summary_configuration_invalid", message, false);
+  }
+}
+
+export class ConsumerDailySummarySessionMissingError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary read requires an authenticated session.") {
+    super("daily_summary_session_missing", message);
+  }
+}
+
+export class ConsumerDailySummarySessionExpiredError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary read requires a current authenticated session.") {
+    super("daily_summary_session_expired", message);
+  }
+}
+
+export class ConsumerDailySummaryUnauthorizedError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary read was not authorized.") {
+    super("daily_summary_unauthorized", message);
+  }
+}
+
+export class ConsumerDailySummaryNotFoundError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary was not found.") {
+    super("daily_summary_not_found", message);
+  }
+}
+
+export class ConsumerDailySummaryInvalidDateError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary date is invalid.") {
+    super("daily_summary_invalid_date", message, false);
+  }
+}
+
+export class ConsumerDailySummaryMappingFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary response could not be mapped.") {
+    super("daily_summary_mapping_failed", message);
+  }
+}
+
+export class ConsumerDailySummaryTransportFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary transport failed.") {
+    super("daily_summary_transport_failed", message);
+  }
+}
+
+export class ConsumerDailySummarySourceUnavailableError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary source is unavailable in this runtime.") {
+    super("daily_summary_source_unavailable", message);
+  }
+}
+
+export class ConsumerDailySummaryCalculationFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary calculation failed.") {
+    super("daily_summary_calculation_failed", message, false);
+  }
+}
+
+export class ConsumerDailySummaryInvalidNutritionError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary nutrition value is invalid.") {
+    super("daily_summary_invalid_nutrition", message, false);
+  }
+}
+
+export class ConsumerDailySummaryRuleUnavailableError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary rule is unavailable in this phase.") {
+    super("daily_summary_rule_unavailable", message, false);
+  }
+}
+
+export class ConsumerDailySummaryParityMismatchError extends ConsumerAuthError {
+  constructor(message = "Consumer stored and calculated daily nutrition summaries do not match.") {
+    super("daily_summary_parity_mismatch", message, false);
   }
 }
 

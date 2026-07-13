@@ -303,3 +303,15 @@ The migration creates `public.create_current_user_meal_record(...)`, a `security
 Phase 2D does not change frozen draft SQL, existing tables, columns, policies, read grants, Restaurant schema, seed data, fixtures, profile bootstrap, meal bootstrap, UI, navigation, daily summary runtime, ratings/favorites/recommendation feedback runtime, production deployment, or next phase scope.
 
 Development live write verification passed against `tastkind-development` with credentials, tokens, sessions, user IDs, record IDs, item IDs, raw rows, and raw payloads redacted from output.
+
+## 23. Phase 2E Follow-Up
+
+Consumer Runtime Integration Phase 2E Daily Nutrition Summary Read Architecture and Recalculation Design is implementation-complete, guard-complete, and freeze-ready.
+
+Phase 2E adds the canonical daily nutrition summary read contract, mock and disabled repositories, a prepared Supabase read adapter, a pure deterministic recalculation engine, stored/calculated parity comparison, a hard-skipped live smoke, and a Phase 2E guard.
+
+Phase 2E adds no active migration, RLS change, grant change, remote Supabase operation, development live summary read, summary insert/update/upsert/delete, RPC, raw SQL execution, seed, fixture, UI wiring, navigation wiring, Home/Today Intake cutover, ratings/favorites/recommendation feedback runtime, production deployment, or next phase work.
+
+The Phase 2E live smoke is hard-skipped with `SKIPPED - Consumer Runtime Daily Nutrition Summary live verification has not started.`
+
+Known next prerequisite: add and verify a minimal authenticated SELECT grant for `daily_nutrition_summaries` before development live summary read verification.

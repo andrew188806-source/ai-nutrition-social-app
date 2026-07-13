@@ -6,6 +6,7 @@ import type {
 } from "./types";
 
 export const SUPABASE_CONSUMER_MEAL_RECORDS_TABLE = "meal_records" as const;
+export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE = "daily_nutrition_summaries" as const;
 export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION = "create_current_user_meal_record" as const;
 
 export const SUPABASE_CONSUMER_MEAL_RECORD_SELECT_COLUMNS = [
@@ -21,6 +22,23 @@ export const SUPABASE_CONSUMER_MEAL_RECORD_SELECT_COLUMNS = [
   "created_at",
   "updated_at",
   "meal_record_items(id,meal_record_id,user_id,restaurant_id,branch_id,menu_id,menu_item_id,display_name_snapshot,user_entered_name,ai_detected_name,normalized_name,portion_snapshot,nutrition_snapshot,nutrition_source,nutrition_schema_version,source_entity_version,occurred_at,timezone,confidence_score,consumed_ratio,correction_status,created_at,updated_at)"
+].join(",");
+
+export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARY_SELECT_COLUMNS = [
+  "id",
+  "user_id",
+  "local_date",
+  "timezone",
+  "calculation_version",
+  "total_calories",
+  "total_protein_g",
+  "total_carbohydrates_g",
+  "total_fat_g",
+  "total_fiber_g",
+  "meal_count",
+  "source_cutoff_at",
+  "recalculated_at",
+  "is_current"
 ].join(",");
 
 export type SupabaseNutritionSnapshotLike = Record<string, unknown> | null;
@@ -66,6 +84,23 @@ export type SupabaseMealRecordRowLike = {
   meal_record_items?: SupabaseMealRecordItemRowLike[] | null;
 };
 
+export type SupabaseDailyNutritionSummaryRowLike = {
+  id?: string | null;
+  user_id?: string | null;
+  local_date?: string | null;
+  timezone?: string | null;
+  calculation_version?: string | null;
+  total_calories?: number | string | null;
+  total_protein_g?: number | string | null;
+  total_carbohydrates_g?: number | string | null;
+  total_fat_g?: number | string | null;
+  total_fiber_g?: number | string | null;
+  meal_count?: number | string | null;
+  source_cutoff_at?: string | null;
+  recalculated_at?: string | null;
+  is_current?: boolean | null;
+};
+
 export type SupabaseMealPostgrestErrorLike = {
   message?: string | null;
   code?: string | null;
@@ -76,6 +111,12 @@ export type SupabaseMealPostgrestErrorLike = {
 
 export type SupabaseMealRecordListResponseLike = {
   data?: SupabaseMealRecordRowLike[] | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
+export type SupabaseDailyNutritionSummaryListResponseLike = {
+  data?: SupabaseDailyNutritionSummaryRowLike[] | null;
   error?: SupabaseMealPostgrestErrorLike | null;
   status?: number | null;
 };
@@ -97,18 +138,19 @@ export type SupabaseCreateMealRecordRpcArgs = {
   p_items: Array<Record<string, unknown>>;
 };
 
-export type SupabaseMealQueryBuilderLike = {
-  select(columns: string): SupabaseMealQueryBuilderLike;
-  eq(column: string, value: string): SupabaseMealQueryBuilderLike;
-  gte(column: string, value: string): SupabaseMealQueryBuilderLike;
-  lte(column: string, value: string): SupabaseMealQueryBuilderLike;
-  is(column: string, value: null): SupabaseMealQueryBuilderLike;
-  order(column: string, options: { ascending: boolean }): SupabaseMealQueryBuilderLike;
-  limit(count: number): Promise<SupabaseMealRecordListResponseLike>;
+export type SupabaseMealQueryBuilderLike<ResponseLike> = {
+  select(columns: string): SupabaseMealQueryBuilderLike<ResponseLike>;
+  eq(column: string, value: string): SupabaseMealQueryBuilderLike<ResponseLike>;
+  gte(column: string, value: string): SupabaseMealQueryBuilderLike<ResponseLike>;
+  lte(column: string, value: string): SupabaseMealQueryBuilderLike<ResponseLike>;
+  is(column: string, value: null): SupabaseMealQueryBuilderLike<ResponseLike>;
+  order(column: string, options: { ascending: boolean }): SupabaseMealQueryBuilderLike<ResponseLike>;
+  limit(count: number): Promise<ResponseLike>;
 };
 
 export type SupabaseConsumerMealClientLike = {
-  from(table: typeof SUPABASE_CONSUMER_MEAL_RECORDS_TABLE): SupabaseMealQueryBuilderLike;
+  from(table: typeof SUPABASE_CONSUMER_MEAL_RECORDS_TABLE): SupabaseMealQueryBuilderLike<SupabaseMealRecordListResponseLike>;
+  from(table: typeof SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE): SupabaseMealQueryBuilderLike<SupabaseDailyNutritionSummaryListResponseLike>;
   rpc(
     fn: typeof SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
     args: SupabaseCreateMealRecordRpcArgs

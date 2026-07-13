@@ -1,7 +1,8 @@
-import type { ConsumerMealRecordsSource, ConsumerMealRuntimeFlags } from "./types";
+import type { ConsumerDailyNutritionSource, ConsumerMealRecordsSource, ConsumerMealRuntimeFlags } from "./types";
 
 const authSources = new Set<ConsumerMealRuntimeFlags["authSource"]>(["mock", "supabase-disabled", "supabase-live"]);
 const mealSources = new Set<ConsumerMealRecordsSource>(["mock", "supabase-disabled", "supabase-live"]);
+const dailyNutritionSources = new Set<ConsumerDailyNutritionSource>(["mock", "supabase-disabled", "supabase-live"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -24,6 +25,13 @@ function parseMealSource(value: string | undefined, issues: string[]): ConsumerM
   return "supabase-disabled";
 }
 
+function parseDailyNutritionSource(value: string | undefined, issues: string[]): ConsumerDailyNutritionSource {
+  if (!value) return "mock";
+  if (dailyNutritionSources.has(value as ConsumerDailyNutritionSource)) return value as ConsumerDailyNutritionSource;
+  issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: ${value}`);
+  return "supabase-disabled";
+}
+
 function parseBooleanFlag(name: string, value: string | undefined, issues: string[]): boolean {
   if (!value) return false;
   if (value === "true") return true;
@@ -39,6 +47,7 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORDS_SOURCE ?? env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_SOURCE,
     issues
   );
+  const dailyNutritionSource = parseDailyNutritionSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE, issues);
   const supabaseAuthEnabled = parseBooleanFlag("EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED", env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED, issues);
   const supabaseWritesEnabled = parseBooleanFlag(
     "EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED",
@@ -69,6 +78,15 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (mealRecordsSource === "supabase-live" && !supabaseAuthEnabled) {
     issues.push("Supabase live meal reads require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
   }
+  if (dailyNutritionSource === "supabase-live") {
+    issues.push("Supabase live daily nutrition summary reads are not enabled in Consumer Runtime Phase 2E.");
+  }
+  if (dailyNutritionSource === "supabase-live" && authSource !== "supabase-live") {
+    issues.push("Supabase live daily nutrition summary reads require EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE=supabase-live.");
+  }
+  if (dailyNutritionSource === "supabase-live" && !supabaseAuthEnabled) {
+    issues.push("Supabase live daily nutrition summary reads require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
+  }
   if (mealRecordWritesEnabled && !supabaseWritesEnabled) {
     issues.push("Consumer meal record writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
   }
@@ -85,5 +103,5 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     issues.push("Supabase live meal writes are development-only in Consumer Runtime Phase 2D.");
   }
 
-  return { authSource, mealRecordsSource, supabaseAuthEnabled, supabaseWritesEnabled, mealRecordWritesEnabled, mealRecordLiveWriteOptIn, issues };
+  return { authSource, mealRecordsSource, dailyNutritionSource, supabaseAuthEnabled, supabaseWritesEnabled, mealRecordWritesEnabled, mealRecordLiveWriteOptIn, issues };
 }
