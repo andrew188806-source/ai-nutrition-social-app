@@ -45,6 +45,11 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED ?? env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES,
     issues
   );
+  const mealRecordWritesEnabled = parseBooleanFlag(
+    "EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED",
+    env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED,
+    issues
+  );
 
   if (authSource === "supabase-live" && !supabaseAuthEnabled) {
     issues.push("Supabase live auth source requires EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
@@ -58,9 +63,15 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (mealRecordsSource === "supabase-live" && !supabaseAuthEnabled) {
     issues.push("Supabase live meal reads require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
   }
-  if (supabaseWritesEnabled) {
-    issues.push("Consumer Supabase writes are not enabled in Consumer Runtime Phase 2A.");
+  if (mealRecordWritesEnabled && !supabaseWritesEnabled) {
+    issues.push("Consumer meal record writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
+  }
+  if (supabaseWritesEnabled && !mealRecordWritesEnabled) {
+    issues.push("Consumer Supabase writes require EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED=true for meal write preparation.");
+  }
+  if (supabaseWritesEnabled && mealRecordsSource === "supabase-live") {
+    issues.push("Supabase live meal writes are not enabled in Consumer Runtime Phase 2C.");
   }
 
-  return { authSource, mealRecordsSource, supabaseAuthEnabled, supabaseWritesEnabled, issues };
+  return { authSource, mealRecordsSource, supabaseAuthEnabled, supabaseWritesEnabled, mealRecordWritesEnabled, issues };
 }

@@ -23,6 +23,20 @@ export type ConsumerAuthErrorCode =
   | "meal_item_mapping_failed"
   | "meal_transport_failed"
   | "meal_source_unavailable"
+  | "meal_write_disabled"
+  | "meal_write_phase_not_enabled"
+  | "meal_write_authentication_required"
+  | "meal_write_invalid_input"
+  | "meal_write_invalid_date"
+  | "meal_write_invalid_nutrition"
+  | "meal_write_invalid_items"
+  | "meal_write_payload_too_large"
+  | "meal_write_ownership_field_rejected"
+  | "meal_write_configuration_invalid"
+  | "meal_write_transport_failed"
+  | "meal_write_mapping_failed"
+  | "meal_write_atomicity_not_supported"
+  | "meal_write_partial_write_prevented"
   | "session_expired"
   | "account_disabled"
   | "configuration_error";
@@ -180,6 +194,90 @@ export class ConsumerMealTransportFailedError extends ConsumerAuthError {
 export class ConsumerMealSourceUnavailableError extends ConsumerAuthError {
   constructor(message = "Consumer meal source is unavailable in this runtime.") {
     super("meal_source_unavailable", message);
+  }
+}
+
+export class ConsumerMealWriteDisabledError extends ConsumerAuthError {
+  constructor(message = "Consumer meal writes are disabled in this runtime.") {
+    super("meal_write_disabled", message);
+  }
+}
+
+export class ConsumerMealWritePhaseNotEnabledError extends ConsumerAuthError {
+  constructor(message = "Consumer meal live writes are not enabled in this phase.") {
+    super("meal_write_phase_not_enabled", message, false);
+  }
+}
+
+export class ConsumerMealWriteAuthenticationRequiredError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write requires an authenticated session.") {
+    super("meal_write_authentication_required", message);
+  }
+}
+
+export class ConsumerMealWriteInvalidInputError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write input is invalid.") {
+    super("meal_write_invalid_input", message, false);
+  }
+}
+
+export class ConsumerMealWriteInvalidDateError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write date is invalid.") {
+    super("meal_write_invalid_date", message, false);
+  }
+}
+
+export class ConsumerMealWriteInvalidNutritionError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write nutrition value is invalid.") {
+    super("meal_write_invalid_nutrition", message, false);
+  }
+}
+
+export class ConsumerMealWriteInvalidItemsError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write items are invalid.") {
+    super("meal_write_invalid_items", message, false);
+  }
+}
+
+export class ConsumerMealWritePayloadTooLargeError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write payload is too large.") {
+    super("meal_write_payload_too_large", message, false);
+  }
+}
+
+export class ConsumerMealWriteOwnershipFieldRejectedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write input must not include ownership fields.") {
+    super("meal_write_ownership_field_rejected", message, false);
+  }
+}
+
+export class ConsumerMealWriteConfigurationInvalidError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write runtime configuration is invalid.") {
+    super("meal_write_configuration_invalid", message, false);
+  }
+}
+
+export class ConsumerMealWriteTransportFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write transport failed.") {
+    super("meal_write_transport_failed", message);
+  }
+}
+
+export class ConsumerMealWriteMappingFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write response could not be mapped.") {
+    super("meal_write_mapping_failed", message);
+  }
+}
+
+export class ConsumerMealWriteAtomicityNotSupportedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write requires an atomic parent-and-items write path before live activation.") {
+    super("meal_write_atomicity_not_supported", message, false);
+  }
+}
+
+export class ConsumerMealWritePartialWritePreventedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write was prevented to avoid partial data.") {
+    super("meal_write_partial_write_prevented", message, false);
   }
 }
 

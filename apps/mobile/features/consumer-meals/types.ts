@@ -11,6 +11,7 @@ export type ConsumerMealRuntimeFlags = {
   mealRecordsSource: ConsumerMealRecordsSource;
   supabaseAuthEnabled: boolean;
   supabaseWritesEnabled: boolean;
+  mealRecordWritesEnabled: boolean;
   issues: string[];
 };
 
@@ -72,7 +73,40 @@ export type ConsumerMealRecord = {
   items: ConsumerMealRecordItem[];
 };
 
+export type ConsumerCreateMealRecordItemInput = {
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuId?: string | null;
+  menuItemId?: string | null;
+  displayName: string;
+  userEnteredName?: string | null;
+  aiDetectedName?: string | null;
+  normalizedName?: string | null;
+  portion?: string | null;
+  nutrition?: ConsumerNutritionSnapshot;
+  nutritionSource?: ConsumerNutritionSourceType;
+  sourceEntityVersion?: string | null;
+  confidenceScore?: number | null;
+  consumedRatio?: number;
+};
+
+export type ConsumerCreateMealRecordInput = {
+  mealType: ConsumerMealType;
+  occurredAt: string;
+  mealDate: string;
+  timezone?: string;
+  title?: string | null;
+  note?: string | null;
+  source?: ConsumerMealSourceType;
+  items: ConsumerCreateMealRecordItemInput[];
+};
+
 export interface ConsumerMealRecordsRepository {
   readonly source: ConsumerMealRecordsSource;
   listCurrentUserMealRecords(input?: ConsumerMealReadInput): Promise<ConsumerAuthResult<ConsumerMealRecord[]>>;
+}
+
+export interface ConsumerMealRecordWriteRepository {
+  readonly source: ConsumerMealRecordsSource;
+  createCurrentUserMealRecord(input: ConsumerCreateMealRecordInput): Promise<ConsumerAuthResult<ConsumerMealRecord>>;
 }

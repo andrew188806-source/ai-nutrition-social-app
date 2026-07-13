@@ -245,3 +245,27 @@ Still not done:
 Current live read table allowlist: `meal_records` plus nested `meal_record_items` through the explicit column allowlist. The live repository still rejects arbitrary user identity input and reads only the current authenticated session user's records.
 
 No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, raw SQL, RPC, UI change, navigation change, Restaurant Web runtime change, Admin runtime change, production deployment, or Phase 2C work was made.
+
+## Phase 2C Controlled Meal Record Write Preparation Result
+
+Consumer Runtime Integration Phase 2C Controlled Meal Record Write Preparation is implementation-complete, guard-complete, and freeze-ready.
+
+Completed:
+
+- Canonical `createCurrentUserMealRecord(input)` write service boundary.
+- Meal create input validation for dates, timestamps, item count, nutrition values, known fields, and payload size.
+- Explicit rejection of ownership fields and server-managed fields.
+- Mock in-memory write repository for fake guard verification only.
+- Disabled write repository returning typed `meal_write_disabled`.
+- Supabase live write repository that validates session/input and then fails closed with `meal_write_atomicity_not_supported`.
+- Phase 2C guard script: `npm run test:consumer-phase2c`.
+- Phase 2C live write smoke script: `npm run test:consumer-phase2c-live-smoke`, hard-skipped because Phase 2D has not started.
+
+Still not done:
+
+- Real Consumer Runtime meal insert/update/upsert/delete.
+- Atomic parent-and-items write transaction/RPC/application strategy.
+- Write grants, RLS write verification, live write smoke, seed, fixture, or profile/meal bootstrap.
+- UI wiring, Home/Today Intake cutover, Daily Nutrition Summary runtime, ratings/favorites/recommendation feedback runtime, social runtime, Restaurant Web runtime, Admin runtime, production deployment, or Phase 2D.
+
+No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, RPC, raw SQL execution, migration, seed, fixture, UI change, navigation change, production deployment, or Phase 2D work was implemented.

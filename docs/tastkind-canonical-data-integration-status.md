@@ -762,3 +762,44 @@ Corrective migration:
 - Does not grant writes, use `GRANT ALL`, create data, change policies, change schema objects, seed, create fixtures, or touch production.
 
 No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, Consumer Runtime write, RPC, raw SQL, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, raw row, row contents, or fixture contents were recorded in the repository.
+
+## 34. Consumer Runtime Integration Phase 2C Status
+
+Consumer Runtime Integration Phase 2C Controlled Meal Record Write Preparation is implementation-complete, guard-complete, and freeze-ready.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Meal Records source: `mock`.
+- Default Consumer Auth enabled flag: `false`.
+- Default Consumer writes enabled flag: `false`.
+- Default Consumer meal record writes enabled flag: `false`.
+- Mock write repository: available only for fake guard verification.
+- Supabase live meal write repository: fail-closed with `meal_write_atomicity_not_supported`.
+- Development live write smoke: hard-skipped because Consumer Runtime Phase 2D has not started.
+- Home / Today Intake / Meal Log cutover: not started.
+- Daily Nutrition Summary runtime: not started.
+- Real meal writes, updates, deletes, corrections, ratings, favorites, recommendation feedback, social, orders, payments, and Admin Consumer Governance: not started.
+- Phase 2D: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-2c-controlled-meal-record-write-preparation.md`
+- `apps/mobile/features/consumer-meals/writeValidation.ts`
+- `apps/mobile/features/consumer-meals/consumerMealRecordWriteService.ts`
+- `apps/mobile/features/consumer-meals/mealWriteMappers.ts`
+- `apps/mobile/features/consumer-meals/adapters/mockConsumerMealRecordWriteRepository.ts`
+- `apps/mobile/features/consumer-meals/adapters/supabaseDisabledConsumerMealRecordWriteRepository.ts`
+- `apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts`
+- `scripts/consumer-meal-records-phase-2c-guard.mjs`
+- `scripts/consumer-meal-records-phase-2c-live-smoke.mjs`
+
+Boundary:
+
+- Approved preparation API: `ConsumerMealRecordWriteService.createCurrentUserMealRecord(input)`.
+- Ownership source: current authenticated session only.
+- Arbitrary user identity input: rejected by validation.
+- Live write behavior: typed fail-closed result before any Supabase write transport.
+- Atomic live writes: deferred to Phase 2D.
+
+No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, schema migration, RLS migration, grant migration, remote migration, Consumer Runtime live write, RPC, raw SQL, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, raw row, row contents, seed, or fixture was created by Phase 2C.

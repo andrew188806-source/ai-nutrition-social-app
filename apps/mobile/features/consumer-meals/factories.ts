@@ -1,9 +1,16 @@
-import { ConsumerMealSourceConfigurationInvalidError } from "../consumer-auth/errors";
+import {
+  ConsumerMealSourceConfigurationInvalidError,
+  ConsumerMealWriteConfigurationInvalidError
+} from "../consumer-auth/errors";
 import type { ConsumerAuthPort } from "../consumer-auth/ports";
 import type { SupabaseConsumerMealClientLike } from "./supabaseMealContracts";
 import { MockConsumerMealRecordsRepository } from "./adapters/mockConsumerMealRecordsRepository";
+import { MockConsumerMealRecordWriteRepository } from "./adapters/mockConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
+import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
+import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
+import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
 import type { ConsumerMealRuntimeFlags } from "./types";
@@ -46,5 +53,39 @@ export function createConsumerMealRecordsService(
 ) {
   return new ConsumerMealRecordsService({
     repository: createConsumerMealRecordsRepository(flags, dependencies)
+  });
+}
+
+export function assertConsumerMealWriteRuntimeFlags(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+  if (flags.issues.length) {
+    return { ok: false as const, error: new ConsumerMealWriteConfigurationInvalidError(flags.issues.join(" ")) };
+  }
+  return { ok: true as const, value: flags };
+}
+
+export function createConsumerMealRecordWriteRepository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  const flagCheck = assertConsumerMealWriteRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  if (!flags.supabaseWritesEnabled || !flags.mealRecordWritesEnabled || flags.mealRecordsSource === "supabase-disabled") {
+    return new SupabaseDisabledConsumerMealRecordWriteRepository();
+  }
+  if (!dependencies.authPort) {
+    throw new ConsumerMealWriteConfigurationInvalidError("Consumer meal writes require an explicit ConsumerAuthPort.");
+  }
+  if (flags.mealRecordsSource === "mock") {
+    return new MockConsumerMealRecordWriteRepository({ authPort: dependencies.authPort });
+  }
+  return new SupabaseConsumerMealRecordWriteRepository({ authPort: dependencies.authPort });
+}
+
+export function createConsumerMealRecordWriteService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  return new ConsumerMealRecordWriteService({
+    repository: createConsumerMealRecordWriteRepository(flags, dependencies)
   });
 }
