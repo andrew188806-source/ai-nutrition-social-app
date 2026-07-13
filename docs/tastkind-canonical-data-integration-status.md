@@ -1043,7 +1043,7 @@ Completed in repository:
 - `ConsumerDailyNutritionSummaryPersistenceService.persistCurrentUserDailyNutritionSummary(input)`.
 - `PersistDailyNutritionSummaryInput` with `summaryDate` only.
 - `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE`.
-- Disabled, mock, and Supabase-prepared persistence repositories.
+- Disabled, mock, and Supabase-prepared persistence repositories for Phase 2J preparation.
 - Future RPC contract constant and mapper for `persist_authenticated_daily_nutrition_summary`.
 - Phase 2J guard script: `npm run test:consumer-phase2j`.
 - Phase 2J default smoke script: `npm run test:consumer-phase2j-smoke`.
@@ -1063,6 +1063,49 @@ Boundary:
 - Default smoke is `SKIPPED`.
 - Default smoke creates no Supabase client, network request, database read, database write, or RPC invocation.
 - Mock contract smoke is local-only and deterministic.
-- Supabase prepared mode maps the future RPC payload but does not call `.rpc(...)`.
+- Supabase prepared mode mapped the future RPC payload but did not call `.rpc(...)` during Phase 2J. Phase 2K promotes this to the explicit `supabase` live source.
 - No caller-supplied user id, token, session, nutrition totals, raw payload, or summary row is accepted.
 - No migration, RLS change, grant change, database write, summary write-back, planned meal write, RPC invocation, raw SQL, seed, fixture, bootstrap, UI change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2K work.
+
+## 42. Consumer Runtime Integration Phase 2K Status
+
+Consumer Runtime Integration Phase 2K Atomic Development Live Daily Nutrition Summary Persistence is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Completed in repository:
+
+- Forward-only migration `20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql`.
+- Atomic RPC `public.persist_authenticated_daily_nutrition_summary(...)`.
+- Runtime live persistence repository `SupabaseConsumerDailyNutritionSummaryPersistenceRepository`.
+- Source flag transition to `disabled | mock | supabase`.
+- Phase 2K guard script: `npm run test:consumer-phase2k`.
+- Phase 2K default smoke script: `npm run test:consumer-phase2k-smoke`.
+- Phase 2K explicit Development live smoke script: `npm run test:consumer-phase2k-live-smoke`.
+- Phase 2K documentation and handoff status.
+
+Runtime path:
+
+- current-user meal read service
+- Phase 2E `calculateDailyNutritionSummary`
+- daily summary persistence service
+- authenticated Supabase RPC
+- stored summary read
+- stored/calculated parity comparison
+- repeated persistence/idempotency check
+
+Boundary:
+
+- Default write source is `disabled`.
+- `supabase` write source is explicit development-only.
+- Ownership is derived from authenticated current user, not caller-provided user id.
+- Direct summary table writes remain unavailable to runtime code.
+- UI and navigation do not trigger persistence.
+- Home and Today Intake remain shared-read only.
+- Planned meals, corrections, consumption adjustments, ratings, favorites, and recommendation feedback are not included in this runtime.
+- No seed, fixture, bootstrap, Auth user creation, production deployment, push, or Phase 2L work.
+
+Development verification:
+
+- Migration `20260713070100` is aligned locally and remotely on the Development project.
+- Explicit live smoke passed with one current-user meal, one item, 123 kcal, 12 g protein, 18 g carbohydrates, 4 g fat, 3 g fiber.
+- First persistence, read-after-write, stored/calculated parity, repeated persistence, duplicate prevention, deterministic result, and sign-out passed.
+- No credentials, tokens, sessions, user IDs, record IDs, summary IDs, raw rows, raw responses, URL, or key are recorded in repository documentation.

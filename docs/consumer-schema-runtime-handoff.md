@@ -387,7 +387,7 @@ Implemented repository modes:
 
 - disabled repository returns `skipped`
 - mock repository persists deterministically in memory for guard verification only
-- Supabase prepared repository maps the future RPC payload but does not invoke RPC
+- Supabase prepared repository mapped the future RPC payload without invoking RPC in Phase 2J
 
 Future RPC contract name:
 
@@ -396,3 +396,25 @@ Future RPC contract name:
 Phase 2J does not add a migration, RLS change, grant change, database write, summary write-back, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, UI change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2K work.
 
 Default Phase 2J smoke is skipped without explicit opt-in and creates no client, network request, database read, database write, or RPC invocation. The mock contract smoke verifies deterministic local calculation and in-memory persistence only.
+
+## Phase 2K Atomic Development Live Daily Nutrition Summary Persistence Result
+
+Consumer Runtime Integration Phase 2K Atomic Development Live Daily Nutrition Summary Persistence is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Phase 2K adds one forward-only active migration:
+
+- `20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql`
+
+The migration creates:
+
+- `public.persist_authenticated_daily_nutrition_summary(...)`
+
+The function derives ownership from `auth.uid()`, accepts no caller-provided user id, uses `security definer` with `search_path = public, pg_temp`, atomically inserts or updates the current user/date/timezone/calculation-version summary, revokes public and anon execute, grants execute only to authenticated, and keeps direct table write privileges revoked.
+
+The Mobile runtime now supports `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE=supabase` for explicit development live summary persistence. The default remains `disabled`.
+
+The runtime service still calculates totals from current-user meal records through the Phase 2E calculator before persistence. It does not include planned meals, stored summaries as calculator input, UI totals, corrections runtime, consumption adjustments runtime, ratings, favorites, recommendation feedback, or caller-provided nutrition totals.
+
+Phase 2K does not change Mobile UI, navigation, Home, Today Intake, the shared intake UI hook, Restaurant Web runtime, Admin runtime, seed data, fixtures, profile bootstrap, Auth users, production configuration, or automatic write-back behavior. Phase 2L has not started.
+
+Development live verification passed for authenticated sign-in, current-user meal read, Phase 2E calculation, first summary persistence RPC, read-after-write, stored/calculated parity, repeated persistence, same user/date current-row count, deterministic nutrition values, and sign-out. The smoke printed no credentials, tokens, sessions, user IDs, record IDs, summary IDs, raw rows, or raw RPC responses.

@@ -44,7 +44,8 @@ const expectedMigrationFiles = [
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
-  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
+  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
+  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql"
 ];
 
 const requiredTables = [
@@ -81,7 +82,7 @@ const expectedObjectCounts = {
   indexes: 28,
   policies: 24,
   types: 13,
-  functions: 2
+  functions: 3
 };
 
 function pass(name, extra = {}) {
@@ -155,7 +156,9 @@ const mealGrantMigrationName = "20260713040100_consumer_schema_phase_1_3_authent
 const mealGrantMigration = activeTexts.find((item) => item.fileName === mealGrantMigrationName);
 const atomicMealWriteMigrationName = "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql";
 const dailySummaryGrantMigrationName = "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql";
+const atomicDailySummaryPersistenceMigrationName = "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql";
 const dailySummaryGrantMigration = activeTexts.find((item) => item.fileName === dailySummaryGrantMigrationName);
+const atomicDailySummaryPersistenceMigration = activeTexts.find((item) => item.fileName === atomicDailySummaryPersistenceMigrationName);
 
 const bomByteFailures = activeTexts
   .filter((item) => item.bytes.length >= 3 && item.bytes[0] === 0xef && item.bytes[1] === 0xbb && item.bytes[2] === 0xbf)
@@ -232,7 +235,8 @@ const expectedMealRecordGrant = "grant select on table public.meal_records to au
 const expectedMealRecordItemGrant = "grant select on table public.meal_record_items to authenticated;";
 const expectedDailySummaryGrant = "grant select on table public.daily_nutrition_summaries to authenticated;";
 const expectedMealWriteFunctionGrant = "grant execute on function public.create_current_user_meal_record( public.meal_type, timestamptz, date, text, text, text, public.meal_source_type, jsonb ) to authenticated;";
-const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedDailySummaryGrant, expectedMealWriteFunctionGrant];
+const expectedDailySummaryWriteFunctionGrant = "grant execute on function public.persist_authenticated_daily_nutrition_summary( date, text, text, numeric, numeric, numeric, numeric, numeric, integer, integer, timestamptz, timestamptz ) to authenticated;";
+const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedDailySummaryGrant, expectedMealWriteFunctionGrant, expectedDailySummaryWriteFunctionGrant];
 const unexpectedGrants = grantStatements.filter((statement) => !allowedGrantStatements.includes(statement));
 if (unexpectedGrants.length) fail("no unexpected grants in active migrations", "Only authenticated SELECT grants for consumer_profiles, meal_records, meal_record_items, daily_nutrition_summaries, and the approved atomic write function execute grant are allowed in active Phase 1.3 migrations.", { unexpectedGrants });
 else pass("no unexpected grants in active migrations", { grantCount: grantStatements.length });
@@ -349,7 +353,9 @@ const forbiddenSqlPatterns = [
 ];
 
 for (const [pattern, message] of forbiddenSqlPatterns) {
-  const found = activeTexts.filter((item) => item.fileName !== atomicMealWriteMigrationName && pattern.test(item.clean)).map((item) => item.rel);
+  const found = activeTexts
+    .filter((item) => item.fileName !== atomicMealWriteMigrationName && item.fileName !== atomicDailySummaryPersistenceMigrationName && pattern.test(item.clean))
+    .map((item) => item.rel);
   if (found.length) fail(`forbidden active migration pattern: ${pattern}`, message, { matches: found });
   else pass(`forbidden active migration pattern absent: ${pattern}`);
 }
@@ -371,6 +377,22 @@ if (atomicMigration) {
   else fail("atomic meal write function inserts parent and items", "Atomic function must insert parent and item rows in one function transaction.");
 } else {
   fail("atomic meal write function migration exists", "Missing Phase 2D atomic meal write function migration.");
+}
+
+if (atomicDailySummaryPersistenceMigration) {
+  const clean = atomicDailySummaryPersistenceMigration.clean.toLowerCase();
+  if (/create\s+or\s+replace\s+function\s+public\.persist_authenticated_daily_nutrition_summary/.test(clean)) pass("atomic daily summary persistence function exists");
+  else fail("atomic daily summary persistence function exists", "Phase 2K migration must create public.persist_authenticated_daily_nutrition_summary.");
+  if (/security\s+definer/.test(clean) && /set\s+search_path\s*=\s*public\s*,\s*pg_temp/.test(clean)) pass("atomic daily summary function has safe security configuration");
+  else fail("atomic daily summary function has safe security configuration", "Summary persistence function must be SECURITY DEFINER with fixed search_path.");
+  if (/auth\.uid\(\)/.test(clean) && !/\bp_user_id\b|\buser_id\s+uuid\s+default\b/.test(clean)) pass("atomic daily summary function derives user from auth.uid only");
+  else fail("atomic daily summary function derives user from auth.uid only", "Summary persistence function must not accept caller-provided user identity.");
+  if (/on\s+conflict\s+\(user_id,\s*local_date,\s*timezone,\s*calculation_version\)\s+where\s+is_current\s*=\s*true\s+do\s+update\s+set/.test(clean)) pass("atomic daily summary function upserts current user/date summary");
+  else fail("atomic daily summary function upserts current user/date summary", "Summary persistence function must upsert by the current summary identity.");
+  if (/revoke\s+all\s+on\s+function[\s\S]*from\s+public\s*;/.test(clean) && /revoke\s+all\s+on\s+function[\s\S]*from\s+anon\s*;/.test(clean) && /grant\s+execute\s+on\s+function[\s\S]*to\s+authenticated\s*;/.test(clean)) pass("atomic daily summary function execute grants are bounded");
+  else fail("atomic daily summary function execute grants are bounded", "Summary persistence function must revoke public and anon execute, then grant authenticated execute.");
+} else {
+  fail("atomic daily summary persistence migration exists", "Missing Phase 2K atomic daily summary persistence migration.");
 }
 
 const authFkTables = [...matches(allActiveSql, /user_id\s+uuid\s+(?:not\s+null\s+)?(?:unique\s+)?references\s+auth\.users\(id\)/gi)];

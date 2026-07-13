@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -36,7 +36,8 @@ const expectedMigrationFiles = [
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
-  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
+  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
+  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -132,10 +133,10 @@ if (writeMatches.length) fail("no unapproved Consumer write methods", "Phase 2I 
 else pass("no unapproved Consumer write methods");
 
 const rpcMatches = mealSourceFiles
-  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerMealRecordWriteRepository.ts"))
+  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerMealRecordWriteRepository.ts") && !rel.endsWith("supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts"))
   .map(({ rel }) => rel);
-if (rpcMatches.length) fail("no new Consumer RPC invocation", "Only the existing Phase 2D write adapter may reference RPC.", { matches: rpcMatches });
-else pass("no new Consumer RPC invocation");
+if (rpcMatches.length) fail("approved Consumer RPC invocation boundaries", "Only the Phase 2D meal write adapter and Phase 2K daily summary persistence adapter may reference RPC.", { matches: rpcMatches });
+else pass("approved Consumer RPC invocation boundaries");
 
 const migrationFiles = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
 if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory unchanged from Phase 2H", { count: migrationFiles.length });

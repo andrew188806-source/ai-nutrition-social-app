@@ -128,6 +128,12 @@ export type SupabaseMealRecordRpcResponseLike = {
   status?: number | null;
 };
 
+export type SupabaseDailyNutritionSummaryRpcResponseLike = {
+  data?: SupabaseDailyNutritionSummaryRowLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
 export type SupabaseCreateMealRecordRpcArgs = {
   p_meal_type: ConsumerMealType;
   p_occurred_at: string;
@@ -171,4 +177,8 @@ export type SupabaseConsumerMealClientLike = {
     fn: typeof SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
     args: SupabaseCreateMealRecordRpcArgs
   ): Promise<SupabaseMealRecordRpcResponseLike>;
+  rpc(
+    fn: typeof SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION,
+    args: SupabasePersistDailyNutritionSummaryRpcArgs
+  ): Promise<SupabaseDailyNutritionSummaryRpcResponseLike>;
 };

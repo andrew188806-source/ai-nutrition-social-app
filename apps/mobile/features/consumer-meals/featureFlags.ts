@@ -3,7 +3,7 @@ import type { ConsumerDailyNutritionSource, ConsumerDailyNutritionWriteSource, C
 const authSources = new Set<ConsumerMealRuntimeFlags["authSource"]>(["mock", "supabase-disabled", "supabase-live"]);
 const mealSources = new Set<ConsumerMealRecordsSource>(["mock", "supabase-disabled", "supabase-live"]);
 const dailyNutritionSources = new Set<ConsumerDailyNutritionSource>(["mock", "supabase-disabled", "supabase-live"]);
-const dailyNutritionWriteSources = new Set<ConsumerDailyNutritionWriteSource>(["disabled", "mock", "supabase_prepared"]);
+const dailyNutritionWriteSources = new Set<ConsumerDailyNutritionWriteSource>(["disabled", "mock", "supabase"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -104,14 +104,20 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (dailyNutritionSource !== "supabase-live" && dailyNutritionLiveReadOptIn) {
     issues.push("Consumer daily nutrition summary live read opt-in requires EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE=supabase-live.");
   }
-  if (dailyNutritionWriteSource === "supabase_prepared" && supabaseWritesEnabled) {
-    issues.push("Consumer daily nutrition summary prepared persistence must not enable live writes in Consumer Runtime Phase 2J.");
+  if (dailyNutritionWriteSource === "supabase" && !supabaseWritesEnabled) {
+    issues.push("Consumer daily nutrition summary live persistence requires EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
   }
-  if (dailyNutritionWriteSource === "supabase_prepared" && runtimeEnvironment !== "development") {
-    issues.push("Consumer daily nutrition summary prepared persistence is development-only until Consumer Runtime Phase 2K.");
+  if (dailyNutritionWriteSource === "supabase" && runtimeEnvironment !== "development") {
+    issues.push("Consumer daily nutrition summary live persistence is development-only in Consumer Runtime Phase 2K.");
   }
-  if (dailyNutritionSource === "supabase-live" && supabaseWritesEnabled) {
-    issues.push("Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled.");
+  if (dailyNutritionWriteSource === "supabase" && dailyNutritionSource !== "supabase-live") {
+    issues.push("Consumer daily nutrition summary live persistence requires EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE=supabase-live.");
+  }
+  if (dailyNutritionWriteSource === "supabase" && !dailyNutritionLiveReadOptIn) {
+    issues.push("Consumer daily nutrition summary live persistence requires EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN=true.");
+  }
+  if (dailyNutritionSource === "supabase-live" && supabaseWritesEnabled && dailyNutritionWriteSource !== "supabase") {
+    issues.push("Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled unless Phase 2K summary persistence is explicitly enabled.");
   }
   if (dailyNutritionSource === "supabase-live" && mealRecordWritesEnabled) {
     issues.push("Supabase live daily nutrition summary reads require Consumer meal record writes to remain disabled.");
@@ -122,16 +128,16 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (mealRecordWritesEnabled && !supabaseWritesEnabled) {
     issues.push("Consumer meal record writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
   }
-  if (supabaseWritesEnabled && !mealRecordWritesEnabled) {
-    issues.push("Consumer Supabase writes require EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED=true for meal write preparation.");
+  if (supabaseWritesEnabled && !mealRecordWritesEnabled && dailyNutritionWriteSource !== "supabase") {
+    issues.push("Consumer Supabase writes require an explicit approved write source.");
   }
   if (mealRecordLiveWriteOptIn && (!supabaseWritesEnabled || !mealRecordWritesEnabled)) {
     issues.push("Consumer meal record live write opt-in requires global writes and meal record writes to be enabled.");
   }
-  if (supabaseWritesEnabled && mealRecordsSource === "supabase-live" && !mealRecordLiveWriteOptIn) {
+  if (mealRecordWritesEnabled && mealRecordsSource === "supabase-live" && !mealRecordLiveWriteOptIn) {
     issues.push("Supabase live meal writes require EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN=true in Consumer Runtime Phase 2D.");
   }
-  if (supabaseWritesEnabled && mealRecordsSource === "supabase-live" && runtimeEnvironment !== "development") {
+  if (mealRecordWritesEnabled && mealRecordsSource === "supabase-live" && runtimeEnvironment !== "development") {
     issues.push("Supabase live meal writes are development-only in Consumer Runtime Phase 2D.");
   }
 

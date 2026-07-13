@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -16,7 +16,10 @@ const approvedMealQueryFiles = new Set([
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts",
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts"
 ]);
-const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
+const approvedMealRpcFiles = new Set([
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts"
+]);
 const mealGrantMigrationName = "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql";
 const expectedMigrationFiles = [
   "20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql",
@@ -36,7 +39,8 @@ const expectedMigrationFiles = [
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   mealGrantMigrationName,
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
-  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
+  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
+  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql"
 ];
 
 function pass(name, extra = {}) {

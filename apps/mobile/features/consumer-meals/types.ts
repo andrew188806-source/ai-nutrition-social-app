@@ -2,7 +2,7 @@ import type { ConsumerAuthResult } from "../consumer-auth/types";
 
 export type ConsumerMealRecordsSource = "mock" | "supabase-disabled" | "supabase-live";
 export type ConsumerDailyNutritionSource = "mock" | "supabase-disabled" | "supabase-live";
-export type ConsumerDailyNutritionWriteSource = "disabled" | "mock" | "supabase_prepared";
+export type ConsumerDailyNutritionWriteSource = "disabled" | "mock" | "supabase";
 export type ConsumerMealType = "breakfast" | "lunch" | "dinner" | "late_night" | "snack" | "other";
 export type ConsumerMealSourceType = "restaurant" | "self_made" | "manual" | "ai_estimated";
 export type ConsumerNutritionSourceType = "restaurant_verified" | "admin_verified" | "ai_estimated" | "user_corrected" | "manual";

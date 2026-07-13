@@ -18,7 +18,7 @@ import { SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository } fr
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
 import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
-import { SupabasePreparedConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabasePreparedConsumerDailyNutritionSummaryPersistenceRepository";
+import { SupabaseConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository";
 import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
@@ -54,8 +54,8 @@ export function createConsumerMealRecordsRepository(
   if (flags.mealRecordsSource === "supabase-disabled") return new SupabaseDisabledConsumerMealRecordsRepository();
   const flagCheck = assertConsumerMealRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
-  if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled || flags.supabaseWritesEnabled) {
-    throw new ConsumerMealSourceConfigurationInvalidError("Consumer live meal reads require live Auth, Auth enabled, and writes disabled.");
+  if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled || (flags.supabaseWritesEnabled && flags.dailyNutritionWriteSource !== "supabase")) {
+    throw new ConsumerMealSourceConfigurationInvalidError("Consumer live meal reads require live Auth, Auth enabled, and no unapproved writes.");
   }
   if (!dependencies.authPort) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live meal reads require an authenticated ConsumerAuthPort.");
   if (!dependencies.mealClient) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live meal reads require an explicit meal client.");
@@ -131,8 +131,8 @@ export function createConsumerDailyNutritionSummaryRepository(
   if (flags.dailyNutritionSource === "supabase-disabled") return new SupabaseDisabledConsumerDailyNutritionSummaryRepository();
   const flagCheck = assertConsumerDailyNutritionSummaryRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
-  if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled || flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled) {
-    throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require live Auth, Auth enabled, and all writes disabled.");
+  if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled || (flags.supabaseWritesEnabled && flags.dailyNutritionWriteSource !== "supabase") || flags.mealRecordWritesEnabled) {
+    throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require live Auth, Auth enabled, and no unapproved writes.");
   }
   if (!flags.dailyNutritionLiveReadOptIn) {
     throw new ConsumerDailySummaryConfigurationInvalidError("Consumer live daily nutrition summary reads require explicit Phase 2F live read opt-in.");
@@ -159,20 +159,27 @@ export function assertConsumerDailyNutritionSummaryPersistenceRuntimeFlags(flags
   if (flags.issues.length) {
     return { ok: false as const, error: new ConsumerDailySummaryPersistenceConfigurationInvalidError(flags.issues.join(" ")) };
   }
-  if (flags.dailyNutritionWriteSource === "supabase_prepared" && (flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled || flags.mealRecordLiveWriteOptIn)) {
-    return { ok: false as const, error: new ConsumerDailySummaryPersistenceConfigurationInvalidError("Prepared daily nutrition summary persistence requires all runtime writes to remain disabled.") };
+  if (flags.dailyNutritionWriteSource === "supabase" && (!flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled || flags.mealRecordLiveWriteOptIn)) {
+    return { ok: false as const, error: new ConsumerDailySummaryPersistenceConfigurationInvalidError("Live daily nutrition summary persistence requires global writes enabled and meal record writes disabled.") };
   }
   return { ok: true as const, value: flags };
 }
 
 export function createConsumerDailyNutritionSummaryPersistenceRepository(
-  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
 ) {
   const flagCheck = assertConsumerDailyNutritionSummaryPersistenceRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
   if (flags.dailyNutritionWriteSource === "disabled") return new SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository();
   if (flags.dailyNutritionWriteSource === "mock") return new MockConsumerDailyNutritionSummaryPersistenceRepository();
-  return new SupabasePreparedConsumerDailyNutritionSummaryPersistenceRepository();
+  if (!dependencies.authPort) throw new ConsumerDailySummaryPersistenceConfigurationInvalidError("Consumer daily nutrition summary live persistence requires an authenticated ConsumerAuthPort.");
+  if (!dependencies.mealClient) throw new ConsumerDailySummaryPersistenceConfigurationInvalidError("Consumer daily nutrition summary live persistence requires an explicit meal client.");
+  return new SupabaseConsumerDailyNutritionSummaryPersistenceRepository({
+    authPort: dependencies.authPort,
+    mealClient: dependencies.mealClient,
+    writeEnabled: flags.dailyNutritionWriteSource === "supabase"
+  });
 }
 
 export function createConsumerDailyNutritionSummaryPersistenceService(
@@ -183,7 +190,7 @@ export function createConsumerDailyNutritionSummaryPersistenceService(
   if (!flagCheck.ok) throw flagCheck.error;
   return new ConsumerDailyNutritionSummaryPersistenceService({
     mealRecordsService: createConsumerMealRecordsService(flags, dependencies),
-    repository: createConsumerDailyNutritionSummaryPersistenceRepository(flags),
+    repository: createConsumerDailyNutritionSummaryPersistenceRepository(flags, dependencies),
     clock: dependencies.clock ?? systemClock,
     timezone: dependencies.timezone
   });

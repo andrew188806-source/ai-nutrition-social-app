@@ -29,7 +29,8 @@ const expectedMigrationFiles = [
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
-  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql"
+  "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
+  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -91,10 +92,10 @@ if (/function parseDailyNutritionWriteSource\(value: string \| undefined, issues
 } else {
   fail("daily nutrition write source defaults to disabled", "Default daily nutrition write source must be disabled.");
 }
-if (/supabase_prepared[\s\S]*supabaseWritesEnabled/.test(flags) && /supabase_prepared[\s\S]*development-only/.test(flags)) {
-  pass("prepared source fails closed outside safe conditions");
+if (/"disabled"[\s\S]*"mock"[\s\S]*"supabase"/.test(flags) && /dailyNutritionWriteSource === "supabase"[\s\S]*development-only/.test(flags)) {
+  pass("live source remains explicit and development-only after Phase 2K");
 } else {
-  fail("prepared source fails closed outside safe conditions", "supabase_prepared must reject live writes and non-development runtime.");
+  fail("live source remains explicit and development-only after Phase 2K", "Phase 2K live summary persistence must remain explicitly gated and development-only.");
 }
 
 const service = read("apps/mobile/features/consumer-meals/consumerDailyNutritionSummaryPersistenceService.ts");
@@ -109,16 +110,11 @@ if (!/storedNutrition|plannedMeals|consumptionAdjustments|corrections|dailyNutri
   fail("persistence service excludes stored summaries, planned meals, corrections, and adjustments", "Phase 2J must calculate only from actual current-user meal records.");
 }
 
-const preparedRepo = read("apps/mobile/features/consumer-meals/adapters/supabasePreparedConsumerDailyNutritionSummaryPersistenceRepository.ts");
-if (/persist_authenticated_daily_nutrition_summary|SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION/.test(preparedRepo) && /buildPersistDailyNutritionSummaryRpcArgs/.test(preparedRepo)) {
-  pass("prepared adapter documents future RPC contract and mapper");
+const summaryPersistenceRepo = read("apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts");
+if (/persist_authenticated_daily_nutrition_summary|SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION/.test(summaryPersistenceRepo) && /buildPersistDailyNutritionSummaryRpcArgs/.test(summaryPersistenceRepo)) {
+  pass("summary persistence adapter preserves Phase 2J RPC contract mapper");
 } else {
-  fail("prepared adapter documents future RPC contract and mapper", "Prepared adapter must expose the future RPC mapping contract.");
-}
-if (!/\.\s*rpc\s*\(/.test(preparedRepo) && !/SupabaseConsumerMealClientLike|authPort|getCurrentSession/.test(preparedRepo)) {
-  pass("prepared adapter does not create client, read session, or invoke RPC");
-} else {
-  fail("prepared adapter does not create client, read session, or invoke RPC", "Phase 2J prepared adapter must not perform live persistence.");
+  fail("summary persistence adapter preserves Phase 2J RPC contract mapper", "Daily summary persistence adapter must preserve the prepared RPC mapping contract.");
 }
 
 const mealSourceFiles = [
@@ -139,10 +135,10 @@ if (writeMatches.length) fail("no unapproved Consumer write methods", "Phase 2J 
 else pass("no unapproved Consumer write methods");
 
 const rpcMatches = mealSourceFiles
-  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerMealRecordWriteRepository.ts"))
+  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerMealRecordWriteRepository.ts") && !rel.endsWith("supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts"))
   .map(({ rel }) => rel);
-if (rpcMatches.length) fail("no new Consumer RPC invocation", "Only the existing Phase 2D write adapter may invoke RPC.", { matches: rpcMatches });
-else pass("no new Consumer RPC invocation");
+if (rpcMatches.length) fail("approved Consumer RPC invocation boundaries", "Only the Phase 2D meal write adapter and Phase 2K daily summary persistence adapter may invoke RPC.", { matches: rpcMatches });
+else pass("approved Consumer RPC invocation boundaries");
 
 const uiFiles = [
   ...walk(appDir, (file) => file.endsWith(".ts") || file.endsWith(".tsx")),
@@ -155,8 +151,8 @@ if (uiPersistenceMatches.length) fail("no UI persistence imports or calls", "UI 
 else pass("no UI persistence imports or calls");
 
 const migrationFiles = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
-if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory unchanged from Phase 2I", { count: migrationFiles.length });
-else fail("migration inventory unchanged from Phase 2I", "Phase 2J must not add or modify migrations.", { migrationFiles, expectedMigrationFiles });
+if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory includes only approved Phase 2K addition", { count: migrationFiles.length });
+else fail("migration inventory includes only approved Phase 2K addition", "Migration inventory must contain only approved migrations through Phase 2K.", { migrationFiles, expectedMigrationFiles });
 
 try {
   const output = execFileSync(process.execPath, [path.join(root, "scripts", "consumer-meal-records-phase-2j-smoke.mjs")], {

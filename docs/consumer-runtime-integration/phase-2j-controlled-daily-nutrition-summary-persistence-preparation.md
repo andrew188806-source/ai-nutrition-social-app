@@ -48,13 +48,13 @@ Allowed values:
 
 - `disabled`
 - `mock`
-- `supabase_prepared`
+- `supabase_prepared` during Phase 2J preparation
 
 Default:
 
 - `disabled`
 
-`supabase_prepared` is development-only and fails closed if runtime write flags are enabled. It maps the future RPC payload shape but does not invoke RPC.
+`supabase_prepared` was development-only and failed closed if runtime write flags were enabled. It mapped the future RPC payload shape but did not invoke RPC. Phase 2K promotes this boundary to the explicit `supabase` source.
 
 ## Repository Implementations
 
@@ -68,11 +68,11 @@ The disabled repository returns `skipped`.
 
 The mock repository stores deterministic in-memory summaries keyed by summary date, timezone, and calculation version. It creates no random ids, no Supabase client, no network request, and no database write.
 
-The prepared Supabase repository exports the future mapper for:
+The prepared Supabase repository exported the future mapper for:
 
 - `persist_authenticated_daily_nutrition_summary`
 
-It does not call `.rpc(...)`, create a client, read a session, or touch the database.
+In Phase 2J it did not call `.rpc(...)`, create a client, read a session, or touch the database.
 
 ## Future RPC Contract
 

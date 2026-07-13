@@ -370,8 +370,26 @@ Phase 2J adds a preparation-only persistence boundary for daily nutrition summar
 
 The public service input accepts only `summaryDate`. It does not accept user id, token, session, nutrition totals, meal count, item count, or raw database payloads. Ownership remains current authenticated user plus summary date.
 
-The new source flag is `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE`, with default `disabled`. Allowed values are `disabled`, `mock`, and `supabase_prepared`. The prepared Supabase mode is development-only, rejects enabled runtime writes, maps the future `persist_authenticated_daily_nutrition_summary` payload contract, and does not invoke RPC.
+The new source flag is `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE`, with default `disabled`. Phase 2J allowed `disabled`, `mock`, and `supabase_prepared`; Phase 2K promotes the live value to `supabase`. The Phase 2J prepared mode mapped the future `persist_authenticated_daily_nutrition_summary` payload contract without invoking RPC.
 
 Phase 2J adds no active migration, RLS change, grant change, remote Supabase operation, live summary persistence, database read in default smoke, database write, RPC invocation, seed, fixture, bootstrap, UI wiring, navigation wiring, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2K work.
 
 The default Phase 2J smoke is skipped without creating a Supabase client, network request, database read, database write, or RPC invocation. The mock contract smoke is deterministic and local-only.
+
+## 29. Phase 2K Follow-Up
+
+Consumer Runtime Integration Phase 2K Atomic Development Live Daily Nutrition Summary Persistence is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Phase 2K adds one forward-only active migration:
+
+- `20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql`
+
+It creates `public.persist_authenticated_daily_nutrition_summary(...)`, an authenticated-only atomic persistence RPC for `daily_nutrition_summaries`. The RPC derives ownership from `auth.uid()`, accepts no caller-provided user id, validates canonical summary inputs, and reuses the existing current-summary unique identity.
+
+Execute privileges are bounded to authenticated. Public and anon execute are revoked. Direct authenticated and anon `INSERT`, `UPDATE`, and `DELETE` privileges on `public.daily_nutrition_summaries` remain revoked.
+
+Runtime source values for daily summary writes are now `disabled`, `mock`, and `supabase`; the default remains `disabled`. The `supabase` path is explicit development-only and is not wired to UI or navigation.
+
+Phase 2K does not add seed data, fixtures, bootstrap data, Auth users, automatic summary creation, UI write-back, planned meal runtime, corrections runtime, consumption adjustments runtime, ratings, favorites, recommendation feedback, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2L work.
+
+Development live verification passed with current-user meal read, Phase 2E calculation, atomic RPC persistence, read-after-write, stored/calculated parity, repeated persistence, same user/date duplicate prevention, deterministic nutrition values, and sign-out. No URL, key, email, password, token, session, user UUID, record UUID, summary UUID, raw row, or raw RPC response is recorded.

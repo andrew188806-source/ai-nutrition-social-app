@@ -17,7 +17,10 @@ const approvedMealQueryFiles = new Set([
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts",
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts"
 ]);
-const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
+const approvedMealRpcFiles = new Set([
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts"
+]);
 
 function pass(name, extra = {}) {
   checks.push({ name, pass: true, ...extra });
