@@ -78,8 +78,8 @@ export class ConsumerTodayIntakeOverviewService {
     let storedSummaryStatus: ConsumerTodayIntakeOverview["storedSummaryStatus"] = "available";
     if (!storedResult.ok) {
       if (storedResult.error instanceof ConsumerDailySummaryNotFoundError || storedResult.error.code === "daily_summary_not_found") {
-        storedSummaryStatus = "missing";
-        warnings.push("stored_summary_missing");
+        storedSummaryStatus = "unavailable";
+        warnings.push("stored_summary_unavailable");
       } else if (storedResult.error instanceof ConsumerDailySummarySourceUnavailableError || storedResult.error.code === "daily_summary_source_unavailable") {
         storedSummaryStatus = "unavailable";
         warnings.push("stored_summary_unavailable");
@@ -99,6 +99,9 @@ export class ConsumerTodayIntakeOverviewService {
       : null;
     const plannedMeals = plannedMealsResult?.ok ? plannedMealsResult.value : [];
     let plannedMealsStatus: ConsumerTodayIntakeOverview["plannedMealsStatus"] = "unavailable";
+    if (!plannedMealsResult) {
+      warnings.push("planned_meals_unavailable");
+    }
     if (plannedMealsResult?.ok) {
       plannedMealsStatus = plannedMeals.length > 0 ? "available" : "empty";
     } else if (plannedMealsResult && !plannedMealsResult.ok) {
@@ -165,8 +168,14 @@ function resolveOverviewStatus(input: {
   plannedMealsStatus: ConsumerTodayIntakeOverview["plannedMealsStatus"];
   warnings: ConsumerTodayIntakeOverviewWarning[];
 }): ConsumerTodayIntakeOverviewStatus {
-  const blockingWarnings = input.warnings.filter((warning) => warning !== "stored_summary_missing" && warning !== "stored_summary_unavailable");
+  const unavailableWarnings = new Set<ConsumerTodayIntakeOverviewWarning>([
+    "stored_summary_missing",
+    "stored_summary_unavailable",
+    "planned_meals_unavailable"
+  ]);
+  const blockingWarnings = input.warnings.filter((warning) => !unavailableWarnings.has(warning));
   if (blockingWarnings.length > 0 || input.storedSummaryStatus === "error" || input.plannedMealsStatus === "error") return "partial";
+  if (input.mealCount > 0 && input.warnings.some((warning) => unavailableWarnings.has(warning))) return "partial";
   return input.mealCount > 0 ? "complete" : "empty";
 }
 

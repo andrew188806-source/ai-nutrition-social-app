@@ -951,3 +951,40 @@ Boundary:
 - Planned meals are separated from actual consumed totals.
 - Stored summary missing is metadata, not an empty-day substitute or transport failure.
 - Empty actual consumed day is not an error.
+
+## 39. Consumer Runtime Integration Phase 2H Status
+
+Consumer Runtime Integration Phase 2H Development Live Shared Intake Read is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Completed in repository:
+
+- Phase 2H guard script: `npm run test:consumer-phase2h`.
+- Phase 2H live smoke script: `npm run test:consumer-phase2h-live-smoke`.
+- Default live smoke skip behavior.
+- Explicit Development live shared overview smoke.
+- Shared overview partial semantics for unavailable optional sources.
+- Phase 2H documentation and handoff status.
+
+Development verification:
+
+- Supabase CLI version was checked.
+- Read-only migration list completed successfully.
+- Local and remote migration history are aligned.
+- Required development migrations are present: `20260713040100`, `20260713050100`, and `20260713060100`.
+- Explicit live smoke passed with current-user Auth, one live meal, calculated nutrition parity, stored summary unavailable, planned meals unavailable, partial overview status, deterministic repeat read, and sign-out.
+
+Live result:
+
+- Overview status: `partial`.
+- Meal count: `1`.
+- Item count: `1`.
+- Stored summary status: `unavailable`.
+- Planned meals status: `unavailable`.
+- Partial reasons: `planned_meals_unavailable`, `stored_summary_unavailable`.
+
+Boundary:
+
+- No Mobile UI or navigation wiring.
+- No Home or Today Intake cutover.
+- No migration, RLS, grant, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL, seed, fixture, bootstrap, production deployment, push, or next phase work.
+- No credentials, tokens, sessions, user IDs, record IDs, item IDs, summary IDs, raw rows, raw responses, URL, or key are recorded in repository documentation.

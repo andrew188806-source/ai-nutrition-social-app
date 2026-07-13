@@ -339,3 +339,13 @@ The phase adds a canonical shared read model, `ConsumerTodayIntakeOverview`, plu
 Stored summaries remain cached projections. Stored summary not-found is metadata, not failure. Stored item count unavailable remains explicit. Planned meals stay separate from actual consumed totals. The factory rejects mixed meal/summary sources and write-enabled flags.
 
 The Phase 2G live smoke is hard-skipped with `SKIPPED - Consumer Runtime Home/Today Intake shared live verification has not started.`
+
+## 26. Phase 2H Follow-Up
+
+Consumer Runtime Integration Phase 2H Development Live Shared Intake Read is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Phase 2H adds no active migration, RLS change, grant change, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL execution, seed, fixture, UI wiring, navigation wiring, Home/Today Intake cutover, Restaurant Web runtime, Admin runtime, production deployment, push, or next phase work.
+
+The default Phase 2H live smoke is skipped without explicit opt-in. The explicit Development live smoke passed through current-user Auth, live Meal Records read, live Daily Nutrition Summary read, Phase 2E recalculation, Phase 2G shared orchestration, deterministic repeat read, and sign-out.
+
+The verified live overview is `partial` because actual consumed meal data exists while optional stored summary and planned meals runtime are unavailable. Partial reasons are `planned_meals_unavailable` and `stored_summary_unavailable`. No mock fallback, raw row leakage, credential output, write, RPC, seed, fixture, or production operation occurred.

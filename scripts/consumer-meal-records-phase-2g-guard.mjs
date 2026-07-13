@@ -283,13 +283,22 @@ async function fakeOverviewTests() {
     mealsResult: auth.ok(records),
     summaryResult: auth.err(new errors.ConsumerDailySummaryNotFoundError())
   }).getCurrentUserTodayIntakeOverview({ date: "2026-07-13" });
-  if (!single.ok || single.value.status !== "complete" || single.value.calculatedNutrition.calories !== 400 || single.value.itemCount !== 2 || single.value.storedSummaryStatus !== "missing") {
-    throw new Error("single-day overview did not calculate item totals or handle missing stored summary");
+  if (
+    !single.ok ||
+    single.value.status !== "partial" ||
+    single.value.calculatedNutrition.calories !== 400 ||
+    single.value.itemCount !== 2 ||
+    single.value.storedSummaryStatus !== "unavailable" ||
+    !single.value.warnings.includes("stored_summary_unavailable") ||
+    !single.value.warnings.includes("planned_meals_unavailable")
+  ) {
+    throw new Error("single-day overview did not calculate item totals or mark unavailable optional sources as partial");
   }
 
   const parityMatch = await serviceFor({
     mealsResult: auth.ok(records),
-    summaryResult: auth.ok(calculatedSummary)
+    summaryResult: auth.ok(calculatedSummary),
+    plannedResult: auth.ok([])
   }).getCurrentUserTodayIntakeOverview({ date: "2026-07-13" });
   if (!parityMatch.ok || parityMatch.value.status !== "complete" || parityMatch.value.warnings.includes("stored_summary_parity_mismatch")) {
     throw new Error("matching stored summary should not create parity warning");

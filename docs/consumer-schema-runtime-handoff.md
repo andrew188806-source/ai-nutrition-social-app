@@ -338,3 +338,15 @@ The shared service reuses the Phase 2A / 2B meal read service, the Phase 2E calc
 Home and Today Intake remain unwired in Phase 2G. Their current route-local view models still use the existing analysis meal record store until a future UI cutover. The live shared-model smoke is intentionally hard-skipped with `SKIPPED - Consumer Runtime Home/Today Intake shared live verification has not started.`
 
 Phase 2G does not add a migration, modify schema/RLS/grants, execute a remote Supabase operation, create seed/fixture/bootstrap data, change UI or navigation, touch Restaurant Web or Admin runtime, deploy to production, or start the next phase.
+
+## Phase 2H Development Live Shared Intake Read Result
+
+Consumer Runtime Integration Phase 2H Development Live Shared Intake Read is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Phase 2H verifies the Phase 2G shared overview against Development Supabase with explicit opt-in. It reuses the current-user Meal Records read service, the Daily Nutrition Summary read service, the Phase 2E calculator, and the Phase 2G shared overview service. The default live smoke remains skipped without explicit opt-in and creates no client, network request, read, write, RPC, seed, fixture, or next-phase work.
+
+The explicit Development live smoke passed: live flags were accepted, sign-in succeeded, canonical session mapping succeeded, current-user meal read returned one meal, shared overview read succeeded, calculated nutrition matched the Phase 2E calculator, deterministic repeat read passed, and sign-out succeeded.
+
+The live overview result is intentionally `partial`: actual meal data and calculated nutrition are available, while the stored daily summary is typed unavailable and planned meals runtime is unavailable. Partial reasons are `planned_meals_unavailable` and `stored_summary_unavailable`. Planned meals are not included in actual consumed totals. Stored summary absence does not erase calculated nutrition or fall back to mock.
+
+Phase 2H does not add a migration, modify schema/RLS/grants, execute database writes, invoke RPC, write summaries, write planned meals, create seed/fixture/bootstrap data, change UI or navigation, touch Restaurant Web or Admin runtime, deploy to production, push, or start the next phase.
