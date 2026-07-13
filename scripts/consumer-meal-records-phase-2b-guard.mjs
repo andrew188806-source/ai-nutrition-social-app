@@ -13,6 +13,7 @@ const checks = [];
 
 const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
 const approvedMealQueryFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts"]);
+const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
 const mealGrantMigrationName = "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql";
 const expectedMigrationFiles = [
   "20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql",
@@ -30,7 +31,8 @@ const expectedMigrationFiles = [
   "20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql",
   "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
-  mealGrantMigrationName
+  mealGrantMigrationName,
+  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -85,7 +87,7 @@ const forbiddenMealPatterns = [
   [/service[_-]?role/i, "Privileged service credentials must not appear in Mobile Consumer source."],
   [new RegExp("SUPABASE_" + "SERVICE", "i"), "Privileged Supabase env vars must not appear in Mobile Consumer source."],
   [new RegExp("SECRET_" + "KEY", "i"), "Secret env vars must not appear in Mobile Consumer source."],
-  [/\.(insert|upsert|update|delete|rpc)\s*\(/, "Consumer meal source must not add writes or RPC calls."],
+  [/\.(insert|upsert|update|delete)\s*\(/, "Consumer meal source must not add direct writes."],
   [/storage\.from\s*\(/, "Consumer meal source must not add Supabase Storage calls."],
   [/\b(userId|ownerId|profileId|externalUserId)\s*[:?]\s*string\b/, "Meal read API must not accept arbitrary user identity input."],
   [/select\s*\(\s*["']\*["']\s*\)/, "Consumer meal reads must use explicit column allowlists."]
@@ -100,6 +102,11 @@ const mealDatabaseQueryMatches = mealSourceText.filter((item) => /\.\s*from\s*\(
 const unapprovedMealQueries = mealDatabaseQueryMatches.filter((file) => !approvedMealQueryFiles.has(file));
 if (unapprovedMealQueries.length) fail("database query calls limited to meal read adapter", "Consumer meal database queries may only appear in the approved adapter.", { matches: unapprovedMealQueries });
 else pass("database query calls limited to meal read adapter", { matches: mealDatabaseQueryMatches });
+
+const mealRpcMatches = mealSourceText.filter((item) => /\.\s*rpc\s*\(/.test(item.text)).map((item) => item.rel);
+const unapprovedMealRpc = mealRpcMatches.filter((file) => !approvedMealRpcFiles.has(file));
+if (unapprovedMealRpc.length) fail("RPC calls limited to atomic meal write adapter", "Consumer meal RPC calls may only appear in the approved Phase 2D write adapter.", { matches: unapprovedMealRpc });
+else pass("RPC calls limited to atomic meal write adapter", { matches: mealRpcMatches });
 
 const repositoryText = fs.readFileSync(path.join(mealRoot, "adapters", "supabaseConsumerMealRecordsRepository.ts"), "utf8");
 if (/\.order\("occurred_at",\s*\{\s*ascending:\s*false\s*\}\)\s*[\s\S]*\.order\("id",\s*\{\s*ascending:\s*false\s*\}\)/.test(repositoryText)) {

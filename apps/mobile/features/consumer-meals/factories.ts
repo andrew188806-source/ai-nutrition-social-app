@@ -78,7 +78,14 @@ export function createConsumerMealRecordWriteRepository(
   if (flags.mealRecordsSource === "mock") {
     return new MockConsumerMealRecordWriteRepository({ authPort: dependencies.authPort });
   }
-  return new SupabaseConsumerMealRecordWriteRepository({ authPort: dependencies.authPort });
+  if (!dependencies.mealClient) {
+    throw new ConsumerMealWriteConfigurationInvalidError("Consumer live meal writes require an explicit meal client.");
+  }
+  return new SupabaseConsumerMealRecordWriteRepository({
+    authPort: dependencies.authPort,
+    mealClient: dependencies.mealClient,
+    writeEnabled: flags.mealRecordLiveWriteOptIn
+  });
 }
 
 export function createConsumerMealRecordWriteService(

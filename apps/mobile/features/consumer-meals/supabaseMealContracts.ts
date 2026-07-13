@@ -6,6 +6,7 @@ import type {
 } from "./types";
 
 export const SUPABASE_CONSUMER_MEAL_RECORDS_TABLE = "meal_records" as const;
+export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION = "create_current_user_meal_record" as const;
 
 export const SUPABASE_CONSUMER_MEAL_RECORD_SELECT_COLUMNS = [
   "id",
@@ -79,6 +80,23 @@ export type SupabaseMealRecordListResponseLike = {
   status?: number | null;
 };
 
+export type SupabaseMealRecordRpcResponseLike = {
+  data?: SupabaseMealRecordRowLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
+export type SupabaseCreateMealRecordRpcArgs = {
+  p_meal_type: ConsumerMealType;
+  p_occurred_at: string;
+  p_meal_date: string;
+  p_timezone: string;
+  p_title: string | null | undefined;
+  p_note: string | null | undefined;
+  p_source: ConsumerMealSourceType;
+  p_items: Array<Record<string, unknown>>;
+};
+
 export type SupabaseMealQueryBuilderLike = {
   select(columns: string): SupabaseMealQueryBuilderLike;
   eq(column: string, value: string): SupabaseMealQueryBuilderLike;
@@ -91,4 +109,8 @@ export type SupabaseMealQueryBuilderLike = {
 
 export type SupabaseConsumerMealClientLike = {
   from(table: typeof SUPABASE_CONSUMER_MEAL_RECORDS_TABLE): SupabaseMealQueryBuilderLike;
+  rpc(
+    fn: typeof SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
+    args: SupabaseCreateMealRecordRpcArgs
+  ): Promise<SupabaseMealRecordRpcResponseLike>;
 };

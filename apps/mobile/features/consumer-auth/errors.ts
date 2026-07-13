@@ -32,11 +32,14 @@ export type ConsumerAuthErrorCode =
   | "meal_write_invalid_items"
   | "meal_write_payload_too_large"
   | "meal_write_ownership_field_rejected"
+  | "meal_write_authorization_failed"
+  | "meal_write_function_rejected"
   | "meal_write_configuration_invalid"
   | "meal_write_transport_failed"
   | "meal_write_mapping_failed"
   | "meal_write_atomicity_not_supported"
   | "meal_write_partial_write_prevented"
+  | "meal_write_read_after_write_failed"
   | "session_expired"
   | "account_disabled"
   | "configuration_error";
@@ -251,6 +254,18 @@ export class ConsumerMealWriteOwnershipFieldRejectedError extends ConsumerAuthEr
   }
 }
 
+export class ConsumerMealWriteAuthorizationFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write was not authorized.") {
+    super("meal_write_authorization_failed", message);
+  }
+}
+
+export class ConsumerMealWriteFunctionRejectedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write function rejected the payload.") {
+    super("meal_write_function_rejected", message, false);
+  }
+}
+
 export class ConsumerMealWriteConfigurationInvalidError extends ConsumerAuthError {
   constructor(message = "Consumer meal write runtime configuration is invalid.") {
     super("meal_write_configuration_invalid", message, false);
@@ -278,6 +293,12 @@ export class ConsumerMealWriteAtomicityNotSupportedError extends ConsumerAuthErr
 export class ConsumerMealWritePartialWritePreventedError extends ConsumerAuthError {
   constructor(message = "Consumer meal write was prevented to avoid partial data.") {
     super("meal_write_partial_write_prevented", message, false);
+  }
+}
+
+export class ConsumerMealWriteReadAfterWriteFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write could not be verified after creation.") {
+    super("meal_write_read_after_write_failed", message);
   }
 }
 

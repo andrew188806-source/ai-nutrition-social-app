@@ -803,3 +803,45 @@ Boundary:
 - Atomic live writes: deferred to Phase 2D.
 
 No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, schema migration, RLS migration, grant migration, remote migration, Consumer Runtime live write, RPC, raw SQL, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, raw row, row contents, seed, or fixture was created by Phase 2C.
+
+## 35. Consumer Runtime Integration Phase 2D Status
+
+Consumer Runtime Integration Phase 2D Atomic Development Live Meal Record Write is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Meal Records source: `mock`.
+- Default Consumer Auth enabled flag: `false`.
+- Default Consumer writes enabled flag: `false`.
+- Default Consumer meal record writes enabled flag: `false`.
+- Default live write opt-in flag: `false`.
+- Development live write path: available only with explicit development-only flags.
+- Atomic write mechanism: `public.create_current_user_meal_record(...)`.
+- Runtime transport: allowlisted Supabase RPC only.
+- Direct insert/update/delete/upsert: not implemented.
+- Development live write smoke: passed with read-after-write.
+- Home / Today Intake / Meal Log cutover: not started.
+- Daily Nutrition Summary runtime: not started.
+- Corrections, consumption adjustments, ratings, favorites, recommendation feedback, social, orders, payments, and Admin Consumer Governance: not started.
+- Next phase: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-2d-atomic-development-live-meal-write.md`
+- `supabase/migrations/20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql`
+- `apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts`
+- `scripts/consumer-meal-records-phase-2d-guard.mjs`
+- `scripts/consumer-meal-records-phase-2d-live-smoke.mjs`
+
+Boundary:
+
+- Ownership source: `auth.uid()` inside the database function.
+- Runtime ownership source: current authenticated session only.
+- Caller-provided identity: rejected.
+- Parent and items: inserted in one function transaction.
+- Direct table write grants: not granted.
+- Function execute: authenticated only.
+- Read-after-write: verified through the current-user meal read service.
+
+No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, Restaurant schema change, seed, fixture, profile bootstrap, automatic meal bootstrap, direct sequential meal write, update, delete, upsert, raw SQL runtime, Storage upload, Realtime connection, production credential, URL/key/email/password/user ID/token/full session/raw row/record ID/item ID output, production deployment, push, or next phase work was created by Phase 2D.

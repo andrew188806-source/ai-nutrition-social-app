@@ -50,6 +50,12 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED,
     issues
   );
+  const mealRecordLiveWriteOptIn = parseBooleanFlag(
+    "EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN",
+    env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN,
+    issues
+  );
+  const runtimeEnvironment = env.EXPO_PUBLIC_TASTKIND_ENVIRONMENT ?? env.TASTKIND_ENVIRONMENT ?? "development";
 
   if (authSource === "supabase-live" && !supabaseAuthEnabled) {
     issues.push("Supabase live auth source requires EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
@@ -69,9 +75,15 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (supabaseWritesEnabled && !mealRecordWritesEnabled) {
     issues.push("Consumer Supabase writes require EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED=true for meal write preparation.");
   }
-  if (supabaseWritesEnabled && mealRecordsSource === "supabase-live") {
-    issues.push("Supabase live meal writes are not enabled in Consumer Runtime Phase 2C.");
+  if (mealRecordLiveWriteOptIn && (!supabaseWritesEnabled || !mealRecordWritesEnabled)) {
+    issues.push("Consumer meal record live write opt-in requires global writes and meal record writes to be enabled.");
+  }
+  if (supabaseWritesEnabled && mealRecordsSource === "supabase-live" && !mealRecordLiveWriteOptIn) {
+    issues.push("Supabase live meal writes require EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN=true in Consumer Runtime Phase 2D.");
+  }
+  if (supabaseWritesEnabled && mealRecordsSource === "supabase-live" && runtimeEnvironment !== "development") {
+    issues.push("Supabase live meal writes are development-only in Consumer Runtime Phase 2D.");
   }
 
-  return { authSource, mealRecordsSource, supabaseAuthEnabled, supabaseWritesEnabled, mealRecordWritesEnabled, issues };
+  return { authSource, mealRecordsSource, supabaseAuthEnabled, supabaseWritesEnabled, mealRecordWritesEnabled, mealRecordLiveWriteOptIn, issues };
 }

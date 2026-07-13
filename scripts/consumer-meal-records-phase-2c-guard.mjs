@@ -12,6 +12,7 @@ const checks = [];
 
 const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
 const approvedMealQueryFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts"]);
+const approvedMealRpcFiles = new Set(["apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts"]);
 const expectedMigrationFiles = [
   "20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql",
   "20260712130200_consumer_schema_phase_1_3_consumer_profiles.sql",
@@ -28,7 +29,8 @@ const expectedMigrationFiles = [
   "20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql",
   "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
-  "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql"
+  "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
+  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -79,7 +81,7 @@ const forbiddenMealPatterns = [
   [/service[_-]?role/i, "Privileged service credentials must not appear in Mobile Consumer source."],
   [new RegExp("SUPABASE_" + "SERVICE", "i"), "Privileged Supabase env vars must not appear in Mobile Consumer source."],
   [new RegExp("SECRET_" + "KEY", "i"), "Secret env vars must not appear in Mobile Consumer source."],
-  [/\.(insert|upsert|update|delete|rpc)\s*\(/, "Consumer meal source must not add active writes or RPC calls."],
+  [/\.(insert|upsert|update|delete)\s*\(/, "Consumer meal source must not add active direct writes."],
   [/storage\.from\s*\(/, "Consumer meal source must not add Supabase Storage calls."],
   [/\b(userId|ownerId|profileId|externalUserId)\s*[:?]\s*string\b/, "Meal write API must not accept arbitrary user identity input."],
   [/select\s*\(\s*["']\*["']\s*\)/, "Consumer meal reads must use explicit column allowlists."]
@@ -95,11 +97,16 @@ const unapprovedMealQueries = mealDatabaseQueryMatches.filter((file) => !approve
 if (unapprovedMealQueries.length) fail("database query calls limited to meal read adapter", "Consumer meal database queries may only appear in the approved read adapter.", { matches: unapprovedMealQueries });
 else pass("database query calls limited to meal read adapter", { matches: mealDatabaseQueryMatches });
 
+const mealRpcMatches = mealSourceText.filter((item) => /\.\s*rpc\s*\(/.test(item.text)).map((item) => item.rel);
+const unapprovedMealRpc = mealRpcMatches.filter((file) => !approvedMealRpcFiles.has(file));
+if (unapprovedMealRpc.length) fail("RPC calls limited to atomic meal write adapter", "Consumer meal RPC calls may only appear in the approved Phase 2D write adapter.", { matches: unapprovedMealRpc });
+else pass("RPC calls limited to atomic meal write adapter", { matches: mealRpcMatches });
+
 const writeRepoText = fs.readFileSync(path.join(mealRoot, "adapters", "supabaseConsumerMealRecordWriteRepository.ts"), "utf8");
-if (/ConsumerMealWriteAtomicityNotSupportedError/.test(writeRepoText) && !/\.\s*from\s*\(/.test(writeRepoText)) {
-  pass("Supabase meal write repository fails closed before transport");
+if (/SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION/.test(writeRepoText) && /\.\s*rpc\s*\(/.test(writeRepoText) && !/\.\s*from\s*\(/.test(writeRepoText)) {
+  pass("Supabase meal write repository uses approved atomic RPC only");
 } else {
-  fail("Supabase meal write repository fails closed before transport", "Phase 2C live write adapter must not create a Supabase write transport path.");
+  fail("Supabase meal write repository uses approved atomic RPC only", "Phase 2D live write adapter must use only the approved atomic RPC.");
 }
 
 const migrationFiles = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((name) => name.endsWith(".sql")).sort();
@@ -236,7 +243,7 @@ async function fakeMealWriteTests() {
     EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED: "true",
     EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED: "true"
   });
-  if (!liveWriteFlags.issues.some((issue) => issue.includes("Phase 2C"))) throw new Error("live Supabase meal writes must remain blocked in Phase 2C flags");
+  if (!liveWriteFlags.issues.some((issue) => issue.includes("LIVE_WRITE_OPT_IN"))) throw new Error("live Supabase meal writes must require explicit Phase 2D opt-in");
 
   validation.validateCreateMealRecordInput(validCreateInput);
   validation.validateCreateMealRecordInput({ ...validCreateInput, mealDate: "2024-02-29", occurredAt: "2024-02-29T00:00:00.000Z" });
@@ -269,10 +276,12 @@ async function fakeMealWriteTests() {
   if (disabled.ok || disabled.error.code !== "meal_write_disabled") throw new Error("disabled write repository did not fail closed");
 
   const liveRepo = new liveWriteRepoModule.SupabaseConsumerMealRecordWriteRepository({
-    authPort: authPortFor(() => auth.ok(validSession))
+    authPort: authPortFor(() => auth.ok(validSession)),
+    mealClient: { rpc: async () => ({ data: null, error: null, status: 200 }) },
+    writeEnabled: false
   });
   const live = await liveRepo.createCurrentUserMealRecord(validCreateInput);
-  if (live.ok || live.error.code !== "meal_write_atomicity_not_supported") throw new Error("live write repository did not fail closed on atomicity");
+  if (live.ok || live.error.code !== "meal_write_phase_not_enabled") throw new Error("live write repository did not fail closed without explicit write enablement");
 
   const service = new writeServiceModule.ConsumerMealRecordWriteService({ repository: mockRepo });
   const delegated = await service.createCurrentUserMealRecord(validCreateInput);

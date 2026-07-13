@@ -12,6 +12,7 @@ export type ConsumerMealRuntimeFlags = {
   supabaseAuthEnabled: boolean;
   supabaseWritesEnabled: boolean;
   mealRecordWritesEnabled: boolean;
+  mealRecordLiveWriteOptIn: boolean;
   issues: string[];
 };
 

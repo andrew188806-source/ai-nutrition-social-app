@@ -42,7 +42,8 @@ const expectedMigrationFiles = [
   "20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql",
   "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
   "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
-  "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql"
+  "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
+  "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql"
 ];
 
 const requiredTables = [
@@ -79,7 +80,7 @@ const expectedObjectCounts = {
   indexes: 28,
   policies: 24,
   types: 13,
-  functions: 1
+  functions: 2
 };
 
 function pass(name, extra = {}) {
@@ -151,6 +152,7 @@ const grantMigrationName = "20260713030100_consumer_schema_phase_1_3_authenticat
 const grantMigration = activeTexts.find((item) => item.fileName === grantMigrationName);
 const mealGrantMigrationName = "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql";
 const mealGrantMigration = activeTexts.find((item) => item.fileName === mealGrantMigrationName);
+const atomicMealWriteMigrationName = "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql";
 
 const bomByteFailures = activeTexts
   .filter((item) => item.bytes.length >= 3 && item.bytes[0] === 0xef && item.bytes[1] === 0xbb && item.bytes[2] === 0xbf)
@@ -225,7 +227,8 @@ const grantStatements = matches(allActiveSql, /\bgrant\b[\s\S]*?;/gi).map((match
 const expectedGrant = "grant select on table public.consumer_profiles to authenticated;";
 const expectedMealRecordGrant = "grant select on table public.meal_records to authenticated;";
 const expectedMealRecordItemGrant = "grant select on table public.meal_record_items to authenticated;";
-const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant];
+const expectedMealWriteFunctionGrant = "grant execute on function public.create_current_user_meal_record( public.meal_type, timestamptz, date, text, text, text, public.meal_source_type, jsonb ) to authenticated;";
+const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedMealWriteFunctionGrant];
 const unexpectedGrants = grantStatements.filter((statement) => !allowedGrantStatements.includes(statement));
 if (unexpectedGrants.length) fail("no unexpected grants in active migrations", "Only authenticated SELECT grants for consumer_profiles, meal_records, and meal_record_items are allowed in active Phase 1.3 migrations.", { unexpectedGrants });
 else pass("no unexpected grants in active migrations", { grantCount: grantStatements.length });
@@ -283,7 +286,7 @@ for (const item of activeTexts) {
   for (const match of matches(item.clean, /create\s+(?:unique\s+)?index\s+([a-z_][a-z0-9_]*)\s+on\s+([a-z_][a-z0-9_]*)/gi)) objectCounts.indexes.add(match[1]);
   for (const match of matches(item.clean, /create\s+policy\s+([a-z_][a-z0-9_]*)\s+on\s+([a-z_][a-z0-9_]*)/gi)) objectCounts.policies.add(match[1]);
   for (const match of matches(item.clean, /create\s+type\s+([a-z_][a-z0-9_]*)\s+as\s+enum/gi)) objectCounts.types.add(match[1]);
-  for (const match of matches(item.clean, /create\s+(?:or\s+replace\s+)?function\s+([a-z_][a-z0-9_]*)\s*\(/gi)) objectCounts.functions.add(match[1]);
+  for (const match of matches(item.clean, /create\s+(?:or\s+replace\s+)?function\s+(?:([a-z_][a-z0-9_]*)\.)?([a-z_][a-z0-9_]*)\s*\(/gi)) objectCounts.functions.add(match[2]);
 }
 
 const actualObjectCounts = {
@@ -324,9 +327,28 @@ const forbiddenSqlPatterns = [
 ];
 
 for (const [pattern, message] of forbiddenSqlPatterns) {
-  const found = activeTexts.filter((item) => pattern.test(item.clean)).map((item) => item.rel);
+  const found = activeTexts.filter((item) => item.fileName !== atomicMealWriteMigrationName && pattern.test(item.clean)).map((item) => item.rel);
   if (found.length) fail(`forbidden active migration pattern: ${pattern}`, message, { matches: found });
   else pass(`forbidden active migration pattern absent: ${pattern}`);
+}
+
+const atomicMigration = activeTexts.find((item) => item.fileName === atomicMealWriteMigrationName);
+if (atomicMigration) {
+  const clean = atomicMigration.clean.toLowerCase();
+  if (/create\s+or\s+replace\s+function\s+public\.create_current_user_meal_record/.test(clean)) pass("atomic meal write function exists");
+  else fail("atomic meal write function exists", "Phase 2D migration must create public.create_current_user_meal_record.");
+  if (/security\s+definer/.test(clean) && /set\s+search_path\s*=\s*public\s*,\s*pg_temp/.test(clean)) pass("atomic meal write function has safe security configuration");
+  else fail("atomic meal write function has safe security configuration", "Atomic function must be SECURITY DEFINER with fixed search_path.");
+  if (/auth\.uid\(\)/.test(clean) && !/\bp_user_id\b|\buser_id\s+uuid\s+default\b/.test(clean)) pass("atomic meal write function derives user from auth.uid only");
+  else fail("atomic meal write function derives user from auth.uid only", "Atomic function must not accept caller-provided user identity.");
+  if (/revoke\s+all\s+on\s+function[\s\S]*from\s+public\s*;/.test(clean) && /revoke\s+all\s+on\s+function[\s\S]*from\s+anon\s*;/.test(clean) && /grant\s+execute\s+on\s+function[\s\S]*to\s+authenticated\s*;/.test(clean)) pass("atomic meal write function execute grants are bounded");
+  else fail("atomic meal write function execute grants are bounded", "Atomic function must revoke public and anon execute, then grant authenticated execute.");
+  if (!/\bexecute\s*\(/i.test(clean) && !/\bformat\s*\(/i.test(clean)) pass("atomic meal write function contains no dynamic SQL helpers");
+  else fail("atomic meal write function contains no dynamic SQL helpers", "Atomic function must not use dynamic SQL.");
+  if (/insert\s+into\s+public\.meal_records/.test(clean) && /insert\s+into\s+public\.meal_record_items/.test(clean)) pass("atomic meal write function inserts parent and items");
+  else fail("atomic meal write function inserts parent and items", "Atomic function must insert parent and item rows in one function transaction.");
+} else {
+  fail("atomic meal write function migration exists", "Missing Phase 2D atomic meal write function migration.");
 }
 
 const authFkTables = [...matches(allActiveSql, /user_id\s+uuid\s+(?:not\s+null\s+)?(?:unique\s+)?references\s+auth\.users\(id\)/gi)];
