@@ -28,7 +28,8 @@ const expectedMigrationFiles = [
   "20260712131200_consumer_schema_phase_1_3_consumer_indexes.sql",
   "20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql",
   "20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
-  "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql"
+  "20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
+  "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql"
 ];
 const requiredMealFiles = [
   "types.ts",
@@ -147,8 +148,8 @@ if (crossSurfaceImports.length) fail("Restaurant/Admin do not import Mobile Cons
 else pass("Restaurant/Admin do not import Mobile Consumer Meals");
 
 const migrationFiles = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((name) => name.endsWith(".sql")).sort();
-if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("Phase 2A creates no schema migration", { count: migrationFiles.length });
-else fail("Phase 2A creates no schema migration", "Phase 2A must not add schema, RLS, or grant migrations.", { migrationFiles, expectedMigrationFiles });
+if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("Phase 2A/2B migration inventory is explicitly allowlisted", { count: migrationFiles.length });
+else fail("Phase 2A/2B migration inventory is explicitly allowlisted", "Consumer Runtime Phase 2A plus Phase 2B may only include the frozen schema package and the approved forward-only grants.", { migrationFiles, expectedMigrationFiles });
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "consumer-meal-phase2a-"));
 for (const file of sourceFiles) {

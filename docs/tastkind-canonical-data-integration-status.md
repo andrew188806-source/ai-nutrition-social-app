@@ -718,3 +718,47 @@ Runtime boundary:
 - Malformed row: typed mapping error, no fallback.
 
 No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, schema migration, RLS migration, grant migration, seed, fixture, Consumer Runtime write, RPC, raw SQL, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, raw row, row contents, or fixture contents were recorded in the repository.
+
+## 33. Consumer Runtime Integration Phase 2B Status
+
+Consumer Runtime Integration Phase 2B Development Live Meal Records Read Verification is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Status:
+
+- Default Consumer Auth source: `mock`.
+- Default Consumer Meal Records source: `mock`.
+- Default Consumer Auth enabled flag: `false`.
+- Default Consumer writes enabled flag: `false`.
+- Development live meal read path: available only with explicit Phase 2B opt-in flags.
+- Development live meal read smoke: passed with authenticated sign-in, current-user meal read, canonical empty list, and sign-out.
+- Home / Today Intake / Meal Log cutover: not started.
+- Daily Nutrition Summary runtime: not started.
+- Meal writes, updates, deletes, corrections, ratings, favorites, recommendation feedback, social, orders, payments, and Admin Consumer Governance: not started.
+- Phase 2C: not started.
+
+Artifacts:
+
+- `docs/consumer-runtime-integration/phase-2b-development-live-meal-read.md`
+- `supabase/migrations/20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql`
+- `scripts/consumer-meal-records-phase-2b-guard.mjs`
+- `scripts/consumer-meal-records-phase-2b-live-smoke.mjs`
+
+Runtime boundary:
+
+- Approved live read API: `ConsumerMealRecordsService.listCurrentUserMealRecords()`.
+- Approved table: `meal_records`.
+- Approved nested rows: `meal_record_items` through explicit column allowlist.
+- Ownership source: current authenticated session `userId`.
+- Arbitrary user-id meal lookup: not exposed.
+- Empty result: canonical empty list.
+- Malformed row: typed mapping error, no fallback.
+- Stable ordering: `occurred_at desc`, then `id desc`.
+
+Corrective migration:
+
+- Grants authenticated SELECT on `public.meal_records`.
+- Grants authenticated SELECT on `public.meal_record_items`.
+- Revokes anon privileges on both meal read tables.
+- Does not grant writes, use `GRANT ALL`, create data, change policies, change schema objects, seed, create fixtures, or touch production.
+
+No Mobile UI, navigation, Restaurant Web runtime, Admin runtime, Consumer Runtime write, RPC, raw SQL, Storage upload, Realtime connection, service-role key, production credential, URL/key/email/password/user ID/token, full session, raw row, row contents, or fixture contents were recorded in the repository.

@@ -54,6 +54,7 @@ export class SupabaseConsumerMealRecordsRepository implements ConsumerMealRecord
         .gte("meal_date", range.startDate)
         .lte("meal_date", range.endDate)
         .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
         .limit(range.limit);
       if (response.error) return err(mapMealTransportError(response.error));
       const rows = response.data ?? [];

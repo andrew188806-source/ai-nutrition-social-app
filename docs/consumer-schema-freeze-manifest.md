@@ -269,3 +269,15 @@ Phase 2A prepares a read-only current-user Meal Records boundary for `meal_recor
 Phase 2A adds no schema migration, RLS migration, grant migration, seed, fixture, write path, RPC, raw SQL path, UI wiring, navigation wiring, Home/Today Intake cutover, Daily Nutrition Summary runtime, social runtime, recommendation runtime, ratings/favorites runtime, Admin Consumer Governance, production deployment, or Phase 2B work.
 
 The live read preparation preserves the current-user ownership boundary: the repository obtains the canonical session from the Auth boundary, filters `meal_records.user_id` by the current session user, and validates both meal record and meal item ownership while mapping rows into canonical types.
+
+## 20. Phase 2B Follow-Up
+
+Consumer Runtime Integration Phase 2B Development Live Meal Records Read Verification is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Phase 2B hardens the Phase 2A read architecture with strict calendar date validation, deterministic `occurred_at desc, id desc` ordering, mock/live ordering parity, narrower public exports, and typed mock catch-path handling.
+
+Phase 2B adds the forward-only corrective migration `20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql`, which grants only authenticated SELECT on `public.meal_records` and `public.meal_record_items`, and revokes anon privileges on those two tables. It does not change tables, columns, constraints, policies, functions, triggers, data, seeds, fixtures, write privileges, or production configuration.
+
+Development live meal read verification passed against the development project. The authenticated development user had no meal records, so live transport, authorization, canonical empty-list mapping, and sign-out passed; non-empty live row mapping was skipped.
+
+No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write, RPC, raw SQL execution, UI change, navigation change, Home/Today Intake cutover, Daily Nutrition Summary runtime, ratings/favorites/recommendation feedback runtime, production deployment, or Phase 2C work was implemented.

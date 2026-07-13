@@ -17,8 +17,8 @@ export function resolveMealReadRange(input: ConsumerMealReadInput = {}, today = 
   if (!Number.isInteger(limit) || limit < 1 || limit > maxLimit) {
     throw new ConsumerMealReadInvalidRangeError(`Meal read limit must be between 1 and ${maxLimit}.`);
   }
-  const start = Date.parse(`${startDate}T00:00:00.000Z`);
-  const end = Date.parse(`${endDate}T00:00:00.000Z`);
+  const start = parseDateKey(startDate);
+  const end = parseDateKey(endDate);
   if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
     throw new ConsumerMealReadInvalidRangeError("Meal read startDate must be on or before endDate.");
   }
@@ -37,4 +37,20 @@ function addDays(dateKey: string, days: number): string {
   const date = new Date(`${dateKey}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return toDateKey(date);
+}
+
+function parseDateKey(dateKey: string): number {
+  const [yearText, monthText, dayText] = dateKey.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day) || year < 1) {
+    return Number.NaN;
+  }
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    return Number.NaN;
+  }
+  return timestamp;
 }

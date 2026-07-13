@@ -219,3 +219,29 @@ Still not done:
 Current live read table allowlist: `meal_records` through the Phase 2A meal read adapter. Nested `meal_record_items` are selected only as child rows in the explicit column allowlist.
 
 No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, raw SQL, RPC, profile bootstrap, automatic profile creation, UI change, navigation change, Restaurant Web runtime change, or Admin runtime change was made. Consumer Runtime Phase 2B was not started.
+
+## Phase 2B Development Live Meal Read Result
+
+Consumer Runtime Integration Phase 2B Development Live Meal Records Read Verification is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Completed:
+
+- Phase 2A hardening for strict calendar date validation, stable `occurred_at desc, id desc` ordering, mock/live ordering parity, narrowed public exports, and typed mock catch-path handling.
+- Forward-only corrective migration `20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql`.
+- Authenticated SELECT grants for `public.meal_records` and `public.meal_record_items`.
+- Explicit anon privilege revokes for both meal read tables.
+- Phase 2B guard script: `npm run test:consumer-phase2b`.
+- Opt-in development live meal read smoke script: `npm run test:consumer-phase2b-live-smoke`.
+- Development live smoke passed for live flags, email sign-in, canonical session, current-user meal read, canonical empty list, and sign-out.
+
+Still not done:
+
+- Home / Today Intake / Meal Log cutover.
+- Daily Nutrition Summary runtime.
+- Meal writes, updates, deletes, corrections, consumption adjustments, ratings, favorites, recommendation feedback, social, orders, payments, Admin governance, or production deployment.
+- Seed, fixture, profile bootstrap, meal bootstrap, or automatic data creation.
+- Phase 2C.
+
+Current live read table allowlist: `meal_records` plus nested `meal_record_items` through the explicit column allowlist. The live repository still rejects arbitrary user identity input and reads only the current authenticated session user's records.
+
+No real Supabase URL/key, email, password, user ID, token, session, raw database row, row contents, or fixture contents are recorded in this repository. No Consumer Runtime write operation, raw SQL, RPC, UI change, navigation change, Restaurant Web runtime change, Admin runtime change, production deployment, or Phase 2C work was made.
