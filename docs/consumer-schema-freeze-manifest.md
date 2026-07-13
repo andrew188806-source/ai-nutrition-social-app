@@ -415,3 +415,28 @@ Frozen schema discovery:
 Default source is `disabled`. Unknown source values fail closed. Default smoke is `SKIPPED` and creates no client, network request, database read, database write, or RPC invocation. Mock contract smoke verifies available, empty, unavailable, deterministic sorting, repeated read, shared overview integration, and planned nutrition separation from actual consumed totals.
 
 Phase 2M prerequisites remain: minimal live read grant if required, RLS ownership verification, Development-only deployment verification, live repository implementation, explicit live smoke, available/empty live read verification, actual/planned nutrition separation verification, no writes, and no production operation.
+
+## 31. Phase 2M Follow-Up
+
+Consumer Runtime Integration Phase 2M Development Live Planned Meals Read is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Phase 2M adds one forward-only active migration:
+
+- `20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql`
+
+The migration grants only authenticated SELECT on `public.planned_meals` and revokes anon privileges on that table. It does not grant direct table writes, does not grant anon SELECT, does not alter RLS policy semantics, and does not change schema objects.
+
+The live planned-meals repository reads only current-user rows by authenticated session and planned date. The runtime source values are now `disabled`, `mock`, and `supabase`, with `supabase_prepared` retained only as deprecated fail-closed compatibility. Default source remains `disabled`.
+
+Frozen schema boundary:
+
+- no planned meal time column exists, so live `plannedTime` remains `null`
+- no planned meal item table exists, so live `items` remains `[]`
+- empty `planned_nutrition_snapshot` maps to canonical `null`
+- planned meals do not affect actual consumed meal count, item count, or nutrition totals
+
+Development live verification passed with planned meals returning canonical `empty`, shared overview reporting `plannedMealsStatus=empty`, no `planned_meals_unavailable` warning, unchanged actual totals, deterministic repeated reads, and sign-out.
+
+No URL, key, email, password, token, session, user UUID, record UUID, planned meal UUID, summary UUID, raw row, raw snapshot, or raw response is recorded.
+
+Phase 2M adds no planned meal write, RPC, seed, fixture, bootstrap, Auth user creation, UI change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2N work.

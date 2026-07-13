@@ -151,6 +151,12 @@ export type SupabaseDailyNutritionSummaryListResponseLike = {
   status?: number | null;
 };
 
+export type SupabasePlannedMealListResponseLike = {
+  data?: SupabasePlannedMealRowLike[] | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
 export type SupabaseMealRecordRpcResponseLike = {
   data?: SupabaseMealRecordRowLike | null;
   error?: SupabaseMealPostgrestErrorLike | null;
@@ -202,6 +208,7 @@ export type SupabaseMealQueryBuilderLike<ResponseLike> = {
 export type SupabaseConsumerMealClientLike = {
   from(table: typeof SUPABASE_CONSUMER_MEAL_RECORDS_TABLE): SupabaseMealQueryBuilderLike<SupabaseMealRecordListResponseLike>;
   from(table: typeof SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE): SupabaseMealQueryBuilderLike<SupabaseDailyNutritionSummaryListResponseLike>;
+  from(table: typeof SUPABASE_CONSUMER_PLANNED_MEALS_TABLE): SupabaseMealQueryBuilderLike<SupabasePlannedMealListResponseLike>;
   rpc(
     fn: typeof SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
     args: SupabaseCreateMealRecordRpcArgs

@@ -14,7 +14,8 @@ const checks = [];
 const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
 const approvedMealQueryFiles = new Set([
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordsRepository.ts",
-  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts"
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerPlannedMealsRepository.ts"
 ]);
 const approvedMealRpcFiles = new Set([
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts",
@@ -40,7 +41,8 @@ const expectedMigrationFiles = [
   mealGrantMigrationName,
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
-  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql"
+  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql",
+  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql"
 ];
 
 function pass(name, extra = {}) {

@@ -28,7 +28,8 @@ const expectedMigrationFiles = [
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
-  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql"
+  "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql",
+  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -78,8 +79,8 @@ if (!/userId\s*\??:|session\s*:|accessToken|token\s*:/.test(types.match(/export 
 else fail("planned meal public input excludes identity and token fields", "Public planned meal input must not accept user/session/token.");
 
 const flags = read("apps/mobile/features/consumer-meals/featureFlags.ts");
-if (/EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE/.test(flags) && /\["disabled", "mock", "supabase_prepared"\]/.test(flags)) pass("planned meals source flag values are disabled/mock/supabase_prepared");
-else fail("planned meals source flag values are disabled/mock/supabase_prepared", "Missing planned meals source selector.");
+if (/EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE/.test(flags) && /\["disabled", "mock", "supabase", "supabase_prepared"\]/.test(flags)) pass("planned meals source flag values include disabled/mock/supabase and deprecated prepared");
+else fail("planned meals source flag values include disabled/mock/supabase and deprecated prepared", "Missing planned meals source selector.");
 if (/if \(!value\) return "disabled"/.test(flags) && /Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE/.test(flags)) pass("planned meals source defaults disabled and unknown fails closed");
 else fail("planned meals source defaults disabled and unknown fails closed", "Planned meals source must default disabled and reject unknown values.");
 
@@ -95,8 +96,9 @@ if (!/\.\s*(insert|upsert|update|delete)\s*\(/.test(plannedSource)) pass("planne
 else fail("planned meals source contains no writes", "Phase 2L must not implement planned meal writes.");
 if (!/\.\s*rpc\s*\(/.test(plannedSource)) pass("planned meals source contains no RPC invocation");
 else fail("planned meals source contains no RPC invocation", "Phase 2L must not invoke planned meal RPC.");
-if (!/\.\s*from\s*\(/.test(plannedSource)) pass("planned meals source contains no direct Supabase query");
-else fail("planned meals source contains no direct Supabase query", "Phase 2L prepared source must not query Supabase.");
+const preparedSource = read("apps/mobile/features/consumer-meals/adapters/supabasePreparedConsumerPlannedMealsRepository.ts");
+if (!/\.\s*from\s*\(/.test(preparedSource)) pass("prepared planned meals source contains no direct Supabase query");
+else fail("prepared planned meals source contains no direct Supabase query", "Phase 2L prepared source must not query Supabase.");
 if (!/@supabase\/supabase-js|react-native-url-polyfill|createClient/.test(plannedSource)) pass("planned meals source creates no Supabase client");
 else fail("planned meals source creates no Supabase client", "Phase 2L must not create a live Supabase client.");
 

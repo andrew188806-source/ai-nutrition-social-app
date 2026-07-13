@@ -58,6 +58,7 @@ Allowed values:
 
 - `disabled`
 - `mock`
+- `supabase` (activated in Phase 2M)
 - `supabase_prepared`
 
 Default:
@@ -85,7 +86,7 @@ Mock source:
 Supabase prepared source:
 
 - records the frozen `planned_meals` table and column mapping
-- returns canonical unavailable because Phase 2M live read has not started
+- returns canonical unavailable as deprecated compatibility after Phase 2M
 - creates no client
 - performs no `.from(...).select(...)`
 - performs no RPC

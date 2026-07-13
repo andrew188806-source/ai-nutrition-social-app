@@ -21,6 +21,7 @@ import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsum
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
 import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
 import { SupabaseConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository";
+import { SupabaseConsumerPlannedMealsRepository } from "./adapters/supabaseConsumerPlannedMealsRepository";
 import { SupabasePreparedConsumerPlannedMealsRepository } from "./adapters/supabasePreparedConsumerPlannedMealsRepository";
 import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
@@ -201,11 +202,29 @@ export function createConsumerDailyNutritionSummaryPersistenceService(
   });
 }
 
-export function createConsumerPlannedMealsRepository(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+export function createConsumerPlannedMealsRepository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
   const flagCheck = assertConsumerMealRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
   if (flags.plannedMealsSource === "mock") return new MockConsumerPlannedMealsRepository();
   if (flags.plannedMealsSource === "supabase_prepared") return new SupabasePreparedConsumerPlannedMealsRepository();
+  if (flags.plannedMealsSource === "supabase") {
+    if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled || flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled) {
+      throw new ConsumerMealSourceConfigurationInvalidError("Consumer live planned meal reads require live Auth, Auth enabled, and read-only runtime flags.");
+    }
+    if (!flags.plannedMealsLiveReadOptIn) {
+      throw new ConsumerMealSourceConfigurationInvalidError("Consumer live planned meal reads require explicit Phase 2M live read opt-in.");
+    }
+    if (!dependencies.authPort) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live planned meal reads require an authenticated ConsumerAuthPort.");
+    if (!dependencies.mealClient) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live planned meal reads require an explicit meal client.");
+    return new SupabaseConsumerPlannedMealsRepository({
+      authPort: dependencies.authPort,
+      mealClient: dependencies.mealClient,
+      readEnabled: flags.plannedMealsLiveReadOptIn
+    });
+  }
   return new SupabaseDisabledConsumerPlannedMealsRepository();
 }
 
@@ -214,7 +233,7 @@ export function createConsumerPlannedMealsService(
   dependencies: ConsumerMealFactoryDependencies = {}
 ) {
   return new ConsumerPlannedMealsService({
-    repository: dependencies.plannedMealsRepository ?? createConsumerPlannedMealsRepository(flags),
+    repository: dependencies.plannedMealsRepository ?? createConsumerPlannedMealsRepository(flags, dependencies),
     clock: dependencies.clock ?? systemClock,
     timezone: dependencies.timezone
   });

@@ -439,3 +439,21 @@ Schema discovery confirmed the active frozen schema has `public.planned_meals`, 
 The shared Today Intake overview now integrates planned meals through `ConsumerPlannedMealsService`. Unavailable planned meals produce `planned_meals_unavailable`; empty planned meals remain distinct from unavailable; available planned meals remain display metadata only and do not change actual consumed meal count, item count, or nutrition totals.
 
 Phase 2L adds no active migration, RLS change, grant change, database read, database write, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, UI layout change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2M work.
+
+## Phase 2M Development Live Planned Meals Read Result
+
+Consumer Runtime Integration Phase 2M Development Live Planned Meals Read is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Phase 2M adds one forward-only active migration:
+
+- `20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql`
+
+The migration grants only authenticated SELECT on `public.planned_meals` and revokes anon privileges on that table. It does not grant INSERT, UPDATE, DELETE, ALL, or anon access; does not modify RLS policy semantics; does not change schema objects; and does not create seed, fixture, bootstrap, Auth users, or consumer rows.
+
+The Mobile runtime now supports `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE=supabase` for explicit Development live planned-meal reads. The default remains `disabled`. The former `supabase_prepared` value is deprecated and fail-closed after Phase 2M.
+
+The live repository derives ownership from the current authenticated session, filters `planned_meals` by `user_id` and `planned_for`, maps frozen row fields, and returns canonical `available` or `empty` when transport succeeds. Because the frozen schema has no planned meal time column and no planned meal item table, live reads map `plannedTime` to `null` and `items` to `[]` rather than inventing data.
+
+Development live verification passed with authenticated sign-in, current-user meal read, planned-meals read returning canonical `empty`, shared Today Intake overview reporting `plannedMealsStatus=empty`, no `planned_meals_unavailable` warning, unchanged actual consumed totals, deterministic repeated planned read, deterministic repeated overview read, and sign-out.
+
+Phase 2M does not change Mobile UI, navigation, Home, Today Intake layout, Restaurant Web runtime, Admin runtime, planned meal writes, planned meal RPC, direct table write grants, schema/RLS policies, seed data, fixtures, profile bootstrap, Auth users, production configuration, push, or Phase 2N work.

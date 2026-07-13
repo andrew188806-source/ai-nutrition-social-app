@@ -33,29 +33,21 @@ export function mapSupabasePlannedMealRowToConsumerPlannedMeal(row: SupabasePlan
     estimatedNutrition,
     status,
     note: row.note ?? null,
-    items: [
-      {
-        plannedMealItemId: `${plannedMealId}:primary`,
-        restaurantId: row.restaurant_id ?? null,
-        branchId: row.branch_id ?? null,
-        menuItemId: row.menu_item_id ?? null,
-        displayName: title,
-        estimatedNutrition
-      }
-    ]
+    items: []
   };
 }
 
 function mapNutritionSnapshot(value: unknown): ConsumerNutritionSnapshot | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
-  return {
+  const snapshot = {
     calories: optionalFiniteNumber(raw.calories ?? raw.kcal) ?? undefined,
     protein: optionalFiniteNumber(raw.protein) ?? undefined,
     carbohydrates: optionalFiniteNumber(raw.carbohydrates ?? raw.carbs) ?? undefined,
     fat: optionalFiniteNumber(raw.fat) ?? undefined,
     fiber: optionalFiniteNumber(raw.fiber) ?? undefined
   };
+  return Object.values(snapshot).some((value) => value !== undefined) ? snapshot : null;
 }
 
 function requiredString(value: unknown, label: string): string {

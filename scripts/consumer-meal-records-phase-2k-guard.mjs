@@ -31,7 +31,8 @@ const expectedMigrationFiles = [
   "20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
-  phase2kMigrationName
+  phase2kMigrationName,
+  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql"
 ];
 
 function pass(name, extra = {}) {

@@ -1177,3 +1177,50 @@ Phase 2M prerequisites:
 - Verify available and empty live reads.
 - Verify planned nutrition remains separated from actual consumed totals.
 - Keep no-write and no-production boundaries.
+
+## 44. Consumer Runtime Integration Phase 2M Status
+
+Consumer Runtime Integration Phase 2M Development Live Planned Meals Read is implementation-complete, guard-complete, development-deployed, development-live-verified, and freeze-ready.
+
+Completed in repository:
+
+- Forward-only migration `20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql`.
+- Live planned meals repository `SupabaseConsumerPlannedMealsRepository`.
+- Planned meals source value `supabase`.
+- Deprecated fail-closed compatibility for `supabase_prepared`.
+- Explicit live opt-in flag `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_LIVE_READ_OPT_IN`.
+- Live mapper boundary: no invented planned time and no invented planned item rows.
+- Phase 2M guard script: `npm run test:consumer-phase2m`.
+- Phase 2M default smoke script: `npm run test:consumer-phase2m-smoke`.
+- Phase 2M explicit Development live smoke script: `npm run test:consumer-phase2m-live-smoke`.
+- Phase 2M documentation and handoff status.
+
+Runtime path:
+
+- authenticated current-user session
+- `planned_meals` SELECT through the Consumer meal client
+- `user_id` and `planned_for` filters
+- canonical planned-meal mapper
+- shared Today Intake overview integration
+
+Boundary:
+
+- Default source is `disabled`.
+- Live source is explicit Development-only.
+- No planned meal write.
+- No planned meal RPC.
+- No direct table write grant.
+- No RLS policy change.
+- No planned meal item table or planned time column creation.
+- No Mobile UI or navigation change.
+- No Restaurant Web or Admin runtime change.
+- No seed, fixture, bootstrap, production deployment, push, or Phase 2N work.
+
+Development verification:
+
+- Migration `20260713080100` is aligned locally and remotely on the Development project.
+- Explicit live smoke passed with one current-user meal read and planned meals returning canonical `empty`.
+- Shared overview returned `plannedMealsStatus=empty` and did not emit `planned_meals_unavailable`.
+- Planned meals did not change actual consumed totals.
+- Repeated planned read and repeated overview read were deterministic.
+- No credentials, tokens, sessions, user IDs, record IDs, planned meal IDs, summary IDs, raw rows, raw snapshots, URL, or key are recorded in repository documentation.
