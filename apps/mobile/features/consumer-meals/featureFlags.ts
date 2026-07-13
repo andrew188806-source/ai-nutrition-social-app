@@ -1,8 +1,9 @@
-import type { ConsumerDailyNutritionSource, ConsumerMealRecordsSource, ConsumerMealRuntimeFlags } from "./types";
+import type { ConsumerDailyNutritionSource, ConsumerDailyNutritionWriteSource, ConsumerMealRecordsSource, ConsumerMealRuntimeFlags } from "./types";
 
 const authSources = new Set<ConsumerMealRuntimeFlags["authSource"]>(["mock", "supabase-disabled", "supabase-live"]);
 const mealSources = new Set<ConsumerMealRecordsSource>(["mock", "supabase-disabled", "supabase-live"]);
 const dailyNutritionSources = new Set<ConsumerDailyNutritionSource>(["mock", "supabase-disabled", "supabase-live"]);
+const dailyNutritionWriteSources = new Set<ConsumerDailyNutritionWriteSource>(["disabled", "mock", "supabase_prepared"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -32,6 +33,13 @@ function parseDailyNutritionSource(value: string | undefined, issues: string[]):
   return "supabase-disabled";
 }
 
+function parseDailyNutritionWriteSource(value: string | undefined, issues: string[]): ConsumerDailyNutritionWriteSource {
+  if (!value) return "disabled";
+  if (dailyNutritionWriteSources.has(value as ConsumerDailyNutritionWriteSource)) return value as ConsumerDailyNutritionWriteSource;
+  issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE: ${value}`);
+  return "disabled";
+}
+
 function parseBooleanFlag(name: string, value: string | undefined, issues: string[]): boolean {
   if (!value) return false;
   if (value === "true") return true;
@@ -48,6 +56,7 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     issues
   );
   const dailyNutritionSource = parseDailyNutritionSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE, issues);
+  const dailyNutritionWriteSource = parseDailyNutritionWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE, issues);
   const supabaseAuthEnabled = parseBooleanFlag("EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED", env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED, issues);
   const supabaseWritesEnabled = parseBooleanFlag(
     "EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED",
@@ -95,6 +104,12 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (dailyNutritionSource !== "supabase-live" && dailyNutritionLiveReadOptIn) {
     issues.push("Consumer daily nutrition summary live read opt-in requires EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE=supabase-live.");
   }
+  if (dailyNutritionWriteSource === "supabase_prepared" && supabaseWritesEnabled) {
+    issues.push("Consumer daily nutrition summary prepared persistence must not enable live writes in Consumer Runtime Phase 2J.");
+  }
+  if (dailyNutritionWriteSource === "supabase_prepared" && runtimeEnvironment !== "development") {
+    issues.push("Consumer daily nutrition summary prepared persistence is development-only until Consumer Runtime Phase 2K.");
+  }
   if (dailyNutritionSource === "supabase-live" && supabaseWritesEnabled) {
     issues.push("Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled.");
   }
@@ -129,6 +144,7 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     mealRecordWritesEnabled,
     mealRecordLiveWriteOptIn,
     dailyNutritionLiveReadOptIn,
+    dailyNutritionWriteSource,
     issues
   };
 }

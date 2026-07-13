@@ -53,6 +53,11 @@ export type ConsumerAuthErrorCode =
   | "daily_summary_invalid_nutrition"
   | "daily_summary_rule_unavailable"
   | "daily_summary_parity_mismatch"
+  | "daily_summary_persistence_configuration_invalid"
+  | "daily_summary_persistence_invalid_input"
+  | "daily_summary_persistence_unavailable"
+  | "daily_summary_persistence_failed"
+  | "daily_summary_persistence_authentication_required"
   | "today_intake_overview_configuration_invalid"
   | "today_intake_overview_authentication_required"
   | "today_intake_overview_invalid_date"
@@ -398,6 +403,36 @@ export class ConsumerDailySummaryRuleUnavailableError extends ConsumerAuthError 
 export class ConsumerDailySummaryParityMismatchError extends ConsumerAuthError {
   constructor(message = "Consumer stored and calculated daily nutrition summaries do not match.") {
     super("daily_summary_parity_mismatch", message, false);
+  }
+}
+
+export class ConsumerDailySummaryPersistenceConfigurationInvalidError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary persistence configuration is invalid.") {
+    super("daily_summary_persistence_configuration_invalid", message, false);
+  }
+}
+
+export class ConsumerDailySummaryPersistenceInvalidInputError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary persistence input is invalid.") {
+    super("daily_summary_persistence_invalid_input", message, false);
+  }
+}
+
+export class ConsumerDailySummaryPersistenceUnavailableError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary persistence is unavailable in this runtime.") {
+    super("daily_summary_persistence_unavailable", message, false);
+  }
+}
+
+export class ConsumerDailySummaryPersistenceFailedError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary persistence failed.") {
+    super("daily_summary_persistence_failed", message);
+  }
+}
+
+export class ConsumerDailySummaryPersistenceAuthenticationRequiredError extends ConsumerAuthError {
+  constructor(message = "Consumer daily nutrition summary persistence requires an authenticated session.") {
+    super("daily_summary_persistence_authentication_required", message);
   }
 }
 

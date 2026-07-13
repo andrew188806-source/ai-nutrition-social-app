@@ -1033,3 +1033,36 @@ Boundary:
 - No migration, RLS, grant, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL, seed, fixture, bootstrap, production deployment, push, or Phase 2J work.
 - Planned meals remain separated from actual consumed totals.
 - No credentials, tokens, sessions, user IDs, record IDs, item IDs, summary IDs, raw rows, raw responses, URL, or key are recorded in repository documentation.
+
+## 41. Consumer Runtime Integration Phase 2J Status
+
+Consumer Runtime Integration Phase 2J Controlled Daily Nutrition Summary Persistence Preparation is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Completed in repository:
+
+- `ConsumerDailyNutritionSummaryPersistenceService.persistCurrentUserDailyNutritionSummary(input)`.
+- `PersistDailyNutritionSummaryInput` with `summaryDate` only.
+- `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE`.
+- Disabled, mock, and Supabase-prepared persistence repositories.
+- Future RPC contract constant and mapper for `persist_authenticated_daily_nutrition_summary`.
+- Phase 2J guard script: `npm run test:consumer-phase2j`.
+- Phase 2J default smoke script: `npm run test:consumer-phase2j-smoke`.
+- Phase 2J mock contract smoke script: `npm run test:consumer-phase2j-mock-smoke`.
+- Phase 2J documentation and handoff status.
+
+Runtime path prepared:
+
+- current-user meal read service
+- Phase 2E daily summary calculator
+- daily summary persistence service
+- disabled / mock / prepared persistence repository
+
+Boundary:
+
+- Default source is `disabled`.
+- Default smoke is `SKIPPED`.
+- Default smoke creates no Supabase client, network request, database read, database write, or RPC invocation.
+- Mock contract smoke is local-only and deterministic.
+- Supabase prepared mode maps the future RPC payload but does not call `.rpc(...)`.
+- No caller-supplied user id, token, session, nutrition totals, raw payload, or summary row is accepted.
+- No migration, RLS change, grant change, database write, summary write-back, planned meal write, RPC invocation, raw SQL, seed, fixture, bootstrap, UI change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2K work.

@@ -8,6 +8,7 @@ import type {
 export const SUPABASE_CONSUMER_MEAL_RECORDS_TABLE = "meal_records" as const;
 export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE = "daily_nutrition_summaries" as const;
 export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION = "create_current_user_meal_record" as const;
+export const SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION = "persist_authenticated_daily_nutrition_summary" as const;
 
 export const SUPABASE_CONSUMER_MEAL_RECORD_SELECT_COLUMNS = [
   "id",
@@ -136,6 +137,21 @@ export type SupabaseCreateMealRecordRpcArgs = {
   p_note: string | null | undefined;
   p_source: ConsumerMealSourceType;
   p_items: Array<Record<string, unknown>>;
+};
+
+export type SupabasePersistDailyNutritionSummaryRpcArgs = {
+  p_summary_date: string;
+  p_timezone: string;
+  p_calculation_version: string;
+  p_total_calories: number;
+  p_total_protein_g: number;
+  p_total_carbohydrates_g: number;
+  p_total_fat_g: number;
+  p_total_fiber_g: number | null;
+  p_meal_count: number;
+  p_item_count: number | null;
+  p_source_cutoff_at: string | null;
+  p_recalculated_at: string;
 };
 
 export type SupabaseMealQueryBuilderLike<ResponseLike> = {

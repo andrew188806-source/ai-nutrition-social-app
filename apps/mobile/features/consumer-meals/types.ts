@@ -2,6 +2,7 @@ import type { ConsumerAuthResult } from "../consumer-auth/types";
 
 export type ConsumerMealRecordsSource = "mock" | "supabase-disabled" | "supabase-live";
 export type ConsumerDailyNutritionSource = "mock" | "supabase-disabled" | "supabase-live";
+export type ConsumerDailyNutritionWriteSource = "disabled" | "mock" | "supabase_prepared";
 export type ConsumerMealType = "breakfast" | "lunch" | "dinner" | "late_night" | "snack" | "other";
 export type ConsumerMealSourceType = "restaurant" | "self_made" | "manual" | "ai_estimated";
 export type ConsumerNutritionSourceType = "restaurant_verified" | "admin_verified" | "ai_estimated" | "user_corrected" | "manual";
@@ -18,6 +19,7 @@ export type ConsumerMealRuntimeFlags = {
   mealRecordWritesEnabled: boolean;
   mealRecordLiveWriteOptIn: boolean;
   dailyNutritionLiveReadOptIn: boolean;
+  dailyNutritionWriteSource: ConsumerDailyNutritionWriteSource;
   issues: string[];
 };
 
@@ -181,6 +183,63 @@ export type ConsumerDailySummaryParityResult = {
 export interface ConsumerDailyNutritionSummaryRepository {
   readonly source: ConsumerDailyNutritionSource;
   getCurrentUserDailyNutritionSummary(input: ConsumerDailyNutritionSummaryReadInput): Promise<ConsumerAuthResult<ConsumerDailyNutritionSummary>>;
+}
+
+export type PersistDailyNutritionSummaryInput = {
+  summaryDate: string;
+};
+
+export type ConsumerDailyNutritionSummaryPersistencePayload = {
+  summaryDate: string;
+  timezone: string;
+  calculationVersion: string;
+  calories: number;
+  protein: number;
+  carbohydrates: number;
+  fat: number;
+  fiber: number | null;
+  mealCount: number;
+  itemCount: number | null;
+  itemCountAvailable: boolean;
+  sourceCutoffAt: string | null;
+  recalculatedAt: string;
+  isCurrent: boolean;
+};
+
+export type ConsumerDailyNutritionSummaryPersistenceStatus =
+  | "persisted"
+  | "skipped"
+  | "unavailable"
+  | "unauthenticated"
+  | "invalid_input"
+  | "read_failed"
+  | "calculation_failed"
+  | "persistence_unavailable"
+  | "persistence_failed";
+
+export type ConsumerDailyNutritionSummaryPersistenceResult = {
+  status: ConsumerDailyNutritionSummaryPersistenceStatus;
+  summaryDate: string;
+  timezone?: string;
+  mealCount?: number;
+  itemCount?: number | null;
+  nutrition?: {
+    calories: number;
+    protein: number;
+    carbohydrates: number;
+    fat: number;
+    fiber: number | null;
+  };
+  identity: "authenticated_user_summary_date";
+  source: ConsumerDailyNutritionWriteSource;
+  errorCode?: string;
+};
+
+export interface ConsumerDailyNutritionSummaryPersistenceRepository {
+  readonly source: ConsumerDailyNutritionWriteSource;
+  persistCurrentUserDailyNutritionSummary(
+    payload: ConsumerDailyNutritionSummaryPersistencePayload
+  ): Promise<ConsumerDailyNutritionSummaryPersistenceResult>;
 }
 
 export type ConsumerTodayIntakeOverviewInput = {

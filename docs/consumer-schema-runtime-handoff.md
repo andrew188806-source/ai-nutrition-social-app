@@ -369,3 +369,30 @@ Actual consumed totals are derived from the shared overview's calculated nutriti
 The default Phase 2I live smoke is skipped without explicit opt-in. The explicit Development live UI-facing smoke passed with current-user Auth, one live meal, one live item, UI model nutrition parity, stored summary unavailable, planned meals unavailable, partial overview status, deterministic repeat UI read, and sign-out.
 
 Phase 2I adds no migration, RLS change, grant change, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2J work.
+
+## Phase 2J Controlled Daily Nutrition Summary Persistence Preparation Result
+
+Consumer Runtime Integration Phase 2J Controlled Daily Nutrition Summary Persistence Preparation is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Phase 2J prepares a calculate-before-persist service boundary for current-user daily nutrition summaries:
+
+- `ConsumerDailyNutritionSummaryPersistenceService.persistCurrentUserDailyNutritionSummary(input)`
+- public input: `summaryDate` only
+- identity: authenticated current user plus summary date
+- totals: calculated from current-user meal records through the Phase 2E pure calculator
+- source flag: `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE`
+- default source: `disabled`
+
+Implemented repository modes:
+
+- disabled repository returns `skipped`
+- mock repository persists deterministically in memory for guard verification only
+- Supabase prepared repository maps the future RPC payload but does not invoke RPC
+
+Future RPC contract name:
+
+- `persist_authenticated_daily_nutrition_summary`
+
+Phase 2J does not add a migration, RLS change, grant change, database write, summary write-back, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, UI change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2K work.
+
+Default Phase 2J smoke is skipped without explicit opt-in and creates no client, network request, database read, database write, or RPC invocation. The mock contract smoke verifies deterministic local calculation and in-memory persistence only.

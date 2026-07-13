@@ -1,5 +1,6 @@
 import {
   ConsumerDailySummaryConfigurationInvalidError,
+  ConsumerDailySummaryPersistenceConfigurationInvalidError,
   ConsumerTodayIntakeOverviewConfigurationInvalidError,
   ConsumerMealSourceConfigurationInvalidError,
   ConsumerMealWriteConfigurationInvalidError
@@ -9,12 +10,16 @@ import type { SupabaseConsumerMealClientLike } from "./supabaseMealContracts";
 import { MockConsumerMealRecordsRepository } from "./adapters/mockConsumerMealRecordsRepository";
 import { MockConsumerMealRecordWriteRepository } from "./adapters/mockConsumerMealRecordWriteRepository";
 import { MockConsumerDailyNutritionSummaryRepository } from "./adapters/mockConsumerDailyNutritionSummaryRepository";
+import { MockConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/mockConsumerDailyNutritionSummaryPersistenceRepository";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
+import { SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository";
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
 import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
+import { SupabasePreparedConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabasePreparedConsumerDailyNutritionSummaryPersistenceRepository";
+import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
@@ -147,6 +152,40 @@ export function createConsumerDailyNutritionSummaryService(
 ) {
   return new ConsumerDailyNutritionSummaryService({
     repository: createConsumerDailyNutritionSummaryRepository(flags, dependencies)
+  });
+}
+
+export function assertConsumerDailyNutritionSummaryPersistenceRuntimeFlags(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+  if (flags.issues.length) {
+    return { ok: false as const, error: new ConsumerDailySummaryPersistenceConfigurationInvalidError(flags.issues.join(" ")) };
+  }
+  if (flags.dailyNutritionWriteSource === "supabase_prepared" && (flags.supabaseWritesEnabled || flags.mealRecordWritesEnabled || flags.mealRecordLiveWriteOptIn)) {
+    return { ok: false as const, error: new ConsumerDailySummaryPersistenceConfigurationInvalidError("Prepared daily nutrition summary persistence requires all runtime writes to remain disabled.") };
+  }
+  return { ok: true as const, value: flags };
+}
+
+export function createConsumerDailyNutritionSummaryPersistenceRepository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()
+) {
+  const flagCheck = assertConsumerDailyNutritionSummaryPersistenceRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  if (flags.dailyNutritionWriteSource === "disabled") return new SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository();
+  if (flags.dailyNutritionWriteSource === "mock") return new MockConsumerDailyNutritionSummaryPersistenceRepository();
+  return new SupabasePreparedConsumerDailyNutritionSummaryPersistenceRepository();
+}
+
+export function createConsumerDailyNutritionSummaryPersistenceService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  const flagCheck = assertConsumerDailyNutritionSummaryPersistenceRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  return new ConsumerDailyNutritionSummaryPersistenceService({
+    mealRecordsService: createConsumerMealRecordsService(flags, dependencies),
+    repository: createConsumerDailyNutritionSummaryPersistenceRepository(flags),
+    clock: dependencies.clock ?? systemClock,
+    timezone: dependencies.timezone
   });
 }
 
