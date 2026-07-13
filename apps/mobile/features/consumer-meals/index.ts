@@ -9,6 +9,7 @@ export * from "./consumerMealRecordsService";
 export * from "./consumerMealRecordWriteService";
 export * from "./consumerDailyNutritionSummaryService";
 export * from "./consumerTodayIntakeOverviewService";
+export * from "./todayIntakeUiModel";
 export * from "./factories";
 export * from "./writeValidation";
 export * from "./adapters/mockConsumerMealRecordsRepository";

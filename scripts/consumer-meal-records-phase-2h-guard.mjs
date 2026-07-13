@@ -126,12 +126,18 @@ const uiFiles = [
   ...walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx")),
   ...walk(path.join(root, "apps", "mobile", "components"), (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
 ];
-const uiImports = uiFiles.filter((file) => /consumer-meals|ConsumerTodayIntakeOverview|@supabase\/supabase-js|react-native-url-polyfill/.test(fs.readFileSync(file, "utf8"))).map(relative);
-if (uiImports.length) fail("UI remains unwired to shared overview and SDK", "Phase 2H must not cut over Home/Today Intake UI.", { matches: uiImports });
-else pass("UI remains unwired to shared overview and SDK");
+const allowedPhase2IUiImports = new Set(["apps/mobile/app/index.tsx", "apps/mobile/app/today-intake.tsx"]);
+const uiImports = uiFiles
+  .map((file) => ({ file, rel: relative(file), text: fs.readFileSync(file, "utf8") }))
+  .filter(({ text }) => /consumer-meals|ConsumerTodayIntakeOverview|@supabase\/supabase-js|react-native-url-polyfill/.test(text));
+const disallowedUiImports = uiImports
+  .filter(({ rel, text }) => !allowedPhase2IUiImports.has(rel) || /@supabase\/supabase-js|react-native-url-polyfill|ConsumerTodayIntakeOverview|consumerMealRecordsService|consumerDailyNutritionSummaryService|dailyNutritionSummaryCalculator/.test(text))
+  .map(({ rel }) => rel);
+if (disallowedUiImports.length) fail("UI imports limited to Phase 2I shared overview hook", "UI may only import the Phase 2I shared overview hook from Home/Today Intake.", { matches: disallowedUiImports });
+else pass("UI imports limited to Phase 2I shared overview hook", { matches: uiImports.map(({ rel }) => rel) });
 
 const navigationImports = walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
-  .filter((file) => /ConsumerTodayIntakeOverview|TODAY_INTAKE|consumer-meals/.test(fs.readFileSync(file, "utf8")))
+  .filter((file) => /ConsumerTodayIntakeOverview|TODAY_INTAKE/.test(fs.readFileSync(file, "utf8")))
   .map(relative);
 if (navigationImports.length) fail("Navigation remains unchanged", "Phase 2H must not wire routes/navigation to shared overview.", { matches: navigationImports });
 else pass("Navigation remains unchanged");

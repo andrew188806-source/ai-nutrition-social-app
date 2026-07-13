@@ -4,21 +4,26 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { NutritionDetailReport } from "../components/NutritionDetailReport";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { getTodayMealRecords } from "../features/analysis/analysisMealRecordStore";
-import { calculateTodayNutritionSummary, getEffectiveCalories } from "../features/analysis/nutritionSummary";
-import { getAutoSettledPlannedDinnerRecord, getConfirmedDinnerRecord, getPlannedDinner } from "../features/planned-meal";
+import { getUiMealCalories, useTodayIntakeUiModel } from "../features/consumer-meals";
 
 export default function TodayIntakeScreen() {
   const router = useRouter();
   const intake = zhTW.mobile.analysis.savedIntake;
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
-  const mealRecords = getTodayMealRecords();
-  const lunchRecord = mealRecords.find((meal) => meal.mealPeriod === zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1]) ?? mealRecords[0];
-  const summary = calculateTodayNutritionSummary(mealRecords);
-  const plannedDinner = getPlannedDinner();
-  const confirmedDinner = getConfirmedDinnerRecord();
-  const autoSettledDinner = getAutoSettledPlannedDinnerRecord();
-  const dinnerPlanForDisplay = confirmedDinner ?? plannedDinner ?? autoSettledDinner;
+  const intakeState = useTodayIntakeUiModel();
+  const model = intakeState.model;
+
+  if (!model) {
+    return (
+      <PlaceholderScreen title={intake.title} subtitle={intakeState.status === "error" ? intakeState.error : intake.body}>
+        <Card>
+          <SectionTitle title={daily.mealRecordsTitle} subtitle={zhTW.mobile.todayNutritionSummary.cardSubtitle} />
+        </Card>
+      </PlaceholderScreen>
+    );
+  }
+
+  const { mealRecords, lunchRecord, summary, dinnerPlanForDisplay, confirmedDinner, autoSettledDinner, plannedDinner } = model;
 
   return (
     <PlaceholderScreen
@@ -48,7 +53,7 @@ export default function TodayIntakeScreen() {
             <View key={meal.mealId ?? `${meal.date}-${meal.mealPeriod}-${meal.mealName}`} style={styles.mealCard}>
               <View style={styles.mealHeader}>
                 <Text style={styles.mealTime}>{meal.mealPeriod}</Text>
-                <Text style={styles.mealCalories}>{getEffectiveCalories(meal)} kcal</Text>
+                <Text style={styles.mealCalories}>{getUiMealCalories(meal)} kcal</Text>
               </View>
               <Text style={styles.mealTitle}>{meal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
               <Text style={styles.mealNote}>
@@ -66,7 +71,7 @@ export default function TodayIntakeScreen() {
           <View style={styles.currentMealCard}>
             <View style={styles.mealHeader}>
               <Text style={styles.mealTime}>{lunchRecord.mealPeriod}</Text>
-              <Text style={styles.mealCalories}>{getEffectiveCalories(lunchRecord)} kcal</Text>
+              <Text style={styles.mealCalories}>{getUiMealCalories(lunchRecord)} kcal</Text>
             </View>
             <Text style={styles.mealTitle}>{lunchRecord.mealName}</Text>
             <Text style={styles.mealNote}>{lunchRecord.restaurantName}｜{lunchRecord.ingredients}</Text>

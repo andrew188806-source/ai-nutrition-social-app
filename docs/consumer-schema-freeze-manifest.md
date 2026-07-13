@@ -349,3 +349,15 @@ Phase 2H adds no active migration, RLS change, grant change, database write, mea
 The default Phase 2H live smoke is skipped without explicit opt-in. The explicit Development live smoke passed through current-user Auth, live Meal Records read, live Daily Nutrition Summary read, Phase 2E recalculation, Phase 2G shared orchestration, deterministic repeat read, and sign-out.
 
 The verified live overview is `partial` because actual consumed meal data exists while optional stored summary and planned meals runtime are unavailable. Partial reasons are `planned_meals_unavailable` and `stored_summary_unavailable`. No mock fallback, raw row leakage, credential output, write, RPC, seed, fixture, or production operation occurred.
+
+## 27. Phase 2I Follow-Up
+
+Consumer Runtime Integration Phase 2I Home / Today Intake Shared Read Model Cutover is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Phase 2I changes Mobile Home and Today Intake read composition only. Both routes now read through `useTodayIntakeUiModel(...)`, which maps the shared `ConsumerTodayIntakeOverview` into existing UI component shapes. The route files no longer directly import legacy meal record selectors, legacy nutrition summary calculators, planned meal display composition, meal repositories, daily summary repositories, Supabase adapters, or Supabase SDK modules.
+
+The actual consumed source remains current-user meal records plus calculated nutrition from the shared overview. Planned meals remain separate display metadata and are not included in actual consumed totals. Stored summary absence and planned runtime absence produce partial metadata without hiding available meals.
+
+Phase 2I adds no active migration, RLS change, grant change, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2J work.
+
+The default Phase 2I live smoke is skipped without explicit opt-in. The explicit Development live UI-facing smoke passed with one current-user meal, one item, partial status, stored summary unavailable, planned meals unavailable, nutrition parity against the shared overview, deterministic repeat UI read, and sign-out.

@@ -141,13 +141,22 @@ const uiFiles = [
   ...walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx")),
   ...walk(path.join(root, "apps", "mobile", "components"), (file) => file.endsWith(".ts") || file.endsWith(".tsx"))
 ];
-const uiImports = uiFiles.filter((file) => /consumer-meals|@supabase\/supabase-js|react-native-url-polyfill/.test(fs.readFileSync(file, "utf8"))).map(relative);
-if (uiImports.length) fail("UI does not import Consumer Meals or SDK", "Mobile UI must not be wired to Consumer Meals in Phase 2A.", { matches: uiImports });
-else pass("UI does not import Consumer Meals or SDK");
+const allowedPhase2IUiImports = new Set(["apps/mobile/app/index.tsx", "apps/mobile/app/today-intake.tsx"]);
+const uiImports = uiFiles
+  .map((file) => ({ rel: relative(file), text: fs.readFileSync(file, "utf8") }))
+  .filter(({ text }) => /consumer-meals|@supabase\/supabase-js|react-native-url-polyfill/.test(text));
+const disallowedUiImports = uiImports
+  .filter(({ rel, text }) => !allowedPhase2IUiImports.has(rel) || /@supabase\/supabase-js|react-native-url-polyfill|consumerMealRecordsService|consumerDailyNutritionSummaryService|dailyNutritionSummaryCalculator|supabaseConsumerMeal|MockConsumerMeal/.test(text))
+  .map(({ rel }) => rel);
+if (disallowedUiImports.length) fail("UI imports limited to Phase 2I shared overview hook", "Mobile UI may only import the Phase 2I shared overview hook from Home/Today Intake.", { matches: disallowedUiImports });
+else pass("UI imports limited to Phase 2I shared overview hook", { matches: uiImports.map(({ rel }) => rel) });
 
 const navigationFiles = walk(path.join(root, "apps", "mobile", "app"), (file) => file.endsWith(".ts") || file.endsWith(".tsx"));
-const navigationImports = navigationFiles.filter((file) => /consumer-meals|mealRecordsSource|MEAL_RECORDS_SOURCE/.test(fs.readFileSync(file, "utf8"))).map(relative);
-if (navigationImports.length) fail("Navigation remains unchanged", "Phase 2A must not wire routes/navigation to Consumer Meals.", { matches: navigationImports });
+const navigationImports = navigationFiles
+  .map((file) => ({ rel: relative(file), text: fs.readFileSync(file, "utf8") }))
+  .filter(({ rel, text }) => /mealRecordsSource|MEAL_RECORDS_SOURCE/.test(text) || (/consumer-meals/.test(text) && !allowedPhase2IUiImports.has(rel)))
+  .map(({ rel }) => rel);
+if (navigationImports.length) fail("Navigation remains unchanged outside Phase 2I UI cutover", "Consumer meal route imports may only appear in the approved Phase 2I Home/Today Intake cutover.", { matches: navigationImports });
 else pass("Navigation remains unchanged");
 
 const crossSurfaceFiles = [

@@ -5,12 +5,11 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav } from "../components/DemoUi";
 import { TodayMealGrid } from "../components/TodayMealGrid";
 import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCard";
-import { getTodayMealRecords, resetMealRecords } from "../features/analysis/analysisMealRecordStore";
-import { calculateTodayNutritionSummary, mapMealRecordsToMealSlots } from "../features/analysis/nutritionSummary";
+import { resetMealRecords } from "../features/analysis/analysisMealRecordStore";
+import { useTodayIntakeUiModel } from "../features/consumer-meals";
 import { advanceDemoTimeByDays, getEffectiveDateKey, isDemoTestingEnabled, resetDemoTime } from "../features/demo-time";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { resetAllMealBuddyDemoState, resetMealBuddySocialDemoState } from "../features/meal-buddy-card";
-import { getPlannedDinner } from "../features/planned-meal";
 import { storage } from "../lib/storage";
 import { Card, CompactRow, PrimaryButton, SecondaryButton, SectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
@@ -20,10 +19,8 @@ export default function LandingScreen() {
   const router = useRouter();
   const [demoDateKey, setDemoDateKey] = useState(getEffectiveDateKey());
   const [, setDemoUserPlan] = useDemoUserPlan();
-  const mealRecords = getTodayMealRecords();
-  const plannedDinner = getPlannedDinner();
-  const summary = calculateTodayNutritionSummary(mealRecords);
-  const mealSlots = mapMealRecordsToMealSlots(mealRecords, plannedDinner);
+  const intakeState = useTodayIntakeUiModel({ date: demoDateKey });
+  const model = intakeState.model;
 
   const lifestyle = zhTW.mobile.refinedLogic.lifestyleWorld;
   const homeFocus = zhTW.mobile.refinedLogic.homeFocus;
@@ -32,6 +29,8 @@ export default function LandingScreen() {
   const foodDiary = zhTW.mobile.mealLog.foodDiary;
 
   function shareDailySummary() {
+    if (!model) return;
+    const { summary } = model;
     const { calories, protein, carbs, fat } = summary.totals;
     Share.share({
       message: `${zhTW.mobile.todayNutritionSummary.cardTitle}：${calories} kcal（${zhTW.mobile.analysis.protein} ${protein}g · ${zhTW.mobile.analysis.carbs} ${carbs}g · ${zhTW.mobile.analysis.fat} ${fat}g）`
@@ -50,6 +49,7 @@ export default function LandingScreen() {
     resetMealRecords();
     storage.removeItem("haocu.mealBuddy.recommendationGroups.v1");
     setDemoDateKey(getEffectiveDateKey());
+    intakeState.refresh();
   }
 
   function openTutorialPlaceholder() {
@@ -71,12 +71,23 @@ export default function LandingScreen() {
           </View>
         </View>
 
-        <TodayNutritionSummaryCard summary={summary} onShare={shareDailySummary} onViewDetail={() => router.push("/today-intake")} />
+        {!model ? (
+          <Card>
+            <SectionHeader
+              title={zhTW.mobile.todayNutritionSummary.cardTitle}
+              subtitle={intakeState.status === "error" ? intakeState.error : zhTW.mobile.todayNutritionSummary.cardSubtitle}
+            />
+          </Card>
+        ) : (
+          <>
+            <TodayNutritionSummaryCard summary={model.summary} onShare={shareDailySummary} onViewDetail={() => router.push("/today-intake")} />
 
-        <View style={styles.section}>
-          <SectionHeader title={todayIntake.mealRecordsTitle} />
-          <TodayMealGrid slots={mealSlots} />
-        </View>
+            <View style={styles.section}>
+              <SectionHeader title={todayIntake.mealRecordsTitle} />
+              <TodayMealGrid slots={model.mealSlots} />
+            </View>
+          </>
+        )}
 
         <View style={styles.actionRow}>
           <View style={styles.actionPrimary}>
@@ -92,14 +103,14 @@ export default function LandingScreen() {
             icon="star"
             iconTone="primary"
             title={plannedDinnerHelper.title}
-            subtitle={plannedDinner ? `${plannedDinner.plannedMealName} · ${plannedDinner.calories}` : plannedDinnerHelper.subtitle}
-            value={plannedDinner ? plannedDinnerHelper.savedBadge : undefined}
+            subtitle={model?.dinnerPlanForDisplay ? `${model.dinnerPlanForDisplay.plannedMealName} · ${model.dinnerPlanForDisplay.calories}` : plannedDinnerHelper.subtitle}
+            value={model?.dinnerPlanForDisplay ? plannedDinnerHelper.savedBadge : undefined}
             onPress={() => router.push("/recommendation")}
           />
           <CompactRow
             icon="bookmark"
             title={foodDiary.unifiedTitle}
-            subtitle={mealRecords.length > 0 ? `今天有 ${mealRecords.length} 則小紀錄` : foodDiary.unifiedBody}
+            subtitle={model && model.mealRecords.length > 0 ? `今天有 ${model.mealRecords.length} 則小紀錄` : foodDiary.unifiedBody}
             onPress={() => router.push("/meal-log")}
           />
         </View>

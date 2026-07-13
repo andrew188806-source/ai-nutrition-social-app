@@ -988,3 +988,48 @@ Boundary:
 - No Home or Today Intake cutover.
 - No migration, RLS, grant, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL, seed, fixture, bootstrap, production deployment, push, or next phase work.
 - No credentials, tokens, sessions, user IDs, record IDs, item IDs, summary IDs, raw rows, raw responses, URL, or key are recorded in repository documentation.
+
+## 40. Consumer Runtime Integration Phase 2I Status
+
+Consumer Runtime Integration Phase 2I Home / Today Intake Shared Read Model Cutover is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Completed in repository:
+
+- Home route cut over to `useTodayIntakeUiModel(...)`.
+- Today Intake route cut over to `useTodayIntakeUiModel(...)`.
+- UI-facing shared model: `apps/mobile/features/consumer-meals/todayIntakeUiModel.ts`.
+- Phase 2I guard script: `npm run test:consumer-phase2i`.
+- Phase 2I opt-in live smoke script: `npm run test:consumer-phase2i-live-smoke`.
+- Phase 2H guard updated to recognize the Phase 2I UI cutover boundary.
+- Phase 2I documentation and handoff status.
+
+Runtime path:
+
+- `apps/mobile/app/index.tsx`
+- `apps/mobile/app/today-intake.tsx`
+- `useTodayIntakeUiModel(...)`
+- `getCurrentUserTodayIntakeUiModel(...)`
+- `ConsumerTodayIntakeOverviewService.getCurrentUserTodayIntakeOverview(input?)`
+
+Development verification:
+
+- Default Phase 2I live smoke is skipped without explicit opt-in.
+- Explicit live UI-facing smoke passed with current-user Auth, one live meal, one live item, canonical nutrition parity, stored summary unavailable, planned meals unavailable, partial overview status, deterministic repeat UI read, and sign-out.
+
+Live result:
+
+- Overview status: `partial`.
+- Meal count: `1`.
+- Item count: `1`.
+- Stored summary status: `unavailable`.
+- Planned meals status: `unavailable`.
+- Partial reasons: `planned_meals_unavailable`, `stored_summary_unavailable`.
+
+Boundary:
+
+- No UI redesign.
+- No navigation change.
+- No Meal Log cutover.
+- No migration, RLS, grant, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL, seed, fixture, bootstrap, production deployment, push, or Phase 2J work.
+- Planned meals remain separated from actual consumed totals.
+- No credentials, tokens, sessions, user IDs, record IDs, item IDs, summary IDs, raw rows, raw responses, URL, or key are recorded in repository documentation.

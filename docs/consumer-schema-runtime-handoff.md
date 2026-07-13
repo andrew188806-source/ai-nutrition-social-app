@@ -350,3 +350,22 @@ The explicit Development live smoke passed: live flags were accepted, sign-in su
 The live overview result is intentionally `partial`: actual meal data and calculated nutrition are available, while the stored daily summary is typed unavailable and planned meals runtime is unavailable. Partial reasons are `planned_meals_unavailable` and `stored_summary_unavailable`. Planned meals are not included in actual consumed totals. Stored summary absence does not erase calculated nutrition or fall back to mock.
 
 Phase 2H does not add a migration, modify schema/RLS/grants, execute database writes, invoke RPC, write summaries, write planned meals, create seed/fixture/bootstrap data, change UI or navigation, touch Restaurant Web or Admin runtime, deploy to production, push, or start the next phase.
+
+## Phase 2I Home / Today Intake Shared Read Model Cutover Result
+
+Consumer Runtime Integration Phase 2I Home / Today Intake Shared Read Model Cutover is implementation-complete, guard-complete, development-live-verified, and freeze-ready.
+
+Phase 2I cuts over the Mobile Home route and Today Intake route to the UI-facing shared intake model:
+
+- `apps/mobile/features/consumer-meals/todayIntakeUiModel.ts`
+- `useTodayIntakeUiModel(...)`
+- `getCurrentUserTodayIntakeUiModel(...)`
+- `ConsumerTodayIntakeOverviewService.getCurrentUserTodayIntakeOverview(input?)`
+
+Home and Today Intake no longer compose their own actual consumed meal list, nutrition totals, or meal slots from route-local meal stores or legacy nutrition calculators. Existing UI layout and navigation are preserved.
+
+Actual consumed totals are derived from the shared overview's calculated nutrition. Planned dinner display remains separate and is not included in actual consumed totals. Missing stored summaries and unavailable planned meals remain explicit partial metadata and do not hide available actual meals.
+
+The default Phase 2I live smoke is skipped without explicit opt-in. The explicit Development live UI-facing smoke passed with current-user Auth, one live meal, one live item, UI model nutrition parity, stored summary unavailable, planned meals unavailable, partial overview status, deterministic repeat UI read, and sign-out.
+
+Phase 2I adds no migration, RLS change, grant change, database write, meal write, summary write-back, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2J work.
