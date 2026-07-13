@@ -7,6 +7,7 @@ import type {
 
 export const SUPABASE_CONSUMER_MEAL_RECORDS_TABLE = "meal_records" as const;
 export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE = "daily_nutrition_summaries" as const;
+export const SUPABASE_CONSUMER_PLANNED_MEALS_TABLE = "planned_meals" as const;
 export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION = "create_current_user_meal_record" as const;
 export const SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION = "persist_authenticated_daily_nutrition_summary" as const;
 
@@ -40,6 +41,20 @@ export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARY_SELECT_COLUMNS = [
   "source_cutoff_at",
   "recalculated_at",
   "is_current"
+].join(",");
+
+export const SUPABASE_CONSUMER_PLANNED_MEALS_SELECT_COLUMNS = [
+  "id",
+  "user_id",
+  "planned_for",
+  "meal_type",
+  "restaurant_id",
+  "branch_id",
+  "menu_item_id",
+  "display_name_snapshot",
+  "planned_nutrition_snapshot",
+  "status",
+  "note"
 ].join(",");
 
 export type SupabaseNutritionSnapshotLike = Record<string, unknown> | null;
@@ -100,6 +115,20 @@ export type SupabaseDailyNutritionSummaryRowLike = {
   source_cutoff_at?: string | null;
   recalculated_at?: string | null;
   is_current?: boolean | null;
+};
+
+export type SupabasePlannedMealRowLike = {
+  id?: string | null;
+  user_id?: string | null;
+  planned_for?: string | null;
+  meal_type?: ConsumerMealType | string | null;
+  restaurant_id?: string | null;
+  branch_id?: string | null;
+  menu_item_id?: string | null;
+  display_name_snapshot?: string | null;
+  planned_nutrition_snapshot?: SupabaseNutritionSnapshotLike;
+  status?: string | null;
+  note?: string | null;
 };
 
 export type SupabaseMealPostgrestErrorLike = {

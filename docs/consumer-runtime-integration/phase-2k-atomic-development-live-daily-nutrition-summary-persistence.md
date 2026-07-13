@@ -131,4 +131,4 @@ Development live verification passed with one current-user meal record and one m
 - No planned meal, correction, consumption adjustment, rating, favorite, or recommendation runtime.
 - No production deployment.
 - No push.
-- No Phase 2L.
+- Phase 2L planned-meals read architecture is separate from Phase 2K summary persistence.

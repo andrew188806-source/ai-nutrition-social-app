@@ -3,12 +3,14 @@ import type { ConsumerAuthResult } from "../consumer-auth/types";
 export type ConsumerMealRecordsSource = "mock" | "supabase-disabled" | "supabase-live";
 export type ConsumerDailyNutritionSource = "mock" | "supabase-disabled" | "supabase-live";
 export type ConsumerDailyNutritionWriteSource = "disabled" | "mock" | "supabase";
+export type ConsumerPlannedMealsSource = "disabled" | "mock" | "supabase_prepared";
 export type ConsumerMealType = "breakfast" | "lunch" | "dinner" | "late_night" | "snack" | "other";
 export type ConsumerMealSourceType = "restaurant" | "self_made" | "manual" | "ai_estimated";
 export type ConsumerNutritionSourceType = "restaurant_verified" | "admin_verified" | "ai_estimated" | "user_corrected" | "manual";
 export type ConsumerMealCorrectionStatus = "none" | "pending" | "confirmed" | "rejected";
 export type ConsumerDailySummaryProvenance = "stored" | "calculated";
 export type ConsumerDailySummaryCalculationStatus = "current" | "missing" | "calculated" | "mismatch" | "deferred";
+export type ConsumerPlannedMealStatusValue = "planned" | "converted" | "cancelled" | "expired";
 
 export type ConsumerMealRuntimeFlags = {
   authSource: "mock" | "supabase-disabled" | "supabase-live";
@@ -20,6 +22,7 @@ export type ConsumerMealRuntimeFlags = {
   mealRecordLiveWriteOptIn: boolean;
   dailyNutritionLiveReadOptIn: boolean;
   dailyNutritionWriteSource: ConsumerDailyNutritionWriteSource;
+  plannedMealsSource: ConsumerPlannedMealsSource;
   issues: string[];
 };
 
@@ -242,6 +245,80 @@ export interface ConsumerDailyNutritionSummaryPersistenceRepository {
   ): Promise<ConsumerDailyNutritionSummaryPersistenceResult>;
 }
 
+export type ConsumerPlannedMealItem = {
+  plannedMealItemId: string;
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuItemId?: string | null;
+  displayName: string;
+  estimatedNutrition: ConsumerNutritionSnapshot | null;
+};
+
+export type ConsumerPlannedMeal = {
+  plannedMealId: string;
+  plannedDate: string;
+  plannedTime: string | null;
+  mealType: ConsumerMealType | null;
+  title: string | null;
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuItemId?: string | null;
+  restaurantName: string | null;
+  estimatedNutrition: ConsumerNutritionSnapshot | null;
+  status: ConsumerPlannedMealStatusValue;
+  note?: string | null;
+  items: ConsumerPlannedMealItem[];
+};
+
+export type GetCurrentUserPlannedMealsInput = {
+  plannedDate?: string;
+};
+
+export type CanonicalPlannedMealsRepositoryInput = {
+  plannedDate: string;
+};
+
+export type ConsumerPlannedMealsUnavailableReason =
+  | "planned_meals_unavailable"
+  | "schema_unavailable"
+  | "source_disabled"
+  | "phase_not_started";
+
+export type ConsumerPlannedMealsReadResult =
+  | {
+      status: "available";
+      plannedDate: string;
+      meals: ConsumerPlannedMeal[];
+    }
+  | {
+      status: "empty";
+      plannedDate: string;
+      meals: [];
+    }
+  | {
+      status: "unavailable";
+      plannedDate: string;
+      reason: ConsumerPlannedMealsUnavailableReason;
+    }
+  | {
+      status: "unauthenticated";
+      plannedDate: string;
+    }
+  | {
+      status: "invalid_input";
+      plannedDate?: string;
+    }
+  | {
+      status: "read_failed";
+      plannedDate: string;
+      errorCode: string;
+    };
+
+export interface ConsumerPlannedMealsRepository {
+  readonly source: ConsumerPlannedMealsSource;
+  getCurrentUserPlannedMeals(input: CanonicalPlannedMealsRepositoryInput): Promise<ConsumerPlannedMealsReadResult>;
+}
+
 export type ConsumerTodayIntakeOverviewInput = {
   date?: string;
 };
@@ -263,18 +340,19 @@ export type ConsumerTodayIntakeOverviewWarning =
 export type ConsumerPlannedMealOverview = {
   plannedMealId?: string;
   date: string;
-  mealTime?: string;
-  mealType?: string;
+  mealTime?: string | null;
+  mealType?: string | null;
   title: string;
   restaurantName?: string | null;
   note?: string | null;
+  estimatedNutrition?: ConsumerNutritionSnapshot | null;
 };
 
 export type ConsumerTodayIntakeOverviewProvenance = {
   meals: ConsumerMealRecordsSource;
   calculatedNutrition: "calculated";
   storedNutrition: ConsumerDailyNutritionSource | "unavailable";
-  plannedMeals: "injected" | "unavailable";
+  plannedMeals: ConsumerPlannedMealsSource | "unavailable";
 };
 
 export type ConsumerTodayIntakeOverview = {
@@ -294,7 +372,3 @@ export type ConsumerTodayIntakeOverview = {
   status: ConsumerTodayIntakeOverviewStatus;
   generatedAt: string;
 };
-
-export interface ConsumerPlannedMealsRepository {
-  listCurrentUserPlannedMeals(input: { date: string }): Promise<ConsumerAuthResult<ConsumerPlannedMealOverview[]>>;
-}

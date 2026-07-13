@@ -415,6 +415,27 @@ The Mobile runtime now supports `EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_W
 
 The runtime service still calculates totals from current-user meal records through the Phase 2E calculator before persistence. It does not include planned meals, stored summaries as calculator input, UI totals, corrections runtime, consumption adjustments runtime, ratings, favorites, recommendation feedback, or caller-provided nutrition totals.
 
-Phase 2K does not change Mobile UI, navigation, Home, Today Intake, the shared intake UI hook, Restaurant Web runtime, Admin runtime, seed data, fixtures, profile bootstrap, Auth users, production configuration, or automatic write-back behavior. Phase 2L has not started.
+Phase 2K does not change Mobile UI, navigation, Home, Today Intake, the shared intake UI hook, Restaurant Web runtime, Admin runtime, seed data, fixtures, profile bootstrap, Auth users, production configuration, or automatic write-back behavior. Phase 2L supersedes only the planned-meals read-architecture note.
 
 Development live verification passed for authenticated sign-in, current-user meal read, Phase 2E calculation, first summary persistence RPC, read-after-write, stored/calculated parity, repeated persistence, same user/date current-row count, deterministic nutrition values, and sign-out. The smoke printed no credentials, tokens, sessions, user IDs, record IDs, summary IDs, raw rows, or raw RPC responses.
+
+## Phase 2L Planned Meals Canonical Read Architecture Result
+
+Consumer Runtime Integration Phase 2L Planned Meals Canonical Read Architecture is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Phase 2L adds a canonical planned meals read domain:
+
+- `ConsumerPlannedMeal`
+- `ConsumerPlannedMealItem`
+- `ConsumerPlannedMealsReadResult`
+- `ConsumerPlannedMealsRepository`
+- `ConsumerPlannedMealsService`
+- `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE`
+
+The source flag allows `disabled`, `mock`, and `supabase_prepared`; the default is `disabled`, and unknown values fail closed.
+
+Schema discovery confirmed the active frozen schema has `public.planned_meals`, `planned_for`, `planned_nutrition_snapshot`, and `planned_meal_status`, but no separate `planned_meal_items` table. Phase 2L therefore models planned items canonically without introducing a new persistence object.
+
+The shared Today Intake overview now integrates planned meals through `ConsumerPlannedMealsService`. Unavailable planned meals produce `planned_meals_unavailable`; empty planned meals remain distinct from unavailable; available planned meals remain display metadata only and do not change actual consumed meal count, item count, or nutrition totals.
+
+Phase 2L adds no active migration, RLS change, grant change, database read, database write, planned meal write, RPC invocation, raw SQL execution, seed, fixture, bootstrap, UI layout change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2M work.

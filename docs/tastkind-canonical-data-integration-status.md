@@ -1109,3 +1109,71 @@ Development verification:
 - Explicit live smoke passed with one current-user meal, one item, 123 kcal, 12 g protein, 18 g carbohydrates, 4 g fat, 3 g fiber.
 - First persistence, read-after-write, stored/calculated parity, repeated persistence, duplicate prevention, deterministic result, and sign-out passed.
 - No credentials, tokens, sessions, user IDs, record IDs, summary IDs, raw rows, raw responses, URL, or key are recorded in repository documentation.
+
+## 43. Consumer Runtime Integration Phase 2L Status
+
+Consumer Runtime Integration Phase 2L Planned Meals Canonical Read Architecture is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Completed in repository:
+
+- Canonical planned meal model and read result union.
+- `ConsumerPlannedMealsService.getCurrentUserPlannedMeals(input?)`.
+- `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE`.
+- Disabled planned meals repository.
+- Deterministic mock planned meals repository.
+- Supabase-prepared planned meals repository with no transport.
+- Planned meals mapper and frozen table/column contract constants.
+- Shared Today Intake overview integration through the canonical planned meal service.
+- Phase 2L guard script: `npm run test:consumer-phase2l`.
+- Phase 2L default smoke script: `npm run test:consumer-phase2l-smoke`.
+- Phase 2L mock contract smoke script: `npm run test:consumer-phase2l-mock-smoke`.
+- Phase 2L documentation and handoff status.
+
+Runtime source values:
+
+- `disabled`
+- `mock`
+- `supabase_prepared`
+
+Default source:
+
+- `disabled`
+
+Schema discovery:
+
+- `public.planned_meals` exists in active frozen schema.
+- `planned_for` is the canonical date column.
+- No planned meal time column exists in the active frozen table.
+- No `planned_meal_items` table exists in active frozen schema.
+- Planned nutrition is stored as `planned_nutrition_snapshot`.
+- Existing RLS owner policy exists, but Phase 2L does not add or verify a live read grant.
+
+Boundary:
+
+- No migration.
+- No grant or RLS change.
+- No Development live planned-meal read.
+- No planned meal write.
+- No direct Supabase query.
+- No planned meal RPC.
+- No database read or write in default smoke.
+- No UI layout or navigation change.
+- No corrections, consumption adjustments, ratings, favorites, or recommendation feedback runtime.
+- No seed, fixture, bootstrap, production deployment, push, or Phase 2M work.
+
+Verification:
+
+- Default smoke is skipped without client, sign-in, network, database read, database write, or RPC.
+- Mock smoke verifies available, empty, unavailable, date filtering, deterministic sorting, repeated read, shared overview integration, and planned nutrition excluded from actual consumed totals.
+- Actual consumed meal count, item count, calories, protein, carbohydrates, fat, and fiber remain unchanged when planned meals are available.
+
+Phase 2M prerequisites:
+
+- Confirm live `planned_meals` column contract.
+- Add minimal authenticated SELECT grant if required.
+- Verify RLS ownership.
+- Implement live repository.
+- Add explicit Development live planned-meal read opt-in.
+- Verify available and empty live reads.
+- Verify planned nutrition remains separated from actual consumed totals.
+- Keep no-write and no-production boundaries.

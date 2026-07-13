@@ -15,10 +15,11 @@ import { err, ok, type ConsumerAuthResult } from "../consumer-auth/types";
 import { calculateDailyNutritionSummary, compareStoredAndCalculatedDailyNutritionSummary } from "./dailyNutritionSummaryCalculator";
 import type { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import type { ConsumerMealRecordsService } from "./consumerMealRecordsService";
+import type { ConsumerPlannedMealsService } from "./consumerPlannedMealsService";
 import type {
   ConsumerDailyNutritionSource,
   ConsumerMealRecordsSource,
-  ConsumerPlannedMealsRepository,
+  ConsumerPlannedMealOverview,
   ConsumerTodayIntakeOverview,
   ConsumerTodayIntakeOverviewInput,
   ConsumerTodayIntakeOverviewStatus,
@@ -34,7 +35,10 @@ export type ConsumerTodayIntakeOverviewClock = {
 export type ConsumerTodayIntakeOverviewServiceOptions = {
   mealRecordsService: ConsumerMealRecordsService;
   dailyNutritionSummaryService: ConsumerDailyNutritionSummaryService;
-  plannedMealsRepository?: ConsumerPlannedMealsRepository;
+  plannedMealsService?: ConsumerPlannedMealsService;
+  plannedMealsRepository?: {
+    listCurrentUserPlannedMeals(input: { date: string }): Promise<ConsumerAuthResult<ConsumerPlannedMealOverview[]>>;
+  };
   clock: ConsumerTodayIntakeOverviewClock;
   mealRecordsSource: ConsumerMealRecordsSource;
   dailyNutritionSource: ConsumerDailyNutritionSource;
@@ -94,17 +98,35 @@ export class ConsumerTodayIntakeOverviewService {
       if (!parity.ok || !parity.value.matches) warnings.push("stored_summary_parity_mismatch");
     }
 
-    const plannedMealsResult = this.options.plannedMealsRepository
-      ? await this.options.plannedMealsRepository.listCurrentUserPlannedMeals({ date })
-      : null;
-    const plannedMeals = plannedMealsResult?.ok ? plannedMealsResult.value : [];
+    const plannedMealsResult = this.options.plannedMealsService
+      ? await this.options.plannedMealsService.getCurrentUserPlannedMeals({ plannedDate: date })
+      : this.options.plannedMealsRepository
+        ? mapLegacyPlannedMealsResult(date, await this.options.plannedMealsRepository.listCurrentUserPlannedMeals({ date }))
+        : null;
+    const plannedMeals = plannedMealsResult?.status === "available"
+      ? plannedMealsResult.meals.map((meal) => ({
+          plannedMealId: meal.plannedMealId,
+          date: meal.plannedDate,
+          mealTime: meal.plannedTime,
+          mealType: meal.mealType,
+          title: meal.title ?? "",
+          restaurantName: meal.restaurantName,
+          note: meal.note ?? null,
+          estimatedNutrition: meal.estimatedNutrition
+        }))
+      : [];
     let plannedMealsStatus: ConsumerTodayIntakeOverview["plannedMealsStatus"] = "unavailable";
     if (!plannedMealsResult) {
       warnings.push("planned_meals_unavailable");
     }
-    if (plannedMealsResult?.ok) {
-      plannedMealsStatus = plannedMeals.length > 0 ? "available" : "empty";
-    } else if (plannedMealsResult && !plannedMealsResult.ok) {
+    if (plannedMealsResult?.status === "available") {
+      plannedMealsStatus = "available";
+    } else if (plannedMealsResult?.status === "empty") {
+      plannedMealsStatus = "empty";
+    } else if (plannedMealsResult?.status === "unavailable") {
+      plannedMealsStatus = "unavailable";
+      warnings.push("planned_meals_unavailable");
+    } else if (plannedMealsResult) {
       plannedMealsStatus = "error";
       warnings.push("planned_meals_error");
     }
@@ -135,13 +157,37 @@ export class ConsumerTodayIntakeOverviewService {
         meals: this.options.mealRecordsSource,
         calculatedNutrition: "calculated",
         storedNutrition: storedSummaryStatus === "unavailable" ? "unavailable" : this.options.dailyNutritionSource,
-        plannedMeals: plannedMealsResult ? "injected" : "unavailable"
+        plannedMeals: plannedMealsResult ? this.options.plannedMealsService?.source ?? "mock" : "unavailable"
       },
       warnings,
       status,
       generatedAt
     });
   }
+}
+
+function mapLegacyPlannedMealsResult(date: string, result: ConsumerAuthResult<ConsumerPlannedMealOverview[]>) {
+  if (!result.ok) {
+    return { status: "read_failed" as const, plannedDate: date, errorCode: result.error.code };
+  }
+  return result.value.length > 0
+    ? {
+        status: "available" as const,
+        plannedDate: date,
+        meals: result.value.map((meal) => ({
+          plannedMealId: meal.plannedMealId ?? `legacy-planned-${meal.mealTime ?? meal.title}`,
+          plannedDate: meal.date || date,
+          plannedTime: meal.mealTime ?? null,
+          mealType: null,
+          title: meal.title,
+          restaurantName: meal.restaurantName ?? null,
+          estimatedNutrition: meal.estimatedNutrition ?? null,
+          status: "planned" as const,
+          note: meal.note ?? null,
+          items: []
+        }))
+      }
+    : { status: "empty" as const, plannedDate: date, meals: [] };
 }
 
 function mapMealReadError(error: { code: string }) {

@@ -149,22 +149,7 @@ export function getUiMealCalories(meal: TodayIntakeUiMealRecord): number {
 
 function createOverviewDependencies(mealFlags: ConsumerMealRuntimeFlags) {
   if (mealFlags.mealRecordsSource !== "supabase-live" && mealFlags.dailyNutritionSource !== "supabase-live") {
-    return {
-      plannedMealsRepository: {
-        listCurrentUserPlannedMeals: async () => ({
-          ok: true as const,
-          value: getLocalPlannedMeals().map((plan) => ({
-            plannedMealId: plan.mealTime ? `local-planned-${plan.mealTime}` : "local-planned-dinner",
-            date: "",
-            mealTime: plan.mealTime,
-            mealType: plan.mealType,
-            title: plan.plannedMealName,
-            restaurantName: plan.restaurantName,
-            note: plan.notes
-          }))
-        })
-      }
-    };
+    return {};
   }
 
   const authFlags = getConsumerRuntimeFlags();

@@ -11,18 +11,22 @@ import { MockConsumerMealRecordsRepository } from "./adapters/mockConsumerMealRe
 import { MockConsumerMealRecordWriteRepository } from "./adapters/mockConsumerMealRecordWriteRepository";
 import { MockConsumerDailyNutritionSummaryRepository } from "./adapters/mockConsumerDailyNutritionSummaryRepository";
 import { MockConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/mockConsumerDailyNutritionSummaryPersistenceRepository";
+import { MockConsumerPlannedMealsRepository } from "./adapters/mockConsumerPlannedMealsRepository";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository";
+import { SupabaseDisabledConsumerPlannedMealsRepository } from "./adapters/supabaseDisabledConsumerPlannedMealsRepository";
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
 import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
 import { SupabaseConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository";
+import { SupabasePreparedConsumerPlannedMealsRepository } from "./adapters/supabasePreparedConsumerPlannedMealsRepository";
 import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
+import { ConsumerPlannedMealsService } from "./consumerPlannedMealsService";
 import { ConsumerTodayIntakeOverviewService, type ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOverviewService";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
 import type { ConsumerMealRuntimeFlags, ConsumerPlannedMealsRepository } from "./types";
@@ -31,6 +35,7 @@ export type ConsumerMealFactoryDependencies = {
   authPort?: ConsumerAuthPort;
   mealClient?: SupabaseConsumerMealClientLike;
   plannedMealsRepository?: ConsumerPlannedMealsRepository;
+  plannedMealsService?: ConsumerPlannedMealsService;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -196,6 +201,25 @@ export function createConsumerDailyNutritionSummaryPersistenceService(
   });
 }
 
+export function createConsumerPlannedMealsRepository(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+  const flagCheck = assertConsumerMealRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  if (flags.plannedMealsSource === "mock") return new MockConsumerPlannedMealsRepository();
+  if (flags.plannedMealsSource === "supabase_prepared") return new SupabasePreparedConsumerPlannedMealsRepository();
+  return new SupabaseDisabledConsumerPlannedMealsRepository();
+}
+
+export function createConsumerPlannedMealsService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  return new ConsumerPlannedMealsService({
+    repository: dependencies.plannedMealsRepository ?? createConsumerPlannedMealsRepository(flags),
+    clock: dependencies.clock ?? systemClock,
+    timezone: dependencies.timezone
+  });
+}
+
 export function assertConsumerTodayIntakeOverviewRuntimeFlags(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
   if (flags.issues.length) {
     return { ok: false as const, error: new ConsumerTodayIntakeOverviewConfigurationInvalidError(flags.issues.join(" ")) };
@@ -218,7 +242,7 @@ export function createConsumerTodayIntakeOverviewService(
   return new ConsumerTodayIntakeOverviewService({
     mealRecordsService: createConsumerMealRecordsService(flags, dependencies),
     dailyNutritionSummaryService: createConsumerDailyNutritionSummaryService(flags, dependencies),
-    plannedMealsRepository: dependencies.plannedMealsRepository,
+    plannedMealsService: dependencies.plannedMealsService ?? createConsumerPlannedMealsService(flags, dependencies),
     clock: dependencies.clock ?? systemClock,
     mealRecordsSource: flags.mealRecordsSource,
     dailyNutritionSource: flags.dailyNutritionSource,

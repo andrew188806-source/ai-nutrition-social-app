@@ -393,3 +393,25 @@ Runtime source values for daily summary writes are now `disabled`, `mock`, and `
 Phase 2K does not add seed data, fixtures, bootstrap data, Auth users, automatic summary creation, UI write-back, planned meal runtime, corrections runtime, consumption adjustments runtime, ratings, favorites, recommendation feedback, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2L work.
 
 Development live verification passed with current-user meal read, Phase 2E calculation, atomic RPC persistence, read-after-write, stored/calculated parity, repeated persistence, same user/date duplicate prevention, deterministic nutrition values, and sign-out. No URL, key, email, password, token, session, user UUID, record UUID, summary UUID, raw row, or raw RPC response is recorded.
+
+## 30. Phase 2L Follow-Up
+
+Consumer Runtime Integration Phase 2L Planned Meals Canonical Read Architecture is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Phase 2L adds no active migration, RLS change, grant change, remote Supabase operation, Development live planned-meal read, planned meal write, database write, RPC invocation, raw SQL execution, seed, fixture, UI wiring, navigation wiring, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2M work.
+
+The phase adds a canonical planned meals read model, source flag, disabled repository, deterministic mock repository, Supabase-prepared no-transport repository, canonical service, and shared Today Intake overview integration.
+
+Frozen schema discovery:
+
+- table: `public.planned_meals`
+- date column: `planned_for`
+- time column: none
+- nutrition field: `planned_nutrition_snapshot`
+- item table: none in active schema
+- RLS: existing owner policy from Phase 1.3
+- authenticated SELECT grant for live planned reads: Phase 2M prerequisite
+
+Default source is `disabled`. Unknown source values fail closed. Default smoke is `SKIPPED` and creates no client, network request, database read, database write, or RPC invocation. Mock contract smoke verifies available, empty, unavailable, deterministic sorting, repeated read, shared overview integration, and planned nutrition separation from actual consumed totals.
+
+Phase 2M prerequisites remain: minimal live read grant if required, RLS ownership verification, Development-only deployment verification, live repository implementation, explicit live smoke, available/empty live read verification, actual/planned nutrition separation verification, no writes, and no production operation.
