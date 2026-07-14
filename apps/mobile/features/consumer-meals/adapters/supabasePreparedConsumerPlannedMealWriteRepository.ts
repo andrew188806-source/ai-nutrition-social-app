@@ -17,8 +17,10 @@ import type {
   ConsumerPlannedMealWriteResult
 } from "../types";
 
+// Deprecated after Phase 2O. Use SupabaseConsumerPlannedMealWriteRepository (source: "supabase") instead.
+// Source is now "disabled" since "supabase_prepared" is no longer a valid ConsumerPlannedMealsWriteSource.
 export class SupabasePreparedConsumerPlannedMealWriteRepository implements ConsumerPlannedMealWriteRepository {
-  readonly source = "supabase_prepared" as const;
+  readonly source = "disabled" as const;
   readonly saveFunction = SUPABASE_SAVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION;
   readonly updateFunction = SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_FUNCTION;
   readonly removeFunction = SUPABASE_REMOVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION;
@@ -36,7 +38,7 @@ export class SupabasePreparedConsumerPlannedMealWriteRepository implements Consu
   async remove(payload: CanonicalPlannedMealRemovePayload): Promise<ConsumerPlannedMealWriteResult> {
     toSupabaseRemovePlannedMealRpcArgs(payload);
     return {
-      status: "unavailable",
+      status: "skipped",
       operation: "remove",
       source: this.source,
       identity: "authenticated_user_planned_meal",
@@ -53,9 +55,9 @@ function unavailable(
   nutritionSnapshotAvailable: boolean
 ): ConsumerPlannedMealWriteResult {
   return {
-    status: "unavailable",
+    status: "skipped",
     operation,
-    source: "supabase_prepared",
+    source: "disabled",
     identity: "authenticated_user_planned_meal",
     plannedFor,
     mealType,

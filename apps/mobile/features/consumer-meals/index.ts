@@ -32,3 +32,4 @@ export * from "./adapters/supabaseConsumerMealRecordWriteRepository";
 export * from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
 export * from "./adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository";
 export * from "./adapters/supabasePreparedConsumerPlannedMealWriteRepository";
+export * from "./adapters/supabaseConsumerPlannedMealWriteRepository";

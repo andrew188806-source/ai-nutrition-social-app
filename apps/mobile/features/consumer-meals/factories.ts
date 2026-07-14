@@ -27,6 +27,7 @@ import { SupabaseConsumerDailyNutritionSummaryPersistenceRepository } from "./ad
 import { SupabaseConsumerPlannedMealsRepository } from "./adapters/supabaseConsumerPlannedMealsRepository";
 import { SupabasePreparedConsumerPlannedMealsRepository } from "./adapters/supabasePreparedConsumerPlannedMealsRepository";
 import { SupabasePreparedConsumerPlannedMealWriteRepository } from "./adapters/supabasePreparedConsumerPlannedMealWriteRepository";
+import { SupabaseConsumerPlannedMealWriteRepository } from "./adapters/supabaseConsumerPlannedMealWriteRepository";
 import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
@@ -250,17 +251,28 @@ export function assertConsumerPlannedMealWriteRuntimeFlags(flags: ConsumerMealRu
   if (flags.issues.length) {
     return { ok: false as const, error: new ConsumerAuthConfigurationError(flags.issues.join(" ")) };
   }
-  if (flags.plannedMealsWriteSource === "supabase_prepared" && flags.supabaseWritesEnabled) {
-    return { ok: false as const, error: new ConsumerAuthConfigurationError("Consumer planned meal prepared write contracts must not enable live writes.") };
+  if (flags.plannedMealsWriteSource === "supabase" && (!flags.supabaseWritesEnabled || flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled)) {
+    return { ok: false as const, error: new ConsumerAuthConfigurationError("Consumer planned meal live writes require live Auth, Auth enabled, and writes enabled.") };
   }
   return { ok: true as const, value: flags };
 }
 
-export function createConsumerPlannedMealWriteRepository(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+export function createConsumerPlannedMealWriteRepository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
   const flagCheck = assertConsumerPlannedMealWriteRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
   if (flags.plannedMealsWriteSource === "mock") return new MockConsumerPlannedMealWriteRepository();
-  if (flags.plannedMealsWriteSource === "supabase_prepared") return new SupabasePreparedConsumerPlannedMealWriteRepository();
+  if (flags.plannedMealsWriteSource === "supabase") {
+    if (!dependencies.authPort) throw new ConsumerAuthConfigurationError("Consumer planned meal live writes require an authenticated ConsumerAuthPort.");
+    if (!dependencies.mealClient) throw new ConsumerAuthConfigurationError("Consumer planned meal live writes require an explicit meal client.");
+    return new SupabaseConsumerPlannedMealWriteRepository({
+      authPort: dependencies.authPort,
+      mealClient: dependencies.mealClient,
+      writeEnabled: true
+    });
+  }
   return new SupabaseDisabledConsumerPlannedMealWriteRepository();
 }
 
@@ -271,7 +283,7 @@ export function createConsumerPlannedMealWriteService(
   const flagCheck = assertConsumerPlannedMealWriteRuntimeFlags(flags);
   if (!flagCheck.ok) throw flagCheck.error;
   return new ConsumerPlannedMealWriteService({
-    repository: dependencies.plannedMealWriteRepository ?? createConsumerPlannedMealWriteRepository(flags)
+    repository: dependencies.plannedMealWriteRepository ?? createConsumerPlannedMealWriteRepository(flags, dependencies)
   });
 }
 

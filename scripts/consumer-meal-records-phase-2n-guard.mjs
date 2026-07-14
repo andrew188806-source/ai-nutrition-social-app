@@ -74,12 +74,20 @@ for (const rel of [
 }
 
 const migrationFiles = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
-if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory unchanged from Phase 2M", { count: migrationFiles.length });
-else fail("migration inventory unchanged from Phase 2M", "Phase 2N must not add migrations.", { migrationFiles, expectedMigrationFiles });
+// Phase 2O adds one migration beyond 2N's expected list. Allow either the 2N-only set or the 2N+2O set.
+const phase2OMigration = "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql";
+const expectedWith2O = [...expectedMigrationFiles, phase2OMigration];
+if (JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrationFiles)) pass("migration inventory at Phase 2N baseline", { count: migrationFiles.length });
+else if (JSON.stringify(migrationFiles) === JSON.stringify(expectedWith2O)) pass("migration inventory at Phase 2O (2N baseline + 2O write function migration)", { count: migrationFiles.length });
+else fail("migration inventory unchanged from Phase 2M or updated for Phase 2O only", "Phase 2N must not add migrations other than Phase 2O planned meal write functions.", { migrationFiles, expectedMigrationFiles });
 
 const types = read("apps/mobile/features/consumer-meals/types.ts");
-if (/ConsumerPlannedMealsWriteSource = "disabled" \| "mock" \| "supabase_prepared"/.test(types)) pass("planned meal write source values are disabled/mock/supabase_prepared");
-else fail("planned meal write source values are disabled/mock/supabase_prepared", "Write source must not expose live supabase in Phase 2N.");
+// Phase 2O supersedes the supabase_prepared write source with supabase. Allow either the 2N or 2O type definition.
+const writeSourceLine = types.match(/ConsumerPlannedMealsWriteSource\s*=\s*[^\n]+/)?.[0] ?? "";
+const has2NWriteSources = /supabase_prepared/.test(writeSourceLine);
+const has2OWriteSources = /"supabase"/.test(writeSourceLine) && !/"supabase_prepared"/.test(writeSourceLine);
+if (has2NWriteSources || has2OWriteSources) pass("planned meal write source values are controlled (Phase 2N or 2O)");
+else fail("planned meal write source values are controlled (Phase 2N or 2O)", "Write source type must be either 2N (supabase_prepared) or 2O (supabase).");
 if (/SaveCurrentUserPlannedMealInput/.test(types) && /UpdateCurrentUserPlannedMealInput/.test(types) && /RemoveCurrentUserPlannedMealInput/.test(types)) pass("canonical planned meal write inputs exist");
 else fail("canonical planned meal write inputs exist", "Missing save/update/remove input contracts.");
 const inputContracts = [
@@ -93,8 +101,12 @@ if (/ConsumerPlannedMealWriteResult/.test(types) && /saved/.test(types) && /upda
 else fail("canonical write result union exists", "Write result must be typed and non-boolean.");
 
 const flags = read("apps/mobile/features/consumer-meals/featureFlags.ts");
-if (/EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE/.test(flags) && /\["disabled", "mock", "supabase_prepared"\]/.test(flags)) pass("write source flag exists and excludes live supabase");
-else fail("write source flag exists and excludes live supabase", "Missing planned meal write source flag.");
+// Phase 2O replaces supabase_prepared with supabase in the valid write source set. Allow either 2N or 2O set.
+const hasWriteSourceFlag = /EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE/.test(flags);
+const has2NFlagSet = /\["disabled", "mock", "supabase_prepared"\]/.test(flags);
+const has2OFlagSet = /\["disabled", "mock", "supabase"\]/.test(flags);
+if (hasWriteSourceFlag && (has2NFlagSet || has2OFlagSet)) pass("write source flag exists and controls live supabase access");
+else fail("write source flag exists and controls live supabase access", "Missing planned meal write source flag.");
 if (/if \(!value\) return "disabled"/.test(flags) && /Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE/.test(flags)) pass("write source defaults disabled and unknown fails closed");
 else fail("write source defaults disabled and unknown fails closed", "Planned meal write source must default disabled and reject unknown values.");
 
@@ -131,8 +143,11 @@ else fail("prepared repository performs no client, network, database, or RPC ope
 const factory = read("apps/mobile/features/consumer-meals/factories.ts");
 if (/createConsumerPlannedMealWriteService/.test(factory) && /createConsumerPlannedMealWriteRepository/.test(factory)) pass("factory exposes planned meal write service and repository");
 else fail("factory exposes planned meal write service and repository", "Missing planned meal write factory.");
-if (/plannedMealsWriteSource === "mock"/.test(factory) && /plannedMealsWriteSource === "supabase_prepared"/.test(factory) && /SupabaseDisabledConsumerPlannedMealWriteRepository/.test(factory)) pass("factory selects disabled/mock/prepared sources");
-else fail("factory selects disabled/mock/prepared sources", "Factory must select planned write sources explicitly.");
+// Phase 2O replaces supabase_prepared with supabase in the factory. Allow either 2N or 2O factory shape.
+const has2NFactoryShape = /plannedMealsWriteSource === "mock"/.test(factory) && /plannedMealsWriteSource === "supabase_prepared"/.test(factory) && /SupabaseDisabledConsumerPlannedMealWriteRepository/.test(factory);
+const has2OFactoryShape = /plannedMealsWriteSource === "mock"/.test(factory) && /plannedMealsWriteSource === "supabase"/.test(factory) && /SupabaseDisabledConsumerPlannedMealWriteRepository/.test(factory);
+if (has2NFactoryShape || has2OFactoryShape) pass("factory selects controlled planned write sources");
+else fail("factory selects controlled planned write sources", "Factory must select planned write sources explicitly.");
 
 const mealFiles = walk(mealRoot, (file) => file.endsWith(".ts")).map((file) => ({ rel: relative(file), text: fs.readFileSync(file, "utf8") }));
 const plannedWriteFiles = mealFiles.filter(({ rel, text }) => /PlannedMealWrite|plannedMealWrite|PLANNED_MEALS_WRITE|save_authenticated_planned_meal|remove_authenticated_planned_meal/.test(rel + text));
@@ -140,9 +155,10 @@ const transportWriteFiles = plannedWriteFiles.filter(({ rel }) => /supabase|Supa
 const forbiddenWriteMatches = transportWriteFiles.filter(({ text }) => /\.\s*(insert|upsert|update|delete)\s*\(/.test(text)).map(({ rel }) => rel);
 if (forbiddenWriteMatches.length) fail("planned meal write preparation has no direct table writes", "Phase 2N must not call direct write methods.", { matches: forbiddenWriteMatches });
 else pass("planned meal write preparation has no direct table writes");
-const rpcMatches = plannedWriteFiles.filter(({ text }) => /\.\s*rpc\s*\(/.test(text)).map(({ rel }) => rel);
-if (rpcMatches.length) fail("planned meal write preparation invokes no RPC", "Phase 2N must not call RPC.", { matches: rpcMatches });
-else pass("planned meal write preparation invokes no RPC");
+// Phase 2O adds a live adapter that calls .rpc(). Exclude the Phase 2O live repo file from the 2N RPC-free check.
+const phase2NRpcFiles = plannedWriteFiles.filter(({ rel, text }) => /\.\s*rpc\s*\(/.test(text) && !/supabaseConsumerPlannedMealWriteRepository/.test(rel));
+if (phase2NRpcFiles.length) fail("planned meal write preparation invokes no RPC (Phase 2N files only)", "Phase 2N files must not call RPC.", { matches: phase2NRpcFiles.map(({ rel }) => rel) });
+else pass("planned meal write preparation invokes no RPC (Phase 2N files only)");
 const secretMatches = plannedWriteFiles.filter(({ text }) => /service[_-]?role|SUPABASE_SERVICE|SECRET_KEY/.test(text)).map(({ rel }) => rel);
 if (secretMatches.length) fail("planned meal write preparation has no privileged credential references", "No service-role or secret references are allowed.", { matches: secretMatches });
 else pass("planned meal write preparation has no privileged credential references");

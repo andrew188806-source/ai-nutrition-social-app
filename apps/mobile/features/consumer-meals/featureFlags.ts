@@ -5,7 +5,7 @@ const mealSources = new Set<ConsumerMealRecordsSource>(["mock", "supabase-disabl
 const dailyNutritionSources = new Set<ConsumerDailyNutritionSource>(["mock", "supabase-disabled", "supabase-live"]);
 const dailyNutritionWriteSources = new Set<ConsumerDailyNutritionWriteSource>(["disabled", "mock", "supabase"]);
 const plannedMealsSources = new Set<ConsumerPlannedMealsSource>(["disabled", "mock", "supabase", "supabase_prepared"]);
-const plannedMealsWriteSources = new Set<ConsumerPlannedMealsWriteSource>(["disabled", "mock", "supabase_prepared"]);
+const plannedMealsWriteSources = new Set<ConsumerPlannedMealsWriteSource>(["disabled", "mock", "supabase"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -51,6 +51,10 @@ function parsePlannedMealsSource(value: string | undefined, issues: string[]): C
 
 function parsePlannedMealsWriteSource(value: string | undefined, issues: string[]): ConsumerPlannedMealsWriteSource {
   if (!value) return "disabled";
+  if (value === "supabase_prepared") {
+    issues.push("EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE=supabase_prepared is deprecated after Phase 2O. Use disabled, mock, or supabase.");
+    return "disabled";
+  }
   if (plannedMealsWriteSources.has(value as ConsumerPlannedMealsWriteSource)) return value as ConsumerPlannedMealsWriteSource;
   issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE: ${value}`);
   return "disabled";
@@ -166,11 +170,17 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (plannedMealsSource === "supabase_prepared") {
     issues.push("Consumer planned meals supabase_prepared is deprecated after Phase 2M; use disabled, mock, or supabase.");
   }
-  if (plannedMealsWriteSource === "supabase_prepared" && runtimeEnvironment !== "development") {
-    issues.push("Consumer planned meals Supabase prepared write contracts are development-only in Consumer Runtime Phase 2N.");
+  if (plannedMealsWriteSource === "supabase" && runtimeEnvironment !== "development") {
+    issues.push("Consumer planned meals live Supabase writes are development-only in Consumer Runtime Phase 2O.");
   }
-  if (plannedMealsWriteSource === "supabase_prepared" && supabaseWritesEnabled) {
-    issues.push("Consumer planned meals Supabase prepared write contracts must not enable live Consumer writes in Phase 2N.");
+  if (plannedMealsWriteSource === "supabase" && !supabaseWritesEnabled) {
+    issues.push("Consumer planned meals live Supabase writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
+  }
+  if (plannedMealsWriteSource === "supabase" && authSource !== "supabase-live") {
+    issues.push("Consumer planned meals live Supabase writes require EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE=supabase-live.");
+  }
+  if (plannedMealsWriteSource === "supabase" && !supabaseAuthEnabled) {
+    issues.push("Consumer planned meals live Supabase writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED=true.");
   }
   if (mealRecordWritesEnabled && !supabaseWritesEnabled) {
     issues.push("Consumer meal record writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");

@@ -136,8 +136,11 @@ try {
   const preparedRepository = new preparedRepoModule.SupabasePreparedConsumerPlannedMealWriteRepository();
   const preparedService = new serviceModule.ConsumerPlannedMealWriteService({ repository: preparedRepository });
   const prepared = await preparedService.saveCurrentUserPlannedMeal(validInput);
-  if (prepared.status !== "unavailable" || prepared.source !== "supabase_prepared") fail("prepared source unavailable", "Prepared source must not go live.");
-  pass("prepared source unavailable");
+  // Phase 2O: prepared repo now deprecated → source="disabled", status="skipped". Allow both 2N and 2O behavior.
+  const preparedOk = (prepared.status === "unavailable" && prepared.source === "supabase_prepared") ||
+    (prepared.status === "skipped" && prepared.source === "disabled");
+  if (!preparedOk) fail("prepared source unavailable or deprecated", "Prepared source must not go live (Phase 2N: unavailable/supabase_prepared; Phase 2O: skipped/disabled).");
+  pass("prepared source unavailable or deprecated");
 
   const canonical = mapperModule.toCanonicalPlannedMealWritePayload(validInput);
   if (!canonical.ok) fail("canonical mapper", "Valid input should map.");

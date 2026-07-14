@@ -4,6 +4,12 @@ import type {
   ConsumerMealType,
   ConsumerNutritionSourceType
 } from "./types";
+import type {
+  SupabaseRemovePlannedMealRpcArgs,
+  SupabaseSavePlannedMealRpcArgs,
+  SupabaseUpdatePlannedMealRpcArgs
+} from "./plannedMealWriteMappers";
+export type { SupabaseSavePlannedMealRpcArgs, SupabaseUpdatePlannedMealRpcArgs, SupabaseRemovePlannedMealRpcArgs };
 
 export const SUPABASE_CONSUMER_MEAL_RECORDS_TABLE = "meal_records" as const;
 export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE = "daily_nutrition_summaries" as const;
@@ -172,6 +178,52 @@ export type SupabaseDailyNutritionSummaryRpcResponseLike = {
   status?: number | null;
 };
 
+export type SupabaseSavePlannedMealRpcResultLike = {
+  planned_meal_id?: string | null;
+  planned_for?: string | null;
+  meal_type?: string | null;
+  display_name_snapshot?: string | null;
+  status?: string | null;
+  nutrition_snapshot_present?: boolean | null;
+  created_at?: string | null;
+};
+
+export type SupabaseUpdatePlannedMealRpcResultLike = {
+  found?: boolean | null;
+  updated?: boolean | null;
+  planned_meal_id?: string | null;
+  planned_for?: string | null;
+  meal_type?: string | null;
+  status?: string | null;
+  nutrition_snapshot_present?: boolean | null;
+  updated_at?: string | null;
+};
+
+export type SupabaseRemovePlannedMealRpcResultLike = {
+  found?: boolean | null;
+  already_cancelled?: boolean | null;
+  planned_meal_id?: string | null;
+  status?: string | null;
+};
+
+export type SupabaseSavePlannedMealRpcResponseLike = {
+  data?: SupabaseSavePlannedMealRpcResultLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
+export type SupabaseUpdatePlannedMealRpcResponseLike = {
+  data?: SupabaseUpdatePlannedMealRpcResultLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
+export type SupabaseRemovePlannedMealRpcResponseLike = {
+  data?: SupabaseRemovePlannedMealRpcResultLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+
 export type SupabaseCreateMealRecordRpcArgs = {
   p_meal_type: ConsumerMealType;
   p_occurred_at: string;
@@ -220,4 +272,16 @@ export type SupabaseConsumerMealClientLike = {
     fn: typeof SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION,
     args: SupabasePersistDailyNutritionSummaryRpcArgs
   ): Promise<SupabaseDailyNutritionSummaryRpcResponseLike>;
+  rpc(
+    fn: typeof SUPABASE_SAVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION,
+    args: SupabaseSavePlannedMealRpcArgs
+  ): Promise<SupabaseSavePlannedMealRpcResponseLike>;
+  rpc(
+    fn: typeof SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_FUNCTION,
+    args: SupabaseUpdatePlannedMealRpcArgs
+  ): Promise<SupabaseUpdatePlannedMealRpcResponseLike>;
+  rpc(
+    fn: typeof SUPABASE_REMOVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION,
+    args: SupabaseRemovePlannedMealRpcArgs
+  ): Promise<SupabaseRemovePlannedMealRpcResponseLike>;
 };

@@ -46,7 +46,8 @@ const expectedMigrationFiles = [
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
   "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql",
-  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql"
+  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql",
+  "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql"
 ];
 
 const requiredTables = [
@@ -83,7 +84,7 @@ const expectedObjectCounts = {
   indexes: 28,
   policies: 24,
   types: 13,
-  functions: 3
+  functions: 6
 };
 
 function pass(name, extra = {}) {
@@ -159,6 +160,7 @@ const atomicMealWriteMigrationName = "20260713050100_consumer_schema_phase_1_3_a
 const dailySummaryGrantMigrationName = "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql";
 const atomicDailySummaryPersistenceMigrationName = "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql";
 const plannedMealGrantMigrationName = "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql";
+const atomicPlannedMealWriteMigrationName = "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql";
 const dailySummaryGrantMigration = activeTexts.find((item) => item.fileName === dailySummaryGrantMigrationName);
 const atomicDailySummaryPersistenceMigration = activeTexts.find((item) => item.fileName === atomicDailySummaryPersistenceMigrationName);
 const plannedMealGrantMigration = activeTexts.find((item) => item.fileName === plannedMealGrantMigrationName);
@@ -240,7 +242,10 @@ const expectedDailySummaryGrant = "grant select on table public.daily_nutrition_
 const expectedPlannedMealGrant = "grant select on table public.planned_meals to authenticated;";
 const expectedMealWriteFunctionGrant = "grant execute on function public.create_current_user_meal_record( public.meal_type, timestamptz, date, text, text, text, public.meal_source_type, jsonb ) to authenticated;";
 const expectedDailySummaryWriteFunctionGrant = "grant execute on function public.persist_authenticated_daily_nutrition_summary( date, text, text, numeric, numeric, numeric, numeric, numeric, integer, integer, timestamptz, timestamptz ) to authenticated;";
-const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedDailySummaryGrant, expectedPlannedMealGrant, expectedMealWriteFunctionGrant, expectedDailySummaryWriteFunctionGrant];
+const expectedSavePlannedMealFunctionGrant = "grant execute on function public.save_authenticated_planned_meal( date, text, text, text, text, text, text, jsonb ) to authenticated;";
+const expectedUpdatePlannedMealFunctionGrant = "grant execute on function public.update_authenticated_planned_meal( uuid, date, text, text, text, text, text, text, jsonb, text ) to authenticated;";
+const expectedRemovePlannedMealFunctionGrant = "grant execute on function public.remove_authenticated_planned_meal(uuid) to authenticated;";
+const allowedGrantStatements = [expectedGrant, expectedMealRecordGrant, expectedMealRecordItemGrant, expectedDailySummaryGrant, expectedPlannedMealGrant, expectedMealWriteFunctionGrant, expectedDailySummaryWriteFunctionGrant, expectedSavePlannedMealFunctionGrant, expectedUpdatePlannedMealFunctionGrant, expectedRemovePlannedMealFunctionGrant];
 const unexpectedGrants = grantStatements.filter((statement) => !allowedGrantStatements.includes(statement));
 if (unexpectedGrants.length) fail("no unexpected grants in active migrations", "Only authenticated SELECT grants for consumer_profiles, meal_records, meal_record_items, daily_nutrition_summaries, planned_meals, and approved atomic write function execute grants are allowed in active Phase 1.3 migrations.", { unexpectedGrants });
 else pass("no unexpected grants in active migrations", { grantCount: grantStatements.length });
@@ -376,7 +381,7 @@ const forbiddenSqlPatterns = [
 
 for (const [pattern, message] of forbiddenSqlPatterns) {
   const found = activeTexts
-    .filter((item) => item.fileName !== atomicMealWriteMigrationName && item.fileName !== atomicDailySummaryPersistenceMigrationName && pattern.test(item.clean))
+    .filter((item) => item.fileName !== atomicMealWriteMigrationName && item.fileName !== atomicDailySummaryPersistenceMigrationName && item.fileName !== atomicPlannedMealWriteMigrationName && pattern.test(item.clean))
     .map((item) => item.rel);
   if (found.length) fail(`forbidden active migration pattern: ${pattern}`, message, { matches: found });
   else pass(`forbidden active migration pattern absent: ${pattern}`);
