@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav } from "../components/DemoUi";
 import { TodayMealGrid } from "../components/TodayMealGrid";
@@ -12,7 +12,7 @@ import { useDemoUserPlan } from "../features/demo-user-plan";
 import { resetAllMealBuddyDemoState, resetMealBuddySocialDemoState } from "../features/meal-buddy-card";
 import { storage } from "../lib/storage";
 import { Card, CompactRow, PrimaryButton, SecondaryButton, SectionHeader } from "../theme/components";
-import { Icon } from "../theme/icons";
+import { Icon, type IconName } from "../theme/icons";
 import { fonts, hexA, radius, snowPalette as colors } from "../theme/tokens";
 
 export default function LandingScreen() {
@@ -25,7 +25,6 @@ export default function LandingScreen() {
   const lifestyle = zhTW.mobile.refinedLogic.lifestyleWorld;
   const homeFocus = zhTW.mobile.refinedLogic.homeFocus;
   const todayIntake = lifestyle.todayIntake;
-  const plannedDinnerHelper = zhTW.mobile.plannedDinnerHelper;
   const foodDiary = zhTW.mobile.mealLog.foodDiary;
 
   function shareDailySummary() {
@@ -89,24 +88,17 @@ export default function LandingScreen() {
           </>
         )}
 
+        <Card tone="primary" style={styles.primaryActionCard}>
+          <SectionHeader title={homeFocus.photoAnalysis} subtitle={homeFocus.photoAnalysisBody} />
+          <PrimaryButton icon="camera" label={homeFocus.startPhotoAnalysis} onPress={() => router.push({ pathname: "/meal-photo", params: { autoOpen: "true" } })} />
+        </Card>
+
         <View style={styles.actionRow}>
-          <View style={styles.actionPrimary}>
-            <PrimaryButton icon="camera" label={homeFocus.photoAnalysis} onPress={() => router.push({ pathname: "/meal-photo", params: { autoOpen: "true" } })} />
-          </View>
-          <View style={styles.actionSecondary}>
-            <SecondaryButton icon="buddies" label={homeFocus.findMealPartners} onPress={() => router.push({ pathname: "/meal-buddies", params: { section: "cards" } })} />
-          </View>
+          <HomeSecondaryAction icon="star" title={homeFocus.findNextMeal} body={homeFocus.findNextMealBody} onPress={() => router.push("/recommendation")} />
+          <HomeSecondaryAction icon="buddies" title={homeFocus.findMealPartners} body={homeFocus.findMealPartnersBody} onPress={() => router.push({ pathname: "/meal-buddies", params: { section: "cards" } })} />
         </View>
 
         <View style={styles.compactStack}>
-          <CompactRow
-            icon="star"
-            iconTone="primary"
-            title={plannedDinnerHelper.title}
-            subtitle={model?.dinnerPlanForDisplay ? `${model.dinnerPlanForDisplay.plannedMealName} · ${model.dinnerPlanForDisplay.calories}` : plannedDinnerHelper.subtitle}
-            value={model?.dinnerPlanForDisplay ? plannedDinnerHelper.savedBadge : undefined}
-            onPress={() => router.push("/recommendation")}
-          />
           <CompactRow
             icon="bookmark"
             title={foodDiary.unifiedTitle}
@@ -134,6 +126,22 @@ export default function LandingScreen() {
         <BottomNav />
       </ScrollView>
     </View>
+  );
+}
+
+function HomeSecondaryAction({ body, icon, onPress, title }: { body: string; icon: IconName; onPress: () => void; title: string }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.secondaryActionCard, pressed && styles.secondaryActionCardPressed]}>
+      <View style={styles.secondaryActionIcon}>
+        <Icon name={icon} size={18} color={colors.primaryDeep} />
+      </View>
+      <Text style={styles.secondaryActionTitle}>{title}</Text>
+      <Text style={styles.secondaryActionBody}>{body}</Text>
+      <View style={styles.secondaryActionFooter}>
+        <Text style={styles.secondaryActionLink}>{zhTW.common.open}</Text>
+        <Icon name="chevron" size={15} color={colors.primaryDeep} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -201,11 +209,53 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12
   },
-  actionPrimary: {
-    flex: 1.25
+  primaryActionCard: {
+    gap: 16
   },
-  actionSecondary: {
-    flex: 1
+  secondaryActionCard: {
+    flex: 1,
+    minHeight: 176,
+    backgroundColor: colors.card,
+    borderColor: colors.line,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: 9,
+    padding: 14
+  },
+  secondaryActionCardPressed: {
+    opacity: 0.78
+  },
+  secondaryActionIcon: {
+    alignItems: "center",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.base,
+    height: 38,
+    justifyContent: "center",
+    width: 38
+  },
+  secondaryActionTitle: {
+    color: colors.ink,
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  secondaryActionBody: {
+    color: colors.sub,
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 18
+  },
+  secondaryActionFooter: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  secondaryActionLink: {
+    color: colors.primaryDeep,
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    fontWeight: "900"
   },
   compactStack: {
     gap: 10

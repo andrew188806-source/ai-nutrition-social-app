@@ -14,12 +14,14 @@ The mobile app uses Expo Router. Route files own navigation and screen compositi
 
 ## Supporting Routes
 
+Home presents three independent actions: the strongest primary `拍照分析` action opens `/meal-photo?autoOpen=true`; equal secondary cards open `/recommendation` for `直接找下一餐` and `/meal-buddies?section=cards` for `找飯友`. The two secondary cards share the same visual component and neither depends on the other flow.
+
 | Route | User-facing purpose | Source file | Owner / source | Engineer notes |
 | --- | --- | --- | --- | --- |
 | `/analysis` | review/correct AI result | `apps/mobile/app/analysis.tsx` | `features/analysis` | writes confirmed meals to the shared meal-record store |
 | `/today-intake` | current-day consumed and planned intake | `apps/mobile/app/today-intake.tsx` | analysis records + planned meal store | planned meals must remain distinct from consumed meals |
 | `/meal-log` | unified Food Memory / 美食日記 archive | `apps/mobile/app/meal-log.tsx` | meal records + i18n demo archive | future retention, favorite, sharing, monthly-report APIs |
-| `/recommendation` | next-meal recommendation | `apps/mobile/app/recommendation.tsx` | recommendation demo content | still links to legacy `/social`; migrate carefully |
+| `/recommendation` | next-meal recommendation | `apps/mobile/app/recommendation.tsx` | U1 presentation-only mock result plus separated planned-dinner demo | future canonical result must enter through a mapper/provider seam; no direct Runtime or Supabase access |
 | `/group-tables` | compatibility redirect and table content implementation | `apps/mobile/app/group-tables.tsx` | group-table store + meal-buddy social store | public entry redirects to `/meal-buddies?section=tables`; do not create another table page |
 | `/social` | legacy social preview | `apps/mobile/app/social.tsx` | legacy route | still reachable from recommendation/restaurants; deprecate only after those links migrate |
 | `/community-card-settings` | edit Community Card | `apps/mobile/app/community-card-settings.tsx` | Community Card settings store | future profile/privacy API |
@@ -50,3 +52,4 @@ Restaurant integration enters the same shell through route context:
 - Do not introduce standalone chat, recommendation-result, or four-person-table landing pages.
 - Preserve route context IDs rather than matching records by display name.
 - Treat `/group-tables` and `/social` as compatibility/legacy routes until all callers are migrated and verified.
+- U1 next-meal results must not create Meal Buddy cards during navigation. Only the explicit `用這餐找飯友` action may open the existing card form with transient presentation prefill.

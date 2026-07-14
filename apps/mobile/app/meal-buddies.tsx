@@ -45,6 +45,7 @@ import {
 } from "../features/meal-buddy-card";
 import { resolveCommunityProfileDisplay, type AvatarSource, type CommunityProfileDisplay } from "../features/display-resolvers";
 import { useDemoUserPlan } from "../features/demo-user-plan";
+import { clearU1NextMealBuddyPrefill, consumeU1NextMealBuddyPrefill, type U1NextMealBuddyPrefillViewModel } from "../features/next-meal-prototype";
 import { storage } from "../lib/storage";
 import { GroupTablesContent } from "./group-tables";
 
@@ -178,6 +179,7 @@ export default function MealBuddyHomeScreen() {
     section?: string;
     tableAction?: string;
     tableTime?: string;
+    u1PrefillToken?: string;
   }>();
   const pendingMatch = getPendingMatchRequest();
   const initialCards = getActiveMealBuddyCards();
@@ -192,6 +194,7 @@ export default function MealBuddyHomeScreen() {
   const [focusedChatName, setFocusedChatName] = useState("");
   const [, setSocialVersion] = useState(0);
   const [acceptedMealInvite, setAcceptedMealInvite] = useState<ReturnType<typeof getMealBuddyInvites>[number] | null>(null);
+  const [u1Prefill, setU1Prefill] = useState<U1NextMealBuddyPrefillViewModel | null>(null);
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
   const chats = getMealBuddyChats();
@@ -215,6 +218,15 @@ export default function MealBuddyHomeScreen() {
   useEffect(() => {
     setActiveSection(parseMealBuddySection(params.section));
   }, [params.section]);
+
+  useEffect(() => {
+    if (!params.u1PrefillToken) {
+      clearU1NextMealBuddyPrefill();
+      setU1Prefill(null);
+      return;
+    }
+    setU1Prefill(consumeU1NextMealBuddyPrefill(params.u1PrefillToken));
+  }, [params.u1PrefillToken]);
 
   useEffect(() => {
     persistRecommendationGroups(recommendationGroups);
@@ -347,6 +359,7 @@ export default function MealBuddyHomeScreen() {
           }}
           paidQuotaMessage={paidQuotaMessage}
           onOpenProfile={openCommunityProfile}
+          u1Prefill={u1Prefill}
         />
       ) : null}
 
@@ -510,7 +523,8 @@ function DiscoverSection({
   onOpenPremium,
   onOpenProfile,
   onViewCandidateCard,
-  onUseCard
+  onUseCard,
+  u1Prefill
 }: {
   activeCards: MealBuddyCard[];
   cardUsage: ReturnType<typeof getActiveCardUsage>;
@@ -537,10 +551,11 @@ function DiscoverSection({
   onOpenProfile: (profileId?: string) => void;
   onViewCandidateCard: (candidate: RankedMealBuddyCandidate) => void;
   onUseCard: (card: MealBuddyCard) => void;
+  u1Prefill: U1NextMealBuddyPrefillViewModel | null;
 }) {
   const [previewCandidate, setPreviewCandidate] = useState<RankedMealBuddyCandidate | null>(null);
   const [previewCard, setPreviewCard] = useState<MealBuddyCard | null>(null);
-  const [formTarget, setFormTarget] = useState<{ card?: MealBuddyCard; cardType: MealBuddyCardType; mode: "create" | "edit" } | null>(null);
+  const [formTarget, setFormTarget] = useState<{ card?: MealBuddyCard; cardType: MealBuddyCardType; mode: "create" | "edit"; prefill?: U1NextMealBuddyPrefillViewModel } | null>(null);
   const [expandedGroups, setExpandedGroups] = useState({ all: true });
   const [highlightCardId, setHighlightCardId] = useState("");
   const [cardQuotaMessage, setCardQuotaMessage] = useState("");
@@ -551,6 +566,17 @@ function DiscoverSection({
     setExpandedGroups((current) => ({ ...current, all: true }));
     focusElementAfterRender(mealBuddyCardElementId(targetCard), () => setTimeout(() => setHighlightCardId(""), 1600));
   }, [highlightCardCreatedAt]);
+
+  useEffect(() => {
+    if (!u1Prefill) return;
+    const targetUsage = u1Prefill.restaurantName ? cardUsage.restaurant : cardUsage.general;
+    if (targetUsage.count >= targetUsage.limit) {
+      setCardQuotaMessage(isPremium ? "目前飯友卡數量已達上限，請先整理既有卡片。" : "目前飯友卡數量已達上限，請先整理既有卡片再繼續。");
+      return;
+    }
+    setCardQuotaMessage("");
+    setFormTarget({ cardType: u1Prefill.restaurantName ? "restaurant" : "general", mode: "create", prefill: u1Prefill });
+  }, [u1Prefill?.handoffId]);
 
   function requestCreateCard(cardType: MealBuddyCardType) {
     setCardQuotaMessage("");
@@ -567,6 +593,7 @@ function DiscoverSection({
   }
 
   function saveInlineCard(input: MealBuddyCardFormValue) {
+    clearU1NextMealBuddyPrefill();
     if (formTarget?.mode === "edit" && formTarget.card) {
       deleteMealBuddyCard(formTarget.card);
     }
@@ -644,7 +671,19 @@ function DiscoverSection({
                   </Pressable>
                 </View>
                 {cardQuotaMessage ? <Text style={styles.message}>{cardQuotaMessage}</Text> : null}
-                {formTarget ? <InlineMealBuddyCardForm card={formTarget.card} cardType={formTarget.cardType} mode={formTarget.mode} onCancel={() => setFormTarget(null)} onSave={saveInlineCard} /> : null}
+                {formTarget ? (
+                  <InlineMealBuddyCardForm
+                    card={formTarget.card}
+                    cardType={formTarget.cardType}
+                    mode={formTarget.mode}
+                    prefill={formTarget.prefill}
+                    onCancel={() => {
+                      clearU1NextMealBuddyPrefill();
+                      setFormTarget(null);
+                    }}
+                    onSave={saveInlineCard}
+                  />
+                ) : null}
                 {activeCards.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateTitle}>尚未建立飯友卡</Text>
@@ -794,27 +833,32 @@ function InlineMealBuddyCardForm({
   card,
   cardType,
   mode,
+  prefill,
   onCancel,
   onSave
 }: {
   card?: MealBuddyCard;
   cardType: MealBuddyCardType;
   mode: "create" | "edit";
+  prefill?: U1NextMealBuddyPrefillViewModel;
   onCancel: () => void;
   onSave: (input: MealBuddyCardFormValue) => void;
 }) {
-  const [foodName, setFoodName] = useState(card?.preferredFoodName || "");
-  const [foodCategory, setFoodCategory] = useState(card?.foodCategory || "");
-  const [preferredTime, setPreferredTime] = useState(card?.preferredTime || "");
-  const [area, setArea] = useState(card?.area || "");
-  const [restaurantName, setRestaurantName] = useState(card?.restaurantName || "");
+  const [foodName, setFoodName] = useState(card?.preferredFoodName || prefill?.foodName || "");
+  const [foodCategory, setFoodCategory] = useState(card?.foodCategory || prefill?.foodCategory || "");
+  const [preferredTime, setPreferredTime] = useState(card?.preferredTime || prefill?.preferredTime || "");
+  const [area, setArea] = useState(card?.area || prefill?.area || "");
+  const [restaurantName, setRestaurantName] = useState(card?.restaurantName || prefill?.restaurantName || "");
   const [paymentPreference, setPaymentPreference] = useState("AA 制");
-  const [note, setNote] = useState(card?.nutritionGoal || "");
+  const [note, setNote] = useState(card?.nutritionGoal || prefill?.note || "");
   const isRestaurantCard = cardType === "restaurant";
 
   return (
     <View style={styles.inlineForm}>
-      <SectionTitle title={mode === "create" ? "建立飯友卡" : "編輯飯友卡"} subtitle="補上這次想吃的餐點、時間與地區，系統會用同一套飯友卡去推薦。" />
+      <SectionTitle
+        title={mode === "create" ? "建立飯友卡" : "編輯飯友卡"}
+        subtitle={prefill ? "已帶入下一餐範例；確認並主動儲存前，不會建立飯友卡或使用推薦額度。" : "補上這次想吃的餐點、時間與地區，系統會用同一套飯友卡去推薦。"}
+      />
       <View style={styles.formGrid}>
         <LabeledInput label="餐點名稱" value={foodName} onChangeText={setFoodName} placeholder="例如：雞胸便當" />
         <LabeledInput label="用餐時間" value={preferredTime} onChangeText={setPreferredTime} placeholder="例如：今天 18:30" />

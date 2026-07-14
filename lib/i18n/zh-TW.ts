@@ -33,7 +33,7 @@ export const zhTW = {
     mealLogTitle: "美食日記",
     mealLogSubtitle: "把每日營養、餐點卡、月評分與收藏美食整理成一個可回顧的生活化 archive。",
     nextMealTitle: "下一餐推薦",
-    nextMealSubtitle: "根據最近營養攝取、目標與標籤，推薦更適合的下一餐。",
+    nextMealSubtitle: "使用固定範例候選體驗下一餐選擇；目前不代表正式個人化推薦。",
     socialTitle: "相似飲食社交探索",
     socialSubtitle: "從餐點紀錄自然延伸到生活型態相近的人，不是交友配對 App。",
     restaurantTitle: "認證餐廳推薦",
@@ -1206,9 +1206,14 @@ export const zhTW = {
     refinedLogic: {
       homeFocus: {
         title: "現在想怎麼吃？",
-        body: "先決定要分析餐點、找飯友，或找餐廳。不用先看一整排功能。",
+        body: "可以先記錄這一餐，也能略過分析直接找下一餐或找飯友。",
+        findNextMeal: "直接找下一餐",
+        findNextMealBody: "也可以略過分析，先看看下一餐選項",
         photoAnalysis: "拍照分析",
+        photoAnalysisBody: "記錄這一餐，讓之後的推薦更貼近你的飲食狀況",
+        startPhotoAnalysis: "開始拍照分析",
         findMealPartners: "找飯友",
+        findMealPartnersBody: "直接管理飯友卡與尋找一起吃飯的人",
         findRestaurant: "找餐廳",
         journeyHint: "我餓了 → 拍照分析或找餐廳 → 餐點建議 → 找飯友 → 飯局 → 餐點紀錄 → 下次評上一餐"
       },
@@ -1595,6 +1600,33 @@ export const zhTW = {
         nutritionFoodMemoryEntry: "美食日記",
         nutritionFoodMemoryBody: "查看每日營養、餐點卡、收藏美食與每月飲食評分。"
       }
+    },
+    nextMealPrototype: {
+      sampleBadge: "U1 範例資料",
+      presentationOnly: "僅供畫面流程確認",
+      successSubtitle: "先決定自己要不要吃，再選擇是否主動找飯友。",
+      loadingTitle: "正在準備下一餐範例",
+      loadingBody: "這裡只載入本機 deterministic mock，不會連線或建立任何紀錄。",
+      disabledTitle: "下一餐範例未啟用",
+      emptyTitle: "目前沒有下一餐範例",
+      errorTitle: "下一餐範例載入失敗",
+      errorBody: "暫時無法載入下一餐範例，請稍後再試。",
+      retry: "重新載入",
+      returnHome: "回首頁",
+      freeCandidateCount: "Free 範例：顯示前 {count} 個候選",
+      premiumCandidateCount: "Premium 範例：顯示前 {count} 個候選",
+      bestBadge: "首選範例",
+      alternativeBadge: "替代選項 {index}",
+      selectedBadge: "已選擇",
+      selectionRequired: "請先選擇一個候選，再決定是否確認為下一餐或用這餐找飯友。",
+      selectCandidateHint: "只更新本頁選擇，不會儲存或建立飯友卡。",
+      reasonTitle: "為什麼是這餐",
+      confirmMeal: "這是我的下一餐",
+      findBuddy: "用這餐找飯友",
+      buddyHint: "只會開啟飯友卡表單並帶入範例內容，不會自動建立卡片。",
+      confirmedBody: "已選定這一餐；這項確認只存在本頁，離開或重新載入後可以重設。",
+      plannedDinnerSectionTitle: "晚餐預先規劃（Demo）",
+      plannedDinnerSectionBody: "這是既有的晚餐規劃展示，與上方 U1 下一餐確認分開。"
     },
     recommendation: {
       title: "今日推薦方向",

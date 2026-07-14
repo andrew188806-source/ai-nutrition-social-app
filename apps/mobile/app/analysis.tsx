@@ -9,8 +9,8 @@ import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, Sel
 import { getTodayMealRecords, saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
 import { getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
-import { createMealBuddyCard, getCommunityMealTime, getDefaultInteractionPreference, resetMealBuddyVisibleQuotaForDemo, setPendingMatchRequest, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
+import { getNextMealCandidateCount } from "../features/next-meal-prototype";
 import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
 import { mobileMenuItemService } from "../services/mobile-menu-item-service";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
@@ -59,15 +59,6 @@ function buildNextMealRecommendationCards(limit: number, referenceCalories: numb
   return mobileMenuItemService.getRecommendedMenuItemsForNextMeal(limit, referenceCalories);
 }
 
-// mealSlotOptions ("早餐（第一餐）"...) and mealBuddyCard.mealPeriods ("早餐"...) are two
-// differently-worded, index-parallel label sets; map between them by position.
-function resolveMealPeriodForBuddyCard(selectedMealPeriod: string) {
-  const slotOptions: readonly string[] = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions;
-  const periods = zhTW.mobile.refinedLogic.mealBuddyCard.mealPeriods;
-  const index = slotOptions.indexOf(selectedMealPeriod);
-  return index >= 0 ? periods[index] : periods[2];
-}
-
 export default function AnalysisScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mealSlot?: string }>();
@@ -79,7 +70,6 @@ export default function AnalysisScreen() {
   const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : session.selectedMealPeriod || defaultMealPeriod;
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(initialMealPeriod);
   const [autoSavedConfirmedMeal, setAutoSavedConfirmedMeal] = useState(session.autoSavedConfirmedMeal);
-  const [showMealBuddySuccess, setShowMealBuddySuccess] = useState(false);
   const isAnalysisConfirmed = analysis.matchState === "confirmed";
   // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
   // Reused across remounts within the same AI Analysis session (see analysisSessionStore).
@@ -90,7 +80,7 @@ export default function AnalysisScreen() {
   // immediately replaces the recommendation list with one based on the updated calories.
   const referenceCalories = guiltSharingResult?.sharedCaloriesPerPerson ?? analysis.nutritionSummary.calories;
   const nextMealRecommendations = useMemo(
-    () => buildNextMealRecommendationCards(demoMode === "premium" ? 10 : 3, referenceCalories),
+    () => buildNextMealRecommendationCards(getNextMealCandidateCount(demoMode), referenceCalories),
     [demoMode, referenceCalories]
   );
 
@@ -175,28 +165,8 @@ export default function AnalysisScreen() {
     return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={saveMealRecordToMockDatabase} onOpenSocial={() => router.push("/meal-buddies")} />;
   }
 
-  function createMealBuddyCardFromRecommendation(meal: NextMealRecommendationCard) {
-    // Integration entry: tapping a Next Meal Recommendation card -> Meal Buddy Card matching pool.
-    const card = createMealBuddyCard({
-      cardType: "general",
-      sourceType: "ai_recommendation",
-      intentionType: getDefaultInteractionPreference(),
-      restaurantId: meal.restaurantId,
-      menuItemId: meal.menuItemId,
-      restaurantName: meal.restaurantName,
-      preferredFoodName: meal.dishName,
-      preferredTime: getCommunityMealTime(resolveMealPeriodForBuddyCard(selectedMealPeriod)),
-      mealTime: getCommunityMealTime(resolveMealPeriodForBuddyCard(selectedMealPeriod)),
-      nutritionGoal: "依下一餐推薦建立，符合目前營養狀態。",
-      note: `依 AI 分析（${analysis.mealName}）後的下一餐推薦建立。`
-    });
-    resetMealBuddyVisibleQuotaForDemo(demoMode);
-    upsertMealBuddyCardWithQuota(card, demoMode);
-    setPendingMatchRequest(card, demoMode === "premium" ? 5 : 3, false, demoMode);
-    setShowMealBuddySuccess(true);
-    setTimeout(() => {
-      router.push("/meal-buddies");
-    }, 650);
+  function openNextMealRecommendation(meal: NextMealRecommendationCard) {
+    router.push({ pathname: "/recommendation", params: { prototypeId: meal.menuItemId } });
   }
 
   return (
@@ -204,7 +174,6 @@ export default function AnalysisScreen() {
       title={zhTW.mobile.analysisTitle}
       subtitle={zhTW.mobile.analysisSubtitle}
     >
-      <MealBuddySuccessToast visible={showMealBuddySuccess} />
       {mealSaved ? (
         <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
       ) : (
@@ -284,7 +253,7 @@ export default function AnalysisScreen() {
               onGuiltShare={handleGuiltSharingConfirm}
               nextMealRecommendations={nextMealRecommendations}
               isPremium={demoMode === "premium"}
-              onSelectMeal={createMealBuddyCardFromRecommendation}
+              onSelectMeal={openNextMealRecommendation}
               onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
             />
           ) : (
@@ -374,18 +343,6 @@ export default function AnalysisScreen() {
         </>
       )}
     </PlaceholderScreen>
-  );
-}
-
-function MealBuddySuccessToast({ visible }: { visible: boolean }) {
-  if (!visible) {
-    return null;
-  }
-
-  return (
-    <View style={styles.toast}>
-      <Text style={styles.toastText}>已建立飯友卡，正在為你推薦飯友</Text>
-    </View>
   );
 }
 
@@ -523,7 +480,7 @@ function NextMealRecommendationCarousel({
           return (
             <Animated.View key={item.menuItemId} style={[styles.recoCard, { transform: [{ scale: cueScale }] }]}>
               <Pressable
-                accessibilityHint="點擊後會建立飯友卡"
+                accessibilityHint="查看這筆下一餐推薦結果"
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.recoCardTapArea, pressed && styles.recoCardTapAreaPressed]}
                 onPress={() => onSelectMeal(item)}
@@ -546,7 +503,7 @@ function NextMealRecommendationCarousel({
               </Pressable>
               {reasonExpanded ? <Text style={styles.recoReasonText}>{item.reason}</Text> : null}
               <SecondaryButton icon="plate" label={copy.viewRestaurantCta} onPress={() => onViewRestaurant(item.restaurantId)} />
-              <Text style={styles.recoTapHint}>點擊餐點即可建立飯友卡</Text>
+              <Text style={styles.recoTapHint}>點擊餐點查看「這是你的下一餐」</Text>
             </Animated.View>
           );
         })}
