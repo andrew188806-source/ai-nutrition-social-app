@@ -2,10 +2,15 @@ import type { NextMealCandidateEntitlement } from "./nextMealCandidateCountPolic
 
 export type U1NextMealPrototypeScenario = "success" | "empty" | "error";
 
+export type U1NextMealPresentationSource =
+  | "u1_mock"
+  | "canonical_mock"
+  | "local_menu_demo";
+
 export type U1NextMealCandidateViewModel = {
   prototypeId: string;
-  source: "u1_mock";
-  isSampleData: true;
+  source: U1NextMealPresentationSource;
+  isSampleData: boolean;
   ordinal: number;
   isBestRecommendation: boolean;
   mealName: string;
@@ -19,8 +24,8 @@ export type U1NextMealCandidateViewModel = {
 };
 
 export type U1NextMealRecommendationViewModel = {
-  source: "u1_mock";
-  isSampleData: true;
+  source: U1NextMealPresentationSource;
+  isSampleData: boolean;
   headline: string;
   entitlement: NextMealCandidateEntitlement;
   visibleCandidateCount: number;

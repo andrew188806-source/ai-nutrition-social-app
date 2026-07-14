@@ -43,7 +43,7 @@ const u1Files = fs.existsSync(u1Root)
 const u1Source = u1Files.map(({ text }) => text).join("\n");
 const forbiddenU1Patterns = [
   [/@supabase\/|\bsupabase\b/i, "Supabase"],
-  [/consumer[A-Za-z]*Write(Service|Repository)|consumer-meals/i, "Consumer Runtime write service or repository"],
+  [/consumer[A-Za-z]*Write(Service|Repository)/i, "Consumer Runtime write service or repository"],
   [/\.rpc\s*\(|writeRpc|invokeRpc/i, "write RPC"],
   [/plannedMealStore|savePlannedDinner|confirmPlannedDinner/i, "planned-meal write API"],
   [/mealBuddyCardStore|createMealBuddyCard|upsertMealBuddyCard|setPendingMatchRequest|resetMealBuddyVisibleQuota/i, "Meal Buddy card or pending-match mutation API"]
@@ -53,6 +53,24 @@ for (const [pattern, label] of forbiddenU1Patterns) {
   if (matches.length) fail(`U1 source does not import or invoke ${label}`, `Forbidden ${label} reference found.`, { matches });
   else pass(`U1 source does not import or invoke ${label}`);
 }
+// Phase 2R: only canonical provider (../consumer-meals/factories) and mapper (../consumer-meals/types) may import consumer-meals
+const illegalConsumerMealsImports = u1Files
+  .filter(({ rel, text }) => {
+    if (/canonicalNextMealPrototypeProvider\.ts$/.test(rel)) return false; // allowed: factories import
+    if (/mapCanonicalToU1NextMeal\.ts$/.test(rel)) return false;           // allowed: types import
+    return /consumer-meals/.test(text);
+  })
+  .map(({ rel }) => rel);
+if (illegalConsumerMealsImports.length)
+  fail("Non-integration U1 files do not import from consumer-meals", "Only canonical provider and mapper may reference consumer-meals.", { matches: illegalConsumerMealsImports });
+else
+  pass("Non-integration U1 files do not import from consumer-meals");
+// consumer-meals/adapters is forbidden in ALL U1 files — even the canonical integration files
+const adapterImports = u1Files.filter(({ text }) => /consumer-meals\/adapters/.test(text)).map(({ rel }) => rel);
+if (adapterImports.length)
+  fail("U1 source does not directly import consumer-meals adapter implementations", "consumer-meals adapter imports are forbidden in next-meal-prototype.", { matches: adapterImports });
+else
+  pass("U1 source does not directly import consumer-meals adapter implementations");
 
 const home = read("apps/mobile/app/index.tsx");
 if (/PrimaryButton[^\n]*label=\{homeFocus\.startPhotoAnalysis\}[^\n]*pathname: "\/meal-photo"[^\n]*autoOpen: "true"/.test(home)) pass("Home primary CTA preserves direct photo capture/upload route");
@@ -113,8 +131,21 @@ if (/if \(selectedCandidate\) onUseForMealBuddy\(selectedCandidate\)/.test(conte
 else fail("Only the selected candidate reaches Meal Buddy prefill", "Meal Buddy handoff must receive selectedCandidate only.");
 if (/status === "loading"/.test(content) && /status === "disabled"/.test(content) && /status === "empty"/.test(content) && /status === "error"/.test(content) && /status !== "success"/.test(content)) pass("U1 UI implements loading, disabled, empty, error, and success states");
 else fail("U1 UI implements loading, disabled, empty, error, and success states", "All deterministic presentation states must be rendered.");
-if (/source: "u1_mock"/.test(read("apps/mobile/features/next-meal-prototype/types.ts")) && /isSampleData: true/.test(read("apps/mobile/features/next-meal-prototype/types.ts")) && /sampleBadge/.test(content)) pass("All candidates and UI remain marked prototype/sample data");
-else fail("All candidates and UI remain marked prototype/sample data", "Candidate contract and UI must expose sample-data markers.");
+// Phase 2R: sample-data invariant — widened types but all sources must still mark data as sample
+const u1Types = read("apps/mobile/features/next-meal-prototype/types.ts");
+const canonicalMapper = read("apps/mobile/features/next-meal-prototype/mapCanonicalToU1NextMeal.ts");
+if (/U1NextMealPresentationSource/.test(u1Types) && /"u1_mock"/.test(u1Types) && /"canonical_mock"/.test(u1Types) && /"local_menu_demo"/.test(u1Types) && /isSampleData:\s*boolean/.test(u1Types) && /sampleBadge/.test(content))
+  pass("U1 presentation source type is widened and includes all Phase 2R sources with sample-data field");
+else fail("U1 presentation source type is widened and includes all Phase 2R sources with sample-data field", "U1NextMealPresentationSource must define u1_mock, canonical_mock, local_menu_demo; isSampleData must be boolean.");
+if (/["']u1_mock["']/.test(provider) && /isSampleData:\s*true/.test(provider))
+  pass("U1 mock provider still marks candidates with source u1_mock and isSampleData true");
+else fail("U1 mock provider still marks candidates with source u1_mock and isSampleData true", "Mock provider must not change its sample-data contract.");
+if (/isSampleData:\s*true/.test(canonicalMapper))
+  pass("Canonical mapper outputs isSampleData: true for all Phase 2R sources");
+else fail("Canonical mapper outputs isSampleData: true for all Phase 2R sources", "Canonical path must mark all data as sample in Phase 2R.");
+if (/canonicalSampleBadge/.test(content) && /canonicalContextNote/.test(content))
+  pass("NextMealPrototypeContent renders canonical sample badge and context note");
+else fail("NextMealPrototypeContent renders canonical sample badge and context note", "Both canonicalSampleBadge and canonicalContextNote must render for canonical sources.");
 
 const prefill = read("apps/mobile/features/next-meal-prototype/nextMealBuddyPrefill.ts");
 if (/pendingPrefill = null/.test(prefill) && /consumeU1NextMealBuddyPrefill/.test(prefill) && /clearU1NextMealBuddyPrefill/.test(prefill) && /buildU1NextMealBuddyPrefill\(recommendation: U1NextMealCandidateViewModel\)/.test(prefill)) pass("U1 prefill is transient and built from one selected candidate");

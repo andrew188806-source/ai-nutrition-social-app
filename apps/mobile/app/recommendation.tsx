@@ -6,7 +6,7 @@ import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import {
   NextMealPrototypeContent,
   buildU1NextMealBuddyPrefill,
-  createU1MockNextMealPrototypeProvider,
+  createCanonicalNextMealPrototypeProvider,
   stageU1NextMealBuddyPrefill,
   type U1NextMealPrototypeScenario,
   type U1NextMealCandidateViewModel
@@ -24,9 +24,9 @@ import {
   type PlannedMeal
 } from "../features/planned-meal";
 
-// U1 is an explicitly enabled local prototype. The provider itself fails closed
-// when disabled and never falls through to a live or canonical runtime source.
-const u1MockProvider = createU1MockNextMealPrototypeProvider({ enabled: true });
+// Canonical provider: wires Phase 2Q service behind the U1 presentation layer.
+// Fails closed on config error; never falls back to U1 mock on service failure.
+const canonicalProvider = createCanonicalNextMealPrototypeProvider();
 
 export default function RecommendationScreen() {
   const router = useRouter();
@@ -70,7 +70,7 @@ export default function RecommendationScreen() {
         onReturnHome={() => router.replace("/")}
         onUseForMealBuddy={openMealBuddyPrefill}
         preferredPrototypeId={typeof params.prototypeId === "string" ? params.prototypeId : undefined}
-        provider={u1MockProvider}
+        provider={canonicalProvider}
         scenario={scenario}
       />
 

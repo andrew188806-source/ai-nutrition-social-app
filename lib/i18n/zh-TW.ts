@@ -1603,6 +1603,8 @@ export const zhTW = {
     },
     nextMealPrototype: {
       sampleBadge: "U1 範例資料",
+      canonicalSampleBadge: "示範餐點資料",
+      canonicalContextNote: "推薦會參考今天已記錄的飲食；完整偏好個人化將於後續提供",
       presentationOnly: "僅供畫面流程確認",
       successSubtitle: "先決定自己要不要吃，再選擇是否主動找飯友。",
       loadingTitle: "正在準備下一餐範例",

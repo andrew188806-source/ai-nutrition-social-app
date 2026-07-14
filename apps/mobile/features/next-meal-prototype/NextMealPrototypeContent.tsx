@@ -95,10 +95,15 @@ export function NextMealPrototypeContent({
     <Card tone="primary" style={styles.resultCard}>
       <View style={styles.badgeRow}>
         <View style={styles.sampleBadge}>
-          <Text style={styles.sampleBadgeText}>{copy.sampleBadge}</Text>
+          <Text style={styles.sampleBadgeText}>
+            {model.recommendation.source === "u1_mock" ? copy.sampleBadge : copy.canonicalSampleBadge}
+          </Text>
         </View>
         <Text style={styles.sourceText}>{copy.presentationOnly}</Text>
       </View>
+      {model.recommendation.source !== "u1_mock" ? (
+        <Text style={styles.canonicalContextNote}>{copy.canonicalContextNote}</Text>
+      ) : null}
       <SectionHeader title={model.recommendation.headline} subtitle={copy.successSubtitle} />
       <Text style={styles.entitlementText}>{candidateCountLabel}</Text>
 
@@ -236,6 +241,7 @@ const styles = StyleSheet.create({
   primaryActionText: { color: "#FFFFFF", fontFamily: fonts.bold, fontSize: 14, fontWeight: "900" },
   secondaryAction: { alignItems: "center", backgroundColor: colors.card, borderColor: colors.primary, borderRadius: radius.base, borderWidth: 1, flexDirection: "row", gap: 8, justifyContent: "center", paddingHorizontal: 16, paddingVertical: 14 },
   secondaryActionText: { color: colors.primaryDeep, fontFamily: fonts.bold, fontSize: 14, fontWeight: "900" },
+  canonicalContextNote: { color: "#5B7FA6", fontFamily: fonts.medium, fontSize: 12, lineHeight: 17 },
   actionDisabled: { opacity: 0.42 },
   actionPressed: { opacity: 0.78 },
   stateCard: { alignItems: "stretch", gap: 14 },

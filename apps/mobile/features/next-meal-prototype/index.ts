@@ -1,5 +1,7 @@
 export { NextMealPrototypeContent } from "./NextMealPrototypeContent";
 export { createU1MockNextMealPrototypeProvider } from "./mockNextMealPrototypeProvider";
+export { createCanonicalNextMealPrototypeProvider } from "./canonicalNextMealPrototypeProvider";
+export { mapCanonicalToU1NextMeal } from "./mapCanonicalToU1NextMeal";
 export { getNextMealCandidateCount, normalizeNextMealCandidateEntitlement } from "./nextMealCandidateCountPolicy";
 export type { NextMealCandidateEntitlement } from "./nextMealCandidateCountPolicy";
 export { presentU1NextMealResult } from "./nextMealPrototypePresenter";
@@ -13,6 +15,7 @@ export {
 export type {
   U1NextMealBuddyPrefillViewModel,
   U1NextMealCandidateViewModel,
+  U1NextMealPresentationSource,
   U1NextMealPrototypeProvider,
   U1NextMealPrototypeScenario,
   U1NextMealRecommendationViewModel,
