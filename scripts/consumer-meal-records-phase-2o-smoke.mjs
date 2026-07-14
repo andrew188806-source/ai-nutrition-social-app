@@ -251,6 +251,18 @@ try {
   const preWriteCount = (preWriteQuery.data ?? []).length;
   pass("pre-write planned meals count", { count: preWriteCount, idsPrinted: false });
 
+  // Pre-lifecycle daily nutrition summary baseline — read before any planned meal write.
+  const overviewService = mealRuntime.createConsumerTodayIntakeOverviewService(readFlags, {
+    authPort,
+    mealClient: supabase,
+    clock: fixedClock,
+    timezone: testTimezone
+  });
+  const preLifecycleOverview = await overviewService.getCurrentUserTodayIntakeOverview({ date: testPlannedDate });
+  if (!preLifecycleOverview.ok) fail("stored daily nutrition summary pre-lifecycle baseline", "Pre-lifecycle daily nutrition summary read failed.", { code: preLifecycleOverview.error.code });
+  const preLifecycleTotals = totalsOf(preLifecycleOverview.value);
+  pass("stored daily nutrition summary pre-lifecycle baseline", { dailySummaryRead: true, snapshotPrinted: false });
+
   // Save planned meal via write service.
   const writeService = mealRuntime.createConsumerPlannedMealWriteService(writeFlags, { authPort, mealClient: supabase });
   pass("write service created", { source: writeService.source });
@@ -309,12 +321,6 @@ try {
   pass("post-write count", { preWriteCount, postWriteCount, delta: postWriteCount - preWriteCount, idsPrinted: false });
 
   // Actual totals check: planned meals must not affect consumed meal totals.
-  const overviewService = mealRuntime.createConsumerTodayIntakeOverviewService(readFlags, {
-    authPort,
-    mealClient: supabase,
-    clock: fixedClock,
-    timezone: testTimezone
-  });
   const overviewResult = await overviewService.getCurrentUserTodayIntakeOverview({ date: testPlannedDate });
   if (!overviewResult.ok) fail("overview read for totals check", "Overview read failed.", { code: overviewResult.error.code });
   const baselineTotals = totalsOf(overviewResult.value);
@@ -423,6 +429,12 @@ try {
   }
   pass("actual totals unchanged after remove", { actualTotalsUnchanged: true });
 
+  // Stored Daily Nutrition Summary must be unchanged across the entire save→update→remove lifecycle.
+  if (JSON.stringify(totalsOf(overviewAfterRemove.value)) !== JSON.stringify(preLifecycleTotals)) {
+    fail("stored daily nutrition summary unchanged across lifecycle", "Planned meal lifecycle (save/update/remove) must not affect stored daily nutrition summary.");
+  }
+  pass("stored daily nutrition summary unchanged across lifecycle", { dailySummaryUnchanged: true, snapshotPrinted: false });
+
   // Post-cancel count: total row count unchanged (soft cancel, row retained).
   const postCancelQuery = await supabase
     .from("planned_meals")
@@ -453,6 +465,7 @@ try {
     readAfterRemove: "passed",
     repeatedRemove: "passed",
     actualTotalsUnchanged: "passed",
+    dailySummaryUnchanged: "passed",
     softCancelVerified: true,
     rowRetainedAfterCancel: true,
     clientCreated: true,
