@@ -14,7 +14,7 @@ export type ConsumerDailySummaryProvenance = "stored" | "calculated";
 export type ConsumerDailySummaryCalculationStatus = "current" | "missing" | "calculated" | "mismatch" | "deferred";
 export type ConsumerPlannedMealStatusValue = "planned" | "converted" | "cancelled" | "expired";
 
-export type ConsumerNextMealRecommendationSource = "disabled" | "mock" | "local-menu-demo";
+export type ConsumerNextMealRecommendationSource = "disabled" | "mock" | "local-menu-demo" | "supabase";
 
 export type ConsumerMealRuntimeFlags = {
   authSource: "mock" | "supabase-disabled" | "supabase-live";

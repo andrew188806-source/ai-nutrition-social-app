@@ -11,6 +11,7 @@ import {
   type U1NextMealPrototypeScenario,
   type U1NextMealCandidateViewModel
 } from "../features/next-meal-prototype";
+import { createCanonicalNextMealPrototypeRuntimeDependencies } from "../features/next-meal-prototype/canonicalNextMealPrototypeComposition";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import {
   DailyNutritionPlanner,
@@ -26,7 +27,9 @@ import {
 
 // Canonical provider: wires Phase 2Q service behind the U1 presentation layer.
 // Fails closed on config error; never falls back to U1 mock on service failure.
-const canonicalProvider = createCanonicalNextMealPrototypeProvider();
+const canonicalProvider = createCanonicalNextMealPrototypeProvider(
+  createCanonicalNextMealPrototypeRuntimeDependencies()
+);
 
 export default function RecommendationScreen() {
   const router = useRouter();

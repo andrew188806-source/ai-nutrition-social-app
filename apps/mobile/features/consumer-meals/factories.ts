@@ -21,7 +21,9 @@ import { ConsumerMealCorrectionService } from "./consumerMealCorrectionService";
 import { DisabledConsumerNextMealRecommendationRepository } from "./adapters/disabledConsumerNextMealRecommendationRepository";
 import { MockConsumerNextMealRecommendationRepository } from "./adapters/mockConsumerNextMealRecommendationRepository";
 import { LocalMenuDemoConsumerNextMealRecommendationRepository } from "./adapters/localMenuDemoConsumerNextMealRecommendationRepository";
+import { SupabaseConsumerNextMealRecommendationRepository } from "./adapters/supabaseConsumerNextMealRecommendationRepository";
 import { ConsumerNextMealRecommendationService } from "./consumerNextMealRecommendationService";
+import type { SupabaseRestaurantMenuClientLike } from "./adapters/supabaseRestaurantMenuRows";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
@@ -55,6 +57,7 @@ export type ConsumerMealFactoryDependencies = {
   plannedMealWriteService?: ConsumerPlannedMealWriteService;
   correctionRepository?: ConsumerMealCorrectionRepository;
   nextMealRecommendationRepository?: ConsumerNextMealRecommendationRepository;
+  restaurantMenuClient?: SupabaseRestaurantMenuClientLike;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -347,10 +350,18 @@ export function createConsumerTodayIntakeOverviewService(
 
 export function createConsumerNextMealRecommendationRepository(
   flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
-  _dependencies: ConsumerMealFactoryDependencies = {}
+  dependencies: ConsumerMealFactoryDependencies = {}
 ): ConsumerNextMealRecommendationRepository {
   if (flags.nextMealRecommendationSource === "mock") return new MockConsumerNextMealRecommendationRepository();
   if (flags.nextMealRecommendationSource === "local-menu-demo") return new LocalMenuDemoConsumerNextMealRecommendationRepository();
+  if (flags.nextMealRecommendationSource === "supabase") {
+    if (!dependencies.authPort) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live next-meal recommendation requires an explicit authPort.");
+    if (!dependencies.restaurantMenuClient) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live next-meal recommendation requires an explicit restaurantMenuClient.");
+    return new SupabaseConsumerNextMealRecommendationRepository({
+      authPort: dependencies.authPort,
+      restaurantMenuClient: dependencies.restaurantMenuClient
+    });
+  }
   return new DisabledConsumerNextMealRecommendationRepository();
 }
 

@@ -7,7 +7,7 @@ const dailyNutritionWriteSources = new Set<ConsumerDailyNutritionWriteSource>(["
 const plannedMealsSources = new Set<ConsumerPlannedMealsSource>(["disabled", "mock", "supabase", "supabase_prepared"]);
 const plannedMealsWriteSources = new Set<ConsumerPlannedMealsWriteSource>(["disabled", "mock", "supabase"]);
 const correctionSources = new Set<ConsumerMealCorrectionSource>(["disabled", "mock", "supabase-prepared"]);
-const nextMealRecommendationSources = new Set<ConsumerNextMealRecommendationSource>(["disabled", "mock", "local-menu-demo"]);
+const nextMealRecommendationSources = new Set<ConsumerNextMealRecommendationSource>(["disabled", "mock", "local-menu-demo", "supabase"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 

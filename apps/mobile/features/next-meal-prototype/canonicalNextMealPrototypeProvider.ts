@@ -1,13 +1,23 @@
-import { createConsumerNextMealRecommendationService } from "../consumer-meals/factories";
+import {
+  createConsumerNextMealRecommendationService,
+  type ConsumerMealFactoryDependencies
+} from "../consumer-meals/factories";
 import { getNextMealCandidateCount, normalizeNextMealCandidateEntitlement } from "./nextMealCandidateCountPolicy";
 import { mapCanonicalToU1NextMeal } from "./mapCanonicalToU1NextMeal";
 import type { U1NextMealPrototypeProvider, U1NextMealPrototypeRequest, U1NextMealProviderResult } from "./types";
 
-export function createCanonicalNextMealPrototypeProvider(): U1NextMealPrototypeProvider {
+export type CanonicalNextMealPrototypeProviderDependencies = Pick<
+  ConsumerMealFactoryDependencies,
+  "authPort" | "mealClient" | "restaurantMenuClient"
+>;
+
+export function createCanonicalNextMealPrototypeProvider(
+  dependencies: CanonicalNextMealPrototypeProviderDependencies = {}
+): U1NextMealPrototypeProvider {
   let service: ReturnType<typeof createConsumerNextMealRecommendationService> | undefined;
 
   try {
-    service = createConsumerNextMealRecommendationService();
+    service = createConsumerNextMealRecommendationService(undefined, dependencies);
   } catch {
     // Factory or configuration error — return fail-closed provider rather than propagating to module scope
   }
@@ -35,7 +45,32 @@ export function createCanonicalNextMealPrototypeProvider(): U1NextMealPrototypeP
 
       try {
         const result = await capturedService.getCurrentUserNextMealRecommendation();
-        return mapCanonicalToU1NextMeal(result, entitlement, visibleLimit, preferredPrototypeId);
+        const mapped = mapCanonicalToU1NextMeal(
+          result,
+          entitlement,
+          visibleLimit,
+          preferredPrototypeId
+        );
+
+        if (
+          result.status === "available" &&
+          result.recommendation.dataProvenance === "live" &&
+          mapped.status === "success"
+        ) {
+          return {
+            ...mapped,
+            recommendation: {
+              ...mapped.recommendation,
+              isSampleData: false,
+              candidates: mapped.recommendation.candidates.map((candidate) => ({
+                ...candidate,
+                isSampleData: false
+              }))
+            }
+          };
+        }
+
+        return mapped;
       } catch {
         return {
           status: "error",
