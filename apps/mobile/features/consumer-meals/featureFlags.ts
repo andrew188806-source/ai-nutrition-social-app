@@ -143,8 +143,8 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (dailyNutritionWriteSource === "supabase" && !dailyNutritionLiveReadOptIn) {
     issues.push("Consumer daily nutrition summary live persistence requires EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN=true.");
   }
-  if (dailyNutritionSource === "supabase-live" && supabaseWritesEnabled && dailyNutritionWriteSource !== "supabase") {
-    issues.push("Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled unless Phase 2K summary persistence is explicitly enabled.");
+  if (dailyNutritionSource === "supabase-live" && supabaseWritesEnabled && dailyNutritionWriteSource !== "supabase" && plannedMealsWriteSource !== "supabase") {
+    issues.push("Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled unless Phase 2K summary persistence or Phase 2O planned meal writes are explicitly enabled.");
   }
   if (dailyNutritionSource === "supabase-live" && mealRecordWritesEnabled) {
     issues.push("Supabase live daily nutrition summary reads require Consumer meal record writes to remain disabled.");
@@ -185,7 +185,7 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   if (mealRecordWritesEnabled && !supabaseWritesEnabled) {
     issues.push("Consumer meal record writes require EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED=true.");
   }
-  if (supabaseWritesEnabled && !mealRecordWritesEnabled && dailyNutritionWriteSource !== "supabase") {
+  if (supabaseWritesEnabled && !mealRecordWritesEnabled && dailyNutritionWriteSource !== "supabase" && plannedMealsWriteSource !== "supabase") {
     issues.push("Consumer Supabase writes require an explicit approved write source.");
   }
   if (mealRecordLiveWriteOptIn && (!supabaseWritesEnabled || !mealRecordWritesEnabled)) {

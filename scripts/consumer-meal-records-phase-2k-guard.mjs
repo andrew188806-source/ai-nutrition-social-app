@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
@@ -32,7 +32,8 @@ const expectedMigrationFiles = [
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
   phase2kMigrationName,
-  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql"
+  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql",
+  "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -142,7 +143,7 @@ if (writeMatches.length) fail("no unapproved direct Consumer write methods", "Ph
 else pass("no unapproved direct Consumer write methods");
 
 const rpcMatches = mealSourceFiles
-  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerMealRecordWriteRepository.ts") && !rel.endsWith("supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts"))
+  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerMealRecordWriteRepository.ts") && !rel.endsWith("supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts") && !rel.endsWith("supabaseConsumerPlannedMealWriteRepository.ts"))
   .map(({ rel }) => rel);
 if (rpcMatches.length) fail("approved Consumer RPC invocation boundaries", "Only Phase 2D meal write and Phase 2K summary persistence adapters may invoke RPC.", { matches: rpcMatches });
 else pass("approved Consumer RPC invocation boundaries");

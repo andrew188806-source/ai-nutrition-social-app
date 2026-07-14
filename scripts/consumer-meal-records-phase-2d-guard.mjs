@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -20,7 +20,8 @@ const approvedMealQueryFiles = new Set([
 ]);
 const approvedMealRpcFiles = new Set([
   "apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts",
-  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts"
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerPlannedMealWriteRepository.ts"
 ]);
 
 function pass(name, extra = {}) {

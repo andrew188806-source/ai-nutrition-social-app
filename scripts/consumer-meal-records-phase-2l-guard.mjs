@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -29,7 +29,8 @@ const expectedMigrationFiles = [
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
   "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql",
-  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql"
+  "20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql",
+  "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql"
 ];
 
 function pass(name, extra = {}) {

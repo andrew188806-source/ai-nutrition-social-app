@@ -32,7 +32,8 @@ const expectedMigrationFiles = [
   "20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
   "20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
   "20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql",
-  phase2mMigrationName
+  phase2mMigrationName,
+  "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql"
 ];
 
 function pass(name, extra = {}) {
@@ -132,9 +133,9 @@ if (plannedWriteMatches.length) fail("no planned meal write methods in runtime s
 else pass("no planned meal write methods in runtime source");
 
 const plannedRpcMatches = sourceFiles
-  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /planned/i.test(rel + text) && /\.\s*rpc\s*\(/.test(text))
+  .filter(({ rel, text }) => rel.includes("apps/mobile/features/consumer-meals/") && /planned/i.test(rel + text) && /\.\s*rpc\s*\(/.test(text) && !rel.endsWith("supabaseConsumerPlannedMealWriteRepository.ts"))
   .map(({ rel }) => rel);
-if (plannedRpcMatches.length) fail("no planned meal RPC in runtime source", "Phase 2M must not implement planned meal RPC.", { matches: plannedRpcMatches });
+if (plannedRpcMatches.length) fail("no planned meal RPC in runtime source", "Phase 2M must not implement planned meal RPC (Phase 2O write adapter excluded as later phase).", { matches: plannedRpcMatches });
 else pass("no planned meal RPC in runtime source");
 
 const uiFiles = [

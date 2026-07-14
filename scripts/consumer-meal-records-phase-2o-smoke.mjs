@@ -158,6 +158,10 @@ for (const file of sourceFiles) {
   fs.writeFileSync(target, output, "utf8");
 }
 
+const analysisStub = path.join(tempRoot, "analysis", "analysisMealRecordStore.js");
+fs.mkdirSync(path.dirname(analysisStub), { recursive: true });
+fs.writeFileSync(analysisStub, "exports.getMealRecords = () => [];\n", "utf8");
+
 process.env.NODE_PATH = [mobileNodeModulesPath, process.env.NODE_PATH].filter(Boolean).join(path.delimiter);
 Module._initPaths();
 const requireFromAuthTemp = createRequire(path.join(tempRoot, "consumer-auth", "index.js"));
