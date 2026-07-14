@@ -276,14 +276,37 @@ const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).fil
 if (migrations.length === 21) pass("migration count remains at 21", { count: migrations.length });
 else fail("migration count remains at 21", "Phase 2R must not add migrations.", { count: migrations.length });
 
-// ─── 15. Phase 2S not started ─────────────────────────────────────────────────
+// ─── 15. Phase 2S status (boundary preparation allowed; mobile cutover not allowed) ──────
 
-const phase2sFiles = collectFiles(root, ".mjs")
+// Phase 2S boundary preparation artifacts are expected and permitted:
+//   - scripts/consumer-public-restaurant-menu-phase-2s-guard.mjs (boundary guard)
+//   - docs/consumer-runtime-phase-2s/* (migration draft, validation SQL, design doc)
+// Phase 2S mobile live cutover (Phase 2T) is NOT permitted:
+//   - any Mobile live repository adapter for supabase restaurant/menu reads
+//   - any Phase 2T guard script
+const phase2sBoundaryOnlyFiles = [
+  "scripts/consumer-public-restaurant-menu-phase-2s-guard.mjs"
+];
+const phase2tMobileLiveFiles = [
+  "apps/mobile/features/consumer-meals/adapters/supabaseConsumerNextMealRecommendationRepository.ts",
+  "apps/mobile/features/consumer-meals/adapters/supabaseRestaurantMenuConsumerNextMealRecommendationRepository.ts",
+  "scripts/consumer-public-restaurant-menu-phase-2t-guard.mjs"
+];
+
+const unexpectedPhase2sOrLaterFiles = collectFiles(root, ".mjs")
   .concat(collectFiles(root, ".ts"))
-  .filter((f) => /phase.?2s/i.test(path.basename(f)) || /phase2s/i.test(path.basename(f)));
+  .filter((f) => /phase.?2s/i.test(path.basename(f)) || /phase2s/i.test(path.basename(f)))
+  .map((f) => path.relative(root, f).replace(/\\/g, "/"))
+  .filter((f) => !phase2sBoundaryOnlyFiles.includes(f));
 
-if (!phase2sFiles.length) pass("Phase 2S not started (no phase-2s files found)");
-else fail("Phase 2S not started (no phase-2s files found)", "Phase 2S must not begin before Phase 2R is committed.", { files: phase2sFiles.map((f) => path.relative(root, f)) });
+const phase2tStartedFiles = phase2tMobileLiveFiles.filter((f) => fs.existsSync(path.join(root, f)));
+
+if (!unexpectedPhase2sOrLaterFiles.length && !phase2tStartedFiles.length)
+  pass("Phase 2S in boundary-preparation state (guard+docs only); Phase 2T mobile cutover not started");
+else
+  fail("Phase 2S in boundary-preparation state (guard+docs only); Phase 2T mobile cutover not started",
+    "Phase 2S must only contain boundary design artifacts. Mobile live cutover must not begin until Phase 2T is explicitly approved.",
+    { unexpectedPhase2sFiles: unexpectedPhase2sOrLaterFiles, phase2tFiles: phase2tStartedFiles });
 
 // ─── 16. No source-tree generated JS ─────────────────────────────────────────
 
