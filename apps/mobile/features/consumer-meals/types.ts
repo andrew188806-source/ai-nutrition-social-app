@@ -14,6 +14,8 @@ export type ConsumerDailySummaryProvenance = "stored" | "calculated";
 export type ConsumerDailySummaryCalculationStatus = "current" | "missing" | "calculated" | "mismatch" | "deferred";
 export type ConsumerPlannedMealStatusValue = "planned" | "converted" | "cancelled" | "expired";
 
+export type ConsumerNextMealRecommendationSource = "disabled" | "mock" | "local-menu-demo";
+
 export type ConsumerMealRuntimeFlags = {
   authSource: "mock" | "supabase-disabled" | "supabase-live";
   mealRecordsSource: ConsumerMealRecordsSource;
@@ -28,6 +30,7 @@ export type ConsumerMealRuntimeFlags = {
   plannedMealsLiveReadOptIn: boolean;
   plannedMealsWriteSource: ConsumerPlannedMealsWriteSource;
   correctionSource: ConsumerMealCorrectionSource;
+  nextMealRecommendationSource: ConsumerNextMealRecommendationSource;
   issues: string[];
 };
 
@@ -505,3 +508,90 @@ export type ConsumerTodayIntakeOverview = {
   status: ConsumerTodayIntakeOverviewStatus;
   generatedAt: string;
 };
+
+// Phase 2Q — Canonical Next Meal Recommendation Read Architecture
+
+export type ConsumerNextMealDataProvenance = "sample" | "live";
+
+export type ConsumerNextMealPersonalizationLevel =
+  | "fallback"
+  | "intake_context"
+  | "full_profile";
+
+export type ConsumerNextMealRecommendationBasis =
+  | "calorie_proximity"
+  | "fallback_calorie_reference";
+
+export type ConsumerNextMealCandidateReason = {
+  reasonSummary: string;
+  reasonBasis: ConsumerNextMealRecommendationBasis;
+};
+
+export type ConsumerNextMealCandidate = {
+  candidateId: string;
+  restaurantId: string;
+  branchId?: string | null;
+  mealName: string;
+  restaurantName: string;
+  areaLabel?: string | null;
+  emoji?: string | null;
+  nutrition: ConsumerNutritionSnapshot;
+  tags: readonly string[];
+  reason: ConsumerNextMealCandidateReason;
+  rankOrdinal: number;
+};
+
+export type ConsumerNextMealRecommendationInput = {
+  date?: string;
+  timezone?: string;
+  candidatePoolLimit?: number;
+};
+
+export type ConsumerNextMealRecommendationContext = {
+  date: string;
+  timezone: string;
+  generatedAt: string;
+  alreadyConsumedCalories: number;
+  alreadyConsumedProtein: number;
+  referenceCaloriesPerMeal: number;
+  referenceIsActualTarget: false;
+  plannedMealCount: number;
+  plannedMealsAvailable: boolean;
+  plannedMealsAppliedToRanking: false;
+  personalizationLevel: ConsumerNextMealPersonalizationLevel;
+  intakeOverviewUsed: boolean;
+};
+
+export type ConsumerNextMealRecommendation = {
+  candidates: readonly ConsumerNextMealCandidate[];
+  totalCandidateCount: number;
+  source: ConsumerNextMealRecommendationSource;
+  dataProvenance: ConsumerNextMealDataProvenance;
+  context: ConsumerNextMealRecommendationContext;
+};
+
+export type ConsumerNextMealRecommendationRepositoryInput = {
+  referenceCaloriesPerMeal: number;
+  candidatePoolLimit?: number;
+};
+
+export type ConsumerNextMealRecommendationRepositoryResult =
+  | { status: "available"; candidates: readonly ConsumerNextMealCandidate[]; totalCandidateCount: number }
+  | { status: "empty" }
+  | { status: "disabled" }
+  | { status: "read_failed"; errorCode: string };
+
+export interface ConsumerNextMealRecommendationRepository {
+  readonly source: ConsumerNextMealRecommendationSource;
+  readonly dataProvenance: ConsumerNextMealDataProvenance;
+  getRankedNextMealCandidates(
+    input: ConsumerNextMealRecommendationRepositoryInput
+  ): Promise<ConsumerNextMealRecommendationRepositoryResult>;
+}
+
+export type ConsumerNextMealRecommendationResult =
+  | { status: "available"; recommendation: ConsumerNextMealRecommendation }
+  | { status: "empty"; source: ConsumerNextMealRecommendationSource; date: string }
+  | { status: "disabled"; source: ConsumerNextMealRecommendationSource }
+  | { status: "intake_unavailable"; source: ConsumerNextMealRecommendationSource; errorCode: string }
+  | { status: "read_failed"; source: ConsumerNextMealRecommendationSource; errorCode: string };

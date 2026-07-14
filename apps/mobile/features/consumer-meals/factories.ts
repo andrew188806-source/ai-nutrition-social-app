@@ -18,6 +18,10 @@ import { DisabledConsumerMealCorrectionRepository } from "./adapters/disabledCon
 import { MockConsumerMealCorrectionRepository } from "./adapters/mockConsumerMealCorrectionRepository";
 import { SupabasePreparedConsumerMealCorrectionRepository } from "./adapters/supabasePreparedConsumerMealCorrectionRepository";
 import { ConsumerMealCorrectionService } from "./consumerMealCorrectionService";
+import { DisabledConsumerNextMealRecommendationRepository } from "./adapters/disabledConsumerNextMealRecommendationRepository";
+import { MockConsumerNextMealRecommendationRepository } from "./adapters/mockConsumerNextMealRecommendationRepository";
+import { LocalMenuDemoConsumerNextMealRecommendationRepository } from "./adapters/localMenuDemoConsumerNextMealRecommendationRepository";
+import { ConsumerNextMealRecommendationService } from "./consumerNextMealRecommendationService";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
@@ -40,7 +44,7 @@ import { ConsumerPlannedMealWriteService } from "./consumerPlannedMealWriteServi
 import { ConsumerPlannedMealsService } from "./consumerPlannedMealsService";
 import { ConsumerTodayIntakeOverviewService, type ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOverviewService";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
-import type { ConsumerMealCorrectionRepository, ConsumerMealRuntimeFlags, ConsumerPlannedMealWriteRepository, ConsumerPlannedMealsRepository } from "./types";
+import type { ConsumerMealCorrectionRepository, ConsumerMealRuntimeFlags, ConsumerNextMealRecommendationRepository, ConsumerPlannedMealWriteRepository, ConsumerPlannedMealsRepository } from "./types";
 
 export type ConsumerMealFactoryDependencies = {
   authPort?: ConsumerAuthPort;
@@ -50,6 +54,7 @@ export type ConsumerMealFactoryDependencies = {
   plannedMealWriteRepository?: ConsumerPlannedMealWriteRepository;
   plannedMealWriteService?: ConsumerPlannedMealWriteService;
   correctionRepository?: ConsumerMealCorrectionRepository;
+  nextMealRecommendationRepository?: ConsumerNextMealRecommendationRepository;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -336,6 +341,29 @@ export function createConsumerTodayIntakeOverviewService(
     clock: dependencies.clock ?? systemClock,
     mealRecordsSource: flags.mealRecordsSource,
     dailyNutritionSource: flags.dailyNutritionSource,
+    timezone: dependencies.timezone
+  });
+}
+
+export function createConsumerNextMealRecommendationRepository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  _dependencies: ConsumerMealFactoryDependencies = {}
+): ConsumerNextMealRecommendationRepository {
+  if (flags.nextMealRecommendationSource === "mock") return new MockConsumerNextMealRecommendationRepository();
+  if (flags.nextMealRecommendationSource === "local-menu-demo") return new LocalMenuDemoConsumerNextMealRecommendationRepository();
+  return new DisabledConsumerNextMealRecommendationRepository();
+}
+
+export function createConsumerNextMealRecommendationService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  const flagCheck = assertConsumerTodayIntakeOverviewRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  return new ConsumerNextMealRecommendationService({
+    repository: dependencies.nextMealRecommendationRepository ?? createConsumerNextMealRecommendationRepository(flags, dependencies),
+    intakeOverviewService: createConsumerTodayIntakeOverviewService(flags, dependencies),
+    clock: dependencies.clock ?? systemClock,
     timezone: dependencies.timezone
   });
 }
