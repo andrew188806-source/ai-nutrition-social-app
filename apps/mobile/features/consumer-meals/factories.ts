@@ -3,7 +3,8 @@ import {
   ConsumerDailySummaryPersistenceConfigurationInvalidError,
   ConsumerTodayIntakeOverviewConfigurationInvalidError,
   ConsumerMealSourceConfigurationInvalidError,
-  ConsumerMealWriteConfigurationInvalidError
+  ConsumerMealWriteConfigurationInvalidError,
+  ConsumerAuthConfigurationError
 } from "../consumer-auth/errors";
 import type { ConsumerAuthPort } from "../consumer-auth/ports";
 import type { SupabaseConsumerMealClientLike } from "./supabaseMealContracts";
@@ -12,31 +13,37 @@ import { MockConsumerMealRecordWriteRepository } from "./adapters/mockConsumerMe
 import { MockConsumerDailyNutritionSummaryRepository } from "./adapters/mockConsumerDailyNutritionSummaryRepository";
 import { MockConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/mockConsumerDailyNutritionSummaryPersistenceRepository";
 import { MockConsumerPlannedMealsRepository } from "./adapters/mockConsumerPlannedMealsRepository";
+import { MockConsumerPlannedMealWriteRepository } from "./adapters/mockConsumerPlannedMealWriteRepository";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository";
 import { SupabaseDisabledConsumerPlannedMealsRepository } from "./adapters/supabaseDisabledConsumerPlannedMealsRepository";
+import { SupabaseDisabledConsumerPlannedMealWriteRepository } from "./adapters/supabaseDisabledConsumerPlannedMealWriteRepository";
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
 import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
 import { SupabaseConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryPersistenceRepository";
 import { SupabaseConsumerPlannedMealsRepository } from "./adapters/supabaseConsumerPlannedMealsRepository";
 import { SupabasePreparedConsumerPlannedMealsRepository } from "./adapters/supabasePreparedConsumerPlannedMealsRepository";
+import { SupabasePreparedConsumerPlannedMealWriteRepository } from "./adapters/supabasePreparedConsumerPlannedMealWriteRepository";
 import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
+import { ConsumerPlannedMealWriteService } from "./consumerPlannedMealWriteService";
 import { ConsumerPlannedMealsService } from "./consumerPlannedMealsService";
 import { ConsumerTodayIntakeOverviewService, type ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOverviewService";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
-import type { ConsumerMealRuntimeFlags, ConsumerPlannedMealsRepository } from "./types";
+import type { ConsumerMealRuntimeFlags, ConsumerPlannedMealWriteRepository, ConsumerPlannedMealsRepository } from "./types";
 
 export type ConsumerMealFactoryDependencies = {
   authPort?: ConsumerAuthPort;
   mealClient?: SupabaseConsumerMealClientLike;
   plannedMealsRepository?: ConsumerPlannedMealsRepository;
   plannedMealsService?: ConsumerPlannedMealsService;
+  plannedMealWriteRepository?: ConsumerPlannedMealWriteRepository;
+  plannedMealWriteService?: ConsumerPlannedMealWriteService;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -236,6 +243,35 @@ export function createConsumerPlannedMealsService(
     repository: dependencies.plannedMealsRepository ?? createConsumerPlannedMealsRepository(flags, dependencies),
     clock: dependencies.clock ?? systemClock,
     timezone: dependencies.timezone
+  });
+}
+
+export function assertConsumerPlannedMealWriteRuntimeFlags(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+  if (flags.issues.length) {
+    return { ok: false as const, error: new ConsumerAuthConfigurationError(flags.issues.join(" ")) };
+  }
+  if (flags.plannedMealsWriteSource === "supabase_prepared" && flags.supabaseWritesEnabled) {
+    return { ok: false as const, error: new ConsumerAuthConfigurationError("Consumer planned meal prepared write contracts must not enable live writes.") };
+  }
+  return { ok: true as const, value: flags };
+}
+
+export function createConsumerPlannedMealWriteRepository(flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags()) {
+  const flagCheck = assertConsumerPlannedMealWriteRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  if (flags.plannedMealsWriteSource === "mock") return new MockConsumerPlannedMealWriteRepository();
+  if (flags.plannedMealsWriteSource === "supabase_prepared") return new SupabasePreparedConsumerPlannedMealWriteRepository();
+  return new SupabaseDisabledConsumerPlannedMealWriteRepository();
+}
+
+export function createConsumerPlannedMealWriteService(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  const flagCheck = assertConsumerPlannedMealWriteRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  return new ConsumerPlannedMealWriteService({
+    repository: dependencies.plannedMealWriteRepository ?? createConsumerPlannedMealWriteRepository(flags)
   });
 }
 

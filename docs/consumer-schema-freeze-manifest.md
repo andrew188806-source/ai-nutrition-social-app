@@ -440,3 +440,36 @@ Development live verification passed with planned meals returning canonical `emp
 No URL, key, email, password, token, session, user UUID, record UUID, planned meal UUID, summary UUID, raw row, raw snapshot, or raw response is recorded.
 
 Phase 2M adds no planned meal write, RPC, seed, fixture, bootstrap, Auth user creation, UI change, navigation change, Restaurant Web runtime, Admin runtime, production deployment, push, or Phase 2N work.
+
+## 32. Phase 2N Follow-Up
+
+Consumer Runtime Integration Phase 2N Controlled Planned Meal Write Preparation is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Phase 2N adds no active migration, remote migration deployment, grant/RLS change, schema change, RPC creation, RPC invocation, Development live write, direct database write, seed, fixture, bootstrap, UI route change, navigation change, local demo cutover, Restaurant Web runtime, Admin runtime, production operation, push, or Phase 2O work.
+
+The phase prepares canonical planned meal write contracts and a fail-closed repository boundary:
+
+- source flag: `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE`
+- allowed values: `disabled`, `mock`, `supabase_prepared`
+- default: `disabled`
+- public inputs: save, update, remove
+- public inputs exclude caller user id, owner id, session, token, raw rows, audit fields, and arbitrary SQL/filter fields
+- nutrition snapshots accept only finite non-negative canonical nutrition fields
+- result statuses are typed and non-boolean
+
+Schema discovery blockers for Phase 2O:
+
+- no `user_id + planned_for` unique constraint
+- no planned meal item table
+- no dedicated planned time column
+- no soft-delete column
+- remove/cancel semantics must be decided before live writes
+- atomic RPCs must derive ownership from `auth.uid()`
+
+Prepared future RPC names are documented in code only and are not live:
+
+- `save_authenticated_planned_meal`
+- `update_authenticated_planned_meal`
+- `remove_authenticated_planned_meal`
+
+Default smoke is skipped without client, sign-in, network, database read, database write, or RPC. Mock contract smoke passes locally and verifies save, repeated save, update, remove, missing remove, owner isolation, nutrition validation, actual totals unchanged, no Daily Summary persistence, and no client/network/database/RPC.

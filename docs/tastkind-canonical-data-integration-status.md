@@ -1224,3 +1224,77 @@ Development verification:
 - Planned meals did not change actual consumed totals.
 - Repeated planned read and repeated overview read were deterministic.
 - No credentials, tokens, sessions, user IDs, record IDs, planned meal IDs, summary IDs, raw rows, raw snapshots, URL, or key are recorded in repository documentation.
+
+## 45. Consumer Runtime Integration Phase 2N Status
+
+Consumer Runtime Integration Phase 2N Controlled Planned Meal Write Preparation is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Completed in repository:
+
+- `ConsumerPlannedMealWriteService`
+- canonical save, update, and remove input contracts
+- canonical planned meal write result contract
+- planned meal write source flag `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE`
+- disabled planned meal write repository
+- deterministic mock planned meal write repository
+- Supabase-prepared planned meal write repository
+- future RPC argument mappers
+- Phase 2N guard script: `npm run test:consumer-phase2n`
+- Phase 2N default smoke script: `npm run test:consumer-phase2n-smoke`
+- Phase 2N mock smoke script: `npm run test:consumer-phase2n-mock-smoke`
+- Phase 2N documentation and handoff status
+
+Runtime source values:
+
+- `disabled`
+- `mock`
+- `supabase_prepared`
+
+Default source:
+
+- `disabled`
+
+Schema discovery:
+
+- `public.planned_meals` has row id and owner `user_id`.
+- `planned_for` is the canonical date column.
+- `planned_nutrition_snapshot` is the planned nutrition metadata field.
+- Existing owner RLS policy is `planned_meals_owner_all`.
+- Authenticated SELECT grant exists from Phase 2M.
+- There is no planned meal item table.
+- There is no dedicated planned time column.
+- There is no soft-delete column.
+- There is no unique `user_id + planned_for` constraint.
+
+Boundary:
+
+- No migration.
+- No migration deployment.
+- No grant/RLS change.
+- No RPC creation.
+- No RPC invocation.
+- No Development live write.
+- No direct planned meal insert, update, upsert, or delete.
+- No UI route or navigation change.
+- No local demo cutover.
+- No actual meal record or Daily Summary persistence change.
+- No corrections, consumption adjustments, ratings, favorites, or recommendation feedback runtime.
+- No seed, fixture, bootstrap, production deployment, push, or Phase 2O work.
+
+Verification:
+
+- Default smoke is skipped without client, sign-in, network, database read, database write, or RPC.
+- Mock contract smoke passed for valid save, invalid input, deterministic repeated save, update, remove, remove missing, owner isolation simulation, nutrition validation, disabled source skipped, prepared source unavailable, future RPC mapping, actual totals unchanged, and no Daily Summary persistence.
+
+Phase 2O prerequisites:
+
+- choose live save uniqueness/idempotency identity
+- decide whether save is create-only or upsert
+- decide cancel/remove semantics
+- create atomic authenticated RPCs
+- ensure RPCs derive owner from `auth.uid()`
+- add minimum authenticated execute grants and anon revokes
+- verify create/update/remove read-after-write
+- verify owner isolation
+- verify no duplicate behavior
+- keep no service-role and no production boundaries

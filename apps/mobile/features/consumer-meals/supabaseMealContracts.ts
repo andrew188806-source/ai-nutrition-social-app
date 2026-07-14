@@ -10,6 +10,9 @@ export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE = "daily_nutritio
 export const SUPABASE_CONSUMER_PLANNED_MEALS_TABLE = "planned_meals" as const;
 export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION = "create_current_user_meal_record" as const;
 export const SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION = "persist_authenticated_daily_nutrition_summary" as const;
+export const SUPABASE_SAVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "save_authenticated_planned_meal" as const;
+export const SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "update_authenticated_planned_meal" as const;
+export const SUPABASE_REMOVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "remove_authenticated_planned_meal" as const;
 
 export const SUPABASE_CONSUMER_MEAL_RECORD_SELECT_COLUMNS = [
   "id",

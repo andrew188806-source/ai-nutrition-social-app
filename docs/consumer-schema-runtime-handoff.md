@@ -457,3 +457,27 @@ The live repository derives ownership from the current authenticated session, fi
 Development live verification passed with authenticated sign-in, current-user meal read, planned-meals read returning canonical `empty`, shared Today Intake overview reporting `plannedMealsStatus=empty`, no `planned_meals_unavailable` warning, unchanged actual consumed totals, deterministic repeated planned read, deterministic repeated overview read, and sign-out.
 
 Phase 2M does not change Mobile UI, navigation, Home, Today Intake layout, Restaurant Web runtime, Admin runtime, planned meal writes, planned meal RPC, direct table write grants, schema/RLS policies, seed data, fixtures, profile bootstrap, Auth users, production configuration, push, or Phase 2N work.
+
+## Phase 2N Controlled Planned Meal Write Preparation Result
+
+Consumer Runtime Integration Phase 2N Controlled Planned Meal Write Preparation is implementation-complete, guard-complete, default-smoke-skipped, mock-contract-verified, and freeze-ready.
+
+Phase 2N adds no migration, RLS change, grant change, RPC creation, RPC invocation, Development live write, database write, seed, fixture, bootstrap, UI route change, navigation change, local demo cutover, Restaurant Web runtime, Admin runtime, production operation, push, or Phase 2O work.
+
+The phase adds a preparation-only planned meal write boundary:
+
+- `SaveCurrentUserPlannedMealInput`
+- `UpdateCurrentUserPlannedMealInput`
+- `RemoveCurrentUserPlannedMealInput`
+- `ConsumerPlannedMealWriteResult`
+- `ConsumerPlannedMealWriteRepository`
+- `ConsumerPlannedMealWriteService`
+- `EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE`
+
+The write source values are `disabled`, `mock`, and `supabase_prepared`; the default is `disabled`, and unknown values fail closed.
+
+Schema discovery confirmed `public.planned_meals` has a row id, owner `user_id`, `planned_for`, required `meal_type`, required `display_name_snapshot`, `planned_nutrition_snapshot`, status, note, restaurant/menu refs, timestamps, and an owner RLS policy. The active schema has no `planned_meal_items` table, no dedicated planned time column, no soft-delete column, and no unique `user_id + planned_for` constraint. Phase 2N therefore prepares row-id-based update/remove contracts and records live uniqueness/upsert/cancel semantics as Phase 2O prerequisites.
+
+The prepared Supabase repository records future RPC names only: `save_authenticated_planned_meal`, `update_authenticated_planned_meal`, and `remove_authenticated_planned_meal`. It maps canonical RPC arguments and returns unavailable without creating a client, invoking RPC, reading, or writing.
+
+Mock verification passed for valid save, invalid input, caller user id rejection, unknown field rejection, deterministic repeated save, update, remove, remove missing, owner isolation simulation, nutrition validation, disabled source skipped, prepared source unavailable, future RPC mapping, and no client/network/database/write/RPC.

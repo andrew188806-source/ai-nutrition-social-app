@@ -4,6 +4,7 @@ export type ConsumerMealRecordsSource = "mock" | "supabase-disabled" | "supabase
 export type ConsumerDailyNutritionSource = "mock" | "supabase-disabled" | "supabase-live";
 export type ConsumerDailyNutritionWriteSource = "disabled" | "mock" | "supabase";
 export type ConsumerPlannedMealsSource = "disabled" | "mock" | "supabase" | "supabase_prepared";
+export type ConsumerPlannedMealsWriteSource = "disabled" | "mock" | "supabase_prepared";
 export type ConsumerMealType = "breakfast" | "lunch" | "dinner" | "late_night" | "snack" | "other";
 export type ConsumerMealSourceType = "restaurant" | "self_made" | "manual" | "ai_estimated";
 export type ConsumerNutritionSourceType = "restaurant_verified" | "admin_verified" | "ai_estimated" | "user_corrected" | "manual";
@@ -24,6 +25,7 @@ export type ConsumerMealRuntimeFlags = {
   dailyNutritionWriteSource: ConsumerDailyNutritionWriteSource;
   plannedMealsSource: ConsumerPlannedMealsSource;
   plannedMealsLiveReadOptIn: boolean;
+  plannedMealsWriteSource: ConsumerPlannedMealsWriteSource;
   issues: string[];
 };
 
@@ -318,6 +320,95 @@ export type ConsumerPlannedMealsReadResult =
 export interface ConsumerPlannedMealsRepository {
   readonly source: ConsumerPlannedMealsSource;
   getCurrentUserPlannedMeals(input: CanonicalPlannedMealsRepositoryInput): Promise<ConsumerPlannedMealsReadResult>;
+}
+
+export type SaveCurrentUserPlannedMealInput = {
+  plannedFor: string;
+  title: string;
+  mealType: ConsumerMealType;
+  notes?: string | null;
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuItemId?: string | null;
+  nutritionSnapshot?: ConsumerNutritionSnapshot | null;
+};
+
+export type UpdateCurrentUserPlannedMealInput = {
+  plannedMealId: string;
+  plannedFor?: string;
+  title?: string;
+  mealType?: ConsumerMealType;
+  notes?: string | null;
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuItemId?: string | null;
+  nutritionSnapshot?: ConsumerNutritionSnapshot | null;
+  status?: ConsumerPlannedMealStatusValue;
+};
+
+export type RemoveCurrentUserPlannedMealInput = {
+  plannedMealId: string;
+};
+
+export type CanonicalPlannedMealWritePayload = {
+  plannedFor: string;
+  title: string;
+  mealType: ConsumerMealType;
+  notes: string | null;
+  restaurantId: string | null;
+  branchId: string | null;
+  menuItemId: string | null;
+  nutritionSnapshot: ConsumerNutritionSnapshot | null;
+};
+
+export type CanonicalPlannedMealUpdatePayload = {
+  plannedMealId: string;
+  plannedFor?: string;
+  title?: string;
+  mealType?: ConsumerMealType;
+  notes?: string | null;
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuItemId?: string | null;
+  nutritionSnapshot?: ConsumerNutritionSnapshot | null;
+  status?: ConsumerPlannedMealStatusValue;
+};
+
+export type CanonicalPlannedMealRemovePayload = {
+  plannedMealId: string;
+};
+
+export type ConsumerPlannedMealWriteStatus =
+  | "saved"
+  | "updated"
+  | "removed"
+  | "skipped"
+  | "unavailable"
+  | "unauthenticated"
+  | "invalid_input"
+  | "not_found"
+  | "forbidden"
+  | "write_failed";
+
+export type ConsumerPlannedMealWriteOperation = "save" | "update" | "remove";
+
+export type ConsumerPlannedMealWriteResult = {
+  status: ConsumerPlannedMealWriteStatus;
+  operation: ConsumerPlannedMealWriteOperation;
+  source: ConsumerPlannedMealsWriteSource;
+  identity: "authenticated_user_planned_meal";
+  plannedMealId?: string;
+  plannedFor?: string;
+  mealType?: ConsumerMealType;
+  nutritionSnapshotAvailable?: boolean;
+  errorCode?: string;
+};
+
+export interface ConsumerPlannedMealWriteRepository {
+  readonly source: ConsumerPlannedMealsWriteSource;
+  save(payload: CanonicalPlannedMealWritePayload): Promise<ConsumerPlannedMealWriteResult>;
+  updatePlannedMeal(payload: CanonicalPlannedMealUpdatePayload): Promise<ConsumerPlannedMealWriteResult>;
+  remove(payload: CanonicalPlannedMealRemovePayload): Promise<ConsumerPlannedMealWriteResult>;
 }
 
 export type ConsumerTodayIntakeOverviewInput = {
