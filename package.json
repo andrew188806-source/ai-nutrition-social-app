@@ -51,6 +51,9 @@
     "test:consumer-phase2o": "node scripts/consumer-meal-records-phase-2o-guard.mjs",
     "test:consumer-phase2o-smoke": "node scripts/consumer-meal-records-phase-2o-smoke.mjs",
     "test:consumer-phase2o-live-smoke": "node scripts/consumer-meal-records-phase-2o-smoke.mjs",
+    "test:consumer-phase2p": "node scripts/consumer-meal-records-phase-2p-guard.mjs",
+    "test:consumer-phase2p-smoke": "node scripts/consumer-meal-records-phase-2p-smoke.mjs",
+    "test:consumer-phase2p-mock-smoke": "node scripts/consumer-meal-records-phase-2p-smoke.mjs --mock-contract",
     "test:consumer-schema-phase1.3": "node scripts/consumer-schema-phase-1-3-guard.mjs",
     "validate:consumer-schema": "node scripts/validate-consumer-schema.mjs",
     "audit:canonical": "node scripts/audit-canonical-data.mjs"

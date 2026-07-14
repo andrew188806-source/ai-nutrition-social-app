@@ -260,6 +260,41 @@ export type SupabaseMealQueryBuilderLike<ResponseLike> = {
   limit(count: number): Promise<ResponseLike>;
 };
 
+export const SUPABASE_CONSUMER_MEAL_ANALYSES_TABLE = "meal_analyses" as const;
+export const SUPABASE_CONSUMER_MEAL_CORRECTIONS_TABLE = "meal_corrections" as const;
+
+// Phase 2P architecture preparation: correction read select columns for when a read grant is added.
+export const SUPABASE_CONSUMER_MEAL_CORRECTIONS_SELECT_COLUMNS =
+  "id, meal_analysis_id, meal_record_item_id, correction_type, before_value, after_value, corrected_at" as const;
+
+export type SupabaseMealAnalysisRowLike = {
+  id?: string | null;
+  user_id?: string | null;
+  meal_record_id?: string | null;
+  model_name?: string | null;
+  model_version?: string | null;
+  estimated_nutrition?: unknown;
+  detected_items?: unknown;
+  confidence_score?: number | null;
+  analysis_status?: string | null;
+  analyzed_at?: string | null;
+  created_at?: string | null;
+};
+
+export type SupabaseMealCorrectionRowLike = {
+  id?: string | null;
+  user_id?: string | null;
+  meal_analysis_id?: string | null;
+  meal_record_item_id?: string | null;
+  correction_type?: string | null;
+  before_value?: unknown;
+  after_value?: unknown;
+  correction_reason?: string | null;
+  note?: string | null;
+  corrected_at?: string | null;
+  created_at?: string | null;
+};
+
 export type SupabaseConsumerMealClientLike = {
   from(table: typeof SUPABASE_CONSUMER_MEAL_RECORDS_TABLE): SupabaseMealQueryBuilderLike<SupabaseMealRecordListResponseLike>;
   from(table: typeof SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE): SupabaseMealQueryBuilderLike<SupabaseDailyNutritionSummaryListResponseLike>;

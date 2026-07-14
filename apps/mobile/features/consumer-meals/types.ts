@@ -5,6 +5,7 @@ export type ConsumerDailyNutritionSource = "mock" | "supabase-disabled" | "supab
 export type ConsumerDailyNutritionWriteSource = "disabled" | "mock" | "supabase";
 export type ConsumerPlannedMealsSource = "disabled" | "mock" | "supabase" | "supabase_prepared";
 export type ConsumerPlannedMealsWriteSource = "disabled" | "mock" | "supabase";
+export type ConsumerMealCorrectionSource = "disabled" | "mock" | "supabase-prepared";
 export type ConsumerMealType = "breakfast" | "lunch" | "dinner" | "late_night" | "snack" | "other";
 export type ConsumerMealSourceType = "restaurant" | "self_made" | "manual" | "ai_estimated";
 export type ConsumerNutritionSourceType = "restaurant_verified" | "admin_verified" | "ai_estimated" | "user_corrected" | "manual";
@@ -26,6 +27,7 @@ export type ConsumerMealRuntimeFlags = {
   plannedMealsSource: ConsumerPlannedMealsSource;
   plannedMealsLiveReadOptIn: boolean;
   plannedMealsWriteSource: ConsumerPlannedMealsWriteSource;
+  correctionSource: ConsumerMealCorrectionSource;
   issues: string[];
 };
 
@@ -409,6 +411,45 @@ export interface ConsumerPlannedMealWriteRepository {
   save(payload: CanonicalPlannedMealWritePayload): Promise<ConsumerPlannedMealWriteResult>;
   updatePlannedMeal(payload: CanonicalPlannedMealUpdatePayload): Promise<ConsumerPlannedMealWriteResult>;
   remove(payload: CanonicalPlannedMealRemovePayload): Promise<ConsumerPlannedMealWriteResult>;
+}
+
+export type ConsumerMealCorrectionDetail =
+  | { correctionType: "nutrition_override"; before: ConsumerNutritionSnapshot | null; after: ConsumerNutritionSnapshot }
+  | { correctionType: "ingredient_adjustment"; before: string | null; after: string }
+  | { correctionType: "portion_adjustment"; before: string | null; after: string }
+  | { correctionType: "cooking_adjustment"; before: string | null; after: string }
+  | { correctionType: "name_change"; before: string | null; after: string }
+  | { correctionType: "unknown"; rawCorrectionType: string; after: unknown };
+
+export type ConsumerMealCorrectionItemOverview = {
+  mealRecordItemId: string;
+  correctionStatus: ConsumerMealCorrectionStatus;
+  correction: ConsumerMealCorrectionDetail | null;
+};
+
+export type ConsumerMealCorrectionReadInput = {
+  mealRecordId: string;
+};
+
+export type ConsumerMealCorrectionOverview = {
+  mealRecordId: string;
+  items: ConsumerMealCorrectionItemOverview[];
+  hasAnyCorrections: boolean;
+  correctionReadSource: ConsumerMealCorrectionSource;
+};
+
+export type ConsumerMealCorrectionReadResult =
+  | { status: "available"; overview: ConsumerMealCorrectionOverview }
+  | { status: "empty"; mealRecordId: string; correctionReadSource: ConsumerMealCorrectionSource }
+  | { status: "disabled"; correctionReadSource: ConsumerMealCorrectionSource }
+  | { status: "grant_pending"; correctionReadSource: ConsumerMealCorrectionSource; errorCode: string }
+  | { status: "unauthenticated"; correctionReadSource: ConsumerMealCorrectionSource }
+  | { status: "not_found"; mealRecordId: string; correctionReadSource: ConsumerMealCorrectionSource }
+  | { status: "read_failed"; mealRecordId: string; correctionReadSource: ConsumerMealCorrectionSource; errorCode: string };
+
+export interface ConsumerMealCorrectionRepository {
+  readonly source: ConsumerMealCorrectionSource;
+  getCurrentUserMealCorrectionOverview(input: ConsumerMealCorrectionReadInput): Promise<ConsumerMealCorrectionReadResult>;
 }
 
 export type ConsumerTodayIntakeOverviewInput = {

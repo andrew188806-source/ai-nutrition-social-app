@@ -1,4 +1,4 @@
-import type { ConsumerDailyNutritionSource, ConsumerDailyNutritionWriteSource, ConsumerMealRecordsSource, ConsumerMealRuntimeFlags, ConsumerPlannedMealsSource, ConsumerPlannedMealsWriteSource } from "./types";
+import type { ConsumerDailyNutritionSource, ConsumerDailyNutritionWriteSource, ConsumerMealCorrectionSource, ConsumerMealRecordsSource, ConsumerMealRuntimeFlags, ConsumerPlannedMealsSource, ConsumerPlannedMealsWriteSource } from "./types";
 
 const authSources = new Set<ConsumerMealRuntimeFlags["authSource"]>(["mock", "supabase-disabled", "supabase-live"]);
 const mealSources = new Set<ConsumerMealRecordsSource>(["mock", "supabase-disabled", "supabase-live"]);
@@ -6,6 +6,7 @@ const dailyNutritionSources = new Set<ConsumerDailyNutritionSource>(["mock", "su
 const dailyNutritionWriteSources = new Set<ConsumerDailyNutritionWriteSource>(["disabled", "mock", "supabase"]);
 const plannedMealsSources = new Set<ConsumerPlannedMealsSource>(["disabled", "mock", "supabase", "supabase_prepared"]);
 const plannedMealsWriteSources = new Set<ConsumerPlannedMealsWriteSource>(["disabled", "mock", "supabase"]);
+const correctionSources = new Set<ConsumerMealCorrectionSource>(["disabled", "mock", "supabase-prepared"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -49,6 +50,13 @@ function parsePlannedMealsSource(value: string | undefined, issues: string[]): C
   return "disabled";
 }
 
+function parseCorrectionSource(value: string | undefined, issues: string[]): ConsumerMealCorrectionSource {
+  if (!value) return "disabled";
+  if (correctionSources.has(value as ConsumerMealCorrectionSource)) return value as ConsumerMealCorrectionSource;
+  issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_CORRECTION_SOURCE: ${value}`);
+  return "disabled";
+}
+
 function parsePlannedMealsWriteSource(value: string | undefined, issues: string[]): ConsumerPlannedMealsWriteSource {
   if (!value) return "disabled";
   if (value === "supabase_prepared") {
@@ -79,6 +87,7 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
   const dailyNutritionWriteSource = parseDailyNutritionWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE, issues);
   const plannedMealsSource = parsePlannedMealsSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE, issues);
   const plannedMealsWriteSource = parsePlannedMealsWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE, issues);
+  const correctionSource = parseCorrectionSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_CORRECTION_SOURCE, issues);
   const supabaseAuthEnabled = parseBooleanFlag("EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED", env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED, issues);
   const supabaseWritesEnabled = parseBooleanFlag(
     "EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED",
@@ -211,6 +220,7 @@ export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): Consum
     plannedMealsSource,
     plannedMealsLiveReadOptIn,
     plannedMealsWriteSource,
+    correctionSource,
     issues
   };
 }
