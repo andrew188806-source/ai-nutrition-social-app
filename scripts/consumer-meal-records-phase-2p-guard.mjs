@@ -164,6 +164,22 @@ const correctionWriteSourceMatches = mealFiles
 if (correctionWriteSourceMatches.length) fail("no correction write methods in consumer-meals source", "Phase 2P must not implement correction writes.", { matches: correctionWriteSourceMatches });
 else pass("no correction write methods in consumer-meals source");
 
+// Phase 2P documentation
+const docPath = "docs/consumer-runtime-integration/phase-2p-meal-correction-canonical-read-architecture.md";
+if (fs.existsSync(path.join(root, docPath))) pass(`Phase 2P documentation exists: ${docPath}`);
+else fail(`Phase 2P documentation exists: ${docPath}`, "Phase 2P must include a canonical architecture documentation file.");
+const doc = fs.existsSync(path.join(root, docPath)) ? read(docPath) : "";
+if (/correction_read_grant_pending/.test(doc) && /authenticated SELECT grant.*not present|not present.*authenticated SELECT grant/i.test(doc)) pass("documentation records grant gap and correction_read_grant_pending error code");
+else fail("documentation records grant gap and correction_read_grant_pending error code", "Documentation must state the authenticated SELECT grant is absent for meal_analyses and meal_corrections.");
+if (/meal_analyses/.test(doc) && /meal_corrections/.test(doc) && /meal_record_items\.correction_status/.test(doc)) pass("documentation identifies all three correction-related schema objects");
+else fail("documentation identifies all three correction-related schema objects", "Documentation must reference meal_analyses, meal_corrections, and meal_record_items.correction_status.");
+if (/No.*write.*implemented|write path.*not implemented|No write path/i.test(doc)) pass("documentation confirms no write path implemented");
+else fail("documentation confirms no write path implemented", "Documentation must state no correction write path exists.");
+if (/No.*training pipeline|No training pipeline/i.test(doc) && /embeddings|embedding/i.test(doc)) pass("documentation confirms no training pipeline or embeddings");
+else fail("documentation confirms no training pipeline or embeddings", "Documentation must explicitly exclude training pipeline and embeddings.");
+if (/No Phase 2Q|Phase 2Q.*not started|not start Phase 2Q/i.test(doc)) pass("documentation confirms Phase 2Q was not started");
+else fail("documentation confirms Phase 2Q was not started", "Documentation must explicitly state Phase 2Q was not started.");
+
 // factories.ts — correction factory
 const factory = read("apps/mobile/features/consumer-meals/factories.ts");
 if (/createConsumerMealCorrectionRepository/.test(factory) && /createConsumerMealCorrectionService/.test(factory)) pass("factory exposes correction repository and service factories");
