@@ -23,4 +23,6 @@ npm.cmd run demo
 
 目前架構、mock 資料來源、後端替換入口與已知 TODO 請見 [`ENGINEER_HANDOFF.md`](./ENGINEER_HANDOFF.md)。
 
+目前 Runtime Integration 的唯一 canonical phase roadmap 請見 [`docs/tastkind-runtime-integration-roadmap.md`](./docs/tastkind-runtime-integration-roadmap.md)；舊產品、投資與 demo phase schemes 不覆蓋該 roadmap。
+
 本專案目前是前端 Demo。AI、資料保存、聊天、通知、付款與審核流程尚未連接正式後端。

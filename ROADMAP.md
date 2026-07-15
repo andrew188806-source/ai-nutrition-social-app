@@ -1,5 +1,7 @@
 # Roadmap
 
+> **Runtime Integration authority:** The current canonical Runtime Integration phase names, order, ownership boundaries, and freeze rules are defined in [`docs/tastkind-runtime-integration-roadmap.md`](./docs/tastkind-runtime-integration-roadmap.md). The phase schemes below are retained as legacy/general product and demo roadmap context and do not override that canonical runtime roadmap.
+
 ## Phase 6 Complete
 
 Investor demo polish, Community Card, mock Meal Buddy List, mock Chat Window and engineer handoff documentation.
