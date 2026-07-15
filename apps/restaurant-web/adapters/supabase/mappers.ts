@@ -8,6 +8,10 @@ import type {
   Restaurant,
   RestaurantBranch
 } from "@haocu/shared/domain/restaurantDomain";
+import type {
+  RestaurantPublicNutritionSource,
+  RestaurantPublicPublishedNutrition
+} from "../../repositories/restaurant-public-nutrition-read-repository";
 import { SupabaseMappingError } from "./errors";
 import type {
   BranchMenuItemRow,
@@ -17,6 +21,7 @@ import type {
   MenuItemRow,
   MenuRow,
   RestaurantBranchRow,
+  RestaurantPublicPublishedNutritionRow,
   RestaurantRow
 } from "./rows";
 
@@ -46,6 +51,27 @@ function optionalNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && Number.isFinite(Number(value))) return Number(value);
   return undefined;
+}
+
+function nullableNumber(value: unknown, entity: string, field: string): number | null {
+  if (value === null) return null;
+  return numberFrom(value, entity, field);
+}
+
+function nullableString(value: unknown, entity: string, field: string): string | null {
+  if (value === null) return null;
+  return requireString(value, entity, field);
+}
+
+function mapPublicNutritionSource(value: unknown): RestaurantPublicNutritionSource {
+  if (value === "ai_estimated" || value === "restaurant_confirmed" || value === "platform_reviewed") {
+    return value;
+  }
+  throw new SupabaseMappingError(
+    `Unsupported public nutrition source: ${String(value)}`,
+    "RestaurantPublicPublishedNutrition",
+    "nutrition_source_public"
+  );
 }
 
 function mapRestaurantStatus(status: string | null | undefined): Restaurant["status"] {
@@ -216,5 +242,25 @@ export function mapMenuItemNutritionRow(row: MenuItemNutritionRow): MenuItemNutr
     confidenceScore: optionalNumber(row.confidence_score) ?? 0,
     verifiedStatus: mapVerificationStatus(row.verified_status),
     updatedAt: requireString(row.updated_at, "MenuItemNutrition", "updated_at")
+  };
+}
+
+export function mapRestaurantPublicPublishedNutritionRow(
+  row: RestaurantPublicPublishedNutritionRow
+): RestaurantPublicPublishedNutrition {
+  return {
+    restaurantId: requireString(row.restaurant_id, "RestaurantPublicPublishedNutrition", "restaurant_id"),
+    menuItemId: requireString(row.menu_item_id, "RestaurantPublicPublishedNutrition", "menu_item_id"),
+    calories: nullableNumber(row.calories, "RestaurantPublicPublishedNutrition", "calories"),
+    protein: nullableNumber(row.protein, "RestaurantPublicPublishedNutrition", "protein"),
+    carbohydrates: nullableNumber(row.carbohydrates, "RestaurantPublicPublishedNutrition", "carbohydrates"),
+    fat: nullableNumber(row.fat, "RestaurantPublicPublishedNutrition", "fat"),
+    fiber: nullableNumber(row.fiber, "RestaurantPublicPublishedNutrition", "fiber"),
+    sugar: nullableNumber(row.sugar, "RestaurantPublicPublishedNutrition", "sugar"),
+    sodium: nullableNumber(row.sodium, "RestaurantPublicPublishedNutrition", "sodium"),
+    saturatedFat: nullableNumber(row.saturated_fat, "RestaurantPublicPublishedNutrition", "saturated_fat"),
+    servingSize: nullableString(row.serving_size, "RestaurantPublicPublishedNutrition", "serving_size"),
+    nutritionSourcePublic: mapPublicNutritionSource(row.nutrition_source_public),
+    nutritionUpdatedAt: requireString(row.nutrition_updated_at, "RestaurantPublicPublishedNutrition", "nutrition_updated_at")
   };
 }

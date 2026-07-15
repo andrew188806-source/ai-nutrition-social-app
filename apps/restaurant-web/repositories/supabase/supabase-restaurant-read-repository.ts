@@ -3,7 +3,7 @@ import {
   mapBranchMenuItemRow,
   mapMenuCategoryRow,
   mapMenuItemAliasRow,
-  mapMenuItemNutritionRow,
+  mapRestaurantPublicPublishedNutritionRow,
   mapMenuItemRow,
   mapMenuRow,
   mapRestaurantBranchRow,
@@ -14,15 +14,16 @@ import type {
   BranchMenuItemRow,
   MenuCategoryRow,
   MenuItemAliasRow,
-  MenuItemNutritionRow,
   MenuItemPerformanceRow,
   MenuItemRow,
   MenuRow,
   NutritionBadgePerformanceRow,
   RestaurantBranchRow,
   RestaurantExposureSummaryRow,
+  RestaurantPublicPublishedNutritionRow,
   RestaurantRow
 } from "../../adapters/supabase/rows";
+import type { RestaurantPublicNutritionReadRepository } from "../restaurant-public-nutrition-read-repository";
 import type {
   MenuItemPerformanceSummary,
   NutritionBadgePerformanceSummary,
@@ -74,7 +75,9 @@ function firstOrNull<T>(rows: T[]): T | null {
   return rows[0] ?? null;
 }
 
-export function createSupabaseRestaurantReadRepository(client: ReadonlyDatabaseClient): RestaurantReadRepository {
+export function createSupabaseRestaurantReadRepository(
+  client: ReadonlyDatabaseClient
+): RestaurantReadRepository & RestaurantPublicNutritionReadRepository {
   return {
     async getRestaurant(restaurantId) {
       const rows = await client.select<RestaurantRow[]>("restaurants", { filters: [{ field: "id", operator: "eq", value: restaurantId }], limit: 1, operation: "getRestaurant" });
@@ -119,13 +122,30 @@ export function createSupabaseRestaurantReadRepository(client: ReadonlyDatabaseC
       return rows.map(mapMenuItemAliasRow);
     },
     async getCurrentPublishedNutrition(menuItemId) {
-      const rows = await client.select<MenuItemNutritionRow[]>("current_published_menu_item_nutrition", { filters: [{ field: "menu_item_id", operator: "eq", value: menuItemId }], limit: 1, operation: "getCurrentPublishedNutrition" });
-      const row = firstOrNull(rows);
-      return row ? mapMenuItemNutritionRow(row) : null;
+      void menuItemId;
+      throw new SupabaseQueryError("Internal nutrition reads are unsupported on the public prepared repository.");
     },
     async listCurrentPublishedNutrition(restaurantId) {
-      const rows = await client.select<MenuItemNutritionRow[]>("current_published_menu_item_nutrition", { filters: [{ field: "restaurant_id", operator: "eq", value: restaurantId }], operation: "listCurrentPublishedNutrition" });
-      return rows.map(mapMenuItemNutritionRow);
+      void restaurantId;
+      throw new SupabaseQueryError("Internal nutrition reads are unsupported on the public prepared repository.");
+    },
+    async getPublicPublishedNutrition(menuItemId, options) {
+      const rows = await client.select<RestaurantPublicPublishedNutritionRow[]>("restaurant_public_published_nutrition_v1", {
+        filters: [{ field: "menu_item_id", operator: "eq", value: menuItemId }],
+        limit: 1,
+        operation: "getPublicPublishedNutrition",
+        accessToken: options?.accessToken
+      });
+      const row = firstOrNull(rows);
+      return row ? mapRestaurantPublicPublishedNutritionRow(row) : null;
+    },
+    async listPublicPublishedNutrition(restaurantId, options) {
+      const rows = await client.select<RestaurantPublicPublishedNutritionRow[]>("restaurant_public_published_nutrition_v1", {
+        filters: [{ field: "restaurant_id", operator: "eq", value: restaurantId }],
+        operation: "listPublicPublishedNutrition",
+        accessToken: options?.accessToken
+      });
+      return rows.map(mapRestaurantPublicPublishedNutritionRow);
     },
     async getRestaurantDashboardSummary(restaurantId) {
       const rows = await client.select<RestaurantExposureSummaryRow[]>("restaurant_exposure_summary", {

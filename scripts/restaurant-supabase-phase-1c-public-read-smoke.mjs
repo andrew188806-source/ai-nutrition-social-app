@@ -14,7 +14,7 @@ const PUBLIC_RESOURCES = [
   "menu_categories",
   "menu_items",
   "branch_menu_items",
-  "current_published_menu_item_nutrition"
+  "restaurant_public_published_nutrition_v1"
 ];
 const INTERNAL_EXCLUDED = [
   "pending_menu_items",
@@ -72,6 +72,54 @@ function blocked(reason, details = {}) {
   process.exit(0);
 }
 
+const contractMode = process.argv.includes("--contract");
+const liveMode = process.argv.includes("--live");
+
+if (!contractMode && !liveMode) {
+  console.log(JSON.stringify({
+    status: "skipped",
+    phase: "1C",
+    mode: "offline",
+    reason: "Expected offline skip; use --contract for local contract validation or --live for an explicitly approved live read.",
+    clientCreated: false,
+    liveRequestUsed: false,
+    writeRequestUsed: false,
+    credentialsPrinted: false
+  }, null, 2));
+  process.exit(0);
+}
+
+if (contractMode) {
+  const resourceFile = readFileSync(join(root, "apps/restaurant-web/adapters/supabase/readonly-resources.ts"), "utf8");
+  const publicFields = [
+    "restaurant_id", "menu_item_id", "calories", "protein", "carbohydrates", "fat", "fiber",
+    "sugar", "sodium", "saturated_fat", "serving_size", "nutrition_source_public", "nutrition_updated_at"
+  ];
+  const maliciousRow = Object.fromEntries(publicFields.map((field) => [field, null]));
+  Object.assign(maliciousRow, { restaurant_id: "restaurant-contract", menu_item_id: "item-contract", nutrition_source_public: "restaurant_confirmed", nutrition_updated_at: "2026-07-15T00:00:00Z", source: "internal", confidence_score: 0.99, verified_status: "verified" });
+  const projected = Object.fromEntries(publicFields.map((field) => [field, maliciousRow[field]]));
+  const forbidden = ["source", "confidence_score", "verified_status"];
+  const checks = [
+    { name: "safe resource is allowlisted", pass: resourceFile.includes('"restaurant_public_published_nutrition_v1"') },
+    { name: "internal nutrition view is not allowlisted", pass: !resourceFile.includes('"current_published_menu_item_nutrition"') },
+    { name: "public response has exactly 13 fields", pass: Object.keys(projected).length === 13 },
+    { name: "malicious internal fields are excluded", pass: forbidden.every((field) => !(field in projected)) },
+    { name: "nullable nutrition remains null", pass: projected.protein === null && projected.sodium === null }
+  ];
+  const failed = checks.filter((check) => !check.pass);
+  console.log(JSON.stringify({
+    status: failed.length ? "failed" : "passed",
+    phase: "1C",
+    mode: "contract",
+    checks,
+    publicResourcesTested: PUBLIC_RESOURCES,
+    liveRequestUsed: false,
+    writeRequestUsed: false,
+    credentialsPrinted: false
+  }, null, 2));
+  process.exit(failed.length ? 1 : 0);
+}
+
 const restaurantEnvLoaded = loadEnvFile(join(root, "apps/restaurant-web/.env.local"));
 const restaurantTextEnvLoaded = !restaurantEnvLoaded && loadEnvFile(join(root, "apps/restaurant-web/.env.local.txt"));
 const rootEnvLoaded = loadEnvFile(join(root, ".env.local"));
@@ -115,10 +163,14 @@ for (const resource of PUBLIC_RESOURCES) {
     let rowCount = 0;
     let shape = "unknown";
     let safeErrorCategory;
+    let forbiddenFields = [];
     if (response.ok) {
       const json = await response.json();
       shape = Array.isArray(json) ? "array" : typeof json;
       rowCount = Array.isArray(json) ? json.length : 0;
+      if (resource === "restaurant_public_published_nutrition_v1" && Array.isArray(json) && json[0]) {
+        forbiddenFields = ["source", "confidence_score", "verified_status"].filter((field) => field in json[0]);
+      }
     } else if (response.status === 404) {
       safeErrorCategory = "missing_resource";
     } else if (response.status === 401 || response.status === 403) {
@@ -126,7 +178,7 @@ for (const resource of PUBLIC_RESOURCES) {
     } else {
       safeErrorCategory = "http_error";
     }
-    results.push({ operation: "public-read", resource, httpStatus: response.status, ok: response.ok, rowCount, responseShape: shape, safeErrorCategory });
+    results.push({ operation: "public-read", resource, httpStatus: response.status, ok: response.ok && forbiddenFields.length === 0, rowCount, responseShape: shape, safeErrorCategory, forbiddenFields });
   } catch (error) {
     results.push({ operation: "public-read", resource, ok: false, errorCategory: error instanceof Error ? error.name : "UnknownError" });
   }

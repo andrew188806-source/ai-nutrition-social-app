@@ -1,13 +1,27 @@
 import type { RestaurantDataSourceConfig } from "../config/restaurant-data-source";
 import { createMockRestaurantReadRepository } from "../repositories/mock-restaurant-read-repository";
-import { createRestaurantReadRepository } from "../repositories/restaurant-read-repository-factory";
+import {
+  createRestaurantPublicNutritionReadRepository,
+  createRestaurantReadRepository
+} from "../repositories/restaurant-read-repository-factory";
+import type { RestaurantPublicNutritionReadRepository } from "../repositories/restaurant-public-nutrition-read-repository";
 import type { RestaurantReadRepository } from "../repositories/restaurant-read-repository";
 
 export interface RestaurantReadServiceOptions {
   repository?: RestaurantReadRepository;
+  publicNutritionRepository?: RestaurantPublicNutritionReadRepository;
+  accessToken?: string;
   config?: RestaurantDataSourceConfig;
   logger?: Pick<Console, "warn">;
   fetchImpl?: typeof fetch;
+}
+
+export async function listRestaurantPublicPublishedNutrition(
+  restaurantId: string,
+  options: RestaurantReadServiceOptions = {}
+) {
+  const repository = options.publicNutritionRepository ?? createRestaurantPublicNutritionReadRepository(options);
+  return repository.listPublicPublishedNutrition(restaurantId, { accessToken: options.accessToken });
 }
 
 function getRepository(options: RestaurantReadServiceOptions = {}) {

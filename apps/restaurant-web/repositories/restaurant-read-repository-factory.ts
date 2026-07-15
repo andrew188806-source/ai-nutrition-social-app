@@ -1,6 +1,7 @@
 import { createRestaurantReadonlyDatabaseClient } from "../adapters/supabase/server-readonly-client";
 import { getRestaurantDataSourceConfig, type RestaurantDataSourceConfig } from "../config/restaurant-data-source";
 import { createMockRestaurantReadRepository } from "./mock-restaurant-read-repository";
+import type { RestaurantPublicNutritionReadRepository } from "./restaurant-public-nutrition-read-repository";
 import type { RestaurantReadRepository } from "./restaurant-read-repository";
 import { createSupabaseRestaurantReadRepository } from "./supabase/supabase-restaurant-read-repository";
 
@@ -31,4 +32,16 @@ export function createRestaurantReadRepository(options: RestaurantRepositoryFact
     }
     throw error;
   }
+}
+
+export function createRestaurantPublicNutritionReadRepository(
+  options: RestaurantRepositoryFactoryOptions = {}
+): RestaurantPublicNutritionReadRepository {
+  const config = options.config ?? getRestaurantDataSourceConfig();
+  if (config.dataSource !== "supabase-readonly") {
+    throw new Error("Public nutrition prepared repository requires the supabase-readonly data source.");
+  }
+  return createSupabaseRestaurantReadRepository(
+    createRestaurantReadonlyDatabaseClient({ config, fetchImpl: options.fetchImpl })
+  );
 }

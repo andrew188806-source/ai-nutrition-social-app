@@ -227,13 +227,13 @@ if (n2File) {
 // ============================================================
 // Check 20: Migration count
 // ============================================================
-const expectedMigrationCount = 23;
+const expectedMigrationCount = 24;
 if (migrationCount === expectedMigrationCount && n1Migrations.length === 1 && n2Migrations.length === 1) {
-  pass("Migration count remains 23 with exactly N1 and N2", { count: migrationCount });
+  pass("Migration count is 24 after the Phase 2U-C-A N2R preparation, with exactly N1 and N2", { count: migrationCount });
 } else {
   fail(
-    "Migration count remains 23 with exactly N1 and N2",
-    `Expected 23 migrations with one N1 and one N2; found ${migrationCount} migrations, ${n1Migrations.length} N1, ${n2Migrations.length} N2.`,
+    "Migration count is 24 after the Phase 2U-C-A N2R preparation, with exactly N1 and N2",
+    `Expected 24 migrations with one N1 and one N2; found ${migrationCount} migrations, ${n1Migrations.length} N1, ${n2Migrations.length} N2.`,
     { count: migrationCount }
   );
 }

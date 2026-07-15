@@ -6,7 +6,7 @@ export const READONLY_RESOURCES = [
   "menu_items",
   "branch_menu_items",
   "menu_item_aliases",
-  "current_published_menu_item_nutrition",
+  "restaurant_public_published_nutrition_v1",
   "restaurant_exposure_summary",
   "nutrition_badge_performance",
   "menu_item_performance"
@@ -24,7 +24,7 @@ export const READONLY_ORDER_FIELDS: Record<ReadonlyResource, readonly string[]> 
   menu_items: ["name", "id"],
   branch_menu_items: ["id", "branch_id", "menu_item_id"],
   menu_item_aliases: ["id", "alias_name"],
-  current_published_menu_item_nutrition: ["menu_item_id", "updated_at"],
+  restaurant_public_published_nutrition_v1: ["menu_item_id", "nutrition_updated_at"],
   restaurant_exposure_summary: ["restaurant_id", "source"],
   nutrition_badge_performance: ["restaurant_id", "menu_item_id"],
   menu_item_performance: ["restaurant_id", "menu_item_id"]

@@ -11,7 +11,7 @@ const PUBLIC_RESOURCES = [
   { operation: "Menu categories", resource: "menu_categories" },
   { operation: "Published menu items", resource: "menu_items" },
   { operation: "Branch menu items", resource: "branch_menu_items" },
-  { operation: "Current published nutrition", resource: "current_published_menu_item_nutrition" }
+  { operation: "Public published nutrition", resource: "restaurant_public_published_nutrition_v1" }
 ];
 const INTERNAL_BLOCKED_BY_ALLOWLIST = [
   "pending_menu_items",
@@ -101,6 +101,11 @@ function optionalNumber(value) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && Number.isFinite(Number(value))) return Number(value);
   return undefined;
+}
+
+function nullableNumber(value, entity, field) {
+  if (value === null) return null;
+  return asNumber(value, entity, field);
 }
 
 function asStringArray(value) {
@@ -214,21 +219,19 @@ function mapBranchMenuItem(row) {
 
 function mapNutrition(row) {
   return {
-    id: asString(row.id, "MenuItemNutrition", "id"),
-    menuItemId: asString(row.menu_item_id, "MenuItemNutrition", "menu_item_id"),
-    calories: optionalNumber(row.calories),
-    protein: optionalNumber(row.protein),
-    carbohydrates: optionalNumber(row.carbohydrates),
-    fat: optionalNumber(row.fat),
-    fiber: optionalNumber(row.fiber),
-    sugar: optionalNumber(row.sugar),
-    sodium: optionalNumber(row.sodium),
-    saturatedFat: optionalNumber(row.saturated_fat),
-    servingSize: typeof row.serving_size === "string" ? row.serving_size : undefined,
-    source: row.source || "pending",
-    confidenceScore: optionalNumber(row.confidence_score) ?? 0,
-    verifiedStatus: row.verified_status || "pending_review",
-    updatedAt: asString(row.updated_at, "MenuItemNutrition", "updated_at")
+    restaurantId: asString(row.restaurant_id, "RestaurantPublicPublishedNutrition", "restaurant_id"),
+    menuItemId: asString(row.menu_item_id, "RestaurantPublicPublishedNutrition", "menu_item_id"),
+    calories: nullableNumber(row.calories, "RestaurantPublicPublishedNutrition", "calories"),
+    protein: nullableNumber(row.protein, "RestaurantPublicPublishedNutrition", "protein"),
+    carbohydrates: nullableNumber(row.carbohydrates, "RestaurantPublicPublishedNutrition", "carbohydrates"),
+    fat: nullableNumber(row.fat, "RestaurantPublicPublishedNutrition", "fat"),
+    fiber: nullableNumber(row.fiber, "RestaurantPublicPublishedNutrition", "fiber"),
+    sugar: nullableNumber(row.sugar, "RestaurantPublicPublishedNutrition", "sugar"),
+    sodium: nullableNumber(row.sodium, "RestaurantPublicPublishedNutrition", "sodium"),
+    saturatedFat: nullableNumber(row.saturated_fat, "RestaurantPublicPublishedNutrition", "saturated_fat"),
+    servingSize: row.serving_size === null ? null : asString(row.serving_size, "RestaurantPublicPublishedNutrition", "serving_size"),
+    nutritionSourcePublic: asString(row.nutrition_source_public, "RestaurantPublicPublishedNutrition", "nutrition_source_public"),
+    nutritionUpdatedAt: asString(row.nutrition_updated_at, "RestaurantPublicPublishedNutrition", "nutrition_updated_at")
   };
 }
 
@@ -273,6 +276,68 @@ function verifyMalformedMappingFails() {
     checks.push({ check: "malformed numeric row fails", pass: true });
   }
   return checks;
+}
+
+const contractMode = process.argv.includes("--contract");
+const liveMode = process.argv.includes("--live");
+
+if (!contractMode && !liveMode) {
+  console.log(JSON.stringify({
+    status: "skipped",
+    phase: "1D",
+    mode: "offline",
+    reason: "Expected offline skip; live parity requires explicit --live approval.",
+    clientCreated: false,
+    liveRequestUsed: false,
+    writeRequestUsed: false,
+    credentialsPrinted: false
+  }, null, 2));
+  process.exit(0);
+}
+
+if (contractMode) {
+  const resourcesSource = readProjectFile("apps/restaurant-web/adapters/supabase/readonly-resources.ts");
+  const repositorySource = readProjectFile("apps/restaurant-web/repositories/supabase/supabase-restaurant-read-repository.ts");
+  const maliciousRow = {
+    restaurant_id: "restaurant-contract",
+    menu_item_id: "item-contract",
+    calories: 510,
+    protein: null,
+    carbohydrates: "42",
+    fat: null,
+    fiber: null,
+    sugar: null,
+    sodium: null,
+    saturated_fat: null,
+    serving_size: null,
+    nutrition_source_public: "restaurant_confirmed",
+    nutrition_updated_at: "2026-07-15T00:00:00Z",
+    source: "internal",
+    confidence_score: 0.99,
+    verified_status: "verified"
+  };
+  const canonical = mapNutrition(maliciousRow);
+  const checks = [
+    requireSourceCheck("safe nutrition view allowlisted", resourcesSource.includes('"restaurant_public_published_nutrition_v1"')),
+    requireSourceCheck("internal nutrition view excluded from allowlist", !resourcesSource.includes('"current_published_menu_item_nutrition"')),
+    requireSourceCheck("prepared repository queries safe nutrition view", repositorySource.includes('client.select<RestaurantPublicPublishedNutritionRow[]>("restaurant_public_published_nutrition_v1"')),
+    requireSourceCheck("canonical public nutrition has 13 fields", Object.keys(canonical).length === 13),
+    requireSourceCheck("nullable nutrition remains null", canonical.protein === null && canonical.fat === null && canonical.sodium === null),
+    requireSourceCheck("sanitized provenance retained", canonical.nutritionSourcePublic === "restaurant_confirmed"),
+    requireSourceCheck("canonical timestamp retained", canonical.nutritionUpdatedAt === maliciousRow.nutrition_updated_at),
+    requireSourceCheck("internal fields excluded", !Object.keys(canonical).some((key) => ["source", "confidenceScore", "verifiedStatus"].includes(key)))
+  ];
+  const failed = checks.filter((check) => !check.pass);
+  console.log(JSON.stringify({
+    status: failed.length ? "failed" : "passed",
+    phase: "1D",
+    mode: "contract",
+    checks,
+    liveRequestUsed: false,
+    writeRequestUsed: false,
+    credentialsPrinted: false
+  }, null, 2));
+  process.exit(failed.length ? 1 : 0);
 }
 
 const restaurantEnvLoaded = loadEnvFile(join(root, "apps/restaurant-web/.env.local"));
@@ -354,7 +419,7 @@ if (blockedReasons.length === 0) {
   const categoryRows = await getRows(baseUrl, key, "menu_categories", { filters: { menu_id: menuId }, limit: 1 });
   const itemRows = await getRows(baseUrl, key, "menu_items", { filters: { restaurant_id: restaurantId }, limit: 1 });
   const branchItemRows = await getRows(baseUrl, key, "branch_menu_items", { filters: { restaurant_id: restaurantId }, limit: 1 });
-  const nutritionRows = await getRows(baseUrl, key, "current_published_menu_item_nutrition", { filters: { restaurant_id: restaurantId }, limit: 1 });
+  const nutritionRows = await getRows(baseUrl, key, "restaurant_public_published_nutrition_v1", { filters: { restaurant_id: restaurantId }, limit: 1 });
 
   const rowResults = {
     restaurants: restaurantRows,
@@ -363,7 +428,7 @@ if (blockedReasons.length === 0) {
     menu_categories: categoryRows,
     menu_items: itemRows,
     branch_menu_items: branchItemRows,
-    current_published_menu_item_nutrition: nutritionRows
+    restaurant_public_published_nutrition_v1: nutritionRows
   };
 
   publicOperationResults = PUBLIC_RESOURCES.map(({ operation, resource }) => {
@@ -378,7 +443,7 @@ if (blockedReasons.length === 0) {
         menu_categories: "listMenuCategories",
         menu_items: "listMenuItems",
         branch_menu_items: "listBranchMenuItems",
-        current_published_menu_item_nutrition: "listCurrentPublishedNutrition/getCurrentPublishedNutrition"
+        restaurant_public_published_nutrition_v1: "listPublicPublishedNutrition/getPublicPublishedNutrition"
       }[resource],
       resource,
       httpStatus: result.httpStatus,
@@ -395,7 +460,7 @@ if (blockedReasons.length === 0) {
     ["menu_categories", categoryRows.rows[0], mapMenuCategory],
     ["menu_items", itemRows.rows[0], mapMenuItem],
     ["branch_menu_items", branchItemRows.rows[0], mapBranchMenuItem],
-    ["current_published_menu_item_nutrition", nutritionRows.rows[0], mapNutrition]
+    ["restaurant_public_published_nutrition_v1", nutritionRows.rows[0], mapNutrition]
   ];
   canonicalMappingResults = mappingTargets.map(([resource, row, mapper]) => {
     try {
@@ -480,7 +545,7 @@ const result = {
   mockRollback,
   privateAnalyticsExclusion: privateAnalytics,
   publicDataExposureObservations: {
-    publicReadsAllowed: ["active restaurant", "active branch", "published menu", "published menu item", "available branch menu item", "current published nutrition"],
+    publicReadsAllowed: ["active restaurant", "active branch", "published menu", "published menu item", "available branch menu item", "public-safe published nutrition"],
     internalResourcesBlockedByClientAllowlist: INTERNAL_BLOCKED_BY_ALLOWLIST,
     privateAnalyticsRequiresUserJwt: true,
     serviceRoleUsed: false

@@ -48,9 +48,10 @@ for (const errorName of ["SupabaseAuthenticationRequiredError", "SupabaseHttpErr
 }
 
 const resources = read("apps/restaurant-web/adapters/supabase/readonly-resources.ts");
-for (const resource of ["restaurants", "restaurant_branches", "menus", "menu_categories", "menu_items", "branch_menu_items", "menu_item_aliases", "current_published_menu_item_nutrition", "restaurant_exposure_summary", "nutrition_badge_performance", "menu_item_performance"]) {
+for (const resource of ["restaurants", "restaurant_branches", "menus", "menu_categories", "menu_items", "branch_menu_items", "menu_item_aliases", "restaurant_public_published_nutrition_v1", "restaurant_exposure_summary", "nutrition_badge_performance", "menu_item_performance"]) {
   if (!resources.includes(`"${resource}"`)) fail(`Missing readonly resource allowlist entry ${resource}.`);
 }
+if (resources.includes('"current_published_menu_item_nutrition"')) fail("Internal nutrition view must not remain in the public readonly allowlist.");
 
 const client = read("apps/restaurant-web/adapters/supabase/fetch-rest-client.ts");
 for (const snippet of [
