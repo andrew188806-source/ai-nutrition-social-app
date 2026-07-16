@@ -67,7 +67,10 @@
     "audit:canonical": "node scripts/audit-canonical-data.mjs",
     "test:restaurant-phase2v-d-preflight": "node scripts/restaurant-web-phase-2v-d-preflight-guard.mjs",
     "test:restaurant-phase2v-d": "node scripts/restaurant-web-phase-2v-d-guard.mjs",
-    "test:restaurant-phase2v-d-smoke": "node scripts/restaurant-web-phase-2v-d-contract-smoke.mjs"
+    "test:restaurant-phase2v-d-smoke": "node scripts/restaurant-web-phase-2v-d-contract-smoke.mjs",
+    "test:restaurant-phase2v-e-preflight": "node scripts/restaurant-n4-phase-2v-e-preflight-guard.mjs",
+    "test:restaurant-phase2v-e": "node scripts/restaurant-n4-phase-2v-e-guard.mjs",
+    "test:restaurant-phase2v-e-smoke": "node scripts/restaurant-n4-phase-2v-e-contract-smoke.mjs"
   },
   "workspaces": [
     "apps/*",

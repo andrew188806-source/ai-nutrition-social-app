@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  SupabaseAuthenticationRequiredError,
   SupabaseConfigurationError,
   SupabaseHttpError,
   SupabaseQueryError,
@@ -42,12 +41,6 @@ function isArrayExpected(options?: ReadonlySelectOptions): boolean {
   return options?.single !== "single" && options?.single !== "maybeSingle";
 }
 
-const PRIVATE_ANALYTICS_RESOURCES = new Set<ReadonlyResource>([
-  "restaurant_exposure_summary",
-  "nutrition_badge_performance",
-  "menu_item_performance"
-]);
-
 export class FetchRestClient implements ReadonlyDatabaseClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -63,10 +56,6 @@ export class FetchRestClient implements ReadonlyDatabaseClient {
   }
 
   async select<T>(resource: ReadonlyResource, options: ReadonlySelectOptions = {}): Promise<T> {
-    if ((PRIVATE_ANALYTICS_RESOURCES.has(resource) || options.operation?.includes("analytics")) && !options.accessToken) {
-      throw new SupabaseAuthenticationRequiredError(`${options.operation ?? resource} requires a user access token.`);
-    }
-
     const url = new URL(`${this.baseUrl}/${resource}`);
     const searchParams: URLSearchParams = url.searchParams;
     searchParams.set("select", options.select ?? "*");
@@ -116,7 +105,7 @@ export class FetchRestClient implements ReadonlyDatabaseClient {
       }
       return body as T;
     } catch (error) {
-      if (error instanceof SupabaseHttpError || error instanceof SupabaseQueryError || error instanceof SupabaseAuthenticationRequiredError) throw error;
+      if (error instanceof SupabaseHttpError || error instanceof SupabaseQueryError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
         throw new SupabaseRequestTimeoutError(`Readonly REST request timed out for ${resource}.`, resource);
       }
