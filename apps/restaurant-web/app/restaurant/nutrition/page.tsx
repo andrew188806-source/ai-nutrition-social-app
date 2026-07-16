@@ -1,38 +1,8 @@
 import { DashboardShell } from "../../../components/DashboardShell";
-import { Card, Section, StatusPill } from "../../../components/RestaurantCards";
-import { getMenuConsoleData, getNutritionQueue } from "../../../services/restaurantConsoleService";
+import { Card, Section } from "../../../components/RestaurantCards";
+import { LiveNutrition } from "../../../components/runtime/LiveRestaurantViews";
+import { RpcUnavailable } from "../../../components/runtime/RuntimeStates";
+import { loadLiveNutrition } from "../../../runtime/live-restaurant-reads";
+import { createRestaurantRuntimeService } from "../../../services/restaurant-runtime-service-factory";
 
-export default function NutritionPage() {
-  const data = getMenuConsoleData();
-  const queue = getNutritionQueue();
-  return (
-    <DashboardShell title="營養管理" subtitle="管理營養資料審核、缺少食材、缺少份量與 AI 估算異常。">
-      <Section title="待處理營養資料">
-        <div className="grid gap-4">
-          {queue.map((nutrition) => {
-            const item = data.items.find((menuItem) => menuItem.id === nutrition.menuItemId);
-            return (
-              <Card key={nutrition.id}>
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h3 className="font-black text-stone-950">{item?.name ?? "未知餐點"}</h3>
-                    <p className="mt-1 text-sm text-stone-500">熱量 {nutrition.calories ?? "未填"} · 蛋白質 {nutrition.protein ?? "未填"}</p>
-                  </div>
-                  <StatusPill tone={nutrition.ingredientsStatus === "ai_outlier" ? "bad" : "warn"}>{statusCopy[nutrition.ingredientsStatus]}</StatusPill>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </Section>
-    </DashboardShell>
-  );
-}
-
-const statusCopy = {
-  complete: "完整",
-  missing_ingredients: "缺少食材",
-  missing_portion: "缺少份量",
-  ai_outlier: "AI 估算異常",
-  pending_review: "待審核"
-};
+export default async function NutritionPage() { const runtime=createRestaurantRuntimeService(); if(runtime.mode==="supabase") { try { return <DashboardShell title="營養管理" subtitle="僅顯示目前 owner/internal nutrition。"><LiveNutrition data={await loadLiveNutrition()}/></DashboardShell>; } catch { return <RpcUnavailable/>; } } if(runtime.mode==="disabled") return null; const rows=runtime.getNutritionQueue(); return <DashboardShell title="營養管理" subtitle="Demo data"><Section title="示範營養佇列"><div className="grid gap-4">{rows.map(row=><Card key={row.id}>示範營養資料：{row.calories??"—"} kcal</Card>)}</div></Section></DashboardShell>; }

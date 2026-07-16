@@ -12,16 +12,12 @@ export interface RestaurantReadonlyClientFactoryOptions {
 
 export function createRestaurantReadonlyDatabaseClient(options: RestaurantReadonlyClientFactoryOptions): ReadonlyDatabaseClient {
   const { config } = options;
-  if (config.dataSource !== "supabase-readonly") {
-    throw new SupabaseConfigurationError("Restaurant Supabase client requested while data source is not supabase-readonly.");
+  if (config.dataSource !== "supabase") {
+    throw new SupabaseConfigurationError("Restaurant public Supabase client requested while data source is not supabase.");
   }
 
   if (!config.supabaseUrl || !config.supabasePublishableKey) {
     throw new SupabaseConfigurationError("Restaurant Supabase readonly client requires URL and publishable key.");
-  }
-
-  if (config.supabaseTransport === "supabase-js") {
-    throw new SupabaseConfigurationError("TASTKIND_SUPABASE_TRANSPORT=supabase-js is deferred until package-lock dependency normalization and parity tests pass.");
   }
 
   return new FetchRestClient({

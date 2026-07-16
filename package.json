@@ -64,7 +64,10 @@
     "test:consumer-ux-u1-smoke": "node scripts/consumer-ux-u1-smoke.mjs",
     "test:consumer-schema-phase1.3": "node scripts/consumer-schema-phase-1-3-guard.mjs",
     "validate:consumer-schema": "node scripts/validate-consumer-schema.mjs",
-    "audit:canonical": "node scripts/audit-canonical-data.mjs"
+    "audit:canonical": "node scripts/audit-canonical-data.mjs",
+    "test:restaurant-phase2v-d-preflight": "node scripts/restaurant-web-phase-2v-d-preflight-guard.mjs",
+    "test:restaurant-phase2v-d": "node scripts/restaurant-web-phase-2v-d-guard.mjs",
+    "test:restaurant-phase2v-d-smoke": "node scripts/restaurant-web-phase-2v-d-contract-smoke.mjs"
   },
   "workspaces": [
     "apps/*",

@@ -1,47 +1,22 @@
+import "server-only";
+
 import { createRestaurantReadonlyDatabaseClient } from "../adapters/supabase/server-readonly-client";
 import { getRestaurantDataSourceConfig, type RestaurantDataSourceConfig } from "../config/restaurant-data-source";
 import { createMockRestaurantReadRepository } from "./mock-restaurant-read-repository";
 import type { RestaurantPublicNutritionReadRepository } from "./restaurant-public-nutrition-read-repository";
 import type { RestaurantReadRepository } from "./restaurant-read-repository";
-import { createSupabaseRestaurantReadRepository } from "./supabase/supabase-restaurant-read-repository";
+import { createSupabasePublicNutritionRepository } from "./supabase/supabase-public-nutrition-repository";
 
-export interface RestaurantRepositoryFactoryOptions {
-  config?: RestaurantDataSourceConfig;
-  logger?: Pick<Console, "warn">;
-  fetchImpl?: typeof fetch;
-}
+export interface RestaurantRepositoryFactoryOptions { config?: RestaurantDataSourceConfig; fetchImpl?: typeof fetch; }
 
 export function createRestaurantReadRepository(options: RestaurantRepositoryFactoryOptions = {}): RestaurantReadRepository {
-  const config = options.config ?? getRestaurantDataSourceConfig();
-  if (config.dataSource === "mock") return createMockRestaurantReadRepository();
-
-  try {
-    return createSupabaseRestaurantReadRepository(createRestaurantReadonlyDatabaseClient({ config, fetchImpl: options.fetchImpl }));
-  } catch (error) {
-    if (!config.isProduction && config.readonlyFallbackToMock) {
-      options.logger?.warn?.({
-        scope: "restaurant-web.supabase-readonly",
-        operation: "createRestaurantReadRepository",
-        dataSource: config.dataSource,
-        selectedTransport: config.supabaseTransport,
-        environment: config.isProduction ? "production" : "development",
-        fallbackUsed: true,
-        errorName: error instanceof Error ? error.name : "UnknownError"
-      });
-      return createMockRestaurantReadRepository();
-    }
-    throw error;
-  }
+  const config=options.config??getRestaurantDataSourceConfig();
+  if(config.dataSource==="mock") return createMockRestaurantReadRepository();
+  throw new Error("Legacy RestaurantReadRepository is unavailable outside explicit Demo mode.");
 }
 
-export function createRestaurantPublicNutritionReadRepository(
-  options: RestaurantRepositoryFactoryOptions = {}
-): RestaurantPublicNutritionReadRepository {
-  const config = options.config ?? getRestaurantDataSourceConfig();
-  if (config.dataSource !== "supabase-readonly") {
-    throw new Error("Public nutrition prepared repository requires the supabase-readonly data source.");
-  }
-  return createSupabaseRestaurantReadRepository(
-    createRestaurantReadonlyDatabaseClient({ config, fetchImpl: options.fetchImpl })
-  );
+export function createRestaurantPublicNutritionReadRepository(options: RestaurantRepositoryFactoryOptions = {}): RestaurantPublicNutritionReadRepository {
+  const config=options.config??getRestaurantDataSourceConfig();
+  if(config.dataSource!=="supabase") throw new Error("Public nutrition repository requires Supabase mode.");
+  return createSupabasePublicNutritionRepository(createRestaurantReadonlyDatabaseClient({config,fetchImpl:options.fetchImpl}));
 }

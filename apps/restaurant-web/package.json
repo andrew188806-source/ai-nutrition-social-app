@@ -13,6 +13,8 @@
     "test:phase1d-live": "node ../../scripts/restaurant-supabase-phase-1d-live-read-parity.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "0.12.3",
+    "@supabase/supabase-js": "2.110.6",
     "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

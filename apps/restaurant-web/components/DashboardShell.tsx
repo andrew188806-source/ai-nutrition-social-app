@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { consoleNavItems } from "../data/navigation";
+import { signOutRestaurant } from "../app/login/actions";
 
 function isActive(pathname: string, href: string) {
   if (href === "/restaurant") return pathname === "/restaurant" || pathname === "/";
@@ -86,9 +87,9 @@ export function DashboardShell({ title, subtitle, children }: { title: string; s
                 <Link className="rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-700 hover:bg-stone-50" href="/restaurant/assistant">
                   店務助手
                 </Link>
-                <Link className="rounded-md bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800" href="/login">
-                  店家登入
-                </Link>
+                <form action={signOutRestaurant}>
+                  <button className="rounded-md bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800" type="submit">登出</button>
+                </form>
               </div>
             </div>
           </header>

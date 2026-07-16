@@ -1,66 +1,47 @@
-import { SupabaseConfigurationError } from "../adapters/supabase/errors";
+import "server-only";
 
-export type RestaurantDataSource = "mock" | "supabase-readonly";
-export type SupabaseReadonlyTransport = "rest" | "supabase-js";
+export type RestaurantDataSource = "mock" | "supabase" | "disabled";
 
 export interface RestaurantDataSourceConfig {
   dataSource: RestaurantDataSource;
+  isProduction: boolean;
   supabaseUrl?: string;
   supabasePublishableKey?: string;
-  supabaseTransport: SupabaseReadonlyTransport;
-  readonlyFallbackToMock: boolean;
-  isProduction: boolean;
+  unavailableReason?: "missing-data-source" | "unknown-data-source" | "production-mock" | "invalid-supabase-config";
 }
 
-const ALLOWED_DATA_SOURCES = new Set<RestaurantDataSource>(["mock", "supabase-readonly"]);
-const ALLOWED_TRANSPORTS = new Set<SupabaseReadonlyTransport>(["rest", "supabase-js"]);
+const DATA_SOURCE_ENV = "TASTKIND_RESTAURANT_DATA_SOURCE";
 
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value === "") return fallback;
-  if (["1", "true", "yes"].includes(value.toLowerCase())) return true;
-  if (["0", "false", "no"].includes(value.toLowerCase())) return false;
-  throw new SupabaseConfigurationError(`Invalid boolean value for TASTKIND_SUPABASE_READONLY_FALLBACK_TO_MOCK: ${value}`);
+function isValidProjectUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 export function getRestaurantDataSourceConfig(env: NodeJS.ProcessEnv = process.env): RestaurantDataSourceConfig {
-  const rawDataSource = env.TASTKIND_RESTAURANT_DATA_SOURCE || "mock";
-  if (!ALLOWED_DATA_SOURCES.has(rawDataSource as RestaurantDataSource)) {
-    throw new SupabaseConfigurationError(`Unsupported TASTKIND_RESTAURANT_DATA_SOURCE: ${rawDataSource}`);
-  }
-
-  const rawTransport = env.TASTKIND_SUPABASE_TRANSPORT || "rest";
-  if (!ALLOWED_TRANSPORTS.has(rawTransport as SupabaseReadonlyTransport)) {
-    throw new SupabaseConfigurationError(`Unsupported TASTKIND_SUPABASE_TRANSPORT: ${rawTransport}`);
-  }
-
-  const dataSource = rawDataSource as RestaurantDataSource;
-  const supabaseTransport = rawTransport as SupabaseReadonlyTransport;
   const isProduction = env.NODE_ENV === "production";
-  const readonlyFallbackToMock = parseBoolean(env.TASTKIND_SUPABASE_READONLY_FALLBACK_TO_MOCK, !isProduction);
+  const raw = env[DATA_SOURCE_ENV];
+
+  if (!raw) return { dataSource: "disabled", isProduction, unavailableReason: "missing-data-source" };
+  if (raw !== "mock" && raw !== "supabase" && raw !== "disabled") {
+    return { dataSource: "disabled", isProduction, unavailableReason: "unknown-data-source" };
+  }
+  if (raw === "disabled") return { dataSource: "disabled", isProduction };
+  if (raw === "mock") {
+    return isProduction
+      ? { dataSource: "disabled", isProduction, unavailableReason: "production-mock" }
+      : { dataSource: "mock", isProduction };
+  }
+
   const supabaseUrl = env.TASTKIND_SUPABASE_URL;
   const supabasePublishableKey = env.TASTKIND_SUPABASE_PUBLISHABLE_KEY;
-
-  if (dataSource === "supabase-readonly") {
-    const missing = [
-      ["TASTKIND_SUPABASE_URL", supabaseUrl],
-      ["TASTKIND_SUPABASE_PUBLISHABLE_KEY", supabasePublishableKey]
-    ].filter(([, value]) => !value);
-
-    if (missing.length > 0) {
-      throw new SupabaseConfigurationError(`Missing Restaurant Web Supabase readonly configuration: ${missing.map(([key]) => key).join(", ")}`);
-    }
-
-    if (isProduction && readonlyFallbackToMock) {
-      throw new SupabaseConfigurationError("Production Restaurant Web Supabase readonly mode cannot silently fall back to mock data.");
-    }
+  if (!isValidProjectUrl(supabaseUrl) || !supabasePublishableKey?.trim()) {
+    return { dataSource: "disabled", isProduction, unavailableReason: "invalid-supabase-config" };
   }
 
-  return {
-    dataSource,
-    supabaseUrl,
-    supabasePublishableKey,
-    supabaseTransport,
-    readonlyFallbackToMock,
-    isProduction
-  };
+  return { dataSource: "supabase", isProduction, supabaseUrl, supabasePublishableKey };
 }
