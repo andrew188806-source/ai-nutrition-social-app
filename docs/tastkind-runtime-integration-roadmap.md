@@ -62,6 +62,10 @@ Restaurant Web writes, staff invitation, staff-management UI, Admin Runtime, Soc
 
 The detailed Phase 2V-A contracts are indexed by `docs/runtime-integration-phase-2v/implementation-plan.md`.
 
+### Approved Phase 2V to Phase 2W transition decision
+
+Phase 2W may begin after the Phase 2V-E Development Freeze as an isolated Consumer Ratings Runtime track. N4 and Phase 2V-F remain **BLOCKED / NOT EXECUTED**; they continue to block Restaurant raw-grant cleanup, public hosting, and Production, but do not block the isolated Consumer Ratings Runtime. Starting Phase 2W must not be interpreted as Phase 2V Production completion or as closure of any Phase 2V deferred gate.
+
 ## 4. Fixed Consumer Data Closure Sequence
 
 The names and order below are frozen:
