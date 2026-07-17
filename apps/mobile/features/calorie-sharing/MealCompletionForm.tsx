@@ -1,7 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import type { MealCompletionPercentage, PortionFeeling, UnfinishedReasonKey } from "../analysis/types";
+import {
+  createConsumerRatingFormHydrationState,
+  getConsumerRatingUiMessageKey,
+  reduceConsumerRatingFormHydration,
+  type ConsumerRatingInitialHydration,
+  type ConsumerRatingUiState
+} from "../consumer-ratings/consumerRatingUiModel";
 import { Icon } from "../../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as colors } from "../../theme/tokens";
 import { ActualCalorieShare } from "./ActualCalorieShare";
@@ -26,37 +33,59 @@ export function MealCompletionForm({
   onSubmit,
   estimatedCalories,
   mealName,
-  initialValues
+  formIdentity,
+  initialValues,
+  canonicalInitialValues,
+  canonicalRatingState
 }: {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (result: MealCompletionResult) => void;
+  onSubmit: (result: MealCompletionResult) => void | Promise<void>;
   estimatedCalories: number;
   mealName?: string;
+  formIdentity: string;
   initialValues?: Partial<MealCompletionResult>;
+  canonicalInitialValues?: ConsumerRatingInitialHydration | null;
+  canonicalRatingState?: ConsumerRatingUiState;
 }) {
   const t = zhTW.mobile.calorieSharing;
   const [step, setStep] = useState<"form" | "result">("form");
-  const [rating, setRating] = useState(initialValues?.rating ?? 0);
-  const [portionFeeling, setPortionFeeling] = useState<PortionFeeling>(initialValues?.portionFeeling ?? "justRight");
-  const [wouldEatAgain, setWouldEatAgain] = useState(initialValues?.wouldEatAgain ?? true);
+  const [ratingFields, dispatchRatingFields] = useReducer(
+    reduceConsumerRatingFormHydration,
+    createConsumerRatingFormHydrationState(formIdentity, initialValues)
+  );
   const [completionPercentage, setCompletionPercentage] = useState<MealCompletionPercentage>(initialValues?.completionPercentage ?? 100);
   const [unfinishedReason, setUnfinishedReason] = useState<UnfinishedReasonKey | undefined>(initialValues?.unfinishedReason);
   const [submittedResult, setSubmittedResult] = useState<MealCompletionResult | null>(null);
+  const submitInFlight = useRef(false);
 
   useEffect(() => {
     if (!visible) {
       return;
     }
     setStep("form");
-    setRating(initialValues?.rating ?? 0);
-    setPortionFeeling(initialValues?.portionFeeling ?? "justRight");
-    setWouldEatAgain(initialValues?.wouldEatAgain ?? true);
+    dispatchRatingFields({ type: "reset", identity: formIdentity, values: initialValues });
     setCompletionPercentage(initialValues?.completionPercentage ?? 100);
     setUnfinishedReason(initialValues?.unfinishedReason);
     setSubmittedResult(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+    submitInFlight.current = false;
+  }, [formIdentity, visible]);
+
+  useEffect(() => {
+    if (!visible || step !== "form" || !canonicalInitialValues) return;
+    dispatchRatingFields({
+      type: "hydrate",
+      identity: canonicalInitialValues.identity,
+      values: canonicalInitialValues.values
+    });
+  }, [
+    canonicalInitialValues?.identity,
+    canonicalInitialValues?.values.portionFeeling,
+    canonicalInitialValues?.values.rating,
+    canonicalInitialValues?.values.wouldEatAgain,
+    step,
+    visible
+  ]);
 
   const portionFeelingOptions: { key: PortionFeeling; label: string }[] = [
     { key: "tooMuch", label: t.portionFeelingOptions.tooMuch },
@@ -85,19 +114,25 @@ export function MealCompletionForm({
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     const actualCalories = calculateActualCalories(estimatedCalories, completionPercentage);
     const result: MealCompletionResult = {
-      rating,
-      portionFeeling,
-      wouldEatAgain,
+      rating: ratingFields.values.rating,
+      portionFeeling: ratingFields.values.portionFeeling,
+      wouldEatAgain: ratingFields.values.wouldEatAgain,
       completionPercentage,
       unfinishedReason: completionPercentage < 100 ? unfinishedReason : undefined,
       actualCalories
     };
     setSubmittedResult(result);
     setStep("result");
-    onSubmit(result);
+    try {
+      await onSubmit(result);
+    } finally {
+      submitInFlight.current = false;
+    }
   };
 
   return (
@@ -112,6 +147,12 @@ export function MealCompletionForm({
                 actualCalories={submittedResult.actualCalories}
                 completionPercentage={submittedResult.completionPercentage}
               />
+              {canonicalRatingState?.localCompletionSaved ? (
+                <Text style={styles.syncNotice}>{zhTW.mobile.consumerRatings.localCompletionSaved}</Text>
+              ) : null}
+              {canonicalRatingState ? (
+                <Text style={styles.syncNotice}>{zhTW.mobile.consumerRatings[getConsumerRatingUiMessageKey(canonicalRatingState)]}</Text>
+              ) : null}
               <Pressable style={styles.primaryButton} onPress={onClose}>
                 <Text style={styles.primaryButtonText}>{t.completionSubmitCta}</Text>
               </Pressable>
@@ -125,8 +166,8 @@ export function MealCompletionForm({
               <Text style={styles.label}>{t.ratingLabel}</Text>
               <View style={styles.starsRow}>
                 {[1, 2, 3, 4, 5].map((value) => (
-                  <Pressable key={value} onPress={() => setRating(value)} hitSlop={6}>
-                    <Icon name="star" size={26} color={value <= rating ? colors.amber : colors.line} />
+                  <Pressable key={value} onPress={() => dispatchRatingFields({ type: "edit_rating", value })} hitSlop={6}>
+                    <Icon name="star" size={26} color={value <= ratingFields.values.rating ? colors.amber : colors.line} />
                   </Pressable>
                 ))}
               </View>
@@ -136,21 +177,21 @@ export function MealCompletionForm({
                 {portionFeelingOptions.map((option) => (
                   <Pressable
                     key={option.key}
-                    style={[styles.optionChip, portionFeeling === option.key && styles.optionChipActive]}
-                    onPress={() => setPortionFeeling(option.key)}
+                    style={[styles.optionChip, ratingFields.values.portionFeeling === option.key && styles.optionChipActive]}
+                    onPress={() => dispatchRatingFields({ type: "edit_portion", value: option.key })}
                   >
-                    <Text style={[styles.optionChipText, portionFeeling === option.key && styles.optionChipTextActive]}>{option.label}</Text>
+                    <Text style={[styles.optionChipText, ratingFields.values.portionFeeling === option.key && styles.optionChipTextActive]}>{option.label}</Text>
                   </Pressable>
                 ))}
               </View>
 
               <Text style={styles.label}>{t.wouldEatAgainLabel}</Text>
               <View style={styles.optionsRow}>
-                <Pressable style={[styles.optionChip, wouldEatAgain && styles.optionChipActive]} onPress={() => setWouldEatAgain(true)}>
-                  <Text style={[styles.optionChipText, wouldEatAgain && styles.optionChipTextActive]}>{t.wouldEatAgainOptions.yes}</Text>
+                <Pressable style={[styles.optionChip, ratingFields.values.wouldEatAgain && styles.optionChipActive]} onPress={() => dispatchRatingFields({ type: "edit_would_eat_again", value: true })}>
+                  <Text style={[styles.optionChipText, ratingFields.values.wouldEatAgain && styles.optionChipTextActive]}>{t.wouldEatAgainOptions.yes}</Text>
                 </Pressable>
-                <Pressable style={[styles.optionChip, !wouldEatAgain && styles.optionChipActive]} onPress={() => setWouldEatAgain(false)}>
-                  <Text style={[styles.optionChipText, !wouldEatAgain && styles.optionChipTextActive]}>{t.wouldEatAgainOptions.no}</Text>
+                <Pressable style={[styles.optionChip, !ratingFields.values.wouldEatAgain && styles.optionChipActive]} onPress={() => dispatchRatingFields({ type: "edit_would_eat_again", value: false })}>
+                  <Text style={[styles.optionChipText, !ratingFields.values.wouldEatAgain && styles.optionChipTextActive]}>{t.wouldEatAgainOptions.no}</Text>
                 </Pressable>
               </View>
 
@@ -319,5 +360,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: "800"
+  },
+  syncNotice: {
+    color: colors.sub,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
   }
 });

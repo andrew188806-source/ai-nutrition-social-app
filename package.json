@@ -68,6 +68,8 @@
     "test:consumer-phase2w-c-smoke": "node scripts/consumer-ratings-phase-2w-c-contract-smoke.mjs",
     "test:consumer-phase2w-e0": "node scripts/canonical-restaurant-menu-phase-2w-e0-guard.mjs",
     "test:consumer-phase2w-e0-smoke": "node scripts/canonical-restaurant-menu-phase-2w-e0-contract-smoke.mjs",
+    "test:consumer-phase2w-e": "node scripts/consumer-ratings-phase-2w-e-guard.mjs",
+    "test:consumer-phase2w-e-smoke": "node scripts/consumer-ratings-phase-2w-e-ui-contract-smoke.mjs",
     "test:consumer-ux-u1": "node scripts/consumer-ux-u1-guard.mjs",
     "test:consumer-ux-u1-smoke": "node scripts/consumer-ux-u1-smoke.mjs",
     "test:consumer-schema-phase1.3": "node scripts/consumer-schema-phase-1-3-guard.mjs",

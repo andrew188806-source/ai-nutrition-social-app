@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav, PremiumBadge } from "../components/DemoUi";
@@ -8,6 +8,9 @@ import { getLatestCorrectedMealRecord, getMealRecords, getTodayMealRecords, upda
 import { calculateTodayNutritionSummary, getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import type { SavedMealRecord } from "../features/analysis/types";
 import { MealCompletionForm } from "../features/calorie-sharing";
+import { createMobileConsumerRatingComposition } from "../features/consumer-ratings/consumerRatingComposition";
+import { mapConsumerRatingTarget } from "../features/consumer-ratings/consumerRatingTargetMapper";
+import { useConsumerRatingUiModel } from "../features/consumer-ratings/consumerRatingUiModel";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes, type SelfMadeDish } from "../features/self-made-dishes";
 import { Card, Chip, CompactRow, SecondaryButton, SectionHeader } from "../theme/components";
@@ -27,7 +30,11 @@ type MealCard = {
   review: string;
   photoLabel: string;
   mealId?: string;
+  restaurantId?: string;
   estimatedCalories?: number;
+  savedRating?: number;
+  savedPortionFeeling?: SavedMealRecord["portionFeeling"];
+  savedWouldEatAgain?: boolean;
 };
 type MonthlyCard = (typeof zhTW.mobile.mealLog.foodDiary.monthlyCards)[number];
 type FavoriteCard = (typeof zhTW.mobile.mealLog.foodDiary.favoriteCards)[number];
@@ -54,7 +61,11 @@ export default function MealLogScreen() {
     review: `${meal.ingredients}｜${meal.portion}`,
     photoLabel: diary.mealDetailTitle,
     mealId: meal.mealId,
-    estimatedCalories: meal.estimatedCalories ?? meal.calories
+    restaurantId: meal.restaurantId,
+    estimatedCalories: meal.estimatedCalories ?? meal.calories,
+    savedRating: meal.rating,
+    savedPortionFeeling: meal.portionFeeling,
+    savedWouldEatAgain: meal.wouldEatAgain
   }));
   const mealDetailCards: MealCard[] = correctedMealCards;
 
@@ -68,6 +79,26 @@ export default function MealLogScreen() {
   const [selectedRankingOption, setSelectedRankingOption] = useState<string | null>(null);
   const [mockMessage, setMockMessage] = useState("");
   const [editingMeal, setEditingMeal] = useState<MealCard | null>(null);
+  const ratingComposition = useMemo(() => {
+    try {
+      return createMobileConsumerRatingComposition();
+    } catch {
+      return null;
+    }
+  }, []);
+  const ratingTarget = useMemo(
+    () => mapConsumerRatingTarget({
+      restaurantId: editingMeal?.restaurantId
+    }),
+    [editingMeal?.restaurantId]
+  );
+  const ratingFormIdentity = editingMeal?.mealId ?? editingMeal?.id ?? null;
+  const ratingUi = useConsumerRatingUiModel({
+    service: ratingComposition?.service ?? null,
+    target: ratingTarget,
+    uiIdentity: ratingFormIdentity,
+    enabled: Boolean(editingMeal)
+  });
 
   const selectedDaily = diary.dailyCards.find((card) => card.id === selectedDailyId);
   const selectedMonth = diary.monthlyCards.find((card) => card.id === selectedMonthId) ?? diary.monthlyCards[0];
@@ -137,11 +168,11 @@ export default function MealLogScreen() {
             <MealCompletionForm
               visible={!!editingMeal}
               onClose={() => setEditingMeal(null)}
-              onSubmit={(result) => {
+              onSubmit={async (result) => {
                 if (!editingMeal.mealId) {
                   return;
                 }
-                updateMealRecordByMealId(editingMeal.mealId, {
+                const localRecord = updateMealRecordByMealId(editingMeal.mealId, {
                   rating: result.rating,
                   portionFeeling: result.portionFeeling,
                   wouldEatAgain: result.wouldEatAgain,
@@ -149,9 +180,24 @@ export default function MealLogScreen() {
                   unfinishedReason: result.unfinishedReason,
                   actualCalories: result.actualCalories
                 });
+                const localCompletionSaved = Boolean(localRecord);
+                ratingUi.markLocalCompletionSaved(localCompletionSaved);
+                await ratingUi.save({
+                  rating: result.rating,
+                  portionFeeling: result.portionFeeling,
+                  wouldEatAgain: result.wouldEatAgain
+                }, localCompletionSaved);
               }}
               estimatedCalories={editingMeal.estimatedCalories ?? 0}
               mealName={editingMeal.name}
+              formIdentity={ratingFormIdentity ?? "meal-log-closed"}
+              initialValues={{
+                rating: editingMeal.savedRating,
+                portionFeeling: editingMeal.savedPortionFeeling,
+                wouldEatAgain: editingMeal.savedWouldEatAgain
+              }}
+              canonicalInitialValues={ratingUi.initialHydration}
+              canonicalRatingState={ratingUi.state}
             />
           ) : null}
 

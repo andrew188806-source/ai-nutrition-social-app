@@ -1798,6 +1798,20 @@ export const zhTW = {
         }
       ]
     },
+    consumerRatings: {
+      idle: "尚未同步正式評分。",
+      loading: "正在讀取正式評分⋯",
+      missing: "目前尚無正式評分，可在完成餐後紀錄後嘗試同步。",
+      available: "已載入目前的正式評分。",
+      saving: "正在同步正式評分⋯",
+      saved: "正式評分已同步。",
+      replaced: "正式評分已更新。",
+      disabled: "正式評分同步目前未啟用。",
+      unauthenticated: "登入後才能同步正式評分。",
+      target_unavailable: "目前無法驗證此餐點的正式資料。",
+      failed: "正式評分同步失敗；本機餐後紀錄不受影響。",
+      localCompletionSaved: "餐後完成度與實際攝取量已保存至本機飲食日記。"
+    },
     calorieSharing: {
       guiltShareButton: "罪惡分擔",
       guiltShareModalTitle: "罪惡分擔",
