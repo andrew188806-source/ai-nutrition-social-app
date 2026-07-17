@@ -1,6 +1,6 @@
 # Phase 2W Known Issues and Deferrals
 
-Status: Phase 2W-A local implementation complete; all remote evidence deferred.
+Status: Phase 2W-A Frozen; Phase 2W-B Development validation complete and recorded as a Freeze candidate.
 
 ## Schema and contract issues for Phase 2W-B
 
@@ -9,8 +9,9 @@ Status: Phase 2W-A local implementation complete; all remote evidence deferred.
 - `visibility` and feedback text values have no enum or check constraints.
 - The rating range permits any numeric precision between 0 and 5.
 - There is no soft-delete timestamp, `superseded_at`, or `created_at`. History is represented only by `is_current`, `rated_at`, and `updated_at`.
-- Active migrations contain owner-all RLS policies, but no rating-specific authenticated grants or rating RPC/function.
-- Actual Development grants, policies, indexes, and table definitions still require approved read-only catalog verification in Phase 2W-B.
+- The Phase 2W-B migration adds authenticated owner-scoped SELECT and two authenticated atomic write RPCs while retaining direct-DML denial.
+- Development grants, policies, indexes, functions, negative rollback, atomic replacement, and cross-actor isolation have been verified.
+- Feedback string length limits, dislike-reason count/length limits, and total payload boundaries remain pre-live hardening; they are not resolved.
 
 ## Existing mock incompatibilities
 
@@ -24,4 +25,4 @@ Status: Phase 2W-A local implementation complete; all remote evidence deferred.
 
 ## Preserved deferrals
 
-N4, Phase 2V-F, P2V-PERF-001, Restaurant Web browser lifecycle groups, public hosting, and Production remain unchanged. Phase 2W-B, live reads, atomic writes, UI cutover, Favorites, and Recommendation Feedback have not started.
+N4, Phase 2V-F, P2V-PERF-001, Restaurant Web browser lifecycle groups, public hosting, and Production remain unchanged. Phase 2W-B is a Freeze candidate but is not Frozen before review/commit. Phase 2W-C, live runtime cutover, UI cutover, Favorites, and Recommendation Feedback have not started.
