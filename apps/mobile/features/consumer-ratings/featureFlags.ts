@@ -1,7 +1,7 @@
 import type { ConsumerRatingReadSource, ConsumerRatingRuntimeFlags, ConsumerRatingWriteSource } from "./types";
 
-const readSources = new Set<ConsumerRatingReadSource>(["mock", "disabled"]);
-const writeSources = new Set<ConsumerRatingWriteSource>(["mock", "disabled"]);
+const readSources = new Set<ConsumerRatingReadSource>(["mock", "disabled", "supabase"]);
+const writeSources = new Set<ConsumerRatingWriteSource>(["mock", "disabled", "supabase"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
 

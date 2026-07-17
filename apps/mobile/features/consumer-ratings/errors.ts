@@ -7,6 +7,10 @@ export type ConsumerRatingErrorCode =
   | "rating_target_invalid"
   | "rating_value_invalid"
   | "rating_ownership_field_rejected"
+  | "rating_permission_denied"
+  | "rating_response_malformed"
+  | "rating_transport_failed"
+  | "rating_database_failed"
   | "rating_read_failed"
   | "rating_write_failed";
 
@@ -66,6 +70,30 @@ export class ConsumerRatingValueInvalidError extends ConsumerRatingRuntimeError 
 export class ConsumerRatingOwnershipFieldRejectedError extends ConsumerRatingRuntimeError {
   constructor(message = "Consumer rating input must not include an ownership field.") {
     super("rating_ownership_field_rejected", message);
+  }
+}
+
+export class ConsumerRatingPermissionDeniedError extends ConsumerRatingRuntimeError {
+  constructor(message = "Consumer rating access was denied.") {
+    super("rating_permission_denied", message);
+  }
+}
+
+export class ConsumerRatingResponseMalformedError extends ConsumerRatingRuntimeError {
+  constructor(message = "Consumer rating response did not match the approved contract.") {
+    super("rating_response_malformed", message);
+  }
+}
+
+export class ConsumerRatingTransportFailedError extends ConsumerRatingRuntimeError {
+  constructor(message = "Consumer rating transport failed.") {
+    super("rating_transport_failed", message, true);
+  }
+}
+
+export class ConsumerRatingDatabaseFailedError extends ConsumerRatingRuntimeError {
+  constructor(message = "Consumer rating database operation failed.") {
+    super("rating_database_failed", message);
   }
 }
 

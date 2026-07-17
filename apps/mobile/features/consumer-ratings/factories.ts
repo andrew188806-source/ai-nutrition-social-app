@@ -4,14 +4,17 @@ import {
   MockConsumerRatingRepository,
   type MockConsumerRatingRepositoryOptions
 } from "./adapters/mockConsumerRatingRepository";
+import { SupabaseConsumerRatingRepository } from "./adapters/supabaseConsumerRatingRepository";
 import { ConsumerRatingService } from "./consumerRatingService";
 import { ConsumerRatingConfigurationInvalidError } from "./errors";
 import { getConsumerRatingRuntimeFlags } from "./featureFlags";
 import type { ConsumerRatingReadRepository, ConsumerRatingWriteRepository } from "./ports";
 import type { ConsumerRatingRuntimeFlags } from "./types";
+import type { SupabaseConsumerRatingClientLike } from "./supabaseRatingContracts";
 
 export type ConsumerRatingFactoryDependencies = MockConsumerRatingRepositoryOptions & {
   authPort?: ConsumerAuthPort;
+  ratingClient?: SupabaseConsumerRatingClientLike;
 };
 
 export type ConsumerRatingRepositories = {
@@ -21,16 +24,27 @@ export type ConsumerRatingRepositories = {
 
 export function createConsumerRatingRepositories(
   flags: ConsumerRatingRuntimeFlags = getConsumerRatingRuntimeFlags(),
-  dependencies: MockConsumerRatingRepositoryOptions = {}
+  dependencies: MockConsumerRatingRepositoryOptions & { ratingClient?: SupabaseConsumerRatingClientLike } = {}
 ): ConsumerRatingRepositories {
   assertConsumerRatingRuntimeFlags(flags);
   const mockRepository = flags.readSource === "mock" || flags.writeSource === "mock"
     ? new MockConsumerRatingRepository(dependencies)
     : null;
   const disabledRepository = new DisabledConsumerRatingRepository();
+  const supabaseRepository = flags.readSource === "supabase" || flags.writeSource === "supabase"
+    ? requireSupabaseClient(dependencies.ratingClient)
+    : null;
   return {
-    readRepository: flags.readSource === "mock" ? requireMock(mockRepository) : disabledRepository,
-    writeRepository: flags.writeSource === "mock" ? requireMock(mockRepository) : disabledRepository
+    readRepository: flags.readSource === "mock"
+      ? requireMock(mockRepository)
+      : flags.readSource === "supabase"
+        ? requireSupabase(supabaseRepository)
+        : disabledRepository,
+    writeRepository: flags.writeSource === "mock"
+      ? requireMock(mockRepository)
+      : flags.writeSource === "supabase"
+        ? requireSupabase(supabaseRepository)
+        : disabledRepository
   };
 }
 
@@ -57,5 +71,19 @@ export function assertConsumerRatingRuntimeFlags(flags: ConsumerRatingRuntimeFla
 
 function requireMock(repository: MockConsumerRatingRepository | null): MockConsumerRatingRepository {
   if (!repository) throw new ConsumerRatingConfigurationInvalidError("Mock rating repository was not composed.");
+  return repository;
+}
+
+function requireSupabaseClient(client: SupabaseConsumerRatingClientLike | undefined): SupabaseConsumerRatingRepository {
+  if (!client) {
+    throw new ConsumerRatingConfigurationInvalidError(
+      "Consumer rating Supabase source requires an explicitly injected rating client."
+    );
+  }
+  return new SupabaseConsumerRatingRepository(client);
+}
+
+function requireSupabase(repository: SupabaseConsumerRatingRepository | null): SupabaseConsumerRatingRepository {
+  if (!repository) throw new ConsumerRatingConfigurationInvalidError("Supabase rating repository was not composed.");
   return repository;
 }

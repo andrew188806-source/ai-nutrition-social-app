@@ -1,7 +1,7 @@
 import type { ConsumerRatingRuntimeError } from "./errors";
 
-export type ConsumerRatingReadSource = "mock" | "disabled";
-export type ConsumerRatingWriteSource = "mock" | "disabled";
+export type ConsumerRatingReadSource = "mock" | "disabled" | "supabase";
+export type ConsumerRatingWriteSource = "mock" | "disabled" | "supabase";
 export type ConsumerRatingValue = number;
 
 export type ConsumerRestaurantRatingLookup = {

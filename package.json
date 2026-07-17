@@ -64,6 +64,8 @@
     "test:consumer-phase2w-a-smoke": "node scripts/consumer-ratings-phase-2w-a-contract-smoke.mjs",
     "test:consumer-phase2w-b": "node scripts/consumer-ratings-phase-2w-b-guard.mjs",
     "test:consumer-phase2w-b-smoke": "node scripts/consumer-ratings-phase-2w-b-contract-smoke.mjs",
+    "test:consumer-phase2w-c": "node scripts/consumer-ratings-phase-2w-c-guard.mjs",
+    "test:consumer-phase2w-c-smoke": "node scripts/consumer-ratings-phase-2w-c-contract-smoke.mjs",
     "test:consumer-ux-u1": "node scripts/consumer-ux-u1-guard.mjs",
     "test:consumer-ux-u1-smoke": "node scripts/consumer-ux-u1-smoke.mjs",
     "test:consumer-schema-phase1.3": "node scripts/consumer-schema-phase-1-3-guard.mjs",

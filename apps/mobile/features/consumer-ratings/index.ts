@@ -5,5 +5,8 @@ export * from "./featureFlags";
 export * from "./ports";
 export * from "./types";
 export * from "./validation";
+export * from "./supabaseRatingContracts";
+export * from "./supabaseRatingMappers";
 export * from "./adapters/disabledConsumerRatingRepository";
 export * from "./adapters/mockConsumerRatingRepository";
+export * from "./adapters/supabaseConsumerRatingRepository";
