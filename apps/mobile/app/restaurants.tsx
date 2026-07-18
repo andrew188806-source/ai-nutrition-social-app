@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { createMobileConsumerFavoriteComposition } from "../features/consumer-favorites/consumerFavoriteComposition";
+import { useConsumerFavoritedRestaurants } from "../features/consumer-favorites/consumerFavoriteUiModel";
 import { LinearGradient } from "expo-linear-gradient";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -85,8 +87,18 @@ export default function RestaurantsScreen() {
   const [diningDateOption, setDiningDateOption] = useState<DiningDateOption>(zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[0]);
   const [customDiningDate, setCustomDiningDate] = useState("");
   const [pendingTableRestaurant, setPendingTableRestaurant] = useState<Restaurant | null>(null);
-  const [savedRestaurants, setSavedRestaurants] = useState<string[]>([]);
   const [createdRestaurantNames, setCreatedRestaurantNames] = useState<string[]>([]);
+  const favoriteComposition = useMemo(() => {
+    try {
+      return createMobileConsumerFavoriteComposition();
+    } catch {
+      return null;
+    }
+  }, []);
+  const restaurantFavorites = useConsumerFavoritedRestaurants({
+    service: favoriteComposition?.service ?? null,
+    enabled: true
+  });
   const [detailRestaurant, setDetailRestaurant] = useState<Restaurant | null>(null);
 
   const selectedCityDistricts = Object.keys(locationTree[draftFilters.city]) as Array<District<typeof draftFilters.city>>;
@@ -245,7 +257,7 @@ export default function RestaurantsScreen() {
       <View style={styles.cardList}>
         {recommendedRestaurants.map((restaurant) => {
           const reasons = getRecommendationReasons(restaurant, filters);
-          const saved = savedRestaurants.includes(restaurant.name);
+          const saved = restaurantFavorites.favoritedIds.has(restaurant.restaurantId);
           const verified = isRestaurantVerified(restaurant);
           const created = createdRestaurantNames.includes(restaurant.name);
           return (
@@ -307,12 +319,10 @@ export default function RestaurantsScreen() {
                   <Pressable
                     accessibilityRole="button"
                     style={styles.saveButton}
-                    onPress={() =>
-                      setSavedRestaurants((current) => (current.includes(restaurant.name) ? current.filter((name) => name !== restaurant.name) : [...current, restaurant.name]))
-                    }
+                    onPress={() => void restaurantFavorites.toggle(restaurant.restaurantId)}
                   >
                     <Icon name="bookmark" size={16} color={snow.primaryDeep} />
-                    <Text style={styles.saveButtonText}>{saved ? "已收藏" : zhTW.common.save}</Text>
+                    <Text style={styles.saveButtonText}>{saved ? zhTW.mobile.consumerFavorites.active : zhTW.mobile.consumerFavorites.inactive}</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" style={styles.tablePill} onPress={() => setPendingTableRestaurant(restaurant)}>
                     <Icon name="table4" size={14} color={snow.sub} />

@@ -1812,6 +1812,20 @@ export const zhTW = {
       failed: "正式評分同步失敗；本機餐後紀錄不受影響。",
       localCompletionSaved: "餐後完成度與實際攝取量已保存至本機飲食日記。"
     },
+    consumerFavorites: {
+      toggling: "收藏中⋯",
+      active: "已收藏",
+      inactive: "收藏",
+      removed: "已取消收藏",
+      targetUnavailable: "無法收藏此項目",
+      loginRequired: "請先登入以使用收藏功能",
+      disabled: "收藏功能暫不可用",
+      failed: "操作失敗，請再試一次",
+      loading: "正在載入收藏清單⋯",
+      empty: "尚無收藏餐點",
+      profileCountSummary: "查看收藏",
+      listTitle: "我的收藏餐點"
+    },
     calorieSharing: {
       guiltShareButton: "罪惡分擔",
       guiltShareModalTitle: "罪惡分擔",

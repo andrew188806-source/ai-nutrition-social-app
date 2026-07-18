@@ -8,9 +8,13 @@ import { getLatestCorrectedMealRecord, getMealRecords, getTodayMealRecords, upda
 import { calculateTodayNutritionSummary, getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import type { SavedMealRecord } from "../features/analysis/types";
 import { MealCompletionForm } from "../features/calorie-sharing";
+import { createMobileConsumerFavoriteComposition } from "../features/consumer-favorites/consumerFavoriteComposition";
+import { useConsumerFavoriteList } from "../features/consumer-favorites/consumerFavoriteUiModel";
+import type { ConsumerFavoriteRecord, ConsumerMenuItemFavoriteTarget } from "../features/consumer-favorites/types";
 import { createMobileConsumerRatingComposition } from "../features/consumer-ratings/consumerRatingComposition";
 import { mapConsumerRatingTarget } from "../features/consumer-ratings/consumerRatingTargetMapper";
 import { useConsumerRatingUiModel } from "../features/consumer-ratings/consumerRatingUiModel";
+import { getCanonicalMenuItemById, getCanonicalRestaurantById } from "../features/restaurants";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes, type SelfMadeDish } from "../features/self-made-dishes";
 import { Card, Chip, CompactRow, SecondaryButton, SectionHeader } from "../theme/components";
@@ -37,7 +41,6 @@ type MealCard = {
   savedWouldEatAgain?: boolean;
 };
 type MonthlyCard = (typeof zhTW.mobile.mealLog.foodDiary.monthlyCards)[number];
-type FavoriteCard = (typeof zhTW.mobile.mealLog.foodDiary.favoriteCards)[number];
 type RankingCard = (typeof zhTW.mobile.mealLog.foodDiary.rankingCards)[number];
 
 const emptyField = zhTW.mobile.refinedLogic.mealBuddyCard.emptyField;
@@ -74,11 +77,22 @@ export default function MealLogScreen() {
   const [selectedDailyId, setSelectedDailyId] = useState<string | null>(null);
   const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
   const [selectedMonthId, setSelectedMonthId] = useState<string>(diary.monthlyCards[0]?.id ?? "");
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([diary.favoriteCards[0]?.id ?? ""]);
   const [selectedRankingGroup, setSelectedRankingGroup] = useState<RankingGroupId | null>(null);
   const [selectedRankingOption, setSelectedRankingOption] = useState<string | null>(null);
   const [mockMessage, setMockMessage] = useState("");
   const [editingMeal, setEditingMeal] = useState<MealCard | null>(null);
+  const favoriteComposition = useMemo(() => {
+    try {
+      return createMobileConsumerFavoriteComposition();
+    } catch {
+      return null;
+    }
+  }, []);
+  const menuItemFavorites = useConsumerFavoriteList({
+    service: favoriteComposition?.service ?? null,
+    entityType: "menu_item",
+    enabled: true
+  });
   const ratingComposition = useMemo(() => {
     try {
       return createMobileConsumerRatingComposition();
@@ -149,12 +163,8 @@ export default function MealLogScreen() {
             <View style={styles.stack}>
               {mealDetailCards.map((meal) => (
                 <MealFoodCard
-                  favoriteLabel={diary.favoriteCta}
-                  favoritedLabel={diary.favoritedCta}
-                  isFavorited={favoriteIds.includes(meal.id)}
                   key={meal.id}
                   meal={meal}
-                  onToggleFavorite={() => toggleFavorite(meal.id, favoriteIds, setFavoriteIds)}
                   onMockAction={setMockMessage}
                   onEditRating={meal.mealId ? () => setEditingMeal(meal) : undefined}
                   shareCta={diary.shareCta}
@@ -301,20 +311,25 @@ export default function MealLogScreen() {
         {/* 4. Favorites / 收藏餐點 entry */}
         <View style={styles.section}>
           <SectionHeader title={diary.favoritesTitle} subtitle={diary.favoritesBody} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoritesRow} nativeID="favorite-food-cards">
-            {diary.favoriteCards.map((card) => (
-              <FavoriteFoodCard
-                card={card}
-                favoriteLabel={diary.favoriteCta}
-                favoritedLabel={diary.favoritedCta}
-                isFavorited={favoriteIds.includes(card.id)}
-                key={card.id}
-                onToggleFavorite={() => toggleFavorite(card.id, favoriteIds, setFavoriteIds)}
-                onMockAction={setMockMessage}
-                shareCta={diary.shareCta}
-              />
-            ))}
-          </ScrollView>
+          <View nativeID="favorite-food-cards">
+            {menuItemFavorites.status === "loading" ? (
+              <Text style={styles.note}>{zhTW.mobile.consumerFavorites.loading}</Text>
+            ) : menuItemFavorites.status === "disabled" ? (
+              <Text style={styles.note}>{zhTW.mobile.consumerFavorites.disabled}</Text>
+            ) : menuItemFavorites.status === "unauthenticated" ? (
+              <Text style={styles.note}>{zhTW.mobile.consumerFavorites.loginRequired}</Text>
+            ) : menuItemFavorites.status === "failed" ? (
+              <Text style={styles.note}>{zhTW.mobile.consumerFavorites.failed}</Text>
+            ) : menuItemFavorites.status === "empty" || (menuItemFavorites.status === "loaded" && menuItemFavorites.records.length === 0) ? (
+              <Text style={styles.note}>{zhTW.mobile.consumerFavorites.empty}</Text>
+            ) : menuItemFavorites.status === "loaded" ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoritesRow}>
+                {menuItemFavorites.records.map((record) => (
+                  <LiveFavoriteFoodCard key={record.favoriteId} record={record} onMockAction={setMockMessage} shareCta={diary.shareCta} />
+                ))}
+              </ScrollView>
+            ) : null}
+          </View>
           {!isPaid ? <Text style={styles.note}>{diary.favoriteLimitReached}</Text> : null}
           <SecondaryButton label={diary.viewAllFavoritesCta} onPress={() => setMockMessage(diary.viewAllFavoritesCta)} />
 
@@ -404,10 +419,6 @@ function groupMealRecordsByDate(records: SavedMealRecord[]): { date: string; mea
 
 function isSelfMadeMeal(meal: SavedMealRecord): boolean {
   return meal.source === "self_made" || meal.source === "manual" || meal.source === "ai_estimated";
-}
-
-function toggleFavorite(id: string, favoriteIds: string[], setFavoriteIds: (ids: string[]) => void) {
-  setFavoriteIds(favoriteIds.includes(id) ? favoriteIds.filter((favoriteId) => favoriteId !== id) : [...favoriteIds, id]);
 }
 
 function getAvailableMonths(months: readonly MonthlyCard[], isPaid: boolean) {
@@ -516,7 +527,7 @@ function DailyOverviewCard({ card, detailCta, onPress }: { card: DailyCard; deta
   );
 }
 
-function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorited, meal, onEditRating, onMockAction, onToggleFavorite, shareCta }: { editRatingCta: string; favoriteLabel: string; favoritedLabel: string; isFavorited: boolean; meal: MealCard; onEditRating?: () => void; onMockAction: (message: string) => void; onToggleFavorite: () => void; shareCta: string }) {
+function MealFoodCard({ editRatingCta, meal, onEditRating, onMockAction, shareCta }: { editRatingCta: string; meal: MealCard; onEditRating?: () => void; onMockAction: (message: string) => void; shareCta: string }) {
   return (
     <View style={styles.innerCard}>
       <View style={styles.dailyOverviewHeader}>
@@ -532,9 +543,7 @@ function MealFoodCard({ editRatingCta, favoriteLabel, favoritedLabel, isFavorite
         <Pressable onPress={onEditRating ?? (() => onMockAction("已開啟餐點評分編輯"))}>
           <Text style={styles.linkText}>{editRatingCta}</Text>
         </Pressable>
-        <Pressable onPress={onToggleFavorite}>
-          <Text style={styles.linkText}>{isFavorited ? favoritedLabel : favoriteLabel}</Text>
-        </Pressable>
+        <Text style={styles.cardMeta}>{zhTW.mobile.consumerFavorites.targetUnavailable}</Text>
         <Pressable onPress={() => onMockAction("已產生餐點分享卡")}>
           <Text style={styles.linkText}>{shareCta}</Text>
         </Pressable>
@@ -565,28 +574,28 @@ function MonthlyScoreCard({ card, onMockAction, shareCta }: { card: MonthlyCard;
   );
 }
 
-function FavoriteFoodCard({ card, favoriteLabel, favoritedLabel, isFavorited, onMockAction, onToggleFavorite, shareCta }: { card: FavoriteCard; favoriteLabel: string; favoritedLabel: string; isFavorited: boolean; onMockAction: (message: string) => void; onToggleFavorite: () => void; shareCta: string }) {
+function LiveFavoriteFoodCard({ record, onMockAction, shareCta }: { record: ConsumerFavoriteRecord; onMockAction: (message: string) => void; shareCta: string }) {
+  const target = record.target as ConsumerMenuItemFavoriteTarget;
+  const menuItem = getCanonicalMenuItemById(target.menuItemId);
+  const restaurant = getCanonicalRestaurantById(target.restaurantId);
+  const title = menuItem?.name ?? record.collectionLabel ?? zhTW.mobile.consumerFavorites.listTitle;
+  const meta = restaurant?.name ? `收藏美食卡｜${restaurant.name}` : "收藏美食卡";
   return (
     <View style={styles.favoriteCard}>
       <View style={styles.favoriteHero}>
         <Icon name="plate" size={26} color={colors.primaryDeep} />
-        <Pressable style={styles.favoriteHeartBadge} onPress={onToggleFavorite}>
-          <Icon name="heart" size={14} color={isFavorited ? colors.primary : colors.faint} filled={isFavorited} />
-        </Pressable>
+        <View style={styles.favoriteHeartBadge}>
+          <Icon name="heart" size={14} color={colors.primary} filled />
+        </View>
       </View>
       <Text style={styles.cardTitle} numberOfLines={1}>
-        {card.title}
+        {title}
       </Text>
       <Text style={styles.cardMeta} numberOfLines={1}>
-        {card.meta}
+        {meta}
       </Text>
-      <View style={styles.recentMealTagsRow}>
-        {card.tags.slice(0, 2).map((tag) => (
-          <Chip key={tag} label={tag} />
-        ))}
-      </View>
       <Pressable onPress={() => onMockAction("已產生收藏美食分享卡")}>
-        <Text style={styles.linkText}>{isFavorited ? favoritedLabel : favoriteLabel} · {shareCta}</Text>
+        <Text style={styles.linkText}>{zhTW.mobile.consumerFavorites.active} · {shareCta}</Text>
       </Pressable>
     </View>
   );

@@ -73,7 +73,7 @@ export default function MeScreen() {
           </View>
           <View style={styles.statGrid}>
             <StatCard icon="star" label="本月評分" value={latestMonth.score.replace("月評分：", "")} tone="primary" />
-            <StatCard icon="heart" label="收藏餐點" value={`${diary.favoriteCards.length} 道`} />
+            <StatCard icon="heart" label="收藏餐點" value={zhTW.mobile.consumerFavorites.profileCountSummary} />
             <StatCard icon="leaf" label="蛋白質達標" value={latestMonth.proteinDays.replace("蛋白質達標 ", "")} tone="ai" />
           </View>
         </Card>
