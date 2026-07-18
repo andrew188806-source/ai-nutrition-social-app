@@ -5,7 +5,8 @@ import type {
 } from "./types";
 
 type RuntimeEnv = Record<string, string | undefined>;
-const sources = new Set(["disabled", "mock"]);
+const readSources = new Set<ConsumerFavoriteReadSource>(["disabled", "mock", "supabase"]);
+const writeSources = new Set<ConsumerFavoriteWriteSource>(["disabled", "mock"]);
 
 function readEnv(): RuntimeEnv {
   const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
@@ -15,19 +16,22 @@ function readEnv(): RuntimeEnv {
 export function getConsumerFavoriteRuntimeFlags(env: RuntimeEnv = readEnv()): ConsumerFavoriteRuntimeFlags {
   const issues: string[] = [];
   return {
-    readSource: parseSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_READ_SOURCE, "READ", issues),
-    writeSource: parseSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_WRITE_SOURCE, "WRITE", issues),
+    readSource: parseReadSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_READ_SOURCE, issues),
+    writeSource: parseWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_WRITE_SOURCE, issues),
     issues
   };
 }
 
-function parseSource(
-  value: string | undefined,
-  kind: "READ" | "WRITE",
-  issues: string[]
-): ConsumerFavoriteReadSource | ConsumerFavoriteWriteSource {
+function parseReadSource(value: string | undefined, issues: string[]): ConsumerFavoriteReadSource {
   if (value === undefined || value === "") return "disabled";
-  if (sources.has(value)) return value as ConsumerFavoriteReadSource;
-  issues.push(`Unsupported EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_${kind}_SOURCE.`);
+  if (readSources.has(value as ConsumerFavoriteReadSource)) return value as ConsumerFavoriteReadSource;
+  issues.push("Unsupported EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_READ_SOURCE.");
+  return "disabled";
+}
+
+function parseWriteSource(value: string | undefined, issues: string[]): ConsumerFavoriteWriteSource {
+  if (value === undefined || value === "") return "disabled";
+  if (writeSources.has(value as ConsumerFavoriteWriteSource)) return value as ConsumerFavoriteWriteSource;
+  issues.push("Unsupported EXPO_PUBLIC_TASTKIND_CONSUMER_FAVORITES_WRITE_SOURCE.");
   return "disabled";
 }

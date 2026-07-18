@@ -6,6 +6,10 @@ export type ConsumerFavoriteErrorCode =
   | "favorite_configuration_invalid"
   | "favorite_target_invalid"
   | "favorite_pagination_invalid"
+  | "favorite_permission_denied"
+  | "favorite_response_malformed"
+  | "favorite_transport_failed"
+  | "favorite_database_failed"
   | "favorite_read_failed"
   | "favorite_write_failed";
 
@@ -42,6 +46,24 @@ export class ConsumerFavoriteTargetInvalidError extends ConsumerFavoriteRuntimeE
 
 export class ConsumerFavoritePaginationInvalidError extends ConsumerFavoriteRuntimeError {
   constructor() { super("favorite_pagination_invalid", "Favorite list pagination is invalid."); }
+}
+
+export class ConsumerFavoritePermissionDeniedError extends ConsumerFavoriteRuntimeError {
+  constructor() { super("favorite_permission_denied", "Favorite read access was denied."); }
+}
+
+export class ConsumerFavoriteResponseMalformedError extends ConsumerFavoriteRuntimeError {
+  constructor(message = "Favorite response did not match the approved contract.") {
+    super("favorite_response_malformed", message);
+  }
+}
+
+export class ConsumerFavoriteTransportFailedError extends ConsumerFavoriteRuntimeError {
+  constructor() { super("favorite_transport_failed", "Favorite read transport failed.", true); }
+}
+
+export class ConsumerFavoriteDatabaseFailedError extends ConsumerFavoriteRuntimeError {
+  constructor() { super("favorite_database_failed", "Favorite database read failed."); }
 }
 
 export class ConsumerFavoriteReadFailedError extends ConsumerFavoriteRuntimeError {

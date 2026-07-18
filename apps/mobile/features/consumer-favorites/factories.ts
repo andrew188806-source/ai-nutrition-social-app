@@ -4,14 +4,17 @@ import {
   MockConsumerFavoriteRepository,
   type MockConsumerFavoriteRepositoryOptions
 } from "./adapters/mockConsumerFavoriteRepository";
+import { SupabaseConsumerFavoriteReadRepository } from "./adapters/supabaseConsumerFavoriteReadRepository";
 import { ConsumerFavoriteService } from "./consumerFavoriteService";
 import { ConsumerFavoriteConfigurationInvalidError } from "./errors";
 import { getConsumerFavoriteRuntimeFlags } from "./featureFlags";
 import type { ConsumerFavoriteReadRepository, ConsumerFavoriteWriteRepository } from "./ports";
 import type { ConsumerFavoriteRuntimeFlags } from "./types";
+import type { SupabaseConsumerFavoriteClientLike } from "./supabaseFavoriteContracts";
 
 export type ConsumerFavoriteFactoryDependencies = Partial<MockConsumerFavoriteRepositoryOptions> & {
   authPort?: ConsumerAuthPort;
+  favoriteClient?: SupabaseConsumerFavoriteClientLike;
 };
 
 export type ConsumerFavoriteRepositories = {
@@ -21,14 +24,23 @@ export type ConsumerFavoriteRepositories = {
 
 export function createConsumerFavoriteRepositories(
   flags: ConsumerFavoriteRuntimeFlags = getConsumerFavoriteRuntimeFlags(),
-  dependencies: Partial<MockConsumerFavoriteRepositoryOptions> = {}
+  dependencies: Partial<MockConsumerFavoriteRepositoryOptions> & {
+    favoriteClient?: SupabaseConsumerFavoriteClientLike;
+  } = {}
 ): ConsumerFavoriteRepositories {
   assertConsumerFavoriteRuntimeFlags(flags);
   const usesMock = flags.readSource === "mock" || flags.writeSource === "mock";
   const mockRepository = usesMock ? createMockRepository(dependencies) : null;
   const disabledRepository = new DisabledConsumerFavoriteRepository();
+  const supabaseRepository = flags.readSource === "supabase"
+    ? requireSupabaseClient(dependencies.favoriteClient)
+    : null;
   return {
-    readRepository: flags.readSource === "mock" ? requireMock(mockRepository) : disabledRepository,
+    readRepository: flags.readSource === "mock"
+      ? requireMock(mockRepository)
+      : flags.readSource === "supabase"
+        ? requireSupabase(supabaseRepository)
+        : disabledRepository,
     writeRepository: flags.writeSource === "mock" ? requireMock(mockRepository) : disabledRepository
   };
 }
@@ -77,5 +89,23 @@ function createMockRepository(
 
 function requireMock(repository: MockConsumerFavoriteRepository | null): MockConsumerFavoriteRepository {
   if (!repository) throw new ConsumerFavoriteConfigurationInvalidError("Mock favorite repository was not composed.");
+  return repository;
+}
+
+function requireSupabaseClient(
+  client: SupabaseConsumerFavoriteClientLike | undefined
+): SupabaseConsumerFavoriteReadRepository {
+  if (!client) {
+    throw new ConsumerFavoriteConfigurationInvalidError(
+      "Favorite Supabase read source requires an explicitly injected favorite client."
+    );
+  }
+  return new SupabaseConsumerFavoriteReadRepository(client);
+}
+
+function requireSupabase(
+  repository: SupabaseConsumerFavoriteReadRepository | null
+): SupabaseConsumerFavoriteReadRepository {
+  if (!repository) throw new ConsumerFavoriteConfigurationInvalidError("Supabase favorite read repository was not composed.");
   return repository;
 }
