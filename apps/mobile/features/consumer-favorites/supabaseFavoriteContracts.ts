@@ -1,5 +1,13 @@
 export const SUPABASE_FAVORITE_RESTAURANTS_TABLE = "favorite_restaurants" as const;
 export const SUPABASE_FAVORITE_MENU_ITEMS_TABLE = "favorite_menu_items" as const;
+export const SUPABASE_ADD_AUTHENTICATED_RESTAURANT_FAVORITE_FUNCTION =
+  "add_authenticated_restaurant_favorite" as const;
+export const SUPABASE_REMOVE_AUTHENTICATED_RESTAURANT_FAVORITE_FUNCTION =
+  "remove_authenticated_restaurant_favorite" as const;
+export const SUPABASE_ADD_AUTHENTICATED_MENU_ITEM_FAVORITE_FUNCTION =
+  "add_authenticated_menu_item_favorite" as const;
+export const SUPABASE_REMOVE_AUTHENTICATED_MENU_ITEM_FAVORITE_FUNCTION =
+  "remove_authenticated_menu_item_favorite" as const;
 
 export const SUPABASE_RESTAURANT_FAVORITE_SELECT_COLUMNS = [
   "id",
@@ -56,7 +64,7 @@ export interface SupabaseFavoriteQueryBuilderLike<Row>
   maybeSingle(): PromiseLike<SupabaseFavoriteQueryResponseLike<Row>>;
 }
 
-export interface SupabaseConsumerFavoriteClientLike {
+export interface SupabaseConsumerFavoriteReadClientLike {
   from(
     table: typeof SUPABASE_FAVORITE_RESTAURANTS_TABLE
   ): SupabaseFavoriteQueryBuilderLike<SupabaseRestaurantFavoriteRow>;
@@ -64,3 +72,36 @@ export interface SupabaseConsumerFavoriteClientLike {
     table: typeof SUPABASE_FAVORITE_MENU_ITEMS_TABLE
   ): SupabaseFavoriteQueryBuilderLike<SupabaseMenuItemFavoriteRow>;
 }
+
+export type AuthenticatedRestaurantFavoriteArguments = {
+  p_restaurant_id: string;
+};
+
+export type AuthenticatedMenuItemFavoriteArguments = {
+  p_restaurant_id: string;
+  p_menu_item_id: string;
+};
+
+export type SupabaseFavoriteRpcResponseLike = {
+  data: unknown;
+  error: SupabaseFavoriteErrorLike | null;
+  status?: number;
+};
+
+export interface SupabaseConsumerFavoriteWriteClientLike {
+  rpc(
+    functionName:
+      | typeof SUPABASE_ADD_AUTHENTICATED_RESTAURANT_FAVORITE_FUNCTION
+      | typeof SUPABASE_REMOVE_AUTHENTICATED_RESTAURANT_FAVORITE_FUNCTION,
+    arguments_: AuthenticatedRestaurantFavoriteArguments
+  ): PromiseLike<SupabaseFavoriteRpcResponseLike>;
+  rpc(
+    functionName:
+      | typeof SUPABASE_ADD_AUTHENTICATED_MENU_ITEM_FAVORITE_FUNCTION
+      | typeof SUPABASE_REMOVE_AUTHENTICATED_MENU_ITEM_FAVORITE_FUNCTION,
+    arguments_: AuthenticatedMenuItemFavoriteArguments
+  ): PromiseLike<SupabaseFavoriteRpcResponseLike>;
+}
+
+export type SupabaseConsumerFavoriteClientLike =
+  SupabaseConsumerFavoriteReadClientLike & Partial<SupabaseConsumerFavoriteWriteClientLike>;

@@ -10,3 +10,4 @@ export * from "./supabaseFavoriteMappers";
 export * from "./adapters/disabledConsumerFavoriteRepository";
 export * from "./adapters/mockConsumerFavoriteRepository";
 export * from "./adapters/supabaseConsumerFavoriteReadRepository";
+export * from "./adapters/supabaseConsumerFavoriteWriteRepository";

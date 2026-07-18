@@ -2,7 +2,7 @@ import type { ConsumerFavoriteRuntimeError } from "./errors";
 
 export type ConsumerFavoriteEntityType = "restaurant" | "menu_item";
 export type ConsumerFavoriteReadSource = "disabled" | "mock" | "supabase";
-export type ConsumerFavoriteWriteSource = "disabled" | "mock";
+export type ConsumerFavoriteWriteSource = "disabled" | "mock" | "supabase";
 
 export type ConsumerRestaurantFavoriteTarget = {
   kind: "restaurant";

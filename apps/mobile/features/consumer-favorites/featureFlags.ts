@@ -6,7 +6,7 @@ import type {
 
 type RuntimeEnv = Record<string, string | undefined>;
 const readSources = new Set<ConsumerFavoriteReadSource>(["disabled", "mock", "supabase"]);
-const writeSources = new Set<ConsumerFavoriteWriteSource>(["disabled", "mock"]);
+const writeSources = new Set<ConsumerFavoriteWriteSource>(["disabled", "mock", "supabase"]);
 
 function readEnv(): RuntimeEnv {
   const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
