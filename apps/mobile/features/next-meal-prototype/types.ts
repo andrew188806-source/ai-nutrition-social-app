@@ -1,4 +1,5 @@
 import type { NextMealCandidateEntitlement } from "./nextMealCandidateCountPolicy";
+import type { ConsumerRecommendationFeedbackCanonicalTargetSource } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackTargetMapper";
 
 export type U1NextMealPrototypeScenario = "success" | "empty" | "error";
 
@@ -21,6 +22,7 @@ export type U1NextMealCandidateViewModel = {
   tags: readonly string[];
   reasonSummary: string;
   reasonDetails: readonly string[];
+  canonicalFeedbackTarget?: ConsumerRecommendationFeedbackCanonicalTargetSource;
 };
 
 export type U1NextMealRecommendationViewModel = {

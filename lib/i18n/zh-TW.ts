@@ -1627,6 +1627,11 @@ export const zhTW = {
       findBuddy: "用這餐找飯友",
       buddyHint: "只會開啟飯友卡表單並帶入範例內容，不會自動建立卡片。",
       confirmedBody: "已選定這一餐；這項確認只存在本頁，離開或重新載入後可以重設。",
+      feedbackAvailable: "此即時推薦具有正式餐廳識別，可安全記錄本次互動。",
+      feedbackTargetUnavailable: "這是示範或本機呈現資料，沒有正式識別，因此不會記錄推薦互動。",
+      feedbackPending: "正在記錄推薦互動，不影響你的主要操作。",
+      feedbackRecorded: "推薦互動已安全記錄。",
+      feedbackFailed: "推薦互動未能記錄；你的主要操作仍已完成。",
       plannedDinnerSectionTitle: "晚餐預先規劃（Demo）",
       plannedDinnerSectionBody: "這是既有的晚餐規劃展示，與上方 U1 下一餐確認分開。"
     },

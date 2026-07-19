@@ -1,9 +1,15 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, Chip, SectionHeader } from "../../theme/components";
 import { Icon } from "../../theme/icons";
 import { fonts, hexA, radius, snowPalette as colors } from "../../theme/tokens";
+import {
+  createMobileConsumerRecommendationFeedbackComposition,
+  type MobileConsumerRecommendationFeedbackCompositionOptions
+} from "../consumer-recommendation-feedback/consumerRecommendationFeedbackComposition";
+import { mapConsumerRecommendationFeedbackTarget } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackTargetMapper";
+import { ConsumerRecommendationFeedbackUiModel } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackUiModel";
 import { presentU1NextMealResult } from "./nextMealPrototypePresenter";
 import type { U1NextMealCandidateViewModel, U1NextMealPrototypeProvider, U1NextMealPrototypeScenario, U1NextMealScreenViewModel } from "./types";
 
@@ -13,7 +19,8 @@ export function NextMealPrototypeContent({
   onUseForMealBuddy,
   preferredPrototypeId,
   provider,
-  scenario
+  scenario,
+  feedbackCompositionOptions
 }: {
   entitlement?: unknown;
   onReturnHome: () => void;
@@ -21,10 +28,45 @@ export function NextMealPrototypeContent({
   preferredPrototypeId?: string;
   provider: U1NextMealPrototypeProvider;
   scenario?: U1NextMealPrototypeScenario;
+  feedbackCompositionOptions?: MobileConsumerRecommendationFeedbackCompositionOptions;
 }) {
   const copy = zhTW.mobile.nextMealPrototype;
   const [retryCount, setRetryCount] = useState(0);
   const [model, setModel] = useState<U1NextMealScreenViewModel>({ status: "loading" });
+  const feedbackComposition = useMemo(() => {
+    try {
+      return createMobileConsumerRecommendationFeedbackComposition(feedbackCompositionOptions);
+    } catch {
+      return null;
+    }
+  }, [feedbackCompositionOptions]);
+  const feedbackUiModel = useMemo(() => feedbackComposition
+    ? new ConsumerRecommendationFeedbackUiModel({
+        service: feedbackComposition.service,
+        uuidFactory: feedbackComposition.uuidFactory
+      })
+    : null, [feedbackComposition]);
+  const [feedbackState, setFeedbackState] = useState(feedbackUiModel?.snapshot ?? { status: "disabled" as const });
+
+  useEffect(() => {
+    if (!feedbackUiModel || !feedbackComposition) return;
+    const unsubscribeState = feedbackUiModel.subscribe(setFeedbackState);
+    const unsubscribeAuth = feedbackComposition.source === "disabled"
+      ? () => undefined
+      : feedbackComposition.authPort.observeAuthState((state) => {
+          feedbackUiModel.setAuthSessionIdentity(state.session?.user.userId ?? null);
+        });
+    if (feedbackComposition.source !== "disabled") {
+      void feedbackComposition.authPort.getCurrentSession().then((result) => {
+        feedbackUiModel.setAuthSessionIdentity(result.ok ? result.value?.user.userId ?? null : null);
+      });
+    }
+    return () => {
+      unsubscribeState();
+      unsubscribeAuth();
+      feedbackUiModel.reset();
+    };
+  }, [feedbackComposition, feedbackUiModel]);
 
   const load = useCallback(() => {
     let active = true;
@@ -43,6 +85,13 @@ export function NextMealPrototypeContent({
   }, [copy.errorBody, entitlement, preferredPrototypeId, provider, retryCount, scenario]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!feedbackUiModel || model.status !== "success") return;
+    const canonicalCandidate = model.recommendation.candidates.find((candidate) => candidate.canonicalFeedbackTarget);
+    if (!canonicalCandidate) return;
+    void feedbackUiModel.beginSession(feedbackFlowIdentity(model), "next_meal_recommendation");
+  }, [feedbackUiModel, model]);
 
   if (model.status === "loading") {
     return <NextMealStateCard icon="spark" title={copy.loadingTitle} body={copy.loadingBody} />;
@@ -84,11 +133,31 @@ export function NextMealPrototypeContent({
   function selectCandidate(candidate: U1NextMealCandidateViewModel) {
     if (model.status !== "success") return;
     setModel(presentU1NextMealResult({ status: "success", recommendation: model.recommendation }, candidate.prototypeId));
+    void recordFeedback(candidate, "clicked", `select:${candidate.prototypeId}`, false);
   }
 
   function confirmSelectedCandidate() {
     if (model.status !== "success" || !model.selectedCandidateId) return;
     setModel(presentU1NextMealResult({ status: "success", recommendation: model.recommendation }, model.selectedCandidateId, model.selectedCandidateId));
+    const candidate = model.recommendation.candidates.find((item) => item.prototypeId === model.selectedCandidateId);
+    if (candidate) void recordFeedback(candidate, "accepted", `confirm:${candidate.prototypeId}`, true);
+  }
+
+  async function recordFeedback(
+    candidate: U1NextMealCandidateViewModel,
+    action: "clicked" | "accepted",
+    gestureIdentity: string,
+    terminal: boolean
+  ) {
+    if (!feedbackUiModel || model.status !== "success") return;
+    const mapping = mapConsumerRecommendationFeedbackTarget(candidate.canonicalFeedbackTarget);
+    if (mapping.status === "target_unavailable") return;
+    const session = await feedbackUiModel.beginSession(feedbackFlowIdentity(model), "next_meal_recommendation");
+    if (session.status !== "created" && session.status !== "already_created") return;
+    const result = await feedbackUiModel.recordEvent(gestureIdentity, action, mapping);
+    if (terminal && (result.status === "recorded" || result.status === "already_recorded")) {
+      await feedbackUiModel.endSession();
+    }
   }
 
   return (
@@ -147,6 +216,11 @@ export function NextMealPrototypeContent({
             <Text style={styles.reasonSummary}>{selectedCandidate.reasonSummary}</Text>
             {selectedCandidate.reasonDetails.map((detail) => <Text key={detail} style={styles.reasonDetail}>· {detail}</Text>)}
           </View>
+          <Text style={styles.feedbackStatusText}>
+            {selectedCandidate.canonicalFeedbackTarget
+              ? feedbackStatusCopy(feedbackState.status, copy)
+              : copy.feedbackTargetUnavailable}
+          </Text>
         </View>
       ) : (
         <View style={styles.selectionPrompt}>
@@ -189,6 +263,17 @@ export function NextMealPrototypeContent({
   );
 }
 
+function feedbackFlowIdentity(model: Extract<U1NextMealScreenViewModel, { status: "success" }>): string {
+  return model.recommendation.candidates.map((candidate) => candidate.prototypeId).join("|");
+}
+
+function feedbackStatusCopy(status: string, copy: typeof zhTW.mobile.nextMealPrototype): string {
+  if (status === "recorded" || status === "ended") return copy.feedbackRecorded;
+  if (status === "failed" || status === "idempotency_conflict" || status === "unauthenticated") return copy.feedbackFailed;
+  if (status === "recording" || status === "creating_session" || status === "ending") return copy.feedbackPending;
+  return copy.feedbackAvailable;
+}
+
 function NextMealStateCard({ body, children, icon, title }: { body: string; children?: ReactNode; icon: "lock" | "plate" | "spark"; title: string }) {
   return (
     <Card style={styles.stateCard}>
@@ -227,6 +312,7 @@ const styles = StyleSheet.create({
   mealName: { color: colors.ink, fontFamily: fonts.black, fontSize: 17, fontWeight: "900" },
   mealMeta: { color: colors.sub, fontFamily: fonts.medium, fontSize: 12, lineHeight: 17 },
   selectedDetail: { gap: 12 },
+  feedbackStatusText: { color: colors.sub, fontFamily: fonts.medium, fontSize: 11.5, lineHeight: 17 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reasonBox: { backgroundColor: colors.card, borderColor: colors.line, borderRadius: radius.base, borderWidth: 1, gap: 7, padding: 14 },
   reasonTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 13, fontWeight: "900" },

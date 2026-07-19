@@ -62,10 +62,21 @@ export function createCanonicalNextMealPrototypeProvider(
             recommendation: {
               ...mapped.recommendation,
               isSampleData: false,
-              candidates: mapped.recommendation.candidates.map((candidate) => ({
-                ...candidate,
-                isSampleData: false
-              }))
+              candidates: mapped.recommendation.candidates.map((candidate, index) => {
+                const canonicalCandidate = result.recommendation.candidates[index];
+                return {
+                  ...candidate,
+                  isSampleData: false,
+                  canonicalFeedbackTarget: canonicalCandidate
+                    ? {
+                        kind: "restaurant" as const,
+                        restaurantId: canonicalCandidate.restaurantId,
+                        branchId: canonicalCandidate.branchId ?? null,
+                        identityEvidence: "canonical" as const
+                      }
+                    : undefined
+                };
+              })
             }
           };
         }
