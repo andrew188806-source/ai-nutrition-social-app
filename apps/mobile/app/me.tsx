@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { BottomNav, PremiumBadge } from "../components/DemoUi";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes } from "../features/self-made-dishes";
-import { Card, Chip, CompactRow, IconButton, PersonAvatar, SectionHeader, StatCard } from "../theme/components";
+import { ConsumerProfileStateNotice, useConsumerRuntime } from "../features/consumer-runtime";
+import { Card, CompactRow, PersonAvatar, SectionHeader, StatCard } from "../theme/components";
 import type { IconName } from "../theme/icons";
 import { fonts, snowPalette as colors } from "../theme/tokens";
 
@@ -18,6 +19,7 @@ type ProfileRowItem = {
 
 export default function MeScreen() {
   const router = useRouter();
+  const runtime = useConsumerRuntime();
   const [demoUserPlan] = useDemoUserPlan();
   const isPremium = demoUserPlan === "premium";
   const profile = zhTW.mobile.profile;
@@ -27,6 +29,9 @@ export default function MeScreen() {
   const todayNutrition = zhTW.mobile.todayNutritionSummary;
   const latestMonth = diary.monthlyCards[0];
   const selfMadeDishes = getSelfMadeDishes("demo-user");
+  const canonicalProfile = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile : null;
+  const canonicalName = canonicalProfile?.displayName || canonicalProfile?.nickname || zhTW.mobile.consumerAuth.profileFallback;
+  const loggingOut = runtime.state.operation === "signingOut";
 
   const diaryItems: ProfileRowItem[] = [
     { icon: "leaf", title: diary.dailyDiaryTitle, subtitle: diary.dailyDiaryBody, onPress: () => router.push("/meal-log") },
@@ -56,21 +61,30 @@ export default function MeScreen() {
           <Text style={styles.subtitle}>{profile.subtitle}</Text>
         </View>
 
-        {/* 1. Profile summary card */}
+        <ConsumerProfileStateNotice profileState={runtime.state.profileState} onRetry={() => void runtime.retryProfile()} />
+
+        {/* 1. Canonical profile summary card */}
         <Card tone="primary">
+          <Text style={styles.canonicalLabel}>{zhTW.mobile.consumerAuth.canonicalProfileLabel}</Text>
           <View style={styles.profileRow}>
-            <PersonAvatar type="real" initial={settings.nicknameValue.slice(0, 1)} size={56} />
+            {canonicalProfile?.avatarUrl ? (
+              <Image source={{ uri: canonicalProfile.avatarUrl }} style={styles.profileAvatar} resizeMode="cover" />
+            ) : (
+              <PersonAvatar type="real" initial={canonicalName.slice(0, 1)} size={56} />
+            )}
             <View style={styles.profileInfo}>
               <View style={styles.profileNameRow}>
-                <Text style={styles.profileName}>{settings.nicknameValue}</Text>
-                {isPremium ? <Chip label={premiumUi.premiumBadge} active tone="primary" /> : null}
+                <Text style={styles.profileName}>{canonicalName}</Text>
               </View>
               <Text style={styles.profileIntro} numberOfLines={2}>
-                {settings.introValue}
+                {canonicalProfile?.nickname || zhTW.mobile.consumerAuth.profileStatusActive}
               </Text>
             </View>
-            <IconButton icon="edit" tone="primary" onPress={() => router.push("/community-card-settings")} />
           </View>
+        </Card>
+
+        <Card>
+          <SectionHeader title={zhTW.mobile.consumerAuth.demoCardsTitle} subtitle={zhTW.mobile.consumerAuth.demoCardsBody} />
           <View style={styles.statGrid}>
             <StatCard icon="star" label="本月評分" value={latestMonth.score.replace("月評分：", "")} tone="primary" />
             <StatCard icon="heart" label="收藏餐點" value={zhTW.mobile.consumerFavorites.profileCountSummary} />
@@ -133,6 +147,15 @@ export default function MeScreen() {
           </View>
         </View>
 
+        <Card>
+          <Pressable disabled={loggingOut} onPress={() => void runtime.signOut()} style={[styles.logoutButton, loggingOut && styles.logoutButtonDisabled]}>
+            <Text style={styles.logoutButtonText}>{loggingOut ? zhTW.mobile.consumerAuth.loggingOut : zhTW.mobile.consumerAuth.logout}</Text>
+          </Pressable>
+          {runtime.state.errorCode && runtime.state.authState.status === "signedIn" ? (
+            <Text style={styles.logoutError}>{zhTW.mobile.consumerAuth.logoutFailed}</Text>
+          ) : null}
+        </Card>
+
         <BottomNav />
       </ScrollView>
     </View>
@@ -169,6 +192,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14
+  },
+  profileAvatar: {
+    borderRadius: 28,
+    height: 56,
+    width: 56
+  },
+  canonicalLabel: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    color: colors.primaryDeep,
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    fontWeight: "900",
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5
   },
   profileInfo: {
     flex: 1,
@@ -218,5 +258,29 @@ const styles = StyleSheet.create({
   },
   rowList: {
     gap: 10
+  },
+  logoutButton: {
+    alignItems: "center",
+    borderRadius: 999,
+    backgroundColor: colors.solid,
+    paddingHorizontal: 18,
+    paddingVertical: 13
+  },
+  logoutButtonDisabled: {
+    opacity: 0.5
+  },
+  logoutButtonText: {
+    color: colors.solidText,
+    fontFamily: fonts.bold,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  logoutError: {
+    color: colors.primaryDeep,
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 10,
+    textAlign: "center"
   }
 });

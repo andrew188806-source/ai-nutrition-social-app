@@ -3,6 +3,7 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from "@expo-google-fonts
 import { Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import { zhTW } from "../../../lib/i18n/zh-TW";
+import { ConsumerRuntimeNavigationGate, ConsumerRuntimeProvider } from "../features/consumer-runtime";
 import { snowPalette } from "../theme/tokens";
 
 export default function RootLayout() {
@@ -20,29 +21,33 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: snowPalette.card },
-        headerTintColor: snowPalette.ink,
-        contentStyle: { backgroundColor: snowPalette.bg }
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: zhTW.common.appName }} />
-      <Stack.Screen name="login" options={{ title: zhTW.mobile.nav.login }} />
-      <Stack.Screen name="meal-photo" options={{ title: zhTW.mobile.nav.mealPhoto }} />
-      <Stack.Screen name="analysis" options={{ title: zhTW.mobile.nav.analysis }} />
-      <Stack.Screen name="today-intake" options={{ title: zhTW.mobile.analysis.savedIntake.title }} />
-      <Stack.Screen name="meal-log" options={{ title: zhTW.mobile.nav.mealLog }} />
-      <Stack.Screen name="recommendation" options={{ title: zhTW.mobile.nav.recommendation }} />
-      <Stack.Screen name="social" options={{ title: zhTW.mobile.socialTitle }} />
-      <Stack.Screen name="restaurants" options={{ title: zhTW.mobile.primaryNav.explore }} />
-      <Stack.Screen name="permissions" options={{ title: zhTW.mobile.primaryNav.profile }} />
-      <Stack.Screen name="me" options={{ title: zhTW.mobile.primaryNav.profile }} />
-      <Stack.Screen name="group-tables" options={{ title: zhTW.mobile.groupTablesTitle }} />
-      <Stack.Screen name="health-goal-plan" options={{ title: zhTW.mobile.healthGoalPlan.title }} />
-      <Stack.Screen name="community-card" options={{ title: zhTW.mobile.communityCard.title }} />
-      <Stack.Screen name="community-card-settings" options={{ title: zhTW.mobile.communityCardSettings.title }} />
-      <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
-    </Stack>
+    <ConsumerRuntimeProvider>
+      <ConsumerRuntimeNavigationGate>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: snowPalette.card },
+            headerTintColor: snowPalette.ink,
+            contentStyle: { backgroundColor: snowPalette.bg }
+          }}
+        >
+          <Stack.Screen name="index" options={{ title: zhTW.common.appName }} />
+          <Stack.Screen name="login" options={{ title: zhTW.mobile.nav.login }} />
+          <Stack.Screen name="meal-photo" options={{ title: zhTW.mobile.nav.mealPhoto }} />
+          <Stack.Screen name="analysis" options={{ title: zhTW.mobile.nav.analysis }} />
+          <Stack.Screen name="today-intake" options={{ title: zhTW.mobile.analysis.savedIntake.title }} />
+          <Stack.Screen name="meal-log" options={{ title: zhTW.mobile.nav.mealLog }} />
+          <Stack.Screen name="recommendation" options={{ title: zhTW.mobile.nav.recommendation }} />
+          <Stack.Screen name="social" options={{ title: zhTW.mobile.socialTitle }} />
+          <Stack.Screen name="restaurants" options={{ title: zhTW.mobile.primaryNav.explore }} />
+          <Stack.Screen name="permissions" options={{ title: zhTW.mobile.primaryNav.profile }} />
+          <Stack.Screen name="me" options={{ title: zhTW.mobile.primaryNav.profile }} />
+          <Stack.Screen name="group-tables" options={{ title: zhTW.mobile.groupTablesTitle }} />
+          <Stack.Screen name="health-goal-plan" options={{ title: zhTW.mobile.healthGoalPlan.title }} />
+          <Stack.Screen name="community-card" options={{ title: zhTW.mobile.communityCard.title }} />
+          <Stack.Screen name="community-card-settings" options={{ title: zhTW.mobile.communityCardSettings.title }} />
+          <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
+        </Stack>
+      </ConsumerRuntimeNavigationGate>
+    </ConsumerRuntimeProvider>
   );
 }

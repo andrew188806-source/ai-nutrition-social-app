@@ -24,8 +24,51 @@ export const zhTW = {
     landingTitle: "用一張餐點照，開啟更健康的社交飲食生活",
     landingSubtitle: "AI 估算熱量與營養，記錄日常飲食，推薦下一餐，並探索飲食習慣相近的人與認證餐廳。",
     startDemo: "開始 Demo",
-    loginTitle: "登入或建立帳號",
-    loginSubtitle: "這是展示用登入流程，先不用輸入真實帳號也可以體驗產品。",
+    loginTitle: "登入",
+    loginSubtitle: "使用 Email 登入，或在展示模式中明確選擇 Demo 體驗。",
+    consumerAuth: {
+      emailLabel: "Email",
+      emailPlaceholder: "name@example.com",
+      passwordLabel: "密碼",
+      passwordPlaceholder: "請輸入密碼",
+      signIn: "使用 Email 登入",
+      signingIn: "登入中…",
+      demoTitle: "展示模式",
+      demoBody: "使用本機範例帳號體驗產品，不會連線遠端服務。",
+      demoSignIn: "進入 Demo",
+      fieldsRequired: "請完整輸入 Email 與密碼。",
+      authFailed: "登入未完成，請確認資料後再試一次。",
+      operationNotEnabled: "登入資料無法驗證，或帳號尚未完成 Email 確認。",
+      initializing: "正在確認登入狀態…",
+      retry: "重新載入",
+      profileLoading: "正在載入個人資料…",
+      profileNotFound: {
+        title: "尚無可用的個人資料",
+        body: "登入狀態仍有效；目前沒有可顯示的 canonical profile。"
+      },
+      profileLoadError: {
+        title: "個人資料暫時無法載入",
+        body: "登入狀態仍有效，請稍後重新載入。"
+      },
+      configurationError: {
+        title: "登入服務尚未正確設定",
+        body: "目前無法安全啟動登入流程，請檢查執行環境設定。"
+      },
+      accountDisabled: {
+        title: "此帳號目前無法使用",
+        body: "帳號狀態不允許進入應用程式。如需協助，請聯絡服務人員。"
+      },
+      canonicalProfileLabel: "Canonical Profile",
+      profileFallback: "好廚使用者",
+      profileStatusActive: "帳號使用中",
+      demoCardsTitle: "Demo 資料卡",
+      demoCardsBody: "以下統計與設定仍為本機展示資料，尚未宣稱來自 canonical profile。",
+      logout: "登出",
+      loggingOut: "登出中…",
+      logoutFailed: "登出未完成，請稍後再試。",
+      disabledTitle: "登入功能未啟用",
+      disabledBody: "此執行模式沒有啟用登入服務，也不會切換至 Demo。"
+    },
     mealPhotoTitle: "拍攝或上傳餐點照片",
     mealPhotoSubtitle: "先選擇外食或自己煮，再用餐點照片開始分析。外食會先找附近餐廳菜單；自煮會直接估算食材與份量。",
     analysisTitle: "AI 餐點分析",
