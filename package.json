@@ -88,6 +88,8 @@
     "test:consumer-phase2x-e-dev-smoke": "node scripts/consumer-favorites-phase-2x-e-development-mobile-smoke.mjs",
     "test:consumer-phase2x-e-dev-smoke-dry-run": "node scripts/consumer-favorites-phase-2x-e-development-mobile-smoke.mjs --dry-run",
     "test:consumer-phase2y-a": "node scripts/consumer-recommendation-feedback-phase-2y-a-guard.mjs",
+    "test:consumer-phase2y-b": "node scripts/consumer-recommendation-feedback-phase-2y-b-guard.mjs",
+    "test:consumer-phase2y-b-smoke": "node scripts/consumer-recommendation-feedback-phase-2y-b-contract-smoke.mjs",
     "test:consumer-ux-u1": "node scripts/consumer-ux-u1-guard.mjs",
     "test:consumer-ux-u1-smoke": "node scripts/consumer-ux-u1-smoke.mjs",
     "test:consumer-schema-phase1.3": "node scripts/consumer-schema-phase-1-3-guard.mjs",
