@@ -2,6 +2,8 @@
 -- Ownership derives exclusively from auth.uid(). No caller-supplied user identity is accepted.
 -- All three functions are SECURITY DEFINER with a fixed search_path.
 -- Direct table INSERT/UPDATE/DELETE by authenticated role remains closed.
+-- Correction: record RPC uses structured JSON returns for all validation failures (no 22023 raises).
+-- Authenticated callers may invoke the RPC directly; service-layer pre-validation is not assumed.
 
 begin;
 
@@ -166,6 +168,8 @@ comment on function public.end_authenticated_recommendation_session(uuid)
 -- ────────────────────────────────────────────────────────────────────────────────
 -- RPC 3: record_authenticated_recommendation_feedback_event(uuid, text, text, text, text, text, text, text)
 -- Appends an idempotent feedback event to an owned active session.
+-- All domain validation failures return structured JSON (invalid_action, invalid_target, write_failed).
+-- No SQLSTATE 22023 is raised from this function; all 22023 codes are in the create RPC only.
 -- ────────────────────────────────────────────────────────────────────────────────
 create or replace function public.record_authenticated_recommendation_feedback_event(
   p_session_id             uuid,
@@ -208,28 +212,33 @@ begin
   end if;
 
   -- Validate idempotency key: trim, nonempty, bounded length, no control characters.
+  -- Invalid key → write_failed with sanitized error_code; no internal identifier leaks.
   v_event_key := pg_catalog.btrim(p_event_idempotency_key);
   if v_event_key is null or v_event_key = '' then
-    raise exception 'EVENT_IDEMPOTENCY_KEY_REQUIRED' using errcode = '22023';
+    return pg_catalog.jsonb_build_object('status', 'write_failed', 'error_code', 'event_key_invalid');
   end if;
   if pg_catalog.length(v_event_key) > 500 then
-    raise exception 'EVENT_IDEMPOTENCY_KEY_TOO_LONG' using errcode = '22023';
+    return pg_catalog.jsonb_build_object('status', 'write_failed', 'error_code', 'event_key_invalid');
   end if;
   if v_event_key ~ E'[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]' then
-    raise exception 'EVENT_IDEMPOTENCY_KEY_INVALID_CHARACTERS' using errcode = '22023';
+    return pg_catalog.jsonb_build_object('status', 'write_failed', 'error_code', 'event_key_invalid');
   end if;
 
-  -- Validate and cast action to enum; invalid values are rejected.
+  -- Validate and cast action to enum; NULL or invalid string → invalid_action.
+  -- Authenticated callers may invoke the RPC directly without service pre-validation.
+  if p_action is null then
+    return pg_catalog.jsonb_build_object('status', 'invalid_action');
+  end if;
   begin
     v_action := p_action::recommendation_feedback_action;
   exception when invalid_text_representation then
-    raise exception 'FEEDBACK_ACTION_INVALID' using errcode = '22023';
+    return pg_catalog.jsonb_build_object('status', 'invalid_action');
   end;
 
   -- Validate target kind.
   v_target_kind := pg_catalog.btrim(p_target_kind);
-  if v_target_kind not in ('recommendation', 'restaurant', 'menu_item') then
-    raise exception 'FEEDBACK_TARGET_KIND_INVALID' using errcode = '22023';
+  if v_target_kind is null or v_target_kind not in ('recommendation', 'restaurant', 'menu_item') then
+    return pg_catalog.jsonb_build_object('status', 'invalid_target');
   end if;
 
   -- Exact target shape: reject identity fields that don't belong to the declared target kind.
@@ -238,15 +247,15 @@ begin
   -- menu_item: only restaurant_id, menu_item_id (and optional branch_id) are allowed; recommendation_id must be null.
   if v_target_kind = 'recommendation' then
     if p_restaurant_id is not null or p_menu_item_id is not null or p_branch_id is not null then
-      raise exception 'FEEDBACK_TARGET_SHAPE_INVALID' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
   elsif v_target_kind = 'restaurant' then
     if p_recommendation_id is not null or p_menu_item_id is not null then
-      raise exception 'FEEDBACK_TARGET_SHAPE_INVALID' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
   elsif v_target_kind = 'menu_item' then
     if p_recommendation_id is not null then
-      raise exception 'FEEDBACK_TARGET_SHAPE_INVALID' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
   end if;
 
@@ -254,16 +263,16 @@ begin
   if v_target_kind = 'recommendation' then
     v_recommendation_id := nullif(pg_catalog.btrim(p_recommendation_id), '');
     if v_recommendation_id is null then
-      raise exception 'FEEDBACK_RECOMMENDATION_ID_REQUIRED' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.length(v_recommendation_id) > 500 then
-      raise exception 'FEEDBACK_RECOMMENDATION_ID_TOO_LONG' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if v_recommendation_id ~ E'[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]' then
-      raise exception 'FEEDBACK_RECOMMENDATION_ID_INVALID_CHARACTERS' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.left(v_recommendation_id, 4) = 'fav-' then
-      raise exception 'FEEDBACK_RECOMMENDATION_ID_RESERVED_PREFIX' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     -- NOTE: recommendation_id has no catalog table. Existence check is a Development hard gate.
     -- See Phase 2Y-D-B runbook: deploy with a controlled test recommendation_id.
@@ -271,33 +280,33 @@ begin
   elsif v_target_kind = 'restaurant' then
     v_restaurant_id := nullif(pg_catalog.btrim(p_restaurant_id), '');
     if v_restaurant_id is null then
-      raise exception 'FEEDBACK_RESTAURANT_ID_REQUIRED' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.length(v_restaurant_id) > 500 then
-      raise exception 'FEEDBACK_RESTAURANT_ID_TOO_LONG' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.left(v_restaurant_id, 4) = 'fav-' then
-      raise exception 'FEEDBACK_RESTAURANT_ID_RESERVED_PREFIX' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     perform 1 from public.restaurants as r where r.id = v_restaurant_id for key share;
     if not found then
-      raise exception 'FEEDBACK_RESTAURANT_NOT_FOUND' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     -- branch_id: verify existence and parent relationship via restaurant_branches catalog.
     if p_branch_id is not null then
       v_branch_id := nullif(pg_catalog.btrim(p_branch_id), '');
       if v_branch_id is not null then
         if pg_catalog.length(v_branch_id) > 500 then
-          raise exception 'FEEDBACK_BRANCH_ID_TOO_LONG' using errcode = '22023';
+          return pg_catalog.jsonb_build_object('status', 'invalid_target');
         end if;
         if pg_catalog.left(v_branch_id, 4) = 'fav-' then
-          raise exception 'FEEDBACK_BRANCH_ID_RESERVED_PREFIX' using errcode = '22023';
+          return pg_catalog.jsonb_build_object('status', 'invalid_target');
         end if;
         perform 1 from public.restaurant_branches as rb
         where rb.id = v_branch_id and rb.restaurant_id = v_restaurant_id
         for key share;
         if not found then
-          raise exception 'FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH' using errcode = '22023';
+          return pg_catalog.jsonb_build_object('status', 'invalid_target');
         end if;
       end if;
     end if;
@@ -306,49 +315,49 @@ begin
     v_restaurant_id := nullif(pg_catalog.btrim(p_restaurant_id), '');
     v_menu_item_id  := nullif(pg_catalog.btrim(p_menu_item_id), '');
     if v_restaurant_id is null then
-      raise exception 'FEEDBACK_RESTAURANT_ID_REQUIRED' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if v_menu_item_id is null then
-      raise exception 'FEEDBACK_MENU_ITEM_ID_REQUIRED' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.length(v_restaurant_id) > 500 then
-      raise exception 'FEEDBACK_RESTAURANT_ID_TOO_LONG' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.length(v_menu_item_id) > 500 then
-      raise exception 'FEEDBACK_MENU_ITEM_ID_TOO_LONG' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.left(v_restaurant_id, 4) = 'fav-' then
-      raise exception 'FEEDBACK_RESTAURANT_ID_RESERVED_PREFIX' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     if pg_catalog.left(v_menu_item_id, 4) = 'fav-' then
-      raise exception 'FEEDBACK_MENU_ITEM_ID_RESERVED_PREFIX' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     perform 1 from public.restaurants as r where r.id = v_restaurant_id for key share;
     if not found then
-      raise exception 'FEEDBACK_RESTAURANT_NOT_FOUND' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     perform 1
     from public.menu_items as mi
     where mi.id = v_menu_item_id and mi.restaurant_id = v_restaurant_id
     for key share;
     if not found then
-      raise exception 'FEEDBACK_MENU_ITEM_PARENT_MISMATCH' using errcode = '22023';
+      return pg_catalog.jsonb_build_object('status', 'invalid_target');
     end if;
     -- branch_id: verify existence and parent relationship via restaurant_branches catalog.
     if p_branch_id is not null then
       v_branch_id := nullif(pg_catalog.btrim(p_branch_id), '');
       if v_branch_id is not null then
         if pg_catalog.length(v_branch_id) > 500 then
-          raise exception 'FEEDBACK_BRANCH_ID_TOO_LONG' using errcode = '22023';
+          return pg_catalog.jsonb_build_object('status', 'invalid_target');
         end if;
         if pg_catalog.left(v_branch_id, 4) = 'fav-' then
-          raise exception 'FEEDBACK_BRANCH_ID_RESERVED_PREFIX' using errcode = '22023';
+          return pg_catalog.jsonb_build_object('status', 'invalid_target');
         end if;
         perform 1 from public.restaurant_branches as rb
         where rb.id = v_branch_id and rb.restaurant_id = v_restaurant_id
         for key share;
         if not found then
-          raise exception 'FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH' using errcode = '22023';
+          return pg_catalog.jsonb_build_object('status', 'invalid_target');
         end if;
       end if;
     end if;
@@ -431,7 +440,7 @@ end;
 $$;
 
 comment on function public.record_authenticated_recommendation_feedback_event(uuid, text, text, text, text, text, text, text)
-  is 'Appends an idempotent recommendation feedback event to an owned active session; source_surface is derived from the session; branch_id is catalog-validated against restaurant_branches.';
+  is 'Appends an idempotent recommendation feedback event to an owned active session; all domain validation failures return structured JSON (invalid_action, invalid_target, write_failed); no 22023 raised from this function.';
 
 -- Revoke all, then grant execute only to authenticated.
 revoke all on function public.create_authenticated_recommendation_session(uuid, text, text)

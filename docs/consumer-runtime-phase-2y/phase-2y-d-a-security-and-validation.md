@@ -79,12 +79,12 @@ Before per-kind validation, the RPC enforces exact field shapes:
 | `restaurant` | `restaurant_id` | `recommendation_id`, `menu_item_id` |
 | `menu_item` | `restaurant_id`, `menu_item_id` | `recommendation_id` |
 
-Cross-kind fields raise `FEEDBACK_TARGET_SHAPE_INVALID (22023)`. Public adapter result: `invalid_target`.
+Cross-kind fields return `{ "status": "invalid_target" }` JSON directly (no exception raised). Adapter result: `invalid_target`.
 
 ### restaurant target
 - `restaurant_id` required, trimmed, max 500 chars, no `fav-` prefix.
 - Existence verified via `SELECT ... FROM public.restaurants WHERE id = v_restaurant_id FOR KEY SHARE`.
-- `branch_id` optional: if non-null, existence verified via `SELECT ... FROM public.restaurant_branches WHERE id = v_branch_id AND restaurant_id = v_restaurant_id FOR KEY SHARE`. Missing or parent-mismatched branch raises `FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH (22023)`. Public adapter result: `invalid_target`.
+- `branch_id` optional: if non-null, existence verified via `SELECT ... FROM public.restaurant_branches WHERE id = v_branch_id AND restaurant_id = v_restaurant_id FOR KEY SHARE`. Missing or parent-mismatched branch returns `{ "status": "invalid_target" }` JSON. Adapter result: `invalid_target`.
 
 ### menu_item target
 - `restaurant_id` and `menu_item_id` both required.
@@ -95,7 +95,7 @@ Cross-kind fields raise `FEEDBACK_TARGET_SHAPE_INVALID (22023)`. Public adapter 
 
 ### recommendation target
 - `recommendation_id` required, trimmed, max 500 chars, no `fav-` prefix, no control characters.
-- `restaurant_id`, `menu_item_id`, `branch_id` must all be null — any non-null field raises `FEEDBACK_TARGET_SHAPE_INVALID`.
+- `restaurant_id`, `menu_item_id`, `branch_id` must all be null — any non-null field returns `{ "status": "invalid_target" }` JSON.
 - **No catalog existence check**: `recommendation_id` is an opaque bounded text ID from the recommendation engine. There is no `public.recommendations` catalog table to verify against.
 - This is a **Development hard gate**: Phase 2Y-D-B deployment must test with a controlled `recommendation_id` value and document the opaque-ID strategy.
 
@@ -139,20 +139,23 @@ All text inputs go through:
 | end | 42501 | `{ status: "end_failed", errorCode: "feedback_permission_denied" }` |
 | end | network throw | `{ status: "end_failed", errorCode: "feedback_transport_failed" }` |
 | record | `recorded` / `already_recorded` / `idempotency_conflict` / `session_not_found` / `invalid_session` JSON | matching Frozen status |
+| record | `invalid_action` JSON (null or unrecognized action value) | `{ status: "invalid_action", errorCode: "feedback_action_invalid" }` |
+| record | `invalid_target` JSON (cross-kind shape, branch not found/mismatch, catalog failure) | `{ status: "invalid_target", errorCode: "feedback_target_invalid" }` |
+| record | `write_failed` JSON with `error_code: "event_key_invalid"` (invalid event idempotency key) | `{ status: "write_failed", errorCode: "event_key_invalid" }` |
 | record | 28000 | `{ status: "unauthenticated" }` |
-| record | **22023** (any target/catalog/shape validation) | **`{ status: "invalid_target", errorCode: "feedback_target_invalid" }`** |
+| record | 22023 (unexpected — record RPC does not raise 22023 for any domain validation) | `{ status: "write_failed", errorCode: "feedback_database_failed" }` |
 | record | 42501 | `{ status: "write_failed", errorCode: "feedback_permission_denied" }` |
 | record | network throw | `{ status: "write_failed", errorCode: "feedback_transport_failed" }` |
 | record | malformed JSON | `{ status: "write_failed", errorCode: "feedback_response_malformed" }` |
 
-SQL internal exception names (SESSION_CREATE_CONFLICT, FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH, etc.) must not appear in any public result field. They are used only for adapter-internal error routing.
+SQL internal exception names (SESSION_CREATE_CONFLICT, etc.) and internal SQL identifiers (EVENT_IDEMPOTENCY_KEY_REQUIRED, etc.) must not appear in any public result field. The record RPC returns structured JSON for all domain validation failures — no 22023 is raised from the record function for domain validation. Only AUTHENTICATION_REQUIRED (28000) is raised as an exception from the record RPC.
 
 ### RPC-level exceptions (reference)
 
 | PostgreSQL errcode | Raised by | Adapter mapping |
 |-------------------|-----------|-----------------|
 | `28000` | `AUTHENTICATION_REQUIRED` | → `unauthenticated` |
-| `22023` | Validation failures (shape, catalog, collision) — see full mapping above | → `create_failed` / `end_failed` / `invalid_target` depending on operation |
+| `22023` | Validation failures (shape, catalog, collision) — create/end RPCs only; record RPC returns structured JSON instead | → `create_failed` / `end_failed` (record RPC does not raise 22023 for domain validation; unexpected 22023 from record → `write_failed`) |
 | `42501` | Permission denied (unexpected) | → `create_failed` / `end_failed` / `write_failed` depending on operation |
 
 ### RPC-level structured JSON returns
@@ -168,6 +171,9 @@ SQL internal exception names (SESSION_CREATE_CONFLICT, FEEDBACK_BRANCH_NOT_FOUND
 | `already_recorded` | `{ status: "already_recorded" }` |
 | `idempotency_conflict` | `{ status: "idempotency_conflict" }` |
 | `invalid_session` | `{ status: "invalid_session", errorCode: "session_ended" }` |
+| `invalid_action` | `{ status: "invalid_action", errorCode: "feedback_action_invalid" }` |
+| `invalid_target` | `{ status: "invalid_target", errorCode: "feedback_target_invalid" }` |
+| `write_failed` (event key invalid) | `{ status: "write_failed", errorCode: "event_key_invalid" }` |
 
 ### TypeScript adapter errors
 

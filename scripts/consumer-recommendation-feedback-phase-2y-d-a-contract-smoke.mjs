@@ -423,13 +423,13 @@ try {
   });
   expect(authErrResult.status === "unauthenticated", "RPC 28000 error maps to unauthenticated");
 
-  // ── Step 17: Error mapping — target/catalog validation error (22023) ────────
-  // 22023 from the record RPC covers catalog checks (branch not found, restaurant not found,
-  // target shape violation). The adapter classifies these as invalid_target, not write_failed.
+  // ── Step 17: Structured invalid_target JSON from record RPC → invalid_target ─
+  // Correction: catalog/branch/shape validation errors now return structured JSON from the RPC
+  // (no 22023 exception raised). The adapter maps JSON { status: "invalid_target" } → invalid_target.
 
   const dbErrClient = makeFakeRpcClient({
     "record_authenticated_recommendation_feedback_event": () => ({
-      data: null, error: { code: "22023", message: "FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH" }, status: 400
+      data: { status: "invalid_target" }, error: null
     })
   });
   const dbErrRuntime = feedback.createConsumerRecommendationFeedbackRuntime({
@@ -440,7 +440,7 @@ try {
     target: { kind: "restaurant", restaurantId: "rest-001", branchId: "branch-missing" },
     eventIdempotencyKey: "evt-key-xxx"
   });
-  expect(dbErrResult.status === "invalid_target", "RPC 22023 from record (catalog/branch/shape validation) maps to invalid_target");
+  expect(dbErrResult.status === "invalid_target", "record RPC structured invalid_target JSON maps to invalid_target (catalog/branch/shape failures)");
 
   // ── Step 18: Error mapping — transport failure (network throw) ────────────
 
@@ -529,12 +529,14 @@ try {
     "recommendation target: adapter does not pass p_menu_item_id (exact shape)"
   );
 
-  // ── Step 24: Target shape validation (22023) → invalid_target ────────────
-  // Covers: branch not found, target shape invalid, restaurant not found from record RPC.
+  // ── Step 24: Unexpected 22023 from record RPC → write_failed (not invalid_target) ─
+  // Correction: validation errors now return structured JSON from the record RPC; a 22023 exception
+  // from the record RPC is unexpected (DB-level error) and must map to write_failed.
+  // There is no blanket 22023-to-invalid_target mapping in the corrected adapter.
 
   const shapeErrClient = makeFakeRpcClient({
     "record_authenticated_recommendation_feedback_event": () => ({
-      data: null, error: { code: "22023", message: "FEEDBACK_TARGET_SHAPE_INVALID" }, status: 400
+      data: null, error: { code: "22023", message: "unexpected-db-error" }, status: 400
     })
   });
   const shapeErrRuntime = feedback.createConsumerRecommendationFeedbackRuntime({
@@ -543,12 +545,12 @@ try {
   const shapeErrResult = await shapeErrRuntime.service.recordCurrentUserRecommendationFeedbackEvent({
     sessionId: "sess-smoke-001", action: "shown",
     target: { kind: "restaurant", restaurantId: "rest-001" },
-    eventIdempotencyKey: "evt-shape-err"
+    eventIdempotencyKey: "evt-unexpected-22023"
   });
-  expect(shapeErrResult.status === "invalid_target",
-    "record: FEEDBACK_TARGET_SHAPE_INVALID (22023) maps to invalid_target (exact shape enforcement)");
-  expect(shapeErrResult.errorCode === "feedback_target_invalid",
-    "record: 22023 target shape error errorCode is feedback_target_invalid (not SQL message)");
+  expect(shapeErrResult.status === "write_failed",
+    "record: unexpected 22023 from RPC maps to write_failed (no blanket 22023-to-invalid_target mapping)");
+  expect(shapeErrResult.status !== "invalid_target",
+    "record: unexpected 22023 does not produce invalid_target (validation errors use structured JSON path)");
 
   // ── Step 25: UUID/session collision on create → generic create_failed ─────
   // SESSION_CREATE_CONFLICT (22023) is raised for both foreign-actor UUID collision and
@@ -570,6 +572,71 @@ try {
     "create: SESSION_CREATE_CONFLICT (22023) maps to create_failed (no session existence leak)");
   expect(collisionResult.status !== "session_not_found",
     "create: SESSION_CREATE_CONFLICT does not produce session_not_found (no existence disclosure)");
+
+  // ── Step 26: JSON invalid_action → invalid_action (direct repository call) ──
+  // Validates the adapter handles invalid_action via the structured JSON path, independent
+  // of any service-layer pre-validation. Called directly on the repository (not via service).
+
+  const Repo = feedback.SupabaseConsumerRecommendationFeedbackWriteRepository;
+  const iaRepoClient = makeFakeRpcClient({
+    "record_authenticated_recommendation_feedback_event": () => ({
+      data: { status: "invalid_action" }, error: null
+    })
+  });
+  const iaRepo = new Repo(iaRepoClient);
+  const iaResult = await iaRepo.recordCurrentUserRecommendationFeedbackEvent({
+    sessionId: "sess-smoke-direct-001",
+    action: "shown",
+    target: { kind: "restaurant", restaurantId: "rest-001" },
+    eventIdempotencyKey: "evt-ia-001"
+  });
+  expect(iaResult.status === "invalid_action",
+    "direct repo: JSON invalid_action from record RPC maps to invalid_action (no service pre-validation required)");
+  expect(iaResult.errorCode === "feedback_action_invalid",
+    "direct repo: invalid_action errorCode is feedback_action_invalid (sanitized — no raw SQL identifier)");
+
+  // ── Step 27: JSON write_failed/event_key_invalid → write_failed (direct repo) ──
+  // Event idempotency key validation failures return write_failed with a sanitized error_code.
+  // The raw SQL internal identifiers (EVENT_IDEMPOTENCY_KEY_REQUIRED etc.) must not appear.
+
+  const wfRepoClient = makeFakeRpcClient({
+    "record_authenticated_recommendation_feedback_event": () => ({
+      data: { status: "write_failed", error_code: "event_key_invalid" }, error: null
+    })
+  });
+  const wfRepo = new Repo(wfRepoClient);
+  const wfResult = await wfRepo.recordCurrentUserRecommendationFeedbackEvent({
+    sessionId: "sess-smoke-direct-002",
+    action: "shown",
+    target: { kind: "restaurant", restaurantId: "rest-001" },
+    eventIdempotencyKey: ""
+  });
+  expect(wfResult.status === "write_failed",
+    "direct repo: JSON write_failed (event_key_invalid) from record RPC maps to write_failed");
+  expect(wfResult.errorCode === "event_key_invalid",
+    "direct repo: write_failed errorCode is event_key_invalid (sanitized, no raw SQL identifier)");
+  expect(typeof wfResult.errorCode === "string" && !wfResult.errorCode.includes("EVENT_IDEMPOTENCY_KEY"),
+    "direct repo: raw SQL internal identifier EVENT_IDEMPOTENCY_KEY does not appear in public errorCode");
+
+  // ── Step 28: JSON invalid_target from record RPC — direct repo path ─────────
+  // Verifies the adapter returns invalid_target from the JSON path without service validation.
+
+  const itRepoClient = makeFakeRpcClient({
+    "record_authenticated_recommendation_feedback_event": () => ({
+      data: { status: "invalid_target" }, error: null
+    })
+  });
+  const itRepo = new Repo(itRepoClient);
+  const itResult = await itRepo.recordCurrentUserRecommendationFeedbackEvent({
+    sessionId: "sess-smoke-direct-003",
+    action: "shown",
+    target: { kind: "restaurant", restaurantId: "rest-001" },
+    eventIdempotencyKey: "evt-it-001"
+  });
+  expect(itResult.status === "invalid_target",
+    "direct repo: JSON invalid_target from record RPC maps to invalid_target");
+  expect(itResult.errorCode === "feedback_target_invalid",
+    "direct repo: invalid_target errorCode is feedback_target_invalid (sanitized)");
 
   // ── Step 22: No table DML in adapter (static proof) ──────────────────────
 

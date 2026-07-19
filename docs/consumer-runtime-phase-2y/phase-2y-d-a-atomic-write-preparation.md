@@ -122,9 +122,11 @@ create or replace function public.record_authenticated_recommendation_feedback_e
 - `{ status: "idempotency_conflict" }` — same key, different payload (branch_id mismatch triggers this)
 - `{ status: "session_not_found" }` — missing or foreign session
 - `{ status: "invalid_session" }` — session is ended
-- Raises `FEEDBACK_TARGET_SHAPE_INVALID (22023)` — cross-kind identity fields present (e.g., restaurant_id on recommendation target)
-- Raises `FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH (22023)` — branch_id not in `restaurant_branches` or parent mismatch
-- Public result for all 22023 from record: `invalid_target` (TypeScript adapter)
+- `{ status: "invalid_action" }` — null or invalid action value. Adapter: `{ status: "invalid_action", errorCode: "feedback_action_invalid" }`
+- `{ status: "invalid_target" }` — cross-kind fields present, branch not found/mismatch, or catalog failure. Adapter: `{ status: "invalid_target", errorCode: "feedback_target_invalid" }`
+- `{ status: "write_failed", error_code: "event_key_invalid" }` — invalid event idempotency key. Adapter: `{ status: "write_failed", errorCode: "event_key_invalid" }`
+- Raises `AUTHENTICATION_REQUIRED (28000)` — null `auth.uid()`
+- Note: record RPC uses structured JSON returns for all domain validation (Option A). No 22023 is raised from the record function for any domain validation failure.
 
 **Exact target shapes enforced by RPC:**
 

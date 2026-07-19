@@ -44,7 +44,7 @@ If the count is not 36, stop. Reconcile the schema before proceeding.
 
 ```bash
 sha256sum supabase/migrations/20260719010000_consumer_recommendation_feedback_atomic_write.sql
-# Expected: d214ad6d239df8fb1f268f4be3e201a9ea7c86f274657d189f8df6f4e597b65b
+# Expected: 52a0d5708d6f7b32fca573750cc141342774c52467d90dc65efb650d0652af5e
 ```
 
 If SHA does not match, stop. Do not deploy a modified migration.

@@ -59,7 +59,10 @@ export type MappedRecordFeedbackResponse =
   | { status: "already_recorded" }
   | { status: "idempotency_conflict" }
   | { status: "session_not_found" }
-  | { status: "invalid_session" };
+  | { status: "invalid_session" }
+  | { status: "invalid_action" }
+  | { status: "invalid_target" }
+  | { status: "write_failed"; errorCode: string };
 
 export function mapRecordFeedbackRpcResponse(value: unknown): MappedRecordFeedbackResponse {
   const row = record(value);
@@ -72,9 +75,17 @@ export function mapRecordFeedbackRpcResponse(value: unknown): MappedRecordFeedba
     };
   }
   if (status === "already_recorded" || status === "idempotency_conflict"
-      || status === "session_not_found" || status === "invalid_session") {
+      || status === "session_not_found" || status === "invalid_session"
+      || status === "invalid_action" || status === "invalid_target") {
     exactKeys(row, ["status"]);
     return { status };
+  }
+  if (status === "write_failed") {
+    exactKeys(row, ["status", "error_code"]);
+    const errorCode = typeof row.error_code === "string" && row.error_code.trim().length > 0
+      ? row.error_code.trim()
+      : "feedback_database_failed";
+    return { status: "write_failed", errorCode };
   }
   malformed("status");
 }

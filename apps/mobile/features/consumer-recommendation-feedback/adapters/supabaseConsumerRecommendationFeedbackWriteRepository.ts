@@ -111,11 +111,6 @@ export class SupabaseConsumerRecommendationFeedbackWriteRepository
       return { status: "write_failed", source: SOURCE, errorCode: "transport_failed" };
     }
     if (response.error) {
-      // 22023 from the record RPC = target/input validation failure (catalog check, shape,
-      // or branch existence). The service layer validates format; the RPC validates catalog.
-      if (response.error.code === "22023") {
-        return { status: "invalid_target", source: SOURCE, errorCode: "feedback_target_invalid" };
-      }
       const err = mapRpcError(response.error, response.status);
       if (err instanceof ConsumerRecommendationFeedbackAuthenticationRequiredError) {
         return { status: "unauthenticated", source: SOURCE };
@@ -135,6 +130,15 @@ export class SupabaseConsumerRecommendationFeedbackWriteRepository
       }
       if (mapped.status === "session_not_found") {
         return { status: "session_not_found", source: SOURCE, errorCode: "session_not_found" };
+      }
+      if (mapped.status === "invalid_action") {
+        return { status: "invalid_action", source: SOURCE, errorCode: "feedback_action_invalid" };
+      }
+      if (mapped.status === "invalid_target") {
+        return { status: "invalid_target", source: SOURCE, errorCode: "feedback_target_invalid" };
+      }
+      if (mapped.status === "write_failed") {
+        return { status: "write_failed", source: SOURCE, errorCode: mapped.errorCode };
       }
       // invalid_session (ended session)
       return { status: "invalid_session", source: SOURCE, errorCode: "session_ended" };

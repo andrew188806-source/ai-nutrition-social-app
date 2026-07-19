@@ -236,7 +236,7 @@ if (fs.existsSync(migDir)) {
   if (daFilename === expectedLatest) {
     const daPath = path.join(migDir, expectedLatest);
     daSha = createHash("sha256").update(fs.readFileSync(daPath)).digest("hex");
-    const expectedSha = "8d9ddaff71d85ac12489b3a26d35bf29d3e169ea3e75b3ad67b51bad4a340a33";
+    const expectedSha = "52a0d5708d6f7b32fca573750cc141342774c52467d90dc65efb650d0652af5e";
     check("D-A migration SHA-256 matches candidate", daSha === expectedSha, `got: ${daSha}`);
   }
 
@@ -354,18 +354,30 @@ if (sqlRead.ok) {
     /perform 1 from public\.restaurant_branches/i.test(sql));
   check("Migration checks branch.restaurant_id parent relationship (rb.restaurant_id = v_restaurant_id)",
     /rb\.restaurant_id\s*=\s*v_restaurant_id/i.test(sql));
-  check("Migration raises FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH for bad branch",
-    sql.includes("FEEDBACK_BRANCH_NOT_FOUND_OR_MISMATCH"));
+  // Branch not found → returns structured invalid_target JSON (correction: no exception raised)
+  check("Migration returns invalid_target JSON when branch not found (structured return, not exception)",
+    /perform 1 from public\.restaurant_branches[\s\S]{0,300}'invalid_target'/i.test(sql));
 
-  // Exact target shape enforcement
-  check("Migration enforces exact target shape (FEEDBACK_TARGET_SHAPE_INVALID)",
-    sql.includes("FEEDBACK_TARGET_SHAPE_INVALID"));
-  check("Migration rejects recommendation target with non-null restaurant_id/menu_item_id/branch_id",
-    /v_target_kind = 'recommendation'[\s\S]{0,200}FEEDBACK_TARGET_SHAPE_INVALID/i.test(sql));
-  check("Migration rejects restaurant target with non-null recommendation_id/menu_item_id",
-    /v_target_kind = 'restaurant'[\s\S]{0,200}FEEDBACK_TARGET_SHAPE_INVALID/i.test(sql));
-  check("Migration rejects menu_item target with non-null recommendation_id",
-    /v_target_kind = 'menu_item'[\s\S]{0,200}FEEDBACK_TARGET_SHAPE_INVALID/i.test(sql));
+  // Exact target shape enforcement: returns invalid_target JSON (correction: no FEEDBACK_TARGET_SHAPE_INVALID exception)
+  check("Migration rejects recommendation target with non-null restaurant_id/menu_item_id/branch_id (structured invalid_target return)",
+    /v_target_kind = 'recommendation'[\s\S]{0,200}p_restaurant_id is not null[\s\S]{0,200}'invalid_target'/i.test(sql));
+  check("Migration rejects restaurant target with non-null recommendation_id/menu_item_id (structured invalid_target return)",
+    /v_target_kind = 'restaurant'[\s\S]{0,200}p_recommendation_id is not null[\s\S]{0,200}'invalid_target'/i.test(sql));
+  check("Migration rejects menu_item target with non-null recommendation_id (structured invalid_target return)",
+    /v_target_kind = 'menu_item'[\s\S]{0,200}p_recommendation_id is not null[\s\S]{0,200}'invalid_target'/i.test(sql));
+
+  // record RPC returns structured JSON for all domain validation failures (correction: no 22023 in record RPC)
+  check("Migration record RPC returns invalid_action as structured JSON (not exception)",
+    /jsonb_build_object\s*\(\s*'status'\s*,\s*'invalid_action'\s*\)/i.test(sql));
+  check("Migration record RPC returns invalid_target as structured JSON for catalog/shape failures",
+    (sql.match(/jsonb_build_object\s*\(\s*'status'\s*,\s*'invalid_target'\s*\)/gi) ?? []).length >= 5);
+  check("Migration record RPC returns write_failed/event_key_invalid for invalid event idempotency key",
+    sql.includes("'write_failed'") && sql.includes("'event_key_invalid'"));
+  check("Migration does not raise 22023 from record RPC (all validation uses structured JSON returns)",
+    !(/record_authenticated_recommendation_feedback_event[\s\S]{0,100}begin;[\s\S]*?errcode\s*=\s*'22023'/i.test(sql)));
+  // fav-* prefix on branch_id still checked; now returns invalid_target JSON
+  check("Migration checks fav-* reserved prefix on branch_id (returns invalid_target JSON)",
+    /left\s*\(v_branch_id,\s*4\)\s*=\s*'fav-'[\s\S]{0,100}'invalid_target'/i.test(sql));
 
   // Idempotency payload includes branch_id with null-safe comparison
   check("Migration idempotency payload comparison includes branch_id",
@@ -378,10 +390,6 @@ if (sqlRead.ok) {
     sql.includes("SESSION_CREATE_CONFLICT") && !sql.includes("SESSION_ID_CONFLICT"));
   check("Migration does not expose SESSION_PAYLOAD_CONFLICT as a distinct public error",
     !sql.includes("SESSION_PAYLOAD_CONFLICT"));
-
-  // fav-* prefix check on branch_id
-  check("Migration checks fav-* prefix on branch_id (FEEDBACK_BRANCH_ID_RESERVED_PREFIX)",
-    sql.includes("FEEDBACK_BRANCH_ID_RESERVED_PREFIX"));
 
   // SECURITY DEFINER: no service_role reference
   check("Migration contains no service_role reference", !/service_role/i.test(sql));
@@ -480,6 +488,13 @@ check("mappers.ts uses timestamp validation",
   mappersTs.includes("Date.parse"));
 check("mappers.ts throws ConsumerRecommendationFeedbackResponseMalformedError",
   mappersTs.includes("ConsumerRecommendationFeedbackResponseMalformedError"));
+// Correction: mapper now handles invalid_action, invalid_target, write_failed from record RPC structured JSON
+check("mappers.ts validates invalid_action status from record RPC",
+  mappersTs.includes('"invalid_action"'));
+check("mappers.ts validates invalid_target status from record RPC",
+  mappersTs.includes('"invalid_target"'));
+check("mappers.ts validates write_failed status with error_code from record RPC",
+  mappersTs.includes('"write_failed"') && mappersTs.includes("error_code"));
 
 // adapter.ts: only 3 RPCs, no DML, no raw table access
 check("adapter.ts calls only the 3 approved RPC functions",
@@ -496,10 +511,15 @@ check("adapter.ts has no network fetch",
   !/\bfetch\s*\(|XMLHttpRequest/.test(adapterTs));
 check("adapter.ts maps 28000 error to unauthenticated",
   adapterTs.includes('"28000"') && adapterTs.includes("unauthenticated"));
-check("adapter.ts maps 22023 from record to invalid_target (not write_failed)",
-  adapterTs.includes('"22023"') && adapterTs.includes("invalid_target") && adapterTs.includes("feedback_target_invalid"));
-check("adapter.ts does not map 22023 from record to write_failed (replaced by invalid_target)",
-  !(/response\.error\.code === "22023"[\s\S]{0,100}write_failed/).test(adapterTs));
+// Correction: 22023 is no longer specially mapped in the record handler (structured JSON now handles all cases)
+check("adapter.ts has no blanket 22023-to-invalid_target mapping in record handler",
+  !/response\.error\.code\s*===\s*["']22023["']/.test(adapterTs));
+check("adapter.ts handles invalid_action JSON from record RPC (structured return path)",
+  adapterTs.includes('"invalid_action"') && adapterTs.includes("feedback_action_invalid"));
+check("adapter.ts handles invalid_target JSON from record RPC (structured return path)",
+  adapterTs.includes('"invalid_target"') && adapterTs.includes("feedback_target_invalid"));
+check("adapter.ts handles write_failed JSON from record RPC (event key / structured return path)",
+  adapterTs.includes('"write_failed"') && adapterTs.includes("mapped.errorCode"));
 check("adapter.ts maps invalid_session RPC response to typed result",
   adapterTs.includes('"invalid_session"') && adapterTs.includes("session_ended"));
 check("adapter.ts implements all 3 repository methods",
@@ -525,7 +545,7 @@ check("Mobile TypeScript compiles cleanly",
 console.log("\n=== 9. Staged Diff Clean ===");
 
 const stagedDiff = run("git diff --cached --name-only");
-check("No files staged (Phase 2Y-D-A is candidate-only)", stagedDiff.ok && stagedDiff.stdout === "");
+check("No files staged (clean index — no pending staged changes)", stagedDiff.ok && stagedDiff.stdout === "");
 
 const gitDiffCheck = run("git diff --check");
 check("No whitespace errors (git diff --check)", gitDiffCheck.ok);
@@ -671,9 +691,16 @@ if (phase2yaData !== null) {
   const failing = (phase2yaData.checks ?? []).filter(c => !c.pass);
   check("Phase 2Y-A guard total checks = 121", phase2yaData.totalChecks === 121,
     `got ${phase2yaData.totalChecks}`);
-  // Phase 2Y-D-A adds 4 additional expected failures in the Phase 2Y-A guard:
-  // migration count is now 37, latest migration changed, new RPC grants + functions exist.
-  check("Phase 2Y-A guard has exactly 6 expected failures after D-A (2 original + 4 migration/rpc)", failing.length === 6,
+  // Phase 2Y-D-A committed state adds 5 additional expected failures in the Phase 2Y-A guard
+  // (2 original + 5 migration/rpc = 7 total):
+  //   - migration count is now 37 (was 36)
+  //   - latest migration changed to 20260719010000
+  //   - new RPC grants exist in migrations
+  //   - new RPC functions exist in migrations
+  //   - "no new migration added in Phase 2Y-A": passes in candidate state (migration was untracked),
+  //     fails in committed state (migration is now in the committed tree).
+  // This distinction between candidate-state and committed-state disposition is expected and correct.
+  check("Phase 2Y-A guard has exactly 7 expected failures in D-A committed state (2 original + 5 migration/rpc)", failing.length === 7,
     `got ${failing.length}: ${failing.map(c => c.name).join("; ")}`);
   const EXPECTED_2YA = [
     "no consumer-recommendation-feedback runtime directory exists in Phase 2Y-A",
@@ -681,7 +708,8 @@ if (phase2yaData !== null) {
     "local migration count is still 36",
     "latest migration is still 20260718020000_consumer_favorites_atomic_write.sql",
     "no grant on recommendation tables or RPCs exists in any migration",
-    "no RPC/function for recommendation feedback exists in any migration"
+    "no RPC/function for recommendation feedback exists in any migration",
+    "no new migration added in Phase 2Y-A"
   ];
   for (const expected of EXPECTED_2YA) {
     check(`Phase 2Y-A guard expected failure present: "${expected}"`,
