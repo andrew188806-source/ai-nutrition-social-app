@@ -9,7 +9,11 @@ export type ConsumerRecommendationFeedbackErrorCode =
   | "feedback_session_invalid"
   | "feedback_ownership_field_rejected"
   | "feedback_write_failed"
-  | "feedback_idempotency_conflict";
+  | "feedback_idempotency_conflict"
+  | "feedback_permission_denied"
+  | "feedback_response_malformed"
+  | "feedback_database_failed"
+  | "feedback_transport_failed";
 
 export class ConsumerRecommendationFeedbackRuntimeError extends Error {
   constructor(
@@ -85,5 +89,29 @@ export class ConsumerRecommendationFeedbackWriteFailedError extends ConsumerReco
 export class ConsumerRecommendationFeedbackIdempotencyConflictError extends ConsumerRecommendationFeedbackRuntimeError {
   constructor(message = "Recommendation feedback idempotency key reused with a different payload.") {
     super("feedback_idempotency_conflict", message);
+  }
+}
+
+export class ConsumerRecommendationFeedbackPermissionDeniedError extends ConsumerRecommendationFeedbackRuntimeError {
+  constructor(message = "Recommendation feedback permission denied.") {
+    super("feedback_permission_denied", message);
+  }
+}
+
+export class ConsumerRecommendationFeedbackResponseMalformedError extends ConsumerRecommendationFeedbackRuntimeError {
+  constructor(message = "Recommendation feedback RPC response is malformed.") {
+    super("feedback_response_malformed", message);
+  }
+}
+
+export class ConsumerRecommendationFeedbackDatabaseFailedError extends ConsumerRecommendationFeedbackRuntimeError {
+  constructor(message = "Recommendation feedback database operation failed.") {
+    super("feedback_database_failed", message, true);
+  }
+}
+
+export class ConsumerRecommendationFeedbackTransportFailedError extends ConsumerRecommendationFeedbackRuntimeError {
+  constructor(message = "Recommendation feedback RPC transport failed.") {
+    super("feedback_transport_failed", message, true);
   }
 }

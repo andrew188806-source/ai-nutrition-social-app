@@ -4,21 +4,26 @@ import {
   MockConsumerRecommendationFeedbackRepository,
   type MockConsumerRecommendationFeedbackRepositoryOptions
 } from "./adapters/mockConsumerRecommendationFeedbackRepository";
+import { SupabaseConsumerRecommendationFeedbackWriteRepository } from "./adapters/supabaseConsumerRecommendationFeedbackWriteRepository";
 import { ConsumerRecommendationFeedbackService } from "./consumerRecommendationFeedbackService";
 import { ConsumerRecommendationFeedbackConfigurationInvalidError } from "./errors";
 import { getConsumerRecommendationFeedbackRuntimeFlags } from "./featureFlags";
 import type { ConsumerRecommendationFeedbackRepository } from "./ports";
+import type { SupabaseConsumerRecommendationFeedbackClientLike } from "./supabaseRecommendationFeedbackContracts";
 import type { ConsumerRecommendationFeedbackRuntimeFlags } from "./types";
 
 export type ConsumerRecommendationFeedbackFactoryOptions =
   MockConsumerRecommendationFeedbackRepositoryOptions & {
     authPort: ConsumerAuthPort;
     flags?: ConsumerRecommendationFeedbackRuntimeFlags;
+    feedbackClient?: SupabaseConsumerRecommendationFeedbackClientLike;
   };
 
 export function createConsumerRecommendationFeedbackRepository(
   flags: ConsumerRecommendationFeedbackRuntimeFlags = getConsumerRecommendationFeedbackRuntimeFlags(),
-  options: MockConsumerRecommendationFeedbackRepositoryOptions = {}
+  options: MockConsumerRecommendationFeedbackRepositoryOptions & {
+    feedbackClient?: SupabaseConsumerRecommendationFeedbackClientLike;
+  } = {}
 ): ConsumerRecommendationFeedbackRepository {
   assertConsumerRecommendationFeedbackRuntimeFlags(flags);
   if (flags.source === "mock") {
@@ -29,6 +34,14 @@ export function createConsumerRecommendationFeedbackRepository(
       );
     }
     return new MockConsumerRecommendationFeedbackRepository({ ...options, authPort });
+  }
+  if (flags.source === "supabase") {
+    if (!options.feedbackClient) {
+      throw new ConsumerRecommendationFeedbackConfigurationInvalidError(
+        "Supabase recommendation feedback source requires an explicitly injected RPC-capable feedback client."
+      );
+    }
+    return new SupabaseConsumerRecommendationFeedbackWriteRepository(options.feedbackClient);
   }
   return new DisabledConsumerRecommendationFeedbackRepository();
 }

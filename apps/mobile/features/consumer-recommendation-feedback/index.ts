@@ -7,3 +7,6 @@ export * from "./types";
 export * from "./validation";
 export * from "./adapters/disabledConsumerRecommendationFeedbackRepository";
 export * from "./adapters/mockConsumerRecommendationFeedbackRepository";
+export * from "./adapters/supabaseConsumerRecommendationFeedbackWriteRepository";
+export * from "./supabaseRecommendationFeedbackContracts";
+export * from "./supabaseRecommendationFeedbackMappers";
