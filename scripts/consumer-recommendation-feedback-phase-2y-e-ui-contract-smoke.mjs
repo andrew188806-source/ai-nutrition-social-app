@@ -8,6 +8,7 @@ const root = process.cwd();
 const checks = [];
 const issues = [];
 let tempRoot = null;
+const tempBase = process.platform === "win32" ? os.tmpdir() : "/tmp";
 
 function check(name, condition) {
   const item = { name, pass: Boolean(condition) };
@@ -27,7 +28,7 @@ function writeNodeStub(base, name, main, source) {
   fs.writeFileSync(path.join(dir, main), source, "utf8");
 }
 function compileProduction() {
-  tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "consumer-feedback-phase2y-e-ui-"));
+  tempRoot = fs.mkdtempSync(path.join(tempBase, "consumer-feedback-phase2y-e-ui-"));
   writeNodeStub(tempRoot, "@react-native-async-storage/async-storage", "index.js",
     "const values=new Map();module.exports={getItem:async k=>values.get(k)??null,setItem:async(k,v)=>{values.set(k,v)},removeItem:async k=>{values.delete(k)}};\n");
   writeNodeStub(tempRoot, "react-native-url-polyfill", "auto.js", "// Node has URL support.\n");
@@ -84,11 +85,17 @@ try {
   check("compiled UI module exports production UI model", typeof feedback.ConsumerRecommendationFeedbackUiModel === "function");
 
   const composition = feedback.createMobileConsumerRecommendationFeedbackComposition({
+    store: { sessions: new Map(), events: [] },
     env: {}, flags: { source: "mock", issues: [] }, authPort: authPort(), uuidFactory: uuidSequence(),
     clock: () => "2026-07-19T00:00:00.000Z", idGenerator: () => "feedback-contract"
   });
   check("Mobile composition resolves explicit mock source", composition.source === "mock" && composition.runtime.flags.source === "mock");
-  check("Mobile composition factory construction makes zero writes", composition.runtime.repository.getStore().sessions.size === 0 && composition.runtime.repository.getStore().events.length === 0);
+  const contractStore = { sessions: new Map(), events: [] };
+  const lifecycleComposition = feedback.createMobileConsumerRecommendationFeedbackComposition({
+    store: contractStore, env: {}, flags: { source: "mock", issues: [] }, authPort: authPort(), uuidFactory: uuidSequence(),
+    clock: () => "2026-07-19T00:00:00.000Z", idGenerator: () => "feedback-lifecycle"
+  });
+  check("Mobile composition factory construction makes zero writes", contractStore.sessions.size === 0 && contractStore.events.length === 0);
 
   const mapper = feedback.mapConsumerRecommendationFeedbackTarget;
   const canonical = mapper({ kind: "restaurant", restaurantId: "42", branchId: "branch-01", identityEvidence: "canonical" });
@@ -107,25 +114,35 @@ try {
     ["menu parent missing", { kind: "menu_item", restaurantId: "", menuItemId: "menu-1", identityEvidence: "canonical" }]
   ]) check(`target mapper rejects ${name}`, mapper(input).status === "target_unavailable");
 
-  const model = new feedback.ConsumerRecommendationFeedbackUiModel({ service: composition.service, uuidFactory: composition.uuidFactory });
+  const serviceCalls = { create: 0, record: 0, end: 0 };
+  const trackedService = {
+    source: lifecycleComposition.service.source,
+    createCurrentUserRecommendationSession(input) { serviceCalls.create += 1; return lifecycleComposition.service.createCurrentUserRecommendationSession(input); },
+    recordCurrentUserRecommendationFeedbackEvent(input) { serviceCalls.record += 1; return lifecycleComposition.service.recordCurrentUserRecommendationFeedbackEvent(input); },
+    endCurrentUserRecommendationSession(input) { serviceCalls.end += 1; return lifecycleComposition.service.endCurrentUserRecommendationSession(input); }
+  };
+  const model = new feedback.ConsumerRecommendationFeedbackUiModel({ service: trackedService, uuidFactory: lifecycleComposition.uuidFactory });
   const create1 = model.beginSession("flow-1", "next_meal_recommendation");
   const create2 = model.beginSession("flow-1", "next_meal_recommendation");
   const [created, duplicateCreate] = await Promise.all([create1, create2]);
-  check("session create is stable across duplicate begin", created.status === "created" && duplicateCreate.status === "created" && composition.runtime.repository.getStore().sessions.size === 1);
+  check("session create is stable across duplicate begin", created.status === "created" && duplicateCreate.status === "created" && contractStore.sessions.size === 1 && serviceCalls.create === 1);
 
   const event1 = model.recordEvent("select:one", "clicked", canonical);
   const event2 = model.recordEvent("select:one", "clicked", canonical);
   const [recorded, duplicateTap] = await Promise.all([event1, event2]);
-  check("duplicate tap shares one write", recorded.status === "recorded" && duplicateTap.status === "recorded" && composition.runtime.repository.getStore().events.length === 1);
+  check("duplicate tap shares one write", recorded.status === "recorded" && duplicateTap.status === "recorded" && contractStore.events.length === 1 && serviceCalls.record === 1);
   const stableRetry = await model.recordEvent("select:one", "clicked", canonical);
-  check("completed identical retry resolves already_recorded", stableRetry.status === "already_recorded" && composition.runtime.repository.getStore().events.length === 1);
+  check("completed identical retry resolves already_recorded", stableRetry.status === "already_recorded" && contractStore.events.length === 1 && serviceCalls.record === 1);
+  const accepted = await model.recordEvent("confirm:one", "accepted", canonical);
+  check("accepted uses a distinct stable key and records through production UI model", accepted.status === "recorded" && contractStore.events.length === 2 &&
+    contractStore.events[0].eventIdempotencyKey !== contractStore.events[1].eventIdempotencyKey && serviceCalls.record === 2);
   const conflict = await model.recordEvent("select:one", "accepted", canonical);
   check("same gesture identity with changed payload conflicts", conflict.status === "idempotency_conflict");
   const ended = await model.endSession();
   const repeatedEnd = await model.endSession();
-  check("end and repeated end are safe", ended.status === "ended" && repeatedEnd.status === "already_ended");
+  check("end and repeated end are safe without a repeated service call", ended.status === "ended" && repeatedEnd.status === "already_ended" && serviceCalls.end === 1);
   const afterEnd = await model.recordEvent("after-end", "clicked", canonical);
-  check("ended session rejects later events", afterEnd.status === "invalid_session" && composition.runtime.repository.getStore().events.length === 1);
+  check("ended session rejects later events before service or row write", afterEnd.status === "invalid_session" && contractStore.events.length === 2 && serviceCalls.record === 2);
   model.setAuthSessionIdentity("actor-a");
   model.setAuthSessionIdentity("actor-b");
   check("auth identity change clears local runtime state", model.snapshot.status === "idle");
@@ -154,6 +171,18 @@ try {
   check("UI records only actual clicked and accepted gestures", /"clicked"/.test(content) && /"accepted"/.test(content) && !/"shown"|"dismissed"|"saved"|"consumed"/.test(content));
   check("event input cannot spoof sourceSurface timestamp or excluded payload", !/event[^\n]*(?:sourceSurface|timestamp|rating|feedbackNote|dismissReason)|userId\s*:|user_id\s*:/i.test(content));
   check("UI contains no unsafe UUID generation", !/Math\.random|Date\.now\(\).*uuid|random.*string/i.test(content));
+
+  const developmentRunner = read("scripts/consumer-recommendation-feedback-phase-2y-e-development-mobile-smoke.mjs");
+  check("Development runner imports the true Mobile composition through compiled production exports",
+    /feedback\.createMobileConsumerRecommendationFeedbackComposition/.test(developmentRunner) && /feedback\.ConsumerRecommendationFeedbackUiModel/.test(developmentRunner));
+  check("Development live contract covers clicked accepted repeated end and ended-session protection",
+    /"clicked"/.test(developmentRunner) && /"accepted"/.test(developmentRunner) && /repeat_end_session/.test(developmentRunner) && /record_after_end/.test(developmentRunner));
+  check("Development runner has no direct runtime repository or RPC access",
+    !/composition\.runtime|\.repository|\.rpc\s*\(/.test(developmentRunner));
+  check("Development runner has no service-role or API-keys endpoint path",
+    !/service_role|\/api-keys|apikeys/i.test(developmentRunner));
+  check("Development runner retains finally cleanup sign-out session and operator-close invariants",
+    /finally\s*\{[\s\S]*cleanupStatements[\s\S]*signOut\(\)[\s\S]*getCurrentSession\(\)[\s\S]*operator\.close/.test(developmentRunner));
 
   console.log(JSON.stringify({ status: issues.length ? "failed" : "passed", phase: "Consumer Runtime Phase 2Y-E UI Contract Smoke",
     totalChecks: checks.length, checks, issues, importedPublicComposition: "createMobileConsumerRecommendationFeedbackComposition",

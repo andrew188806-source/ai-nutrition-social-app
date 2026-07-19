@@ -102,17 +102,62 @@ such path, and controlled actors/rows were cleaned to zero. In this Phase 2Y-E l
 
 Development remains retained at 37/37. Production, N4, and Phase 2Z remain untouched/unstarted.
 
+## Committed-state correction addendum
+
+The initial Phase 2Y-E preparation/freeze commit is
+`fe5793fb83f23af608d2e3809379cc7f15703fd7`. Its Development live smoke evidence proved only session
+creation, one `clicked` event, the identical `clicked` retry, and session end. It did not prove an
+`accepted` event, repeated end, or the production UI model's ended-session write protection. Those
+three lifecycle checks are this narrow addendum and remain **not executed against Development**
+until Claude supplies the approved opt-in inputs and runs the corrected live path.
+
+After the initial commit, the original candidate-era guard reported `67/69`: it required the Frozen
+Phase 2Y-D-B commit to equal `HEAD`, and it derived the exact 12-file candidate only from `git status`.
+A clean committed candidate therefore had no status-only inventory. The corrected guard accepts the
+Frozen commit when it is `HEAD` or an ancestor of `HEAD`, and validates the exact cumulative Phase
+2Y-E inventory as the union of `git diff <frozen-base>..HEAD` and current staged/unstaged paths. On
+top of the initial commit, the current worktree is independently restricted to the four approved
+correction files. The staged diff must remain empty. No final correction SHA is hard-coded.
+
+The corrected live contract must use the production Mobile composition and UI model for: `created`,
+`clicked` → `recorded`, identical retry → `already_recorded`, a distinct stable UUID for `accepted`
+→ `recorded`, end after accepted → `ended`, repeated end → `already_ended`, and a post-end event →
+the existing typed `invalid_session` fail-closed result with no additional service/RPC call or row.
+Its existing `finally` contract still requires exact two-event/session cleanup, zero controlled rows,
+aggregate restoration, sign-out/session clearing, operator close, and `persistentTestData=false`.
+The safe default remains `SKIPPED`; local dry-run evidence is not Development live evidence.
+
+Claude's narrow addendum prerequisites are: reuse the existing Development actor; retain exact
+project identity, 37/37 migration, ACL, and prior-cleanup evidence; supply distinct controlled UUIDs
+for the session, clicked event, and accepted event; supply one canonical restaurant target and the
+approved cleanup operator; explicitly opt in only for Development; and confirm zero controlled rows
+before and after with aggregate restoration. No actor provisioning, service-role/API-keys endpoint,
+migration deployment, Production access, or Phase 2Z work is permitted.
+
+The original historical estimate counted four D-B progression failures and missed the legacy
+directory-wide frozen assertion. The actual Frozen D-B guard disposition is exactly `54/59`: five
+failures, all classified `EXPECTED_PHASE_TRANSITION_RESULT`. The fifth is `Frozen Phase 2Y-A/B/D-A
+files are byte-equivalent to baseline`. D-B used the entire recommendation-feedback directory as an
+immutable path, while Phase 2Y-E legitimately added the Mobile composition, target mapper, and UI
+model inside that directory. A forward-compatible manifest derived from files that actually existed
+at Frozen commit `a663a2f04261b563d2aee42e656450c2e8cf42ca` proves every pre-existing frozen file is
+still byte-equivalent. The three Phase 2Y-E additions are absent from that manifest, and the Frozen
+D-B guard itself remains byte-equivalent.
+
 ## Historical regression disposition
 
 The Frozen Phase 2Y-D-A contract smoke remains positive (`81/81`), its forward regression smoke
 remains positive (`33/33`), and the complete D-A guard remains positive (`202/202`). The historical
-Phase 2Y-D-B0 preparation guard reports exactly these four forward-transition differences, each
+Phase 2Y-D-B0 preparation guard reports exactly these five forward-transition differences, each
 classified `EXPECTED_PHASE_TRANSITION_RESULT`:
 
 - `baseline HEAD is exact`: the repository has advanced from the D-B0 preparation baseline;
 - `candidate inventory is exactly four files`: Phase 2Y-E has its own exact 12-file candidate;
 - `Production TypeScript runtime diff is empty`: Phase 2Y-E intentionally adds the Mobile cutover;
 - `package changes no other script`: Phase 2Y-E intentionally adds its three validation scripts.
+- `Frozen Phase 2Y-A/B/D-A files are byte-equivalent to baseline`: the legacy assertion freezes the
+  whole feedback directory and therefore sees the three new Phase 2Y-E Mobile files; the
+  commit-derived frozen manifest proves no pre-existing D-B frozen file changed.
 
 No other D-B0 check fails. In particular, the safe default remains skipped, staged diff remains
 empty, and the historical result reports no network, database, credential, migration, Development,

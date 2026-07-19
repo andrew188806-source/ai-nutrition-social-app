@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const baseline = "a663a2f04261b563d2aee42e656450c2e8cf42ca";
@@ -19,7 +19,35 @@ const doc = "docs/consumer-runtime-phase-2y/phase-2y-e-mobile-recommendation-fee
 const guardPath = "scripts/consumer-recommendation-feedback-phase-2y-e-guard.mjs";
 const uiSmokePath = "scripts/consumer-recommendation-feedback-phase-2y-e-ui-contract-smoke.mjs";
 const devSmokePath = "scripts/consumer-recommendation-feedback-phase-2y-e-development-mobile-smoke.mjs";
+const dbGuardPath = "scripts/consumer-recommendation-feedback-phase-2y-d-b-guard.mjs";
 const candidates = new Set(["package.json", composition, mapper, uiModel, content, provider, nextTypes, i18n, doc, guardPath, uiSmokePath, devSmokePath]);
+const correctionCandidates = new Set([guardPath, devSmokePath, uiSmokePath, doc]);
+const dbExpectedTransitionFailures = [
+  "baseline HEAD is exact",
+  "candidate inventory is exactly four files",
+  "Production TypeScript runtime diff is empty",
+  "package changes no other script",
+  "Frozen Phase 2Y-A/B/D-A files are byte-equivalent to baseline"
+];
+const dbFrozenRoots = [
+  "apps/mobile/features/consumer-recommendation-feedback",
+  "docs/consumer-runtime-phase-2y/phase-2y-a-discovery-report.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-a-runtime-contract.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-a-security-and-target-identity.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-b-local-disabled-mock-architecture.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-b-validation-plan.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-d-a-atomic-write-preparation.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-d-a-security-and-validation.md",
+  "docs/consumer-runtime-phase-2y/phase-2y-d-b-development-write-activation-runbook.md",
+  "scripts/consumer-recommendation-feedback-phase-2y-a-guard.mjs",
+  "scripts/consumer-recommendation-feedback-phase-2y-b-guard.mjs",
+  "scripts/consumer-recommendation-feedback-phase-2y-b-contract-smoke.mjs",
+  "scripts/consumer-recommendation-feedback-phase-2y-d-a-guard.mjs",
+  "scripts/consumer-recommendation-feedback-phase-2y-d-a-contract-smoke.mjs",
+  "scripts/consumer-recommendation-feedback-phase-2y-d-a-forward-regression-smoke.mjs",
+  migration
+];
+const phase2yENewFeedbackFiles = [composition, mapper, uiModel].sort();
 const frozenExact = [
   "apps/mobile/features/consumer-recommendation-feedback/adapters/disabledConsumerRecommendationFeedbackRepository.ts",
   "apps/mobile/features/consumer-recommendation-feedback/adapters/mockConsumerRecommendationFeedbackRepository.ts",
@@ -54,24 +82,107 @@ function check(name, condition, detail = undefined) {
 function git(args) { return spawnSync("git", args, { cwd: root, encoding: "utf8", windowsHide: true }); }
 function read(file) { return fs.readFileSync(path.join(root, file), "utf8"); }
 function sha(file) { return createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex"); }
-function run(file, args = []) {
-  return spawnSync(process.execPath, [file, ...args], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 240000,
-    env: { ...process.env, TMPDIR: os.tmpdir(), TEMP: os.tmpdir(), TMP: os.tmpdir(), TASTKIND_CONSUMER_PHASE2Y_E_DEVELOPMENT_MOBILE_SMOKE: "" } });
+function runFrozenDbGuard() {
+  const tempDir = process.platform === "win32" ? (process.env.TMPDIR ?? "") : "/tmp";
+  return spawnSync(process.execPath, [dbGuardPath], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 600000,
+    env: { ...process.env, TMPDIR: tempDir, TEMP: tempDir, TMP: tempDir,
+      TASTKIND_CONSUMER_PHASE2Y_DB_DEVELOPMENT_LIVE_SMOKE: "", TASTKIND_CONSUMER_PHASE2Y_E_DEVELOPMENT_MOBILE_SMOKE: "" } });
 }
-function parse(stdout) { try { return JSON.parse(stdout); } catch { return null; } }
+let runSequence = 0;
+async function run(file, args = []) {
+  runSequence += 1;
+  const previous = { argv: process.argv, exitCode: process.exitCode, log: console.log,
+    tmpdir: process.env.TMPDIR, temp: process.env.TEMP, tmp: process.env.TMP,
+    liveOptIn: process.env.TASTKIND_CONSUMER_PHASE2Y_E_DEVELOPMENT_MOBILE_SMOKE };
+  const output = [];
+  try {
+    process.argv = [process.execPath, path.join(root, file), ...args];
+    process.exitCode = undefined;
+    process.env.TMPDIR = process.platform === "win32" ? (previous.tmpdir ?? "") : "/tmp";
+    process.env.TEMP = process.env.TMPDIR;
+    process.env.TMP = process.env.TMPDIR;
+    process.env.TASTKIND_CONSUMER_PHASE2Y_E_DEVELOPMENT_MOBILE_SMOKE = "";
+    console.log = (...values) => { output.push(values.map((value) => typeof value === "string" ? value : JSON.stringify(value)).join(" ")); };
+    const url = pathToFileURL(path.join(root, file));
+    url.searchParams.set("guardRun", String(runSequence));
+    await import(url.href);
+    return { status: process.exitCode ?? 0, signal: null, stdout: `${output.join("\n")}\n`, stderr: "" };
+  } catch (error) {
+    return { status: 1, signal: null, stdout: `${output.join("\n")}\n`, stderr: error instanceof Error ? error.message : String(error), error };
+  } finally {
+    process.argv = previous.argv;
+    process.exitCode = previous.exitCode;
+    console.log = previous.log;
+    for (const [key, value] of [["TMPDIR", previous.tmpdir], ["TEMP", previous.temp], ["TMP", previous.tmp],
+      ["TASTKIND_CONSUMER_PHASE2Y_E_DEVELOPMENT_MOBILE_SMOKE", previous.liveOptIn]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+}
+function parse(stdout) {
+  try { return JSON.parse(stdout); } catch {
+    const start = stdout.indexOf("{");
+    const end = stdout.lastIndexOf("}");
+    if (start < 0 || end < start) return null;
+    try { return JSON.parse(stdout.slice(start, end + 1)); } catch { return null; }
+  }
+}
+function runFailure(result) {
+  if (result.status === 0) return undefined;
+  return { status: result.status, signal: result.signal, error: result.error?.message,
+    stderr: result.stderr?.trim().slice(0, 500), stdout: result.stdout?.trim().slice(0, 500) };
+}
+function reportFailure(result, report) {
+  if (result.status !== 0) return runFailure(result);
+  if (report) return undefined;
+  return { status: result.status, stdoutLength: result.stdout?.length ?? null,
+    stdout: result.stdout?.trim().slice(0, 500), stderr: result.stderr?.trim().slice(0, 500) };
+}
 
 try {
   const statusResult = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
   const changed = statusResult.stdout.split("\0").filter(Boolean).map((entry) => entry.slice(3).replaceAll("\\", "/"));
-  const extra = changed.filter((file) => !candidates.has(file));
-  const missing = [...candidates].filter((file) => !changed.includes(file));
+  const head = git(["rev-parse", "HEAD"]).stdout.trim();
+  const committed = git(["diff", "--name-only", `${baseline}..${head}`]).stdout.trim().split("\n").filter(Boolean);
+  const cumulative = [...new Set([...committed, ...changed])].sort();
+  const extra = cumulative.filter((file) => !candidates.has(file));
+  const missing = [...candidates].filter((file) => !cumulative.includes(file));
+  const correctionExtra = changed.filter((file) => !(head === baseline ? candidates : correctionCandidates).has(file));
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
-  check("Phase 2Y-D-B Frozen Commit is HEAD baseline", git(["rev-parse", "HEAD"]).stdout.trim() === baseline);
+  check("Phase 2Y-D-B Frozen Commit is HEAD or HEAD ancestor", git(["merge-base", "--is-ancestor", baseline, head]).status === 0);
   check("Phase 2Y-D-B Frozen Commit is ancestor", git(["merge-base", "--is-ancestor", baseline, "HEAD"]).status === 0);
-  check("candidate scope is exactly 12 approved files", changed.length === 12 && !extra.length && !missing.length, { changed, extra, missing });
+  check("cumulative candidate scope is exactly 12 approved files", cumulative.length === 12 && !extra.length && !missing.length,
+    { committed, worktree: changed, cumulative, extra, missing });
+  check("current correction worktree is within approved correction files", !correctionExtra.length,
+    { worktree: changed, allowed: [...(head === baseline ? candidates : correctionCandidates)], extra: correctionExtra });
   check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
   check("D-A and D-B Frozen implementation files remain byte-equivalent", git(["diff", "--quiet", baseline, "--", ...frozenExact]).status === 0);
   check("Frozen public index remains byte-equivalent", git(["diff", "--quiet", baseline, "--", "apps/mobile/features/consumer-recommendation-feedback/index.ts"]).status === 0);
+  const dbHistorical = runFrozenDbGuard();
+  const dbHistoricalReport = parse(dbHistorical.stdout);
+  const dbFailureNames = dbHistoricalReport?.failedChecks?.map((item) => item.name) ?? [];
+  check("Frozen D-B historical guard executes as exact 54/59 disposition",
+    dbHistorical.status === 1 && dbHistoricalReport?.status === "failed" && dbHistoricalReport?.totalChecks === 59 &&
+      dbHistoricalReport?.passed === 54 && dbHistoricalReport?.failed === 5,
+    reportFailure(dbHistorical, dbHistoricalReport));
+  check("Frozen D-B historical guard has exactly five approved transition failure names",
+    dbFailureNames.length === dbExpectedTransitionFailures.length &&
+      dbExpectedTransitionFailures.every((name) => dbFailureNames.includes(name)) &&
+      dbFailureNames.every((name) => dbExpectedTransitionFailures.includes(name)),
+    { actual: dbFailureNames, expected: dbExpectedTransitionFailures });
+  const dbFrozenManifest = git(["ls-tree", "-r", "--name-only", baseline, "--", ...dbFrozenRoots]).stdout.trim().split("\n").filter(Boolean);
+  const dbFrozenDrift = dbFrozenManifest.filter((file) => git(["diff", "--quiet", baseline, "--", file]).status !== 0);
+  check("D-B frozen manifest is derived from files existing at the Frozen Commit", dbFrozenManifest.length > 0 &&
+    dbFrozenManifest.every((file) => git(["cat-file", "-e", `${baseline}:${file}`]).status === 0), dbFrozenManifest.length);
+  check("every existing D-B frozen-manifest blob remains byte-equivalent", dbFrozenDrift.length === 0,
+    { manifestCount: dbFrozenManifest.length, drift: dbFrozenDrift });
+  const addedFeedbackFiles = git(["diff", "--diff-filter=A", "--name-only", `${baseline}..HEAD`, "--",
+    "apps/mobile/features/consumer-recommendation-feedback"]).stdout.trim().split("\n").filter(Boolean).sort();
+  check("only the three Phase 2Y-E additions explain the legacy directory-wide frozen failure",
+    JSON.stringify(addedFeedbackFiles) === JSON.stringify(phase2yENewFeedbackFiles) &&
+      addedFeedbackFiles.every((file) => !dbFrozenManifest.includes(file)),
+    { addedFeedbackFiles, frozenManifestOverlap: addedFeedbackFiles.filter((file) => dbFrozenManifest.includes(file)) });
+  check("Frozen D-B guard itself remains byte-equivalent", git(["diff", "--quiet", baseline, "--", dbGuardPath]).status === 0);
   check("migration diff is empty and no migration was added", git(["diff", "--quiet", baseline, "--", "supabase/migrations"]).status === 0);
   check("package-lock diff is empty", git(["diff", "--quiet", baseline, "--", "package-lock.json"]).status === 0);
   const migrations = fs.readdirSync(path.join(root, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
@@ -123,16 +234,16 @@ try {
   check("only actual clicked and accepted actions are wired", /"clicked"/.test(contentSource) && /"accepted"/.test(contentSource) && !/"shown"|"dismissed"|"saved"|"consumed"/.test(contentSource));
   check("new UI strings are in zh-TW i18n", ["feedbackAvailable", "feedbackTargetUnavailable", "feedbackPending", "feedbackRecorded", "feedbackFailed"].every((key) => read(i18n).includes(`${key}:`)));
 
-  const uiSmoke = run(uiSmokePath);
+  const uiSmoke = await run(uiSmokePath);
   const uiReport = parse(uiSmoke.stdout);
-  check("UI contract smoke passes production-backed checks", uiSmoke.status === 0 && uiReport?.status === "passed" && uiReport?.checks?.every((item) => item.pass));
-  const safe = run(devSmokePath);
+  check("UI contract smoke passes production-backed checks", uiSmoke.status === 0 && uiReport?.status === "passed" && uiReport?.checks?.every((item) => item.pass), reportFailure(uiSmoke, uiReport));
+  const safe = await run(devSmokePath);
   const safeReport = parse(safe.stdout);
-  check("Development Mobile smoke safe default is SKIPPED", safe.status === 0 && safeReport?.status === "skipped" && safeReport?.networkUsed === false && safeReport?.databaseUsed === false);
-  const dry1 = run(devSmokePath, ["--dry-run"]);
-  const dry2 = run(devSmokePath, ["--dry-run"]);
+  check("Development Mobile smoke safe default is SKIPPED", safe.status === 0 && safeReport?.status === "skipped" && safeReport?.networkUsed === false && safeReport?.databaseUsed === false, reportFailure(safe, safeReport));
+  const dry1 = await run(devSmokePath, ["--dry-run"]);
+  const dry2 = await run(devSmokePath, ["--dry-run"]);
   const dryReport = parse(dry1.stdout);
-  check("Development Mobile dry-run passes in memory", dry1.status === 0 && dryReport?.status === "passed" && dryReport?.networkUsed === false && dryReport?.databaseUsed === false);
+  check("Development Mobile dry-run passes in memory", dry1.status === 0 && dryReport?.status === "passed" && dryReport?.networkUsed === false && dryReport?.databaseUsed === false, reportFailure(dry1, dryReport));
   check("Development Mobile dry-run is deterministic", dry1.stdout === dry2.stdout);
   check("dry-run proves stale duplicate ended and cleanup protections", dryReport?.checks?.some((item) => item.name.includes("stale") && item.pass) &&
     dryReport?.checks?.some((item) => item.name.includes("duplicate tap") && item.pass) && dryReport?.checks?.some((item) => item.name.includes("ended-session") && item.pass) && dryReport?.persistentTestData === false);
@@ -158,7 +269,10 @@ try {
   console.log(JSON.stringify({ status: issues.length ? "failed" : "passed", phase: "Consumer Runtime Phase 2Y-E Guard",
     totalChecks: checks.length, passed: checks.length - issues.length, failed: issues.length,
     failedChecks: issues.map(({ name, detail }) => ({ name, ...(detail === undefined ? {} : { detail }) })),
-    candidateCount: changed.length, migrationCount: migrations.length, latestMigration: migrations.at(-1), migrationSha256: sha(migration),
+    candidateCount: cumulative.length, correctionWorktreeCount: changed.length, migrationCount: migrations.length, latestMigration: migrations.at(-1), migrationSha256: sha(migration),
+    dBHistoricalDisposition: { status: "EXPECTED_PHASE_TRANSITION_RESULT", totalChecks: dbHistoricalReport?.totalChecks ?? 0,
+      passed: dbHistoricalReport?.passed ?? 0, failed: dbHistoricalReport?.failed ?? 0, expectedFailures: dbExpectedTransitionFailures,
+      frozenManifestCount: dbFrozenManifest.length, frozenManifestDriftCount: dbFrozenDrift.length },
     uiSmokeChecks: uiReport?.totalChecks ?? 0, developmentDryRunChecks: dryReport?.checks?.length ?? 0,
     networkUsed: false, databaseUsed: false, credentialsUsed: false, developmentTouched: false, productionTouched: false,
     serviceRoleCredentialAccessed: false, serviceRoleCredentialUsed: false, serviceRoleBrowserRuntimePathUsed: false,
