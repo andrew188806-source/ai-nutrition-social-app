@@ -1,6 +1,7 @@
 import {
   ConsumerAuthError,
   ConsumerMealWriteAuthenticationRequiredError,
+  ConsumerMealWriteFunctionRejectedError,
   ConsumerMealWriteMappingFailedError
 } from "../../consumer-auth/errors";
 import type { ConsumerAuthPort } from "../../consumer-auth/ports";
@@ -22,6 +23,7 @@ export class MockConsumerMealRecordWriteRepository implements ConsumerMealRecord
   readonly source = "mock" as const;
   private sequence = 0;
   private readonly createdRecords: ConsumerMealRecord[] = [];
+  private readonly idempotentRecords = new Map<string, { fingerprint: string; record: ConsumerMealRecord }>();
 
   constructor(private readonly options: MockConsumerMealRecordWriteRepositoryOptions) {}
 
@@ -31,6 +33,15 @@ export class MockConsumerMealRecordWriteRepository implements ConsumerMealRecord
       if (!session.ok) return err(session.error);
       if (!session.value) return err(new ConsumerMealWriteAuthenticationRequiredError());
       const validated = validateCreateMealRecordInput(input);
+      const idempotencyScope = validated.idempotencyKey ? `${session.value.user.userId}\u0000${validated.idempotencyKey}` : null;
+      const fingerprint = JSON.stringify(validated);
+      const existing = idempotencyScope ? this.idempotentRecords.get(idempotencyScope) : undefined;
+      if (existing) {
+        if (existing.fingerprint !== fingerprint) {
+          return err(new ConsumerMealWriteFunctionRejectedError("Consumer meal write idempotency key conflicts with another payload."));
+        }
+        return ok(existing.record);
+      }
       this.sequence += 1;
       const idSuffix = String(this.sequence).padStart(4, "0");
       const now = this.options.now?.() ?? new Date().toISOString();
@@ -40,6 +51,7 @@ export class MockConsumerMealRecordWriteRepository implements ConsumerMealRecord
         now
       });
       this.createdRecords.push(record);
+      if (idempotencyScope) this.idempotentRecords.set(idempotencyScope, { fingerprint, record });
       return ok(record);
     } catch (error) {
       if (error instanceof ConsumerAuthError) return err(error);

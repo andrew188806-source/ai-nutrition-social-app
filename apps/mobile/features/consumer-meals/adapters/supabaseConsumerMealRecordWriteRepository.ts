@@ -11,6 +11,7 @@ import type { ConsumerAuthPort } from "../../consumer-auth/ports";
 import { err, ok } from "../../consumer-auth/types";
 import {
   SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
+  SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_V2_FUNCTION,
   type SupabaseConsumerMealClientLike,
   type SupabaseCreateMealRecordRpcArgs,
   type SupabaseMealPostgrestErrorLike
@@ -45,10 +46,15 @@ export class SupabaseConsumerMealRecordWriteRepository implements ConsumerMealRe
     if (!session.value) return err(new ConsumerMealWriteAuthenticationRequiredError());
     const validated = validateCreateMealRecordInput(input);
     try {
-      const response = await this.options.mealClient.rpc(
-        SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
-        buildCreateMealRecordRpcArgs(validated)
-      );
+      const response = validated.idempotencyKey
+        ? await this.options.mealClient.rpc(SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_V2_FUNCTION, {
+            ...buildCreateMealRecordRpcArgs(validated),
+            p_client_request_id: validated.idempotencyKey
+          })
+        : await this.options.mealClient.rpc(
+            SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
+            buildCreateMealRecordRpcArgs(validated)
+          );
       if (response.error) return err(mapMealWriteRpcError(response.error));
       if (!response.data) return err(new ConsumerMealWriteMappingFailedError("Consumer meal write returned no canonical record."));
       return ok(mapSupabaseMealRecordRowToConsumerMealRecord(response.data, session.value.user.userId));
@@ -97,6 +103,9 @@ function mapMealWriteRpcError(error: SupabaseMealPostgrestErrorLike) {
   }
   if (error.code === "22023" || error.code === "23514" || message.includes("INVALID") || message.includes("REQUIRED") || message.includes("TOO_MANY") || message.includes("FORBIDDEN")) {
     return new ConsumerMealWriteFunctionRejectedError();
+  }
+  if (message.includes("IDEMPOTENCY_KEY_CONFLICT")) {
+    return new ConsumerMealWriteFunctionRejectedError("Consumer meal write idempotency key conflicts with another payload.");
   }
   return new ConsumerMealWriteTransportFailedError();
 }

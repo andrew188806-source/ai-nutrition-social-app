@@ -15,13 +15,14 @@ import type {
   ConsumerNutritionSnapshot,
   ConsumerNutritionSourceType
 } from "./types";
+import { toDateKeyInTimeZone } from "./mealDateTime";
 
 const mealTypes = new Set<ConsumerMealType>(["breakfast", "lunch", "dinner", "late_night", "snack", "other"]);
 const mealSources = new Set<ConsumerMealSourceType>(["restaurant", "self_made", "manual", "ai_estimated"]);
 const nutritionSources = new Set<ConsumerNutritionSourceType>(["restaurant_verified", "admin_verified", "ai_estimated", "user_corrected", "manual"]);
 const rejectedOwnershipFields = new Set(["userId", "ownerId", "profileId", "externalUserId", "createdBy", "user_id", "owner_id", "profile_id"]);
 const rejectedServerFields = new Set(["id", "mealRecordId", "mealRecordItemId", "createdAt", "updatedAt", "deletedAt", "created_at", "updated_at", "deleted_at"]);
-const recordKeys = new Set(["mealType", "occurredAt", "mealDate", "timezone", "title", "note", "source", "items"]);
+const recordKeys = new Set(["idempotencyKey", "mealType", "occurredAt", "mealDate", "timezone", "title", "note", "source", "items"]);
 const itemKeys = new Set([
   "restaurantId",
   "branchId",
@@ -63,14 +64,21 @@ export function validateCreateMealRecordInput(input: ConsumerCreateMealRecordInp
   const source = enumValue(raw.source ?? "manual", mealSources, "source", ConsumerMealWriteInvalidInputError);
   const mealDate = dateKey(raw.mealDate, "mealDate");
   const occurredAt = timestamp(raw.occurredAt, "occurredAt");
-  if (occurredAt.slice(0, 10) !== mealDate) {
-    throw new ConsumerMealWriteInvalidDateError("Meal write occurredAt date must match mealDate.");
-  }
   const timezone = optionalString(raw.timezone, "timezone", 64) ?? "Asia/Taipei";
+  let occurredDate: string;
+  try {
+    occurredDate = toDateKeyInTimeZone(new Date(occurredAt), timezone);
+  } catch {
+    throw new ConsumerMealWriteInvalidDateError("Meal write timezone or occurredAt is invalid.");
+  }
+  if (occurredDate !== mealDate) {
+    throw new ConsumerMealWriteInvalidDateError("Meal write occurredAt date must match mealDate in the supplied timezone.");
+  }
   const itemsRaw = Array.isArray(raw.items) ? raw.items : null;
   if (!itemsRaw || itemsRaw.length < 1) throw new ConsumerMealWriteInvalidItemsError("Meal write requires at least one item.");
   if (itemsRaw.length > maxItems) throw new ConsumerMealWritePayloadTooLargeError(`Meal write cannot include more than ${maxItems} items.`);
   return {
+    idempotencyKey: optionalIdempotencyKey(raw.idempotencyKey),
     mealType,
     occurredAt,
     mealDate,
@@ -80,6 +88,14 @@ export function validateCreateMealRecordInput(input: ConsumerCreateMealRecordInp
     source,
     items: itemsRaw.map((item, index) => validateItem(item, index, occurredAt, timezone))
   };
+}
+
+function optionalIdempotencyKey(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new ConsumerMealWriteInvalidInputError("Meal write idempotencyKey must be a UUID v4.");
+  }
+  return value.toLowerCase();
 }
 
 export function getConsumerMealWriteMaxItems() {

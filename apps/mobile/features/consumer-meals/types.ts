@@ -110,6 +110,7 @@ export type ConsumerCreateMealRecordItemInput = {
 };
 
 export type ConsumerCreateMealRecordInput = {
+  idempotencyKey?: string;
   mealType: ConsumerMealType;
   occurredAt: string;
   mealDate: string;

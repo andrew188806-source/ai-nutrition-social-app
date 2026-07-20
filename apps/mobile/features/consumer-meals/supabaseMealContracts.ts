@@ -15,6 +15,7 @@ export const SUPABASE_CONSUMER_MEAL_RECORDS_TABLE = "meal_records" as const;
 export const SUPABASE_CONSUMER_DAILY_NUTRITION_SUMMARIES_TABLE = "daily_nutrition_summaries" as const;
 export const SUPABASE_CONSUMER_PLANNED_MEALS_TABLE = "planned_meals" as const;
 export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION = "create_current_user_meal_record" as const;
+export const SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_V2_FUNCTION = "create_current_user_meal_record_v2" as const;
 export const SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION = "persist_authenticated_daily_nutrition_summary" as const;
 export const SUPABASE_SAVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "save_authenticated_planned_meal" as const;
 export const SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "update_authenticated_planned_meal" as const;
@@ -235,6 +236,10 @@ export type SupabaseCreateMealRecordRpcArgs = {
   p_items: Array<Record<string, unknown>>;
 };
 
+export type SupabaseCreateMealRecordV2RpcArgs = SupabaseCreateMealRecordRpcArgs & {
+  p_client_request_id: string;
+};
+
 export type SupabasePersistDailyNutritionSummaryRpcArgs = {
   p_summary_date: string;
   p_timezone: string;
@@ -302,6 +307,10 @@ export type SupabaseConsumerMealClientLike = {
   rpc(
     fn: typeof SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
     args: SupabaseCreateMealRecordRpcArgs
+  ): Promise<SupabaseMealRecordRpcResponseLike>;
+  rpc(
+    fn: typeof SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_V2_FUNCTION,
+    args: SupabaseCreateMealRecordV2RpcArgs
   ): Promise<SupabaseMealRecordRpcResponseLike>;
   rpc(
     fn: typeof SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION,
