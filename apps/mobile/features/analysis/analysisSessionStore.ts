@@ -16,7 +16,6 @@ export type AnalysisSessionState = {
   correctedRows: Record<string, boolean>;
   selectedMealPeriod: string;
   mealSaved: boolean;
-  autoSavedConfirmedMeal: boolean;
   mealId: string;
   preMealPhotoIds: string[];
   guiltSharingResult: { peopleCount: number; sharedCaloriesPerPerson: number } | null;
@@ -38,7 +37,6 @@ function createDefaultSession(): AnalysisSessionState {
     correctedRows: {},
     selectedMealPeriod: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1],
     mealSaved: false,
-    autoSavedConfirmedMeal: false,
     mealId: "",
     preMealPhotoIds: [],
     guiltSharingResult: null

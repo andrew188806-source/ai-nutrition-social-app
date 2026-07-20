@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
-import { SupabaseConsumerAuthAdapter } from "../consumer-auth/adapters/supabaseConsumerAuthAdapter";
-import { createAsyncStorageConsumerAuthStorage } from "../consumer-auth/asyncStorageConsumerAuthStorage";
-import { getConsumerRuntimeFlags } from "../consumer-auth/featureFlags";
-import { getSupabaseConsumerEnvironment } from "../consumer-auth/supabaseConsumerEnvironment";
-import { SupabaseConsumerClientFactory } from "../consumer-auth/supabaseConsumerClientFactory";
-import { createOfficialSupabaseConsumerSdkLoader } from "../consumer-auth/supabaseSdkLoader";
 import {
   getAutoSettledPlannedDinnerRecord,
   getConfirmedDinnerRecord,
@@ -15,7 +9,6 @@ import type { PlannedMeal } from "../planned-meal/types";
 import { createConsumerTodayIntakeOverviewService } from "./factories";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
 import type { ConsumerTodayIntakeOverviewService } from "./consumerTodayIntakeOverviewService";
-import type { SupabaseConsumerMealClientLike } from "./supabaseMealContracts";
 import type {
   ConsumerMealRecord,
   ConsumerMealRecordItem,
@@ -98,21 +91,21 @@ export type TodayIntakeUiState =
   | { status: "ready"; model: TodayIntakeUiModel; error: null; refresh: () => void }
   | { status: "error"; model: TodayIntakeUiModel | null; error: string; refresh: () => void };
 
-type RuntimeEnv = Record<string, string | undefined>;
-
-function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
-}
-
 export async function getCurrentUserTodayIntakeUiModel(input: { date?: string; overviewService?: ConsumerTodayIntakeOverviewService } = {}): Promise<TodayIntakeUiModel> {
-  const overviewService = input.overviewService ?? createRuntimeOverviewService();
+  const overviewService = input.overviewService ?? createLocalOverviewService();
   const overviewResult = await overviewService.getCurrentUserTodayIntakeOverview(input);
   if (!overviewResult.ok) throw overviewResult.error;
   return mapOverviewToUiModel(overviewResult.value);
 }
 
-export function useTodayIntakeUiModel(input: { date?: string } = {}): TodayIntakeUiState {
+export function useTodayIntakeUiModel(input: {
+  date?: string;
+  overviewService?: ConsumerTodayIntakeOverviewService | null;
+  revision?: number;
+  actorKey?: string | null;
+  actorGeneration?: number;
+  enabled?: boolean;
+} = {}): TodayIntakeUiState {
   const [version, setVersion] = useState(0);
   const [state, setState] = useState<Omit<TodayIntakeUiState, "refresh">>({
     status: "loading",
@@ -120,24 +113,28 @@ export function useTodayIntakeUiModel(input: { date?: string } = {}): TodayIntak
     error: null
   });
   const stableDate = input.date;
+  const enabled = input.enabled ?? true;
 
   useEffect(() => {
     let cancelled = false;
+    if (!enabled || !input.overviewService || !input.actorKey) {
+      setState((current) => ({ status: "error", model: current.model, error: "Today Intake requires an authenticated runtime." }));
+      return () => { cancelled = true; };
+    }
     setState((current) => ({ status: "loading", model: current.model, error: null }));
-    getCurrentUserTodayIntakeUiModel({ date: stableDate })
+    getCurrentUserTodayIntakeUiModel({ date: stableDate, overviewService: input.overviewService })
       .then((model) => {
         if (!cancelled) setState({ status: "ready", model, error: null });
       })
       .catch((error) => {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : "Today Intake overview could not be loaded.";
-          setState((current) => ({ status: "error", model: current.model, error: message }));
+          setState((current) => ({ status: "error", model: current.model, error: "Today Intake overview could not be loaded." }));
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [stableDate, version]);
+  }, [enabled, input.actorGeneration, input.actorKey, input.overviewService, input.revision, stableDate, version]);
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
   return useMemo(() => ({ ...state, refresh }) as TodayIntakeUiState, [refresh, state]);
@@ -147,29 +144,12 @@ export function getUiMealCalories(meal: TodayIntakeUiMealRecord): number {
   return meal.actualCalories ?? meal.estimatedCalories ?? meal.calories;
 }
 
-function createOverviewDependencies(mealFlags: ConsumerMealRuntimeFlags) {
-  if (mealFlags.mealRecordsSource !== "supabase-live" && mealFlags.dailyNutritionSource !== "supabase-live") {
-    return {};
-  }
-
-  const authFlags = getConsumerRuntimeFlags();
-  const storage = createAsyncStorageConsumerAuthStorage();
-  const factory = new SupabaseConsumerClientFactory({
-    env: getSupabaseConsumerEnvironment(readEnv()),
-    flags: authFlags,
-    storage,
-    sdkLoader: createOfficialSupabaseConsumerSdkLoader()
-  });
-  const { client } = factory.getOrCreateClient();
-  return {
-    authPort: new SupabaseConsumerAuthAdapter({ authClient: client.auth, transportEnabled: true }),
-    mealClient: client as unknown as SupabaseConsumerMealClientLike
-  };
-}
-
-function createRuntimeOverviewService() {
+function createLocalOverviewService() {
   const mealFlags = getConsumerMealRuntimeFlags();
-  return createConsumerTodayIntakeOverviewService(mealFlags, createOverviewDependencies(mealFlags));
+  if (mealFlags.mealRecordsSource === "supabase-live" || mealFlags.dailyNutritionSource === "supabase-live") {
+    throw new Error("Live Today Intake requires the shared Consumer Runtime composition.");
+  }
+  return createConsumerTodayIntakeOverviewService(mealFlags);
 }
 
 function mapOverviewToUiModel(overview: ConsumerTodayIntakeOverview): TodayIntakeUiModel {

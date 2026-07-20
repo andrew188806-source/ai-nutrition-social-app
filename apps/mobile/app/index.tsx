@@ -7,6 +7,7 @@ import { TodayMealGrid } from "../components/TodayMealGrid";
 import { TodayNutritionSummaryCard } from "../components/TodayNutritionSummaryCard";
 import { resetMealRecords } from "../features/analysis/analysisMealRecordStore";
 import { useTodayIntakeUiModel } from "../features/consumer-meals";
+import { useConsumerRuntime } from "../features/consumer-runtime";
 import { advanceDemoTimeByDays, getEffectiveDateKey, isDemoTestingEnabled, resetDemoTime } from "../features/demo-time";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { resetAllMealBuddyDemoState, resetMealBuddySocialDemoState } from "../features/meal-buddy-card";
@@ -18,8 +19,16 @@ import { fonts, hexA, radius, snowPalette as colors } from "../theme/tokens";
 export default function LandingScreen() {
   const router = useRouter();
   const [demoDateKey, setDemoDateKey] = useState(getEffectiveDateKey());
+  const runtime = useConsumerRuntime();
   const [, setDemoUserPlan] = useDemoUserPlan();
-  const intakeState = useTodayIntakeUiModel({ date: demoDateKey });
+  const intakeState = useTodayIntakeUiModel({
+    date: demoDateKey,
+    overviewService: runtime.overviewService,
+    revision: runtime.mealDataRevision,
+    actorKey: runtime.state.actorKey,
+    actorGeneration: runtime.state.actorGeneration,
+    enabled: runtime.state.authState.status === "signedIn"
+  });
   const model = intakeState.model;
 
   const lifestyle = zhTW.mobile.refinedLogic.lifestyleWorld;

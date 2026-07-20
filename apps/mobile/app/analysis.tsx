@@ -11,7 +11,8 @@ import { getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getNextMealCandidateCount } from "../features/next-meal-prototype";
-import { confirmPlannedDinnerFromAnalysis, getPlannedDinner } from "../features/planned-meal";
+import { getPlannedDinner } from "../features/planned-meal";
+import { useConsumerRuntime } from "../features/consumer-runtime";
 import { mobileMenuItemService } from "../services/mobile-menu-item-service";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
 import { Icon } from "../theme/icons";
@@ -63,13 +64,13 @@ export default function AnalysisScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mealSlot?: string }>();
   const analysis = useAnalysisCorrectionState();
+  const consumerRuntime = useConsumerRuntime();
   const [demoMode] = useDemoUserPlan();
   const session = getAnalysisSession();
   const [mealSaved, setMealSaved] = useState(session.mealSaved);
   const defaultMealPeriod = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1];
   const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : session.selectedMealPeriod || defaultMealPeriod;
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(initialMealPeriod);
-  const [autoSavedConfirmedMeal, setAutoSavedConfirmedMeal] = useState(session.autoSavedConfirmedMeal);
   const isAnalysisConfirmed = analysis.matchState === "confirmed";
   // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
   // Reused across remounts within the same AI Analysis session (see analysisSessionStore).
@@ -90,59 +91,32 @@ export default function AnalysisScreen() {
     }
   }, [params.mealSlot]);
 
-  useEffect(() => {
-    if (!isAnalysisConfirmed || autoSavedConfirmedMeal) {
-      return;
-    }
-    persistMealRecordToTodayIntake();
-    setAutoSavedConfirmedMeal(true);
-  }, [isAnalysisConfirmed, autoSavedConfirmedMeal]);
-
   // Keep the session store in sync so visiting another screen and coming back
   // restores this exact state instead of starting a new AI Analysis session.
   useEffect(() => {
     session.mealSaved = mealSaved;
     session.selectedMealPeriod = selectedMealPeriod;
-    session.autoSavedConfirmedMeal = autoSavedConfirmedMeal;
     session.mealId = mealId;
     session.preMealPhotoIds = preMealPhotoIds;
     session.guiltSharingResult = guiltSharingResult;
   });
 
-  function persistMealRecordToTodayIntake() {
-    // Integration entry: AI Analysis -> Today Intake.
-    const savedPlan = {
-      mealTime: selectedMealPeriod,
-      plannedMealName: analysis.mealName,
-      mealType: selectedMealPeriod,
-      restaurantName: analysis.restaurantName,
-      calories: `${analysis.nutritionSummary.calories} kcal`,
-      protein: `${analysis.nutritionSummary.protein}g`,
-      carbs: `${analysis.nutritionSummary.carbohydrates}g`,
-      fat: `${analysis.nutritionSummary.fat}g`,
-      notes: "晚餐已由 AI 分析確認，取代原本的預計晚餐。",
-      isSocialMeal: false
-    };
+  function persistCanonicalMealToExplicitDemoStore(mealRecordId: string, mealDate: string) {
     saveCorrectedMealRecord({
-      mealId,
+      mealId: mealRecordId,
       restaurantName: analysis.restaurantName,
       mealName: analysis.mealName,
       calories: analysis.nutritionSummary.calories,
       protein: analysis.nutritionSummary.protein,
       carbohydrates: analysis.nutritionSummary.carbohydrates,
       fat: analysis.nutritionSummary.fat,
-      ingredients: analysis.nutritionSummary.ingredientSummary,
+      ingredients: "",
       portion: analysis.nutritionSummary.portion,
       mealPeriod: selectedMealPeriod,
-      date: "2026/06/01",
-      preMealPhotoIds,
+      date: mealDate.replaceAll("-", "/"),
       estimatedCalories: analysis.nutritionSummary.calories,
-      calorieSharingPeopleCount: guiltSharingResult?.peopleCount,
-      sharedCaloriesPerPerson: guiltSharingResult?.sharedCaloriesPerPerson
+      source: analysis.isSelfCooked ? "self_made" : "ai_estimated"
     });
-    if (selectedMealPeriod.includes("晚餐")) {
-      confirmPlannedDinnerFromAnalysis(savedPlan);
-    }
   }
 
   function handleGuiltSharingConfirm(result: { peopleCount: number; sharedCaloriesPerPerson: number }) {
@@ -155,14 +129,39 @@ export default function AnalysisScreen() {
     });
   }
 
-  function saveMealRecordToMockDatabase() {
-    persistMealRecordToTodayIntake();
+  async function saveMealRecordFromExplicitGesture() {
+    const originalDetectedName = zhTW.mobile.analysis.candidates[0].meal;
+    const result = await consumerRuntime.createMealRecord({
+      selectedMealPeriod,
+      mealName: analysis.mealName,
+      originalDetectedName,
+      portion: analysis.nutritionSummary.portion,
+      nutrition: {
+        calories: analysis.nutritionSummary.calories,
+        protein: analysis.nutritionSummary.protein,
+        carbohydrates: analysis.nutritionSummary.carbohydrates,
+        fat: analysis.nutritionSummary.fat
+      },
+      isSelfCooked: analysis.isSelfCooked,
+      wasUserCorrected: analysis.nutritionRefreshed || analysis.correctionCompleted || Object.keys(analysis.correctedRows).length > 0 || analysis.mealName !== originalDetectedName,
+      trustedCanonicalIdentity: null
+    });
+    completeSuccessfulMealWrite(result);
+  }
+
+  async function retryPendingMealRecord() {
+    completeSuccessfulMealWrite(await consumerRuntime.retryPendingMealRecord());
+  }
+
+  function completeSuccessfulMealWrite(result: typeof consumerRuntime.mealWriteState) {
+    if (result.status !== "succeeded" || !result.mealRecordId || !result.mealDate) return;
+    if (consumerRuntime.mode === "mock") persistCanonicalMealToExplicitDemoStore(result.mealRecordId, result.mealDate);
     setMealSaved(true);
     router.push("/today-intake");
   }
 
   function renderSuccessActions() {
-    return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={saveMealRecordToMockDatabase} onOpenSocial={() => router.push("/meal-buddies")} />;
+    return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={saveMealRecordFromExplicitGesture} onOpenSocial={() => router.push("/meal-buddies")} />;
   }
 
   function openNextMealRecommendation(meal: NextMealRecommendationCard) {
@@ -248,7 +247,7 @@ export default function AnalysisScreen() {
               nutritionSummary={analysis.nutritionSummary}
               mealName={analysis.mealName}
               guiltSharingResult={guiltSharingResult}
-              onOpenMealLog={saveMealRecordToMockDatabase}
+              onOpenMealLog={saveMealRecordFromExplicitGesture}
               onOpenNutritionRecord={() => router.push("/meal-log")}
               onGuiltShare={handleGuiltSharingConfirm}
               nextMealRecommendations={nextMealRecommendations}
@@ -261,6 +260,21 @@ export default function AnalysisScreen() {
           )}
 
           {!analysis.isSelfCooked && analysis.matchState === "editing" ? <CandidateCorrectionList analysis={analysis} renderSuccessActions={renderSuccessActions} /> : null}
+
+          {consumerRuntime.mealWriteState.status === "submitting" ? (
+            <Card><SectionTitle title={zhTW.mobile.consumerMealWrite.submitting} /></Card>
+          ) : null}
+          {consumerRuntime.mealWriteState.status === "uncertain" ? (
+            <Card>
+              <SectionTitle title={zhTW.mobile.consumerMealWrite.uncertainTitle} subtitle={zhTW.mobile.consumerMealWrite.uncertainBody} />
+              <View style={styles.ctaColumn}>
+                <PrimaryButton icon="check" label={zhTW.mobile.consumerMealWrite.retrySameRequest} onPress={retryPendingMealRecord} />
+                <SecondaryButton icon="chart" label={zhTW.mobile.consumerMealWrite.checkTodayIntake} onPress={() => router.push("/today-intake")} />
+              </View>
+            </Card>
+          ) : consumerRuntime.mealWriteState.status === "error" ? (
+            <Card><SectionTitle title={zhTW.mobile.consumerMealWrite.errorTitle} subtitle={zhTW.mobile.consumerMealWrite.errorBody} /></Card>
+          ) : null}
 
           {!isAnalysisConfirmed ? (
             <SnowCard>

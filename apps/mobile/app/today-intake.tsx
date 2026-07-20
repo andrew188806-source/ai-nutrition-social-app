@@ -5,12 +5,20 @@ import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { NutritionDetailReport } from "../components/NutritionDetailReport";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getUiMealCalories, useTodayIntakeUiModel } from "../features/consumer-meals";
+import { useConsumerRuntime } from "../features/consumer-runtime";
 
 export default function TodayIntakeScreen() {
   const router = useRouter();
   const intake = zhTW.mobile.analysis.savedIntake;
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
-  const intakeState = useTodayIntakeUiModel();
+  const runtime = useConsumerRuntime();
+  const intakeState = useTodayIntakeUiModel({
+    overviewService: runtime.overviewService,
+    revision: runtime.mealDataRevision,
+    actorKey: runtime.state.actorKey,
+    actorGeneration: runtime.state.actorGeneration,
+    enabled: runtime.state.authState.status === "signedIn"
+  });
   const model = intakeState.model;
 
   if (!model) {

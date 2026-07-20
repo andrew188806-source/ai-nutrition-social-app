@@ -69,6 +69,15 @@ export const zhTW = {
       disabledTitle: "登入功能未啟用",
       disabledBody: "此執行模式沒有啟用登入服務，也不會切換至 Demo。"
     },
+    consumerMealWrite: {
+      submitting: "正在加入今日飲食…",
+      uncertainTitle: "尚未確認是否已加入",
+      uncertainBody: "連線結果不確定。你可以使用同一筆請求重試，或先前往今日飲食確認。",
+      retrySameRequest: "重試同一筆請求",
+      checkTodayIntake: "前往今日飲食確認",
+      errorTitle: "目前無法加入今日飲食",
+      errorBody: "這筆餐點尚未保存，請確認登入與資料後再試一次。"
+    },
     mealPhotoTitle: "拍攝或上傳餐點照片",
     mealPhotoSubtitle: "先選擇外食或自己煮，再用餐點照片開始分析。外食會先找附近餐廳菜單；自煮會直接估算食材與份量。",
     analysisTitle: "AI 餐點分析",

@@ -10,6 +10,9 @@ import {
   type ConsumerRuntimeProfileState,
   type ConsumerRuntimeState
 } from "./consumerRuntimeComposition";
+import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
+import type { ConsumerAnalysisMealWriteDraft } from "./consumerMealWriteMapper";
+import type { ConsumerMealWriteRuntimeState } from "./consumerMealWriteRuntime";
 
 export type ConsumerRuntimeContextValue = {
   state: ConsumerRuntimeState;
@@ -19,6 +22,11 @@ export type ConsumerRuntimeContextValue = {
   signInDemo(): Promise<boolean>;
   signOut(): Promise<boolean>;
   retryProfile(): Promise<boolean>;
+  createMealRecord(draft: ConsumerAnalysisMealWriteDraft): Promise<ConsumerMealWriteRuntimeState>;
+  retryPendingMealRecord(): Promise<ConsumerMealWriteRuntimeState>;
+  mealWriteState: ConsumerMealWriteRuntimeState;
+  mealDataRevision: number;
+  overviewService: ConsumerTodayIntakeOverviewService | null;
 };
 
 const unavailableState: ConsumerRuntimeState = {
@@ -31,13 +39,23 @@ const unavailableState: ConsumerRuntimeState = {
 };
 
 const ConsumerRuntimeContext = createContext<ConsumerRuntimeContextValue | null>(null);
+const unavailableMealWriteState: ConsumerMealWriteRuntimeState = {
+  status: "error",
+  errorCode: "configuration_error",
+  mealRecordId: null,
+  mealDate: null,
+  pending: false,
+  mealDataRevision: 0
+};
 
 export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
   const compositionRef = useRef<ReturnType<typeof getOrCreateConsumerRuntimeComposition> | null>(null);
   if (!compositionRef.current) compositionRef.current = getOrCreateConsumerRuntimeComposition();
   const composition = compositionRef.current;
   const controller = composition.ok ? composition.value.controller : null;
+  const mealWriteRuntime = composition.ok ? composition.value.mealWriteRuntime : null;
   const [state, setState] = useState<ConsumerRuntimeState>(() => controller?.getState() ?? unavailableState);
+  const [mealWriteState, setMealWriteState] = useState<ConsumerMealWriteRuntimeState>(() => mealWriteRuntime?.getState() ?? unavailableMealWriteState);
 
   useEffect(() => {
     if (!controller) return;
@@ -49,6 +67,26 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
     };
   }, [controller]);
 
+  useEffect(() => {
+    if (!mealWriteRuntime) return;
+    return mealWriteRuntime.subscribe(setMealWriteState);
+  }, [mealWriteRuntime]);
+
+  useEffect(() => {
+    if (!mealWriteRuntime) return;
+    void mealWriteRuntime.setActor(state.actorKey, state.actorGeneration);
+  }, [mealWriteRuntime, state.actorGeneration, state.actorKey]);
+
+  const profileTimezone = state.profileState.status === "available" ? state.profileState.profile.timezone : null;
+  const overviewService = useMemo(() => {
+    if (!composition.ok || !profileTimezone) return null;
+    try {
+      return composition.value.createOverviewService(profileTimezone);
+    } catch {
+      return null;
+    }
+  }, [composition, profileTimezone]);
+
   const value = useMemo<ConsumerRuntimeContextValue>(() => ({
     state,
     mode: controller?.mode ?? "disabled",
@@ -56,8 +94,24 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
     signIn: (email, password) => controller?.signIn(email, password) ?? Promise.resolve(false),
     signInDemo: () => controller?.signInDemo() ?? Promise.resolve(false),
     signOut: () => controller?.signOut() ?? Promise.resolve(false),
-    retryProfile: () => controller?.retryProfile() ?? Promise.resolve(false)
-  }), [composition.ok, controller, state]);
+    retryProfile: () => controller?.retryProfile() ?? Promise.resolve(false),
+    createMealRecord: (draft) => {
+      if (!mealWriteRuntime || !state.actorKey || state.authState.status !== "signedIn") {
+        return Promise.resolve(mealWriteRuntime?.reject("authentication_required") ?? unavailableMealWriteState);
+      }
+      if (!profileTimezone) return Promise.resolve(mealWriteRuntime.reject("profile_timezone_required"));
+      return mealWriteRuntime.submit({ actorKey: state.actorKey, actorGeneration: state.actorGeneration, timezone: profileTimezone }, draft);
+    },
+    retryPendingMealRecord: () => {
+      if (!mealWriteRuntime || !state.actorKey || state.authState.status !== "signedIn") {
+        return Promise.resolve(mealWriteRuntime?.reject("authentication_required") ?? unavailableMealWriteState);
+      }
+      return mealWriteRuntime.retry({ actorKey: state.actorKey, actorGeneration: state.actorGeneration });
+    },
+    mealWriteState,
+    mealDataRevision: mealWriteState.mealDataRevision,
+    overviewService
+  }), [composition, controller, mealWriteRuntime, mealWriteState, overviewService, profileTimezone, state]);
 
   return <ConsumerRuntimeContext.Provider value={value}>{children}</ConsumerRuntimeContext.Provider>;
 }

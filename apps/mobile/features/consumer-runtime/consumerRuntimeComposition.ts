@@ -15,8 +15,16 @@ import {
   type ConsumerAuthState,
   type ConsumerProfile,
   type ConsumerRuntimeFlags,
+  MemoryConsumerAuthStorage,
+  type ConsumerAuthStorage,
   type SupabaseConsumerProfileClientLike
 } from "../consumer-auth";
+import { getConsumerMealRuntimeFlags } from "../consumer-meals/featureFlags";
+import type { ConsumerMealRuntimeFlags } from "../consumer-meals/types";
+import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
+import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseMealContracts";
+import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
+import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 
 export type ConsumerRuntimeMode = "mock" | "disabled" | "supabase";
 export type ConsumerRuntimeOperation = "idle" | "signingIn" | "signingOut";
@@ -256,6 +264,8 @@ export class ConsumerAuthProfileRuntime {
 export type ConsumerRuntimeComposition = {
   flags: ConsumerRuntimeFlags;
   controller: ConsumerAuthProfileRuntime;
+  mealWriteRuntime: ConsumerMealWriteRuntime;
+  createOverviewService(timezone: string): ConsumerTodayIntakeOverviewService;
 };
 
 export type ConsumerRuntimeCompositionResult =
@@ -267,6 +277,10 @@ export type ConsumerRuntimeCompositionOptions = {
   authPort?: ConsumerAuthPort;
   profileService?: Pick<ConsumerProfileService, "getCurrentProfile">;
   refreshLifecycle?: Pick<ConsumerAuthRefreshLifecycle, "initialize" | "dispose"> | null;
+  mealFlags?: ConsumerMealRuntimeFlags;
+  operationStorage?: ConsumerAuthStorage;
+  mealWriteRuntime?: ConsumerMealWriteRuntime;
+  overviewService?: ConsumerTodayIntakeOverviewService;
 };
 
 let appComposition: ConsumerRuntimeCompositionResult | null = null;
@@ -277,7 +291,7 @@ export function getOrCreateConsumerRuntimeComposition() {
 }
 
 export function createConsumerRuntimeComposition(options: ConsumerRuntimeCompositionOptions = {}): ConsumerRuntimeCompositionResult {
-  const flags = options.flags ?? getConsumerRuntimeFlags();
+  const flags = normalizeAuthFlagsForMealWrite(options.flags ?? getConsumerRuntimeFlags());
   if (flags.issues.length) return { ok: false, errorCode: "configuration_error" };
   if (flags.authSource === "supabase-live" && flags.profileSource !== "supabase-live") {
     return { ok: false, errorCode: "configuration_error" };
@@ -288,6 +302,16 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
 
   try {
     if (options.authPort && options.profileService) {
+      const storage = options.operationStorage ?? new MemoryConsumerAuthStorage();
+      const runtimeParts = createMealRuntimeParts({
+        authFlags: flags,
+        authPort: options.authPort,
+        storage,
+        mealFlags: options.mealFlags,
+        mealWriteRuntime: options.mealWriteRuntime,
+        overviewService: options.overviewService
+      });
+      if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
       return {
         ok: true,
         value: {
@@ -296,42 +320,134 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
             authPort: options.authPort,
             profileService: options.profileService,
             refreshLifecycle: options.refreshLifecycle
-          })
+          }),
+          ...runtimeParts
         }
       };
     }
 
     if (flags.authSource === "supabase-live") {
+      const storage = options.operationStorage ?? createAsyncStorageConsumerAuthStorage();
       const clientFactory = new SupabaseConsumerClientFactory({
         env: getSupabaseConsumerEnvironment(),
         flags,
-        storage: createAsyncStorageConsumerAuthStorage(),
+        storage,
         sdkLoader: createOfficialSupabaseConsumerSdkLoader()
       });
       const { client } = clientFactory.getOrCreateClient();
       const authPort = new SupabaseConsumerAuthAdapter({ authClient: client.auth, transportEnabled: true });
       const scaffold = createConsumerAuthScaffold({ flags, authPort, profileClient: client as unknown as SupabaseConsumerProfileClientLike });
       const refreshLifecycle = new ConsumerAuthRefreshLifecycle(client.auth, createReactNativeConsumerAppStateSource());
+      const runtimeParts = createMealRuntimeParts({
+        authFlags: flags,
+        authPort,
+        storage,
+        mealClient: client as unknown as SupabaseConsumerMealClientLike,
+        mealFlags: options.mealFlags,
+        mealWriteRuntime: options.mealWriteRuntime,
+        overviewService: options.overviewService
+      });
+      if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
       return {
         ok: true,
         value: {
           flags,
-          controller: new ConsumerAuthProfileRuntime({ authPort, profileService: scaffold.profileService, refreshLifecycle })
+          controller: new ConsumerAuthProfileRuntime({ authPort, profileService: scaffold.profileService, refreshLifecycle }),
+          ...runtimeParts
         }
       };
     }
 
-    const scaffold = createConsumerAuthScaffold({ flags });
+    const storage = options.operationStorage ?? createAsyncStorageConsumerAuthStorage();
+    const scaffold = createConsumerAuthScaffold({ flags, storage });
+    const runtimeParts = createMealRuntimeParts({
+      authFlags: flags,
+      authPort: scaffold.authPort,
+      storage,
+      mealFlags: options.mealFlags,
+      mealWriteRuntime: options.mealWriteRuntime,
+      overviewService: options.overviewService
+    });
+    if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
     return {
       ok: true,
       value: {
         flags,
-        controller: new ConsumerAuthProfileRuntime({ authPort: scaffold.authPort, profileService: scaffold.profileService })
+        controller: new ConsumerAuthProfileRuntime({ authPort: scaffold.authPort, profileService: scaffold.profileService }),
+        ...runtimeParts
       }
     };
   } catch {
     return { ok: false, errorCode: "configuration_error" };
   }
+}
+
+function createMealRuntimeParts(input: {
+  authFlags: ConsumerRuntimeFlags;
+  authPort: ConsumerAuthPort;
+  storage: ConsumerAuthStorage;
+  mealClient?: SupabaseConsumerMealClientLike;
+  mealFlags?: ConsumerMealRuntimeFlags;
+  mealWriteRuntime?: ConsumerMealWriteRuntime;
+  overviewService?: ConsumerTodayIntakeOverviewService;
+}) {
+  // Keep the meal factory graph behind the B2 runtime boundary. Historical B1
+  // controller-only validation deliberately loads this module without a native
+  // runtime, while an actual B2 composition always enters this function.
+  const {
+    createConsumerMealRecordWriteService,
+    createConsumerTodayIntakeOverviewService
+  } = require("../consumer-meals/factories") as typeof import("../consumer-meals/factories");
+  const rawMealFlags = input.mealFlags ?? getConsumerMealRuntimeFlags();
+  if (rawMealFlags.authSource !== input.authFlags.authSource) return null;
+  const writeFlags = normalizeMealWriteFlags(rawMealFlags, input.authFlags.authSource);
+  const overviewFlags = normalizeOverviewFlags(rawMealFlags);
+  if (writeFlags.issues.length || overviewFlags.issues.length) return null;
+  const dependencies = { authPort: input.authPort, mealClient: input.mealClient };
+  const mealWriteRuntime = input.mealWriteRuntime ?? new ConsumerMealWriteRuntime({
+    service: createConsumerMealRecordWriteService(writeFlags, dependencies),
+    operationStore: new ConsumerMealWriteOperationStore(input.storage)
+  });
+  return {
+    mealWriteRuntime,
+    createOverviewService: (timezone: string) => input.overviewService ?? createConsumerTodayIntakeOverviewService(
+      overviewFlags,
+      { ...dependencies, timezone }
+    )
+  };
+}
+
+function normalizeAuthFlagsForMealWrite(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {
+  if (!flags.supabaseWritesEnabled) return flags;
+  return {
+    ...flags,
+    supabaseWritesEnabled: false,
+    issues: flags.issues.filter((issue) => issue !== "Consumer Supabase writes are not enabled in Consumer Runtime Phase 1D.")
+  };
+}
+
+function normalizeMealWriteFlags(flags: ConsumerMealRuntimeFlags, authSource: ConsumerRuntimeFlags["authSource"]): ConsumerMealRuntimeFlags {
+  if (authSource === "mock" && flags.mealRecordsSource === "mock") {
+    return { ...flags, supabaseWritesEnabled: true, mealRecordWritesEnabled: true, mealRecordLiveWriteOptIn: false, issues: [] };
+  }
+  return { ...flags, issues: flags.issues.filter((issue) => !isApprovedB2ReadWriteTransitionIssue(issue)) };
+}
+
+function normalizeOverviewFlags(flags: ConsumerMealRuntimeFlags): ConsumerMealRuntimeFlags {
+  return {
+    ...flags,
+    supabaseWritesEnabled: false,
+    mealRecordWritesEnabled: false,
+    mealRecordLiveWriteOptIn: false,
+    dailyNutritionWriteSource: "disabled",
+    plannedMealsWriteSource: "disabled",
+    issues: flags.issues.filter((issue) => !isApprovedB2ReadWriteTransitionIssue(issue))
+  };
+}
+
+function isApprovedB2ReadWriteTransitionIssue(issue: string) {
+  return issue.includes("daily nutrition summary reads require Consumer meal record writes to remain disabled")
+    || issue.includes("daily nutrition summary reads require Consumer Supabase writes to remain disabled");
 }
 
 function mapAuthError(error: ConsumerAuthError | undefined): ConsumerRuntimeErrorCode {
