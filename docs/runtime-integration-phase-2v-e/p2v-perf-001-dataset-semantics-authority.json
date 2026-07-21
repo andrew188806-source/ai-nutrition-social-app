@@ -1,0 +1,361 @@
+{
+  "schema": "tastkind.p2v-perf.dataset-semantics",
+  "version": 1,
+  "clarificationId": "P2V-PERF-001B-DATASET-SEMANTICS-C1",
+  "baseAuthority": {
+    "commit": "26035d2b7a18c974ab76ba0a79565eab803a2199",
+    "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json",
+    "sha256": "4bfc94a5085a537c3faff97deb8329800f8171e506cbe37c0308a66035a24ade",
+    "authorityId": "P2V-PERF-001A-C1",
+    "postgresVersion": "17.6",
+    "seed": 2026072101
+  },
+  "planMetricClarification": {
+    "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-plan-metric-semantics-authority.json",
+    "sha256": "ce9236f9a5855b041fa9edb8dc667378e8303168a12b782a1a52510cf1a22067",
+    "contractPath": "docs/runtime-integration-phase-2v-e/p2v-perf-001-plan-metric-semantics-contract.md",
+    "contractSha256": "a9429e148c7bbfdb3e13465847a8ef60aafbc8d864344ce8dae8b67fa09ab7c4",
+    "guardPath": "scripts/restaurant-performance-p2v-perf-001a-d1-plan-metric-semantics-guard.mjs",
+    "guardSha256": "137744cc9282333c691a22e206bec04e32fd540015cc7e6b303f218917687f00"
+  },
+  "composition": {
+    "precedence": "This clarification is normative only for the A-F dataset-generator operands named in resolvedFields. It replaces omitted, ambiguous, or undefined generator operands for those fields and leaves every base dataset count, relationship, case, threshold, workload, plan metric, authorization, scan, buffer, spill, lifecycle, and evidence obligation unchanged.",
+    "conflict": "Any conflict outside resolvedFields, or any generator value not produced by the closed program vocabulary, fails closed.",
+    "resolvedFields": [
+      "menu_items.name.ordinalIdentifier",
+      "menu_items.allergens",
+      "menu_item_nutrition.version0.active.source",
+      "menu_item_nutrition.version0.active.verified_status",
+      "menu_item_nutrition.version0.nonActive.source",
+      "menu_item_nutrition.version0.nonActive.verified_status",
+      "restaurants.created_at",
+      "menu_item_nutrition.updated_at"
+    ],
+    "preservedBaseInvariants": {
+      "tenants": 50,
+      "items": 5520,
+      "nutritionRows": 11040,
+      "currentNutritionRows": 5520,
+      "publicViewEligibleNutritionRows": 4256,
+      "cases": 35,
+      "mandatoryCases": 29,
+      "diagnosticCases": 6,
+      "thresholdProfiles": 9,
+      "generationOrderEntries": 13
+    }
+  },
+  "evaluator": {
+    "language": "P2V_DATASET_DSL_1",
+    "integerPolicy": {
+      "type": "json-number",
+      "finite": true,
+      "integer": true,
+      "minimum": 0,
+      "missing": "fail",
+      "negative": "fail",
+      "nonFinite": "fail",
+      "malformed": "fail"
+    },
+    "undefinedIdentifier": "fail-closed",
+    "unknownOpcode": "fail-closed",
+    "unknownOperand": "fail-closed",
+    "missingOperand": "fail-closed",
+    "unusedOperand": "fail-closed"
+  },
+  "domains": {
+    "tenantOrdinal": {
+      "scope": "dataset",
+      "base": 0,
+      "minimum": 0,
+      "maximum": 49,
+      "count": 50,
+      "order": "ascending"
+    },
+    "menuOrdinal": {
+      "scope": "tenant",
+      "base": 0,
+      "order": "ascending",
+      "countProgram": {
+        "kind": "tenant-class-value",
+        "maxTenantOrdinal": 0,
+        "maxValue": 8,
+        "noiseValue": 2
+      }
+    },
+    "itemWithinMenu": {
+      "scope": "menu",
+      "base": 0,
+      "order": "ascending",
+      "countProgram": {
+        "kind": "tenant-class-value",
+        "maxTenantOrdinal": 0,
+        "maxValue": 200,
+        "noiseValue": 40
+      }
+    },
+    "tenantLocalItemOrdinal": {
+      "scope": "tenant",
+      "base": 0,
+      "order": "ascending",
+      "program": {
+        "kind": "row-major-index-2d",
+        "outerCounter": "menuOrdinal",
+        "innerCounter": "itemWithinMenu",
+        "innerCountDomain": "itemWithinMenu"
+      },
+      "paddedIdentifier": {
+        "name": "itemOrdinal5",
+        "kind": "decimal-left-pad",
+        "width": 5,
+        "pad": "0"
+      }
+    },
+    "nutritionVersion": {
+      "scope": "menu-item",
+      "base": 0,
+      "minimum": 0,
+      "maximum": 1,
+      "count": 2,
+      "order": "ascending",
+      "meaning": {
+        "0": "current",
+        "1": "history"
+      }
+    }
+  },
+  "generationLoops": {
+    "menu_items": {
+      "kind": "nested-loops",
+      "counters": ["tenantOrdinal", "menuOrdinal", "itemWithinMenu"],
+      "orders": ["ascending", "ascending", "ascending"],
+      "emits": "one-row-per-innermost-iteration"
+    },
+    "menu_item_nutrition": {
+      "kind": "nested-loops",
+      "counters": ["tenantOrdinal", "menuOrdinal", "itemWithinMenu", "nutritionVersion"],
+      "orders": ["ascending", "ascending", "ascending", "ascending"],
+      "emits": "one-row-per-innermost-iteration"
+    }
+  },
+  "programs": {
+    "A-menu-items-name-and-allergens": {
+      "kind": "item-parity-fields",
+      "counter": "tenantLocalItemOrdinal",
+      "nameIdentifier": "itemOrdinal5",
+      "nameTemplate": "perf-item-${itemOrdinal5}",
+      "modulus": 2,
+      "remainderMapping": {
+        "0": [],
+        "1": ["soy"]
+      }
+    },
+    "B-C-version0-active-source-and-status": {
+      "kind": "shared-item-parity-fields",
+      "appliesWhen": {
+        "nutritionVersion": 0,
+        "itemStatus": "active"
+      },
+      "counter": "tenantLocalItemOrdinal",
+      "modulus": 2,
+      "fields": {
+        "source": {
+          "0": "restaurant_verified",
+          "1": "ai_estimated"
+        },
+        "verified_status": {
+          "0": "verified",
+          "1": "ai_estimated"
+        }
+      },
+      "sharedCounterRequired": true
+    },
+    "C-D-version0-non-active-source-and-status": {
+      "kind": "fixed-and-item-parity-fields",
+      "appliesWhen": {
+        "nutritionVersion": 0,
+        "itemStatusIn": ["draft", "archived"]
+      },
+      "fixedFields": {
+        "source": "pending"
+      },
+      "counter": "tenantLocalItemOrdinal",
+      "modulus": 2,
+      "parityFields": {
+        "verified_status": {
+          "0": "pending_review",
+          "1": "rejected"
+        }
+      }
+    },
+    "history-version": {
+      "kind": "fixed-fields",
+      "appliesWhen": {
+        "nutritionVersion": 1
+      },
+      "fields": {
+        "source": "admin_verified",
+        "verified_status": "rejected",
+        "is_current": false
+      }
+    },
+    "E-restaurants-created-at": {
+      "kind": "timestamp-from-row-ordinal",
+      "table": "restaurants",
+      "rowOrdinalProgram": {
+        "kind": "identity-index",
+        "counter": "tenantOrdinal"
+      },
+      "rowOrdinalScope": "table",
+      "rowOrdinalBase": 0,
+      "baseTimestamp": "2026-01-01T00:00:00.000Z",
+      "intervalUnit": "second",
+      "intervalMultiplier": 1,
+      "enumeration": ["tenantOrdinal ascending"],
+      "examples": [
+        {
+          "tenantOrdinal": 0,
+          "rowOrdinal": 0,
+          "timestamp": "2026-01-01T00:00:00.000Z"
+        },
+        {
+          "tenantOrdinal": 49,
+          "rowOrdinal": 49,
+          "timestamp": "2026-01-01T00:00:49.000Z"
+        }
+      ]
+    },
+    "F-menu-item-nutrition-updated-at": {
+      "kind": "timestamp-from-row-ordinal",
+      "table": "menu_item_nutrition",
+      "rowOrdinalProgram": {
+        "kind": "piecewise-tenant-item-version-index",
+        "tenantCounter": "tenantOrdinal",
+        "itemCounter": "tenantLocalItemOrdinal",
+        "versionCounter": "nutritionVersion",
+        "maxTenantOrdinal": 0,
+        "maxTenantItemCount": 1600,
+        "noiseTenantItemCount": 80,
+        "versionsPerItem": 2,
+        "noiseTenantBaseRows": 3200,
+        "noiseTenantOrdinalOffset": 1
+      },
+      "rowOrdinalScope": "table",
+      "rowOrdinalBase": 0,
+      "rowOrdinalMinimum": 0,
+      "rowOrdinalMaximum": 11039,
+      "rowCount": 11040,
+      "baseTimestamp": "2026-01-01T00:00:00.000Z",
+      "intervalUnit": "second",
+      "intervalMultiplier": 1,
+      "enumeration": [
+        "tenantOrdinal ascending",
+        "menuOrdinal ascending",
+        "itemWithinMenu ascending",
+        "nutritionVersion ascending 0 then 1"
+      ],
+      "strides": {
+        "nutritionVersion": 1,
+        "tenantLocalItemOrdinal": 2,
+        "maxTenant": 3200,
+        "noiseTenant": 160
+      },
+      "examples": [
+        {
+          "label": "first-row",
+          "tenantOrdinal": 0,
+          "tenantLocalItemOrdinal": 0,
+          "nutritionVersion": 0,
+          "rowOrdinal": 0,
+          "timestamp": "2026-01-01T00:00:00.000Z"
+        },
+        {
+          "label": "cross-item-boundary",
+          "tenantOrdinal": 0,
+          "tenantLocalItemOrdinal": 1,
+          "nutritionVersion": 0,
+          "rowOrdinal": 2,
+          "timestamp": "2026-01-01T00:00:02.000Z"
+        },
+        {
+          "label": "last-max-tenant-row",
+          "tenantOrdinal": 0,
+          "tenantLocalItemOrdinal": 1599,
+          "nutritionVersion": 1,
+          "rowOrdinal": 3199,
+          "timestamp": "2026-01-01T00:53:19.000Z"
+        },
+        {
+          "label": "cross-tenant-boundary",
+          "tenantOrdinal": 1,
+          "tenantLocalItemOrdinal": 0,
+          "nutritionVersion": 0,
+          "rowOrdinal": 3200,
+          "timestamp": "2026-01-01T00:53:20.000Z"
+        },
+        {
+          "label": "last-row",
+          "tenantOrdinal": 49,
+          "tenantLocalItemOrdinal": 79,
+          "nutritionVersion": 1,
+          "rowOrdinal": 11039,
+          "timestamp": "2026-01-01T03:03:59.000Z"
+        }
+      ]
+    }
+  },
+  "schemaCompatibility": {
+    "migration": "supabase/migrations/20260712120000_create_restaurant_platform_baseline.sql",
+    "menuItemStatuses": ["draft", "active", "archived"],
+    "nutritionSources": ["restaurant_verified", "admin_verified", "ai_estimated", "pending"],
+    "nutritionVerifiedStatuses": ["verified", "ai_estimated", "pending_review", "rejected"],
+    "allergensSqlType": "text[]",
+    "timestampSqlType": "timestamp with time zone"
+  },
+  "fixtures": [
+    {
+      "id": "item-zero",
+      "input": {"tenantOrdinal": 0, "menuOrdinal": 0, "itemWithinMenu": 0},
+      "expected": {"tenantLocalItemOrdinal": 0, "itemOrdinal5": "00000", "allergens": []}
+    },
+    {
+      "id": "item-one",
+      "input": {"tenantOrdinal": 0, "menuOrdinal": 0, "itemWithinMenu": 1},
+      "expected": {"tenantLocalItemOrdinal": 1, "itemOrdinal5": "00001", "allergens": ["soy"]}
+    },
+    {
+      "id": "max-menu-boundary",
+      "input": {"tenantOrdinal": 0, "menuOrdinal": 1, "itemWithinMenu": 0},
+      "expected": {"tenantLocalItemOrdinal": 200, "itemOrdinal5": "00200", "allergens": []}
+    },
+    {
+      "id": "noise-menu-boundary",
+      "input": {"tenantOrdinal": 1, "menuOrdinal": 1, "itemWithinMenu": 0},
+      "expected": {"tenantLocalItemOrdinal": 40, "itemOrdinal5": "00040", "allergens": []}
+    },
+    {
+      "id": "active-remainder-0-current",
+      "input": {"tenantLocalItemOrdinal": 0, "nutritionVersion": 0, "itemStatus": "active"},
+      "expected": {"source": "restaurant_verified", "verified_status": "verified"}
+    },
+    {
+      "id": "active-remainder-1-current",
+      "input": {"tenantLocalItemOrdinal": 1, "nutritionVersion": 0, "itemStatus": "active"},
+      "expected": {"source": "ai_estimated", "verified_status": "ai_estimated"}
+    },
+    {
+      "id": "draft-remainder-0-current",
+      "input": {"tenantLocalItemOrdinal": 180, "nutritionVersion": 0, "itemStatus": "draft"},
+      "expected": {"source": "pending", "verified_status": "pending_review"}
+    },
+    {
+      "id": "archived-remainder-1-current",
+      "input": {"tenantLocalItemOrdinal": 199, "nutritionVersion": 0, "itemStatus": "archived"},
+      "expected": {"source": "pending", "verified_status": "rejected"}
+    },
+    {
+      "id": "history",
+      "input": {"tenantLocalItemOrdinal": 0, "nutritionVersion": 1, "itemStatus": "active"},
+      "expected": {"source": "admin_verified", "verified_status": "rejected", "is_current": false}
+    }
+  ]
+}
