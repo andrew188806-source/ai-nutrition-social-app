@@ -267,7 +267,9 @@ export type ConsumerPlannedMeal = {
   plannedMealId: string;
   plannedDate: string;
   plannedTime: string | null;
+  plannedTimezone?: string | null;
   mealType: ConsumerMealType | null;
+  mealCategory?: string | null;
   title: string | null;
   restaurantId?: string | null;
   branchId?: string | null;
@@ -276,6 +278,9 @@ export type ConsumerPlannedMeal = {
   estimatedNutrition: ConsumerNutritionSnapshot | null;
   status: ConsumerPlannedMealStatusValue;
   note?: string | null;
+  convertedMealRecordId?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   items: ConsumerPlannedMealItem[];
 };
 
@@ -415,6 +420,79 @@ export interface ConsumerPlannedMealWriteRepository {
   save(payload: CanonicalPlannedMealWritePayload): Promise<ConsumerPlannedMealWriteResult>;
   updatePlannedMeal(payload: CanonicalPlannedMealUpdatePayload): Promise<ConsumerPlannedMealWriteResult>;
   remove(payload: CanonicalPlannedMealRemovePayload): Promise<ConsumerPlannedMealWriteResult>;
+}
+
+export type ConsumerPlannedMealV2Source = "disabled" | "mock" | "supabase";
+
+export type ConsumerCreatePlannedMealV2Input = {
+  createRequestId: string;
+  plannedFor: string;
+  plannedLocalTime: string | null;
+  plannedTimezone: string;
+  mealType: ConsumerMealType;
+  mealCategory: string | null;
+  title: string;
+  restaurantNameSnapshot: string | null;
+  note: string | null;
+  restaurantId: string | null;
+  branchId: string | null;
+  menuItemId: string | null;
+  nutritionSnapshot: ConsumerNutritionSnapshot;
+};
+
+export type ConsumerPlannedMealV2Patch = {
+  plannedFor?: string;
+  plannedLocalTime?: string | null;
+  plannedTimezone?: string;
+  mealType?: ConsumerMealType;
+  mealCategory?: string | null;
+  title?: string;
+  restaurantNameSnapshot?: string | null;
+  note?: string | null;
+  restaurantId?: string | null;
+  branchId?: string | null;
+  menuItemId?: string | null;
+  nutritionSnapshot?: ConsumerNutritionSnapshot;
+};
+
+export type ConsumerUpdatePlannedMealV2Input = {
+  plannedMealId: string;
+  expectedUpdatedAt: string;
+  patch: ConsumerPlannedMealV2Patch;
+};
+
+export type ConsumerCancelPlannedMealV2Input = {
+  plannedMealId: string;
+  expectedUpdatedAt: string;
+};
+
+export type ConsumerConvertPlannedMealV2Input = {
+  plannedMealId: string;
+  conversionRequestId: string;
+  expectedUpdatedAt: string;
+  confirmationTimestamp: string;
+  actorTimezone: string;
+};
+
+export type ConsumerPlannedMealV2Mutation = {
+  plannedMeal: ConsumerPlannedMeal;
+  replayed: boolean;
+};
+
+export type ConsumerPlannedMealV2Conversion = {
+  plannedMealId: string;
+  status: "converted";
+  mealRecordId: string;
+  convertedAt: string;
+  replayed: boolean;
+};
+
+export interface ConsumerPlannedMealV2Repository {
+  readonly source: ConsumerPlannedMealV2Source;
+  create(input: ConsumerCreatePlannedMealV2Input): Promise<ConsumerAuthResult<ConsumerPlannedMealV2Mutation>>;
+  update(input: ConsumerUpdatePlannedMealV2Input): Promise<ConsumerAuthResult<ConsumerPlannedMealV2Mutation>>;
+  cancel(input: ConsumerCancelPlannedMealV2Input): Promise<ConsumerAuthResult<ConsumerPlannedMealV2Mutation>>;
+  convert(input: ConsumerConvertPlannedMealV2Input): Promise<ConsumerAuthResult<ConsumerPlannedMealV2Conversion>>;
 }
 
 export type ConsumerMealCorrectionDetail =

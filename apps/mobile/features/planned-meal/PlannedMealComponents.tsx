@@ -10,7 +10,10 @@ export function PlannedDinnerInput({
   onExpand,
   onSave,
   plan,
-  saved
+  saved,
+  operationStatus = "idle",
+  operationMessage,
+  onRetry
 }: {
   expanded: boolean;
   onChange: (plan: PlannedMeal) => void;
@@ -19,6 +22,9 @@ export function PlannedDinnerInput({
   onSave: () => void;
   plan: PlannedMeal;
   saved: boolean;
+  operationStatus?: "idle" | "submitting" | "uncertain" | "succeeded" | "error";
+  operationMessage?: string | null;
+  onRetry?: () => void;
 }) {
   return (
     <Card tone="amber">
@@ -40,6 +46,7 @@ export function PlannedDinnerInput({
             ))}
           </View>
           <SectionTitle title={zhTW.mobile.plannedDinner.detailedMode} />
+          <PlannedMealField label={zhTW.mobile.plannedDinner.fieldLabels.plannedDate} value={plan.plannedDate ?? ""} onChangeText={(plannedDate) => onChange({ ...plan, plannedDate })} />
           <PlannedMealField label={zhTW.mobile.plannedDinner.fieldLabels.mealName} value={plan.plannedMealName} onChangeText={(plannedMealName) => onChange({ ...plan, plannedMealName })} />
           <PlannedMealField label={zhTW.mobile.plannedDinner.fieldLabels.restaurantName} value={plan.restaurantName} onChangeText={(restaurantName) => onChange({ ...plan, restaurantName })} />
           <View style={styles.grid}>
@@ -49,7 +56,7 @@ export function PlannedDinnerInput({
             <PlannedMealField label={zhTW.mobile.plannedDinner.fieldLabels.fat} value={plan.fat} onChangeText={(fat) => onChange({ ...plan, fat })} compact />
           </View>
           <PlannedMealField label={zhTW.mobile.plannedDinner.fieldLabels.notes} value={plan.notes} onChangeText={(notes) => onChange({ ...plan, notes })} />
-          <Pressable style={styles.primaryButton} onPress={onSave}>
+          <Pressable disabled={operationStatus === "submitting"} style={styles.primaryButton} onPress={onSave}>
             <Text style={styles.primaryButtonText}>{zhTW.mobile.plannedDinner.saveCta}</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={onClear}>
@@ -58,6 +65,12 @@ export function PlannedDinnerInput({
         </View>
       )}
       {saved ? <Text style={styles.savedText}>{zhTW.mobile.plannedDinner.savedMessage}</Text> : null}
+      {operationMessage ? <Text style={operationStatus === "error" ? styles.errorText : styles.hint}>{operationMessage}</Text> : null}
+      {operationStatus === "uncertain" && onRetry ? (
+        <Pressable style={styles.secondaryButton} onPress={onRetry}>
+          <Text style={styles.secondaryButtonText}>{zhTW.mobile.plannedDinner.retryCta}</Text>
+        </Pressable>
+      ) : null}
     </Card>
   );
 }
@@ -217,6 +230,13 @@ const styles = StyleSheet.create({
   },
   savedText: {
     color: colors.teal,
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 19,
+    marginTop: 12
+  },
+  errorText: {
+    color: colors.coral,
     fontSize: 13,
     fontWeight: "900",
     lineHeight: 19,

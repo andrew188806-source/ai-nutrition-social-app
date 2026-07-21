@@ -13,6 +13,15 @@ import {
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
 import type { ConsumerAnalysisMealWriteDraft } from "./consumerMealWriteMapper";
 import type { ConsumerMealWriteRuntimeState } from "./consumerMealWriteRuntime";
+import type { ConsumerPlannedMeal, ConsumerUpdatePlannedMealV2Input } from "../consumer-meals/types";
+import type { ConsumerPlannedMealDraft } from "./consumerPlannedMealMapper";
+import type { ConsumerPlannedMealRuntimeState } from "./consumerPlannedMealRuntime";
+
+export type ConsumerPlannedMealMutationState = {
+  status: "idle" | "submitting" | "succeeded" | "error";
+  operation: "update" | "cancel" | null;
+  errorCode: "authentication_required" | "timezone_required" | "configuration_error" | "conflict" | "provider_rejected" | null;
+};
 
 export type ConsumerRuntimeContextValue = {
   state: ConsumerRuntimeState;
@@ -24,7 +33,16 @@ export type ConsumerRuntimeContextValue = {
   retryProfile(): Promise<boolean>;
   createMealRecord(draft: ConsumerAnalysisMealWriteDraft): Promise<ConsumerMealWriteRuntimeState>;
   retryPendingMealRecord(): Promise<ConsumerMealWriteRuntimeState>;
+  createPlannedMeal(draft: ConsumerPlannedMealDraft): Promise<ConsumerPlannedMealRuntimeState>;
+  retryPendingPlannedMeal(): Promise<ConsumerPlannedMealRuntimeState>;
+  updatePlannedMeal(input: ConsumerUpdatePlannedMealV2Input): Promise<ConsumerPlannedMealMutationState>;
+  cancelPlannedMeal(input: { plannedMealId: string; expectedUpdatedAt: string }): Promise<ConsumerPlannedMealMutationState>;
+  convertPlannedMeal(input: { plannedMealId: string; expectedUpdatedAt: string }): Promise<ConsumerPlannedMealRuntimeState>;
+  getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMeal[]>;
   mealWriteState: ConsumerMealWriteRuntimeState;
+  plannedMealState: ConsumerPlannedMealRuntimeState;
+  plannedMealMutationState: ConsumerPlannedMealMutationState;
+  consumerDataRevision: number;
   mealDataRevision: number;
   overviewService: ConsumerTodayIntakeOverviewService | null;
 };
@@ -47,6 +65,10 @@ const unavailableMealWriteState: ConsumerMealWriteRuntimeState = {
   pending: false,
   mealDataRevision: 0
 };
+const unavailablePlannedMealState: ConsumerPlannedMealRuntimeState = {
+  status: "error", pendingKind: null, errorCode: "configuration_error", plannedMealId: null, mealRecordId: null, revision: 0
+};
+const idlePlannedMealMutationState: ConsumerPlannedMealMutationState = { status: "idle", operation: null, errorCode: null };
 
 export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
   const compositionRef = useRef<ReturnType<typeof getOrCreateConsumerRuntimeComposition> | null>(null);
@@ -54,8 +76,14 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
   const composition = compositionRef.current;
   const controller = composition.ok ? composition.value.controller : null;
   const mealWriteRuntime = composition.ok ? composition.value.mealWriteRuntime : null;
+  const plannedMealRuntime = composition.ok ? composition.value.plannedMealRuntime : null;
   const [state, setState] = useState<ConsumerRuntimeState>(() => controller?.getState() ?? unavailableState);
+  const runtimeStateRef = useRef(state);
+  runtimeStateRef.current = state;
   const [mealWriteState, setMealWriteState] = useState<ConsumerMealWriteRuntimeState>(() => mealWriteRuntime?.getState() ?? unavailableMealWriteState);
+  const [plannedMealState, setPlannedMealState] = useState<ConsumerPlannedMealRuntimeState>(() => plannedMealRuntime?.getState() ?? unavailablePlannedMealState);
+  const [plannedMealMutationState, setPlannedMealMutationState] = useState<ConsumerPlannedMealMutationState>(idlePlannedMealMutationState);
+  const [plannedMealMutationRevision, setPlannedMealMutationRevision] = useState(0);
 
   useEffect(() => {
     if (!controller) return;
@@ -73,9 +101,20 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
   }, [mealWriteRuntime]);
 
   useEffect(() => {
+    if (!plannedMealRuntime) return;
+    return plannedMealRuntime.subscribe(setPlannedMealState);
+  }, [plannedMealRuntime]);
+
+  useEffect(() => {
     if (!mealWriteRuntime) return;
     void mealWriteRuntime.setActor(state.actorKey, state.actorGeneration);
   }, [mealWriteRuntime, state.actorGeneration, state.actorKey]);
+
+  useEffect(() => {
+    if (!plannedMealRuntime) return;
+    setPlannedMealMutationState(idlePlannedMealMutationState);
+    void plannedMealRuntime.setActor(state.actorKey, state.actorGeneration);
+  }, [plannedMealRuntime, state.actorGeneration, state.actorKey]);
 
   const profileTimezone = state.profileState.status === "available" ? state.profileState.profile.timezone : null;
   const overviewService = useMemo(() => {
@@ -99,7 +138,7 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
       if (!mealWriteRuntime || !state.actorKey || state.authState.status !== "signedIn") {
         return Promise.resolve(mealWriteRuntime?.reject("authentication_required") ?? unavailableMealWriteState);
       }
-      if (!profileTimezone) return Promise.resolve(mealWriteRuntime.reject("profile_timezone_required"));
+      if (!isValidIanaTimezone(profileTimezone)) return Promise.resolve(mealWriteRuntime.reject("profile_timezone_required"));
       return mealWriteRuntime.submit({ actorKey: state.actorKey, actorGeneration: state.actorGeneration, timezone: profileTimezone }, draft);
     },
     retryPendingMealRecord: () => {
@@ -108,12 +147,92 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
       }
       return mealWriteRuntime.retry({ actorKey: state.actorKey, actorGeneration: state.actorGeneration });
     },
+    createPlannedMeal: (draft) => {
+      if (!plannedMealRuntime || !state.actorKey || state.authState.status !== "signedIn") return Promise.resolve(unavailablePlannedMealState);
+      if (!isValidIanaTimezone(profileTimezone)) return Promise.resolve(unavailablePlannedMealState);
+      return plannedMealRuntime.submitCreate({ actorKey: state.actorKey, actorGeneration: state.actorGeneration, timezone: profileTimezone }, draft);
+    },
+    retryPendingPlannedMeal: () => {
+      if (!plannedMealRuntime || !state.actorKey || state.authState.status !== "signedIn") return Promise.resolve(unavailablePlannedMealState);
+      return plannedMealRuntime.retry({ actorKey: state.actorKey, actorGeneration: state.actorGeneration });
+    },
+    updatePlannedMeal: async (input) => {
+      if (!composition.ok || !state.actorKey || state.authState.status !== "signedIn") return mutationFailure(setPlannedMealMutationState, "authentication_required");
+      if (!isValidIanaTimezone(profileTimezone)) return mutationFailure(setPlannedMealMutationState, "timezone_required");
+      const actor = state.actorKey; const generation = state.actorGeneration;
+      setPlannedMealMutationState({ status: "submitting", operation: "update", errorCode: null });
+      try {
+        const result = await composition.value.plannedMealService.update(input);
+        if (actor !== runtimeStateRef.current.actorKey || generation !== runtimeStateRef.current.actorGeneration) return idlePlannedMealMutationState;
+        if (!result.ok) return mutationFailure(setPlannedMealMutationState, mapPlannedMutationError(result.error.code, result.error.message), "update");
+        const succeeded = { status: "succeeded", operation: "update", errorCode: null } as const;
+        setPlannedMealMutationState(succeeded); setPlannedMealMutationRevision((value) => value + 1); return succeeded;
+      } catch {
+        if (actor !== runtimeStateRef.current.actorKey || generation !== runtimeStateRef.current.actorGeneration) return idlePlannedMealMutationState;
+        return mutationFailure(setPlannedMealMutationState, "provider_rejected", "update");
+      }
+    },
+    cancelPlannedMeal: async (input) => {
+      if (!composition.ok || !state.actorKey || state.authState.status !== "signedIn") return mutationFailure(setPlannedMealMutationState, "authentication_required");
+      if (!isValidIanaTimezone(profileTimezone)) return mutationFailure(setPlannedMealMutationState, "timezone_required");
+      const actor = state.actorKey; const generation = state.actorGeneration;
+      setPlannedMealMutationState({ status: "submitting", operation: "cancel", errorCode: null });
+      try {
+        const result = await composition.value.plannedMealService.cancel(input);
+        if (actor !== runtimeStateRef.current.actorKey || generation !== runtimeStateRef.current.actorGeneration) return idlePlannedMealMutationState;
+        if (!result.ok) return mutationFailure(setPlannedMealMutationState, mapPlannedMutationError(result.error.code, result.error.message), "cancel");
+        const succeeded = { status: "succeeded", operation: "cancel", errorCode: null } as const;
+        setPlannedMealMutationState(succeeded); setPlannedMealMutationRevision((value) => value + 1); return succeeded;
+      } catch {
+        if (actor !== runtimeStateRef.current.actorKey || generation !== runtimeStateRef.current.actorGeneration) return idlePlannedMealMutationState;
+        return mutationFailure(setPlannedMealMutationState, "provider_rejected", "cancel");
+      }
+    },
+    convertPlannedMeal: (input) => {
+      if (!plannedMealRuntime || !state.actorKey || state.authState.status !== "signedIn" || !isValidIanaTimezone(profileTimezone)) return Promise.resolve(unavailablePlannedMealState);
+      return plannedMealRuntime.submitConversion(
+        { actorKey: state.actorKey, actorGeneration: state.actorGeneration, timezone: profileTimezone }, input
+      );
+    },
+    getPlannedMeals: async (plannedDate) => {
+      if (!composition.ok || !state.actorKey || state.authState.status !== "signedIn") return [];
+      const actor = state.actorKey; const generation = state.actorGeneration;
+      try {
+        const result = await composition.value.getPlannedMeals(plannedDate);
+        if (actor !== runtimeStateRef.current.actorKey || generation !== runtimeStateRef.current.actorGeneration) return [];
+        return result.status === "available" ? result.meals : [];
+      } catch { return []; }
+    },
     mealWriteState,
-    mealDataRevision: mealWriteState.mealDataRevision,
+    plannedMealState,
+    plannedMealMutationState,
+    consumerDataRevision: mealWriteState.mealDataRevision + plannedMealState.revision + plannedMealMutationRevision,
+    mealDataRevision: mealWriteState.mealDataRevision + plannedMealState.revision + plannedMealMutationRevision,
     overviewService
-  }), [composition, controller, mealWriteRuntime, mealWriteState, overviewService, profileTimezone, state]);
+  }), [composition, controller, mealWriteRuntime, mealWriteState, overviewService, plannedMealMutationRevision, plannedMealMutationState, plannedMealRuntime, plannedMealState, profileTimezone, state]);
 
   return <ConsumerRuntimeContext.Provider value={value}>{children}</ConsumerRuntimeContext.Provider>;
+}
+
+function mutationFailure(
+  setter: (value: ConsumerPlannedMealMutationState) => void,
+  errorCode: NonNullable<ConsumerPlannedMealMutationState["errorCode"]>,
+  operation: ConsumerPlannedMealMutationState["operation"] = null
+) {
+  const state: ConsumerPlannedMealMutationState = { status: "error", operation, errorCode };
+  setter(state); return state;
+}
+
+function mapPlannedMutationError(code: string, message: string): NonNullable<ConsumerPlannedMealMutationState["errorCode"]> {
+  if (code.includes("authentication") || code === "session_expired") return "authentication_required";
+  if (code.includes("configuration") || code.includes("disabled")) return "configuration_error";
+  if (message.includes("CONFLICT") || message.includes("changed") || message.includes("converted")) return "conflict";
+  return "provider_rejected";
+}
+
+function isValidIanaTimezone(value: string | null): value is string {
+  if (!value?.trim()) return false;
+  try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date(0)); return true; } catch { return false; }
 }
 
 export function useConsumerRuntime() {

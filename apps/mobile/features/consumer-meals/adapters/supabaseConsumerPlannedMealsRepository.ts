@@ -53,7 +53,7 @@ export class SupabaseConsumerPlannedMealsRepository implements ConsumerPlannedMe
         .eq("user_id", userId)
         .eq("planned_for", input.plannedDate)
         .order("planned_for", { ascending: true })
-        .order("meal_type", { ascending: true })
+        .order("planned_local_time", { ascending: true })
         .order("id", { ascending: true })
         .limit(100);
       if (response.error) {

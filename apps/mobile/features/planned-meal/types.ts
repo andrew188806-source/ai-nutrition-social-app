@@ -1,4 +1,5 @@
 export type PlannedMeal = {
+  plannedDate?: string;
   mealTime: string;
   plannedMealName: string;
   mealType: string;
@@ -9,4 +10,7 @@ export type PlannedMeal = {
   fat: string;
   notes: string;
   isSocialMeal: boolean;
+  canonicalPlannedMealId?: string;
+  canonicalUpdatedAt?: string | null;
+  canonicalStatus?: "planned" | "converted" | "cancelled" | "expired";
 };

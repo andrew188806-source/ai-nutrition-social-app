@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
-import {
-  getAutoSettledPlannedDinnerRecord,
-  getConfirmedDinnerRecord,
-  getPlannedDinner
-} from "../planned-meal/plannedMealStore";
 import type { PlannedMeal } from "../planned-meal/types";
 import { createConsumerTodayIntakeOverviewService } from "./factories";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
@@ -14,6 +9,7 @@ import type {
   ConsumerMealRecordItem,
   ConsumerMealRuntimeFlags,
   ConsumerMealSourceType,
+  ConsumerPlannedMeal,
   ConsumerTodayIntakeOverview
 } from "./types";
 
@@ -80,9 +76,7 @@ export type TodayIntakeUiModel = {
   mealRecords: TodayIntakeUiMealRecord[];
   mealSlots: TodayIntakeUiMealSlot[];
   lunchRecord: TodayIntakeUiMealRecord | null;
-  plannedDinner: PlannedMeal | null;
-  confirmedDinner: PlannedMeal | null;
-  autoSettledDinner: PlannedMeal | null;
+  plannedMeals: PlannedMeal[];
   dinnerPlanForDisplay: PlannedMeal | null;
 };
 
@@ -91,11 +85,16 @@ export type TodayIntakeUiState =
   | { status: "ready"; model: TodayIntakeUiModel; error: null; refresh: () => void }
   | { status: "error"; model: TodayIntakeUiModel | null; error: string; refresh: () => void };
 
-export async function getCurrentUserTodayIntakeUiModel(input: { date?: string; overviewService?: ConsumerTodayIntakeOverviewService } = {}): Promise<TodayIntakeUiModel> {
+export async function getCurrentUserTodayIntakeUiModel(input: {
+  date?: string;
+  overviewService?: ConsumerTodayIntakeOverviewService;
+  plannedMealsLoader?: (plannedDate: string) => Promise<ConsumerPlannedMeal[]>;
+} = {}): Promise<TodayIntakeUiModel> {
   const overviewService = input.overviewService ?? createLocalOverviewService();
   const overviewResult = await overviewService.getCurrentUserTodayIntakeOverview(input);
   if (!overviewResult.ok) throw overviewResult.error;
-  return mapOverviewToUiModel(overviewResult.value);
+  const canonicalMeals = input.plannedMealsLoader ? await input.plannedMealsLoader(overviewResult.value.date) : [];
+  return mapOverviewToUiModel(overviewResult.value, canonicalMeals);
 }
 
 export function useTodayIntakeUiModel(input: {
@@ -105,6 +104,7 @@ export function useTodayIntakeUiModel(input: {
   actorKey?: string | null;
   actorGeneration?: number;
   enabled?: boolean;
+  plannedMealsLoader?: (plannedDate: string) => Promise<ConsumerPlannedMeal[]>;
 } = {}): TodayIntakeUiState {
   const [version, setVersion] = useState(0);
   const [state, setState] = useState<Omit<TodayIntakeUiState, "refresh">>({
@@ -122,7 +122,7 @@ export function useTodayIntakeUiModel(input: {
       return () => { cancelled = true; };
     }
     setState((current) => ({ status: "loading", model: current.model, error: null }));
-    getCurrentUserTodayIntakeUiModel({ date: stableDate, overviewService: input.overviewService })
+    getCurrentUserTodayIntakeUiModel({ date: stableDate, overviewService: input.overviewService, plannedMealsLoader: input.plannedMealsLoader })
       .then((model) => {
         if (!cancelled) setState({ status: "ready", model, error: null });
       })
@@ -134,7 +134,7 @@ export function useTodayIntakeUiModel(input: {
     return () => {
       cancelled = true;
     };
-  }, [enabled, input.actorGeneration, input.actorKey, input.overviewService, input.revision, stableDate, version]);
+  }, [enabled, input.actorGeneration, input.actorKey, input.overviewService, input.plannedMealsLoader, input.revision, stableDate, version]);
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
   return useMemo(() => ({ ...state, refresh }) as TodayIntakeUiState, [refresh, state]);
@@ -152,12 +152,10 @@ function createLocalOverviewService() {
   return createConsumerTodayIntakeOverviewService(mealFlags);
 }
 
-function mapOverviewToUiModel(overview: ConsumerTodayIntakeOverview): TodayIntakeUiModel {
+function mapOverviewToUiModel(overview: ConsumerTodayIntakeOverview, canonicalMeals: ConsumerPlannedMeal[]): TodayIntakeUiModel {
   const mealRecords = overview.meals.map(mapConsumerMealToUiMeal);
-  const plannedDinner = getPlannedDinner();
-  const confirmedDinner = getConfirmedDinnerRecord();
-  const autoSettledDinner = getAutoSettledPlannedDinnerRecord();
-  const dinnerPlanForDisplay = confirmedDinner ?? plannedDinner ?? autoSettledDinner;
+  const plannedMeals = overview.plannedMeals.map((meal) => mapOverviewPlannedMeal(meal, canonicalMeals.find((candidate) => candidate.plannedMealId === meal.plannedMealId)));
+  const dinnerPlanForDisplay = plannedMeals.find((meal) => meal.mealTime === "晚餐" || meal.canonicalStatus === "planned") ?? plannedMeals[0] ?? null;
   const summary = mapOverviewToSummary(overview, mealRecords);
   const mealSlots = mapUiMealSlots(mealRecords, dinnerPlanForDisplay);
   const lunchRecord = mealRecords.find((meal) => meal.mealPeriod === mealSlotOptions[1]) ?? mealRecords[0] ?? null;
@@ -168,10 +166,28 @@ function mapOverviewToUiModel(overview: ConsumerTodayIntakeOverview): TodayIntak
     mealRecords,
     mealSlots,
     lunchRecord,
-    plannedDinner,
-    confirmedDinner,
-    autoSettledDinner,
+    plannedMeals,
     dinnerPlanForDisplay
+  };
+}
+
+function mapOverviewPlannedMeal(meal: ConsumerTodayIntakeOverview["plannedMeals"][number], canonical?: ConsumerPlannedMeal): PlannedMeal {
+  const nutrition = meal.estimatedNutrition ?? {};
+  return {
+    plannedDate: meal.date,
+    mealTime: canonical?.plannedTime ?? meal.mealTime ?? "時間未提供",
+    plannedMealName: meal.title || "未命名預定餐",
+    mealType: canonical?.mealCategory ?? canonical?.mealType ?? meal.mealType ?? "未分類",
+    restaurantName: meal.restaurantName ?? "",
+    calories: `${nutrition.calories ?? 0} kcal`,
+    protein: `${nutrition.protein ?? 0}g`,
+    carbs: `${nutrition.carbohydrates ?? 0}g`,
+    fat: `${nutrition.fat ?? 0}g`,
+    notes: meal.note ?? "",
+    isSocialMeal: false,
+    canonicalPlannedMealId: meal.plannedMealId,
+    canonicalUpdatedAt: canonical?.updatedAt ?? null,
+    canonicalStatus: canonical?.status ?? "planned"
   };
 }
 
@@ -278,8 +294,4 @@ function buildReminders(input: { mealCount: number; proteinProgress: number; has
   if (input.mealCount > 0 && !input.hasVegetable) reminders.push({ key: "lowVegetable", label: reminderText.lowVegetable });
   if (input.mealCount >= 2 && reminders.length < 2) reminders.push({ key: "highSodium", label: reminderText.highSodium });
   return reminders.slice(0, 2);
-}
-
-function getLocalPlannedMeals(): PlannedMeal[] {
-  return [getConfirmedDinnerRecord(), getPlannedDinner(), getAutoSettledPlannedDinnerRecord()].filter((plan): plan is PlannedMeal => Boolean(plan));
 }

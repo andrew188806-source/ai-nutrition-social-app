@@ -24,6 +24,7 @@ export default function LandingScreen() {
   const intakeState = useTodayIntakeUiModel({
     date: demoDateKey,
     overviewService: runtime.overviewService,
+    plannedMealsLoader: runtime.getPlannedMeals,
     revision: runtime.mealDataRevision,
     actorKey: runtime.state.actorKey,
     actorGeneration: runtime.state.actorGeneration,

@@ -6,7 +6,8 @@ import { Card, ScanningBar, SectionTitle, TagRow, colors } from "../components/D
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getPlannedDinnerEstimateOptions, type DinnerEstimate } from "../features/analysis/analysisMealRecordStore";
 import { resetAnalysisSession } from "../features/analysis";
-import { clearPlannedDinner, getPlannedDinner, savePlannedDinner, type PlannedMeal } from "../features/planned-meal";
+import { type PlannedMeal } from "../features/planned-meal";
+import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 
 type ImageSource = "camera" | "gallery";
 type PlannedDinnerType = (typeof zhTW.mobile.plannedDinnerHelper.mealTypes)[number];
@@ -18,14 +19,17 @@ const plannedDinnerTypes: readonly PlannedDinnerType[] = helperCopy.mealTypes;
 export default function MealPhotoScreen() {
   const router = useRouter();
   const { autoOpen } = useLocalSearchParams<{ autoOpen?: string }>();
+  const runtime = useConsumerRuntime();
+  const actorTimezone = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile.timezone : runtime.mode === "mock" ? "Asia/Taipei" : "";
   const [isSheetOpen, setIsSheetOpen] = useState(() => autoOpen === "true");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [source, setSource] = useState<ImageSource | null>(null);
-  const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(() => getPlannedDinner());
+  const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(null);
   const [isDinnerFormOpen, setIsDinnerFormOpen] = useState(false);
   const [restaurantName, setRestaurantName] = useState(plannedDinner?.restaurantName ?? "");
   const [plannedType, setPlannedType] = useState<PlannedDinnerType>((plannedDinner?.mealType as PlannedDinnerType) || "火鍋");
   const [plannedTime, setPlannedTime] = useState(plannedDinner?.mealTime ?? "19:00");
+  const [plannedDate] = useState(() => dateKeyInTimezone(new Date(), actorTimezone));
   const [meetingFriends, setMeetingFriends] = useState(plannedDinner?.isSocialMeal ?? false);
   const [notes, setNotes] = useState(plannedDinner?.notes ?? "");
   const [selectedDishName, setSelectedDishName] = useState(plannedDinner?.plannedMealName ?? "");
@@ -64,9 +68,10 @@ export default function MealPhotoScreen() {
     router.push("/analysis");
   }
 
-  function savePlannedDinnerDraft() {
+  async function savePlannedDinnerDraft() {
     const nextPlan: PlannedMeal = {
       mealTime: plannedTime,
+      plannedDate,
       plannedMealName: selectedEstimate.name,
       mealType: plannedType,
       restaurantName: restaurantName.trim() || helperCopy.defaultRestaurantName,
@@ -77,14 +82,15 @@ export default function MealPhotoScreen() {
       notes: notes.trim(),
       isSocialMeal: meetingFriends
     };
-    savePlannedDinner(nextPlan);
-    setPlannedDinner(nextPlan);
-    setSelectedDishName(nextPlan.plannedMealName);
-    setIsDinnerFormOpen(false);
+    const result = await runtime.createPlannedMeal(toCanonicalDraft(nextPlan));
+    if (result.status === "succeeded") {
+      setPlannedDinner({ ...nextPlan, canonicalPlannedMealId: result.plannedMealId ?? undefined, canonicalStatus: "planned" });
+      setSelectedDishName(nextPlan.plannedMealName);
+      setIsDinnerFormOpen(false);
+    }
   }
 
   function clearDinnerPlan() {
-    clearPlannedDinner();
     setPlannedDinner(null);
     setRestaurantName("");
     setNotes("");
@@ -151,7 +157,10 @@ export default function MealPhotoScreen() {
           onNotesChange={setNotes}
           onOpenForm={() => setIsDinnerFormOpen(true)}
           onRestaurantNameChange={setRestaurantName}
-          onSave={savePlannedDinnerDraft}
+          onSave={() => { void savePlannedDinnerDraft(); }}
+          onRetry={() => { void runtime.retryPendingPlannedMeal(); }}
+          operationErrorCode={runtime.plannedMealState.errorCode}
+          operationStatus={runtime.plannedMealState.status}
           onSelectedDishChange={setSelectedDishName}
           onTimeChange={setPlannedTime}
           onTypeChange={(type) => {
@@ -200,6 +209,9 @@ function PlannedDinnerHelper({
   onOpenForm,
   onRestaurantNameChange,
   onSave,
+  onRetry,
+  operationErrorCode,
+  operationStatus,
   onSelectedDishChange,
   onTimeChange,
   onTypeChange,
@@ -221,6 +233,9 @@ function PlannedDinnerHelper({
   onOpenForm: () => void;
   onRestaurantNameChange: (value: string) => void;
   onSave: () => void;
+  onRetry: () => void;
+  operationErrorCode: string | null;
+  operationStatus: "idle" | "restoring" | "submitting" | "uncertain" | "succeeded" | "error";
   onSelectedDishChange: (value: string) => void;
   onTimeChange: (value: string) => void;
   onTypeChange: (value: PlannedDinnerType) => void;
@@ -266,6 +281,12 @@ function PlannedDinnerHelper({
         <Text style={styles.helperStatus}>{helperCopy.badge}</Text>
       </View>
       <Text style={styles.helperSubtitle}>{helperCopy.subtitle}</Text>
+      {operationStatus === "uncertain" ? (
+        <View>
+          <Text style={styles.helperMeta}>{zhTW.mobile.plannedDinner.uncertainMessage}</Text>
+          <Pressable style={styles.helperSecondaryButton} onPress={onRetry}><Text style={styles.helperSecondaryText}>{zhTW.mobile.plannedDinner.retryCta}</Text></Pressable>
+        </View>
+      ) : operationErrorCode ? <Text style={styles.helperMeta}>{operationErrorCode === "conflict" ? zhTW.mobile.plannedDinner.conflictMessage : zhTW.mobile.plannedDinner.errorMessage}</Text> : null}
       {!isFormOpen ? (
         <Pressable style={styles.helperPrimaryButton} onPress={onOpenForm}>
           <Text style={styles.helperPrimaryText}>{helperCopy.button}</Text>
@@ -325,7 +346,7 @@ function PlannedDinnerHelper({
             <Text style={styles.helperGuidance}>{getLunchGuidance(plannedType)}</Text>
           </View>
 
-          <Pressable style={styles.helperPrimaryButton} onPress={onSave}>
+          <Pressable disabled={operationStatus === "submitting"} style={styles.helperPrimaryButton} onPress={onSave}>
             <Text style={styles.helperPrimaryText}>{helperCopy.saveButton}</Text>
           </Pressable>
         </View>
@@ -336,6 +357,40 @@ function PlannedDinnerHelper({
 
 function getDinnerOptions(type: PlannedDinnerType, restaurantName: string) {
   return getPlannedDinnerEstimateOptions(type, restaurantName);
+}
+
+function toCanonicalDraft(plan: PlannedMeal): ConsumerPlannedMealDraft {
+  return {
+    plannedFor: plan.plannedDate ?? "",
+    plannedLocalTime: /^\d{2}:\d{2}$/.test(plan.mealTime) ? plan.mealTime : null,
+    mealType: "dinner",
+    mealCategory: plan.mealType.trim() || null,
+    title: plan.plannedMealName.trim(),
+    restaurantNameSnapshot: plan.restaurantName.trim() || null,
+    note: plan.notes.trim() || null,
+    restaurantId: null,
+    branchId: null,
+    menuItemId: null,
+    nutritionSnapshot: {
+      calories: parseNutrition(plan.calories),
+      protein: parseNutrition(plan.protein),
+      carbohydrates: parseNutrition(plan.carbs),
+      fat: parseNutrition(plan.fat)
+    }
+  };
+}
+
+function parseNutrition(value: string) {
+  const parsed = Number.parseFloat(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function dateKeyInTimezone(value: Date, timezone: string) {
+  if (!timezone) return "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value);
+    const values = new Map(parts.map((part) => [part.type, part.value])); return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+  } catch { return ""; }
 }
 
 function getLunchGuidance(type: string) {

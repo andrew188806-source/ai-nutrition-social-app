@@ -14,6 +14,7 @@ export default function TodayIntakeScreen() {
   const runtime = useConsumerRuntime();
   const intakeState = useTodayIntakeUiModel({
     overviewService: runtime.overviewService,
+    plannedMealsLoader: runtime.getPlannedMeals,
     revision: runtime.mealDataRevision,
     actorKey: runtime.state.actorKey,
     actorGeneration: runtime.state.actorGeneration,
@@ -31,7 +32,7 @@ export default function TodayIntakeScreen() {
     );
   }
 
-  const { mealRecords, lunchRecord, summary, dinnerPlanForDisplay, confirmedDinner, autoSettledDinner, plannedDinner } = model;
+  const { mealRecords, lunchRecord, summary, plannedMeals } = model;
 
   return (
     <PlaceholderScreen
@@ -90,17 +91,34 @@ export default function TodayIntakeScreen() {
 
       <Card tone="amber">
         <SectionTitle title={daily.plannedMealTitle} />
-        <View style={styles.plannedCard}>
-          <Text style={styles.mealTitle}>{dinnerPlanForDisplay?.plannedMealName ?? daily.plannedMeal.title}</Text>
-          <Text style={styles.mealCalories}>{dinnerPlanForDisplay?.calories ?? daily.plannedMeal.calories}</Text>
-          <Text style={styles.mealNote}>
-            {dinnerPlanForDisplay
-              ? `${dinnerPlanForDisplay.restaurantName || zhTW.mobile.plannedDinnerHelper.defaultRestaurantName}｜${dinnerPlanForDisplay.notes || "營養估算，尚未算作已吃"}`
-              : daily.plannedMeal.note}
-          </Text>
-          <Text style={styles.balanceHint}>{getPlannedDinnerHint(Boolean(confirmedDinner), Boolean(autoSettledDinner), Boolean(plannedDinner))}</Text>
-          <TagRow tags={dinnerPlanForDisplay ? [getPlannedDinnerStatus(Boolean(confirmedDinner), Boolean(autoSettledDinner)), dinnerPlanForDisplay.mealType, "營養估算"] : daily.plannedMeal.tags} />
-        </View>
+        {plannedMeals.length ? plannedMeals.map((plan) => (
+          <View key={plan.canonicalPlannedMealId ?? `${plan.plannedDate}-${plan.plannedMealName}`} style={styles.plannedCard}>
+            <Text style={styles.mealTitle}>{plan.plannedMealName}</Text>
+            <Text style={styles.mealCalories}>{plan.calories}</Text>
+            <Text style={styles.mealNote}>{plan.restaurantName || "餐廳未提供"}｜{plan.notes || "營養估算，轉換前不計入已吃"}</Text>
+            <Text style={styles.balanceHint}>{plannedStatusHint(plan.canonicalStatus)}</Text>
+            <TagRow tags={[plannedStatusLabel(plan.canonicalStatus), plan.mealType, "營養估算"]} />
+            {plan.canonicalStatus === "planned" && plan.canonicalPlannedMealId && plan.canonicalUpdatedAt ? (
+              <View style={styles.buttonRow}>
+                <Pressable style={styles.secondaryButton} onPress={() => { void runtime.cancelPlannedMeal({ plannedMealId: plan.canonicalPlannedMealId!, expectedUpdatedAt: plan.canonicalUpdatedAt! }); }}>
+                  <Text style={styles.secondaryButtonText}>取消預定餐</Text>
+                </Pressable>
+                <Pressable style={styles.primaryButton} onPress={() => { void runtime.convertPlannedMeal({ plannedMealId: plan.canonicalPlannedMealId!, expectedUpdatedAt: plan.canonicalUpdatedAt! }); }}>
+                  <Text style={styles.primaryButtonText}>確認已吃並轉為飲食紀錄</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        )) : (
+          <View style={styles.plannedCard}><Text style={styles.mealTitle}>{daily.plannedMeal.title}</Text><Text style={styles.mealNote}>目前沒有 canonical 預定餐。</Text></View>
+        )}
+        {runtime.plannedMealState.status === "uncertain" ? (
+          <View style={styles.plannedCard}>
+            <Text style={styles.balanceHint}>{zhTW.mobile.plannedDinner.uncertainMessage}</Text>
+            <Pressable style={styles.secondaryButton} onPress={() => { void runtime.retryPendingPlannedMeal(); }}><Text style={styles.secondaryButtonText}>{zhTW.mobile.plannedDinner.retryCta}</Text></Pressable>
+          </View>
+        ) : null}
+        {runtime.plannedMealMutationState.status === "error" ? <Text style={styles.balanceHint}>{runtime.plannedMealMutationState.errorCode === "conflict" ? zhTW.mobile.plannedDinner.conflictMessage : zhTW.mobile.plannedDinner.errorMessage}</Text> : null}
       </Card>
 
       <Card tone="mint">
@@ -121,27 +139,18 @@ export default function TodayIntakeScreen() {
   );
 }
 
-function getPlannedDinnerStatus(isConfirmed: boolean, isAutoSettled: boolean) {
-  if (isConfirmed) {
-    return "已吃";
-  }
-  if (isAutoSettled) {
-    return "預計晚餐自動結算";
-  }
-  return "今晚預定";
+function plannedStatusLabel(status: "planned" | "converted" | "cancelled" | "expired" | undefined) {
+  if (status === "converted") return "已轉為飲食紀錄";
+  if (status === "cancelled") return "已取消";
+  if (status === "expired") return "已過期";
+  return "預定中";
 }
 
-function getPlannedDinnerHint(isConfirmed: boolean, isAutoSettled: boolean, hasPlannedDinner: boolean) {
-  if (isConfirmed) {
-    return "晚餐已由 AI 分析確認，預計晚餐已轉為正式紀錄。";
-  }
-  if (isAutoSettled) {
-    return "若隔日仍未分析晚餐，系統會以「預計晚餐自動結算」保留到美食日記。";
-  }
-  if (hasPlannedDinner) {
-    return "今晚預定會作為估算值，幫助下一餐推薦更聰明。";
-  }
-  return zhTW.mobile.plannedDinner.lunchAdvice[1];
+function plannedStatusHint(status: "planned" | "converted" | "cancelled" | "expired" | undefined) {
+  if (status === "converted") return "這筆預定餐已由明確操作轉換；營養只由 canonical 飲食紀錄計入。";
+  if (status === "cancelled") return "這筆預定餐已取消，不會計入已吃。";
+  if (status === "expired") return "這筆預定餐已過期，不提供取消或轉換操作。";
+  return "預定營養僅供參考，轉換前不計入已吃。";
 }
 
 const styles = StyleSheet.create({

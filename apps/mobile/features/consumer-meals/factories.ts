@@ -14,6 +14,7 @@ import { MockConsumerDailyNutritionSummaryRepository } from "./adapters/mockCons
 import { MockConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/mockConsumerDailyNutritionSummaryPersistenceRepository";
 import { MockConsumerPlannedMealsRepository } from "./adapters/mockConsumerPlannedMealsRepository";
 import { MockConsumerPlannedMealWriteRepository } from "./adapters/mockConsumerPlannedMealWriteRepository";
+import { MockConsumerPlannedMealV2Repository } from "./adapters/mockConsumerPlannedMealV2Repository";
 import { DisabledConsumerMealCorrectionRepository } from "./adapters/disabledConsumerMealCorrectionRepository";
 import { MockConsumerMealCorrectionRepository } from "./adapters/mockConsumerMealCorrectionRepository";
 import { SupabasePreparedConsumerMealCorrectionRepository } from "./adapters/supabasePreparedConsumerMealCorrectionRepository";
@@ -30,6 +31,7 @@ import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapt
 import { SupabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryPersistenceRepository";
 import { SupabaseDisabledConsumerPlannedMealsRepository } from "./adapters/supabaseDisabledConsumerPlannedMealsRepository";
 import { SupabaseDisabledConsumerPlannedMealWriteRepository } from "./adapters/supabaseDisabledConsumerPlannedMealWriteRepository";
+import { SupabaseDisabledConsumerPlannedMealV2Repository } from "./adapters/supabaseDisabledConsumerPlannedMealV2Repository";
 import { SupabaseConsumerMealRecordsRepository } from "./adapters/supabaseConsumerMealRecordsRepository";
 import { SupabaseConsumerMealRecordWriteRepository } from "./adapters/supabaseConsumerMealRecordWriteRepository";
 import { SupabaseConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseConsumerDailyNutritionSummaryRepository";
@@ -38,15 +40,17 @@ import { SupabaseConsumerPlannedMealsRepository } from "./adapters/supabaseConsu
 import { SupabasePreparedConsumerPlannedMealsRepository } from "./adapters/supabasePreparedConsumerPlannedMealsRepository";
 import { SupabasePreparedConsumerPlannedMealWriteRepository } from "./adapters/supabasePreparedConsumerPlannedMealWriteRepository";
 import { SupabaseConsumerPlannedMealWriteRepository } from "./adapters/supabaseConsumerPlannedMealWriteRepository";
+import { SupabaseConsumerPlannedMealV2Repository } from "./adapters/supabaseConsumerPlannedMealV2Repository";
 import { ConsumerDailyNutritionSummaryPersistenceService } from "./consumerDailyNutritionSummaryPersistenceService";
 import { ConsumerDailyNutritionSummaryService } from "./consumerDailyNutritionSummaryService";
 import { ConsumerMealRecordWriteService } from "./consumerMealRecordWriteService";
 import { ConsumerMealRecordsService } from "./consumerMealRecordsService";
 import { ConsumerPlannedMealWriteService } from "./consumerPlannedMealWriteService";
+import { ConsumerPlannedMealV2Service } from "./consumerPlannedMealV2Service";
 import { ConsumerPlannedMealsService } from "./consumerPlannedMealsService";
 import { ConsumerTodayIntakeOverviewService, type ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOverviewService";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
-import type { ConsumerMealCorrectionRepository, ConsumerMealRuntimeFlags, ConsumerNextMealRecommendationRepository, ConsumerPlannedMealWriteRepository, ConsumerPlannedMealsRepository } from "./types";
+import type { ConsumerMealCorrectionRepository, ConsumerMealRuntimeFlags, ConsumerNextMealRecommendationRepository, ConsumerPlannedMealV2Repository, ConsumerPlannedMealWriteRepository, ConsumerPlannedMealsRepository } from "./types";
 
 export type ConsumerMealFactoryDependencies = {
   authPort?: ConsumerAuthPort;
@@ -55,6 +59,7 @@ export type ConsumerMealFactoryDependencies = {
   plannedMealsService?: ConsumerPlannedMealsService;
   plannedMealWriteRepository?: ConsumerPlannedMealWriteRepository;
   plannedMealWriteService?: ConsumerPlannedMealWriteService;
+  plannedMealV2Repository?: ConsumerPlannedMealV2Repository;
   correctionRepository?: ConsumerMealCorrectionRepository;
   nextMealRecommendationRepository?: ConsumerNextMealRecommendationRepository;
   restaurantMenuClient?: SupabaseRestaurantMenuClientLike;
@@ -298,6 +303,26 @@ export function createConsumerPlannedMealWriteService(
   return new ConsumerPlannedMealWriteService({
     repository: dependencies.plannedMealWriteRepository ?? createConsumerPlannedMealWriteRepository(flags, dependencies)
   });
+}
+
+export function createConsumerPlannedMealV2Repository(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+): ConsumerPlannedMealV2Repository {
+  const flagCheck = assertConsumerPlannedMealWriteRuntimeFlags(flags);
+  if (!flagCheck.ok) throw flagCheck.error;
+  if (flags.plannedMealsWriteSource === "disabled") return new SupabaseDisabledConsumerPlannedMealV2Repository();
+  if (!dependencies.authPort) throw new ConsumerAuthConfigurationError("Consumer planned meal V2 requires an explicit ConsumerAuthPort.");
+  if (flags.plannedMealsWriteSource === "mock") return new MockConsumerPlannedMealV2Repository({ authPort: dependencies.authPort });
+  if (!dependencies.mealClient) throw new ConsumerAuthConfigurationError("Consumer planned meal V2 live writes require an explicit shared meal client.");
+  return new SupabaseConsumerPlannedMealV2Repository({ authPort: dependencies.authPort, mealClient: dependencies.mealClient, writeEnabled: true });
+}
+
+export function createConsumerPlannedMealV2Service(
+  flags: ConsumerMealRuntimeFlags = getConsumerMealRuntimeFlags(),
+  dependencies: ConsumerMealFactoryDependencies = {}
+) {
+  return new ConsumerPlannedMealV2Service(dependencies.plannedMealV2Repository ?? createConsumerPlannedMealV2Repository(flags, dependencies));
 }
 
 export function createConsumerMealCorrectionRepository(

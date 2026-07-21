@@ -23,16 +23,21 @@ export function mapSupabasePlannedMealRowToConsumerPlannedMeal(row: SupabasePlan
   return {
     plannedMealId,
     plannedDate,
-    plannedTime: null,
+    plannedTime: row.planned_local_time ?? null,
+    plannedTimezone: row.planned_timezone ?? null,
     mealType,
+    mealCategory: row.meal_category ?? null,
     title,
     restaurantId: row.restaurant_id ?? null,
     branchId: row.branch_id ?? null,
     menuItemId: row.menu_item_id ?? null,
-    restaurantName: null,
+    restaurantName: row.restaurant_name_snapshot ?? null,
     estimatedNutrition,
     status,
     note: row.note ?? null,
+    convertedMealRecordId: row.converted_meal_record_id ?? null,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
     items: []
   };
 }

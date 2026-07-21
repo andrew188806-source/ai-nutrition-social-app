@@ -20,6 +20,10 @@ export const SUPABASE_PERSIST_AUTHENTICATED_DAILY_NUTRITION_SUMMARY_FUNCTION = "
 export const SUPABASE_SAVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "save_authenticated_planned_meal" as const;
 export const SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "update_authenticated_planned_meal" as const;
 export const SUPABASE_REMOVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION = "remove_authenticated_planned_meal" as const;
+export const SUPABASE_CREATE_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION = "create_authenticated_planned_meal_v2" as const;
+export const SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION = "update_authenticated_planned_meal_v2" as const;
+export const SUPABASE_CANCEL_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION = "cancel_authenticated_planned_meal_v2" as const;
+export const SUPABASE_CONVERT_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION = "convert_authenticated_planned_meal_v2" as const;
 
 export const SUPABASE_CONSUMER_MEAL_RECORD_SELECT_COLUMNS = [
   "id",
@@ -57,14 +61,21 @@ export const SUPABASE_CONSUMER_PLANNED_MEALS_SELECT_COLUMNS = [
   "id",
   "user_id",
   "planned_for",
+  "planned_local_time",
+  "planned_timezone",
   "meal_type",
+  "meal_category",
   "restaurant_id",
   "branch_id",
   "menu_item_id",
   "display_name_snapshot",
+  "restaurant_name_snapshot",
   "planned_nutrition_snapshot",
   "status",
-  "note"
+  "converted_meal_record_id",
+  "note",
+  "created_at",
+  "updated_at"
 ].join(",");
 
 export type SupabaseNutritionSnapshotLike = Record<string, unknown> | null;
@@ -131,14 +142,75 @@ export type SupabasePlannedMealRowLike = {
   id?: string | null;
   user_id?: string | null;
   planned_for?: string | null;
+  planned_local_time?: string | null;
+  planned_timezone?: string | null;
   meal_type?: ConsumerMealType | string | null;
+  meal_category?: string | null;
   restaurant_id?: string | null;
   branch_id?: string | null;
   menu_item_id?: string | null;
   display_name_snapshot?: string | null;
+  restaurant_name_snapshot?: string | null;
   planned_nutrition_snapshot?: SupabaseNutritionSnapshotLike;
   status?: string | null;
+  converted_meal_record_id?: string | null;
   note?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type SupabaseCreatePlannedMealV2RpcArgs = {
+  p_create_client_request_id: string;
+  p_planned_for: string;
+  p_planned_timezone: string;
+  p_meal_type: ConsumerMealType;
+  p_display_name_snapshot: string;
+  p_planned_local_time: string | null;
+  p_meal_category: string | null;
+  p_restaurant_name_snapshot: string | null;
+  p_note: string | null;
+  p_restaurant_id: string | null;
+  p_branch_id: string | null;
+  p_menu_item_id: string | null;
+  p_planned_nutrition_snapshot: Record<string, unknown>;
+};
+
+export type SupabaseUpdatePlannedMealV2RpcArgs = {
+  p_planned_meal_id: string;
+  p_expected_updated_at: string;
+  p_patch: Record<string, unknown>;
+};
+
+export type SupabaseCancelPlannedMealV2RpcArgs = {
+  p_planned_meal_id: string;
+  p_expected_updated_at: string;
+};
+
+export type SupabaseConvertPlannedMealV2RpcArgs = {
+  p_planned_meal_id: string;
+  p_conversion_idempotency_key: string;
+  p_expected_updated_at: string;
+  p_confirmation_timestamp: string;
+  p_actor_timezone: string;
+};
+
+export type SupabasePlannedMealV2RpcResultLike = SupabasePlannedMealRowLike & { replayed?: boolean | null };
+export type SupabasePlannedMealV2RpcResponseLike = {
+  data?: SupabasePlannedMealV2RpcResultLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
+};
+export type SupabaseConvertPlannedMealV2RpcResultLike = {
+  planned_meal_id?: string | null;
+  status?: string | null;
+  meal_record_id?: string | null;
+  converted_at?: string | null;
+  replayed?: boolean | null;
+};
+export type SupabaseConvertPlannedMealV2RpcResponseLike = {
+  data?: SupabaseConvertPlannedMealV2RpcResultLike | null;
+  error?: SupabaseMealPostgrestErrorLike | null;
+  status?: number | null;
 };
 
 export type SupabaseMealPostgrestErrorLike = {
@@ -328,4 +400,8 @@ export type SupabaseConsumerMealClientLike = {
     fn: typeof SUPABASE_REMOVE_AUTHENTICATED_PLANNED_MEAL_FUNCTION,
     args: SupabaseRemovePlannedMealRpcArgs
   ): Promise<SupabaseRemovePlannedMealRpcResponseLike>;
+  rpc(fn: typeof SUPABASE_CREATE_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION, args: SupabaseCreatePlannedMealV2RpcArgs): Promise<SupabasePlannedMealV2RpcResponseLike>;
+  rpc(fn: typeof SUPABASE_UPDATE_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION, args: SupabaseUpdatePlannedMealV2RpcArgs): Promise<SupabasePlannedMealV2RpcResponseLike>;
+  rpc(fn: typeof SUPABASE_CANCEL_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION, args: SupabaseCancelPlannedMealV2RpcArgs): Promise<SupabasePlannedMealV2RpcResponseLike>;
+  rpc(fn: typeof SUPABASE_CONVERT_AUTHENTICATED_PLANNED_MEAL_V2_FUNCTION, args: SupabaseConvertPlannedMealV2RpcArgs): Promise<SupabaseConvertPlannedMealV2RpcResponseLike>;
 };

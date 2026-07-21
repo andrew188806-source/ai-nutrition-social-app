@@ -1176,6 +1176,10 @@ export const zhTW = {
       rerunLunchCta: "重新推薦午餐",
       editCta: "修改晚餐計畫",
       clearCta: "清除晚餐計畫",
+      retryCta: "用相同請求重試",
+      uncertainMessage: "結果尚未確認。請前往今日飲食確認，或用相同請求重試。",
+      conflictMessage: "這筆預定餐已變更，請重新整理後再試。",
+      errorMessage: "目前無法完成預定餐操作，請稍後再試。",
       uncertainHint: "不確定熱量也沒關係，我們會先用估算值幫你安排。",
       dataBoundaryHint: "晚餐計畫不會寫進餐廳資料庫，只會用來幫你安排今天怎麼吃。",
       dailyPlannerTitle: "今日飲食規劃",
@@ -1191,6 +1195,7 @@ export const zhTW = {
       mealTimeOptions: ["午餐", "晚餐", "宵夜"],
       dinnerTypeOptions: ["火鍋", "燒肉", "牛排", "義大利麵", "拉麵", "便當", "甜點", "宵夜", "自訂"],
       fieldLabels: {
+        plannedDate: "預定日期（YYYY-MM-DD）",
         mealName: "餐點名稱",
         mealType: "餐點類型",
         restaurantName: "餐廳名稱",

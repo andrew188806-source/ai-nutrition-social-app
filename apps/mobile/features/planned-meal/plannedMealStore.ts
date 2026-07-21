@@ -1,12 +1,12 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import type { PlannedMeal } from "./types";
 
-// TODO(engineering):
-// - Current state: planned and confirmed dinners live in module memory for the demo.
-// - Intended future integration: use a planned-meal API plus scheduled settlement for unconfirmed plans.
-// - Related feature: Planned Dinner -> Today Nutrition.
+// Compatibility-only module-memory draft/session state for analysis.tsx and
+// historical demo callers. It is never a canonical source for the B3-D
+// Recommendation, Meal Photo, Home, or Today runtime paths.
 let savedPlannedDinner: PlannedMeal | null = null;
 let confirmedDinnerRecord: PlannedMeal | null = null;
+export const LEGACY_PLANNED_MEAL_STORE_COMPATIBILITY_ONLY = true as const;
 
 export function getDefaultPlannedDinner(): PlannedMeal {
   return { ...zhTW.mobile.plannedDinner.defaultPlan };
@@ -35,12 +35,7 @@ export function getConfirmedDinnerRecord() {
 }
 
 export function getAutoSettledPlannedDinnerRecord() {
-  if (!savedPlannedDinner) {
-    return null;
-  }
-
-  return {
-    ...savedPlannedDinner,
-    notes: savedPlannedDinner.notes ? `${savedPlannedDinner.notes}｜預計晚餐自動結算` : "預計晚餐自動結算"
-  };
+  // Automatic settlement was synthetic and is intentionally disabled. Only an
+  // explicit canonical V2 conversion may create a Meal Record.
+  return null;
 }

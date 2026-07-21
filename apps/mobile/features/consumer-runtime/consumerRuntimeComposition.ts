@@ -21,10 +21,14 @@ import {
 } from "../consumer-auth";
 import { getConsumerMealRuntimeFlags } from "../consumer-meals/featureFlags";
 import type { ConsumerMealRuntimeFlags } from "../consumer-meals/types";
+import type { ConsumerPlannedMeal, ConsumerPlannedMealsReadResult } from "../consumer-meals/types";
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
+import type { ConsumerPlannedMealV2Service } from "../consumer-meals/consumerPlannedMealV2Service";
 import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseMealContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
+import { ConsumerPlannedMealOperationStore } from "./consumerPlannedMealOperationStore";
+import { ConsumerPlannedMealRuntime } from "./consumerPlannedMealRuntime";
 
 export type ConsumerRuntimeMode = "mock" | "disabled" | "supabase";
 export type ConsumerRuntimeOperation = "idle" | "signingIn" | "signingOut";
@@ -265,6 +269,9 @@ export type ConsumerRuntimeComposition = {
   flags: ConsumerRuntimeFlags;
   controller: ConsumerAuthProfileRuntime;
   mealWriteRuntime: ConsumerMealWriteRuntime;
+  plannedMealRuntime: ConsumerPlannedMealRuntime;
+  plannedMealService: Pick<ConsumerPlannedMealV2Service, "update" | "cancel">;
+  getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMealsReadResult>;
   createOverviewService(timezone: string): ConsumerTodayIntakeOverviewService;
 };
 
@@ -280,6 +287,8 @@ export type ConsumerRuntimeCompositionOptions = {
   mealFlags?: ConsumerMealRuntimeFlags;
   operationStorage?: ConsumerAuthStorage;
   mealWriteRuntime?: ConsumerMealWriteRuntime;
+  plannedMealRuntime?: ConsumerPlannedMealRuntime;
+  plannedMealService?: ConsumerPlannedMealV2Service;
   overviewService?: ConsumerTodayIntakeOverviewService;
 };
 
@@ -309,6 +318,8 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         storage,
         mealFlags: options.mealFlags,
         mealWriteRuntime: options.mealWriteRuntime,
+        plannedMealRuntime: options.plannedMealRuntime,
+        plannedMealService: options.plannedMealService,
         overviewService: options.overviewService
       });
       if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
@@ -345,6 +356,8 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         mealClient: client as unknown as SupabaseConsumerMealClientLike,
         mealFlags: options.mealFlags,
         mealWriteRuntime: options.mealWriteRuntime,
+        plannedMealRuntime: options.plannedMealRuntime,
+        plannedMealService: options.plannedMealService,
         overviewService: options.overviewService
       });
       if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
@@ -366,6 +379,8 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
       storage,
       mealFlags: options.mealFlags,
       mealWriteRuntime: options.mealWriteRuntime,
+      plannedMealRuntime: options.plannedMealRuntime,
+      plannedMealService: options.plannedMealService,
       overviewService: options.overviewService
     });
     if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
@@ -389,6 +404,8 @@ function createMealRuntimeParts(input: {
   mealClient?: SupabaseConsumerMealClientLike;
   mealFlags?: ConsumerMealRuntimeFlags;
   mealWriteRuntime?: ConsumerMealWriteRuntime;
+  plannedMealRuntime?: ConsumerPlannedMealRuntime;
+  plannedMealService?: ConsumerPlannedMealV2Service;
   overviewService?: ConsumerTodayIntakeOverviewService;
 }) {
   // Keep the meal factory graph behind the B2 runtime boundary. Historical B1
@@ -396,23 +413,75 @@ function createMealRuntimeParts(input: {
   // runtime, while an actual B2 composition always enters this function.
   const {
     createConsumerMealRecordWriteService,
+    createConsumerPlannedMealV2Service,
+    createConsumerPlannedMealsService,
     createConsumerTodayIntakeOverviewService
   } = require("../consumer-meals/factories") as typeof import("../consumer-meals/factories");
+  const { ConsumerPlannedMealsService } = require("../consumer-meals/consumerPlannedMealsService") as typeof import("../consumer-meals/consumerPlannedMealsService");
   const rawMealFlags = input.mealFlags ?? getConsumerMealRuntimeFlags();
   if (rawMealFlags.authSource !== input.authFlags.authSource) return null;
   const writeFlags = normalizeMealWriteFlags(rawMealFlags, input.authFlags.authSource);
-  const overviewFlags = normalizeOverviewFlags(rawMealFlags);
-  if (writeFlags.issues.length || overviewFlags.issues.length) return null;
+  const overviewFlags = normalizeOverviewFlags(rawMealFlags, input.authFlags.authSource);
+  const plannedWriteFlags = normalizePlannedMealWriteFlags(rawMealFlags, input.authFlags.authSource);
+  if (writeFlags.issues.length || overviewFlags.issues.length || plannedWriteFlags.issues.length) return null;
   const dependencies = { authPort: input.authPort, mealClient: input.mealClient };
   const mealWriteRuntime = input.mealWriteRuntime ?? new ConsumerMealWriteRuntime({
     service: createConsumerMealRecordWriteService(writeFlags, dependencies),
     operationStore: new ConsumerMealWriteOperationStore(input.storage)
   });
+  const basePlannedMealsService = createConsumerPlannedMealsService(overviewFlags, dependencies);
+  const basePlannedMealService = input.plannedMealService ?? createConsumerPlannedMealV2Service(plannedWriteFlags, dependencies);
+  const trackedRows = new Map<string, Map<string, ConsumerPlannedMeal>>();
+  const currentActor = async () => {
+    const session = await input.authPort.getCurrentSession();
+    return session.ok ? session.value?.user.userId ?? null : null;
+  };
+  const remember = async (meal: ConsumerPlannedMeal, expectedActor: string | null) => {
+    if (!expectedActor || await currentActor() !== expectedActor) return;
+    const rows = trackedRows.get(expectedActor) ?? new Map<string, ConsumerPlannedMeal>();
+    rows.set(meal.plannedMealId, meal); trackedRows.set(expectedActor, rows);
+  };
+  const plannedMealService: Pick<ConsumerPlannedMealV2Service, "create" | "update" | "cancel" | "convert"> = {
+    create: async (value) => { const actor = await currentActor(); const result = await basePlannedMealService.create(value); if (result.ok) await remember(result.value.plannedMeal, actor); return result; },
+    update: async (value) => { const actor = await currentActor(); const result = await basePlannedMealService.update(value); if (result.ok) await remember(result.value.plannedMeal, actor); return result; },
+    cancel: async (value) => { const actor = await currentActor(); const result = await basePlannedMealService.cancel(value); if (result.ok) await remember(result.value.plannedMeal, actor); return result; },
+    convert: async (value) => {
+      const actor = await currentActor(); const result = await basePlannedMealService.convert(value);
+      if (result.ok && actor && await currentActor() === actor) {
+        const rows = trackedRows.get(actor); const row = rows?.get(result.value.plannedMealId);
+        if (row) rows?.set(row.plannedMealId, { ...row, status: "converted", convertedMealRecordId: result.value.mealRecordId, updatedAt: result.value.convertedAt });
+      }
+      return result;
+    }
+  };
+  const plannedMealsService = new ConsumerPlannedMealsService({
+    clock: { now: () => new Date() },
+    repository: {
+      source: basePlannedMealsService.source,
+      getCurrentUserPlannedMeals: async ({ plannedDate }) => {
+        const actor = await currentActor();
+        const result = await basePlannedMealsService.getCurrentUserPlannedMeals({ plannedDate });
+        if (!actor || await currentActor() !== actor) return result;
+        const tracked = [...(trackedRows.get(actor)?.values() ?? [])].filter((meal) => meal.plannedDate === plannedDate);
+        const base = result.status === "available" ? result.meals : [];
+        const merged = new Map(tracked.map((meal) => [meal.plannedMealId, meal])); for (const meal of base) merged.set(meal.plannedMealId, meal);
+        const meals = [...merged.values()].sort((left, right) => (left.plannedTime ?? "").localeCompare(right.plannedTime ?? "") || left.plannedMealId.localeCompare(right.plannedMealId));
+        return meals.length ? { status: "available" as const, plannedDate, meals } : result;
+      }
+    }
+  });
+  const plannedMealRuntime = input.plannedMealRuntime ?? new ConsumerPlannedMealRuntime({
+    service: plannedMealService,
+    operationStore: new ConsumerPlannedMealOperationStore(input.storage)
+  });
   return {
     mealWriteRuntime,
+    plannedMealRuntime,
+    plannedMealService,
+    getPlannedMeals: (plannedDate: string) => plannedMealsService.getCurrentUserPlannedMeals({ plannedDate }),
     createOverviewService: (timezone: string) => input.overviewService ?? createConsumerTodayIntakeOverviewService(
       overviewFlags,
-      { ...dependencies, timezone }
+      { ...dependencies, plannedMealsService, timezone }
     )
   };
 }
@@ -433,9 +502,10 @@ function normalizeMealWriteFlags(flags: ConsumerMealRuntimeFlags, authSource: Co
   return { ...flags, issues: flags.issues.filter((issue) => !isApprovedB2ReadWriteTransitionIssue(issue)) };
 }
 
-function normalizeOverviewFlags(flags: ConsumerMealRuntimeFlags): ConsumerMealRuntimeFlags {
+function normalizeOverviewFlags(flags: ConsumerMealRuntimeFlags, authSource: ConsumerRuntimeFlags["authSource"]): ConsumerMealRuntimeFlags {
   return {
     ...flags,
+    plannedMealsSource: authSource === "mock" ? "mock" : flags.plannedMealsSource,
     supabaseWritesEnabled: false,
     mealRecordWritesEnabled: false,
     mealRecordLiveWriteOptIn: false,
@@ -443,6 +513,19 @@ function normalizeOverviewFlags(flags: ConsumerMealRuntimeFlags): ConsumerMealRu
     plannedMealsWriteSource: "disabled",
     issues: flags.issues.filter((issue) => !isApprovedB2ReadWriteTransitionIssue(issue))
   };
+}
+
+function normalizePlannedMealWriteFlags(flags: ConsumerMealRuntimeFlags, authSource: ConsumerRuntimeFlags["authSource"]): ConsumerMealRuntimeFlags {
+  if (authSource === "mock") {
+    return {
+      ...flags,
+      plannedMealsSource: "mock",
+      plannedMealsWriteSource: "mock",
+      supabaseWritesEnabled: true,
+      issues: []
+    };
+  }
+  return { ...flags, issues: flags.issues.filter((issue) => !isApprovedB2ReadWriteTransitionIssue(issue)) };
 }
 
 function isApprovedB2ReadWriteTransitionIssue(issue: string) {
