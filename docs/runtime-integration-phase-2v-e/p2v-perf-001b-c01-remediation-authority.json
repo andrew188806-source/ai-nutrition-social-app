@@ -1,0 +1,303 @@
+{
+  "schema": "tastkind.p2v-perf.c01-remediation-authorization",
+  "version": 1,
+  "authorizationId": "P2V-PERF-001B-C01-REMEDIATION-A1",
+  "status": "candidate-for-independent-d2-review-runtime-remediation-not-authorized",
+  "candidateBaseline": {
+    "branch": "main",
+    "head": "3c36c5c64d6b02b8da807f5715d67065ba3f7de6",
+    "migrationCount": 41,
+    "bindingScope": "candidate-preparation-only",
+    "postFreezeRule": "The branch, HEAD, and migration-count binding expires only after an independent D2 review and Freeze of this authorization; it is not a runtime implementation baseline or permission to implement."
+  },
+  "candidateInventory": [
+    "docs/runtime-integration-phase-2v-e/p2v-perf-001b-c01-remediation-authority.json",
+    "docs/runtime-integration-phase-2v-e/p2v-perf-001b-c01-remediation-contract.md",
+    "scripts/restaurant-performance-p2v-perf-001b-c01-remediation-guard.mjs"
+  ],
+  "frozenBindings": {
+    "baseContract": {
+      "path": "docs/runtime-integration-phase-2v-e/performance-and-query-plan-contract.md",
+      "sha256": "81af13e4078a7ed820a7088472ab449b00bc50514fdeef11fdeaecc4170e28f2"
+    },
+    "baseAuthority": {
+      "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json",
+      "sha256": "4bfc94a5085a537c3faff97deb8329800f8171e506cbe37c0308a66035a24ade"
+    },
+    "baseGuard": {
+      "path": "scripts/restaurant-performance-p2v-perf-001a-authority-guard.mjs",
+      "sha256": "dc18308ff9735fabf266cef0f4591a34bf099bf2527753146000baddee319292"
+    },
+    "planMachineAuthority": {
+      "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-plan-metric-semantics-authority.json",
+      "sha256": "ce9236f9a5855b041fa9edb8dc667378e8303168a12b782a1a52510cf1a22067"
+    },
+    "planMarkdown": {
+      "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-plan-metric-semantics-contract.md",
+      "sha256": "a9429e148c7bbfdb3e13465847a8ef60aafbc8d864344ce8dae8b67fa09ab7c4"
+    },
+    "planGuard": {
+      "path": "scripts/restaurant-performance-p2v-perf-001a-d1-plan-metric-semantics-guard.mjs",
+      "sha256": "137744cc9282333c691a22e206bec04e32fd540015cc7e6b303f218917687f00"
+    },
+    "datasetAuthority": {
+      "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-dataset-semantics-authority.json",
+      "sha256": "a9b6c7669291c6ae8ebd1e09fa50c412c3b5c651b0ba3b511f783f8f4afe4a9f"
+    },
+    "datasetMarkdown": {
+      "path": "docs/runtime-integration-phase-2v-e/p2v-perf-001-dataset-semantics-contract.md",
+      "sha256": "f1b8bd99629e98a2bbf244060bc2c1034942a1e6f687b9137f3778941e17c4d4"
+    },
+    "datasetGuard": {
+      "path": "scripts/restaurant-performance-p2v-perf-001b-dataset-semantics-guard.mjs",
+      "sha256": "ac7da82a0870b490e39ad0a953c32ddac66b819ca03058b110ef4ea6ea724601"
+    }
+  },
+  "rootCauseEvidence": {
+    "caseId": "C01",
+    "track": "outer",
+    "oldRunner": {
+      "sessionPolicy": "new-database-session-per-measured-run",
+      "sharedHitBlocksApproximate": 1949,
+      "executionTimeMsRange": [31, 42],
+      "disposition": "diagnostic-harness-defect-superseded-by-persistent-session-rule"
+    },
+    "persistentSessionResult": {
+      "warmMedianMs": {"actual": 17.076, "limit": 15, "pass": false},
+      "warmMaximumMs": {"actual": 17.471, "limit": 25, "pass": true},
+      "sharedHitBlocks": {"actual": 842, "limit": 256, "pass": false}
+    },
+    "sharedHitAttribution": {
+      "total": 842,
+      "rlsExpandedInnerPlanning": 790,
+      "innerExecution": 52,
+      "equation": "842 = 790 + 52"
+    },
+    "functionDiagnosis": {
+      "name": "restaurant_current_access_context_v1()",
+      "currentLanguage": "sql",
+      "security": "SECURITY DEFINER",
+      "forceRlsPlanNodes": 96,
+      "cause": "The SQL function re-plans its RLS-expanded inner statement on each invocation instead of obtaining session plan-cache reuse."
+    },
+    "ruledOut": [
+      "missing-index",
+      "unused-index",
+      "statistics-defect",
+      "selectivity-defect",
+      "excessive-data-access"
+    ]
+  },
+  "runnerCorrection": {
+    "tracks": ["outer", "inner"],
+    "sessionIsolation": "Each track uses its own persistent database session; sessions are never shared across tracks.",
+    "sequencePerTrackSession": ["cold", "warmup-1", "warmup-2", "measured-1", "measured-2", "measured-3", "measured-4", "measured-5", "measured-6", "measured-7"],
+    "sameSessionRequired": true,
+    "coldDefinition": "The cold run is only the first formal invocation in that new track session; it is not an OS-cache-cold, device-cache-cold, or PostgreSQL-shared-buffer-cleared claim.",
+    "connectionRule": "No measured run may create a new connection or backend; cold, both warm-ups, and all seven measured runs remain in the same track session.",
+    "outerIsAuthoritative": true,
+    "innerMayReplaceOuter": false,
+    "failureRule": "An outer-track failure remains a formal failure even when inner-track evidence passes."
+  },
+  "measurementContract": {
+    "postgresServerPlanningTime": {
+      "field": "Planning Time",
+      "source": "top-level EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) statement summary",
+      "unit": "ms",
+      "classification": "PostgreSQL server planning only",
+      "separationRule": "Never add to or relabel as Execution Time or clientWallTimeMs."
+    },
+    "postgresServerExecutionTime": {
+      "field": "Execution Time",
+      "source": "top-level EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) statement summary",
+      "unit": "ms",
+      "classification": "PostgreSQL server execution only",
+      "outerFunctionScanRule": "SQL-function initialization and inner planning inside an outer Function Scan remain outer PostgreSQL server Execution Time when PostgreSQL includes them there; they are never reclassified as client overhead.",
+      "separationRule": "Never add to or relabel as Planning Time or clientWallTimeMs."
+    },
+    "executionBuffers": {
+      "source": "the top-level Plan object of each EXPLAIN JSON run; these inclusive whole-plan values are execution-buffer totals for that run",
+      "rawFields": [
+        "Shared Hit Blocks",
+        "Shared Read Blocks",
+        "Shared Dirtied Blocks",
+        "Shared Written Blocks",
+        "Local Hit Blocks",
+        "Local Read Blocks",
+        "Local Dirtied Blocks",
+        "Local Written Blocks",
+        "Temp Read Blocks",
+        "Temp Written Blocks"
+      ],
+      "rawRunRule": "Store every listed field separately for the cold run and each of the seven measured runs; warm-up values are diagnostic only and excluded from formal summaries.",
+      "summaryRules": {
+        "maxSharedHitBlocks": "maximum execution Shared Hit Blocks across the cold run and seven measured runs",
+        "maxColdReadBlocks": "cold-run execution Shared Read Blocks",
+        "maxWarmReadBlocks": "maximum execution Shared Read Blocks across the seven measured runs",
+        "localAndTempLimits": "maximum of the corresponding execution field across the cold run and seven measured runs"
+      }
+    },
+    "planningBuffers": {
+      "source": "the top-level Planning object of each EXPLAIN JSON run when PostgreSQL emits planning buffer fields",
+      "rawFields": [
+        "Shared Hit Blocks",
+        "Shared Read Blocks",
+        "Shared Dirtied Blocks",
+        "Shared Written Blocks",
+        "Local Hit Blocks",
+        "Local Read Blocks",
+        "Local Dirtied Blocks",
+        "Local Written Blocks",
+        "Temp Read Blocks",
+        "Temp Written Blocks"
+      ],
+      "separationRule": "Store planning buffers with a planning-prefixed identity and never add them to or present them as execution-buffer threshold values."
+    },
+    "clientWallTime": {
+      "field": "clientWallTimeMs",
+      "source": "client monotonic clock around the complete request round trip",
+      "unit": "ms",
+      "includes": ["client overhead", "libpq overhead", "serialization overhead", "server round trip"],
+      "thresholdRole": "diagnostic-only-never-substitutes-for-Frozen-server-thresholds",
+      "separationRule": "Keep separate from PostgreSQL Planning Time, Execution Time, and all planning or execution buffer fields."
+    },
+    "outerWarmExecutionSummaries": {
+      "sourceTrack": "outer",
+      "sourceSession": "the same outer persistent session",
+      "sourceField": "PostgreSQL top-level EXPLAIN JSON Execution Time",
+      "sourceRuns": ["measured-1", "measured-2", "measured-3", "measured-4", "measured-5", "measured-6", "measured-7"],
+      "warmMedianMs": "median of the seven outer server Execution Time values",
+      "warmMaximumMs": "maximum of the seven outer server Execution Time values",
+      "excluded": ["cold", "warmup-1", "warmup-2", "clientWallTimeMs", "inner Execution Time"],
+      "outerFailureRule": "Inner success never replaces, masks, or overrides an outer failure."
+    },
+    "planningSummary": "For each track, maximum Planning Time is computed across its cold run and seven measured runs; warm-ups and clientWallTimeMs are excluded.",
+    "metricSeparation": "PostgreSQL server planning time, PostgreSQL server execution time, planning buffers, execution buffers, and clientWallTimeMs are distinct evidence classes and may never be added together or ambiguously relabeled."
+  },
+  "runtimeRemediationAuthorization": {
+    "authorizationState": "deferred-until-independent-d2-review-and-freeze",
+    "onlyFutureRuntimeCandidate": "supabase/migrations/20260722010000_cache_restaurant_current_access_context_plan.sql",
+    "candidateCount": 1,
+    "migrationOperation": "CREATE OR REPLACE FUNCTION",
+    "function": "restaurant_current_access_context_v1()",
+    "languageBefore": "sql",
+    "languageAfter": "plpgsql",
+    "bodyForm": "static RETURN QUERY",
+    "purpose": "Permit PostgreSQL session plan caching to absorb repeated RLS-expanded inner planning cost.",
+    "noTrialAlternatives": true
+  },
+  "preservedFunctionInvariants": {
+    "functionIdentity": "public.restaurant_current_access_context_v1()",
+    "completeSignature": "public.restaurant_current_access_context_v1()",
+    "identityArguments": "",
+    "returnSemantics": "RETURNS TABLE",
+    "returnsSet": true,
+    "returnColumns": [
+      {"ordinal": 1, "name": "restaurant_id", "declaredType": "text", "schemaQualifiedType": "pg_catalog.text", "typmod": -1, "array": false, "enum": false, "domain": false},
+      {"ordinal": 2, "name": "role_key", "declaredType": "text", "schemaQualifiedType": "pg_catalog.text", "typmod": -1, "array": false, "enum": false, "domain": false},
+      {"ordinal": 3, "name": "permission_key", "declaredType": "text", "schemaQualifiedType": "pg_catalog.text", "typmod": -1, "array": false, "enum": false, "domain": false},
+      {"ordinal": 4, "name": "permission_scope", "declaredType": "text", "schemaQualifiedType": "pg_catalog.text", "typmod": -1, "array": false, "enum": false, "domain": false},
+      {"ordinal": 5, "name": "branch_id", "declaredType": "text", "schemaQualifiedType": "pg_catalog.text", "typmod": -1, "array": false, "enum": false, "domain": false}
+    ],
+    "returnOrderRule": "Every return column name, exact PostgreSQL type identity, typmod, array/enum/domain identity, and ordinal remains byte-for-byte semantically equivalent.",
+    "catalogEquivalenceEvidence": {
+      "requiredBeforeAndAfter": ["pg_get_function_identity_arguments", "pg_get_function_result", "pg_get_function_arguments", "pg_proc.proretset", "pg_proc.prorettype", "pg_proc.proallargtypes", "pg_proc.proargmodes", "pg_proc.proargnames", "pg_type schema-qualified identities for every return type"],
+      "expectedIdentityArguments": "",
+      "expectedFunctionResult": "TABLE(restaurant_id text, role_key text, permission_key text, permission_scope text, branch_id text)",
+      "expectedFunctionArguments": "",
+      "expectedProretset": true,
+      "expectedProrettype": "pg_catalog.record",
+      "expectedProallargtypes": ["pg_catalog.text", "pg_catalog.text", "pg_catalog.text", "pg_catalog.text", "pg_catalog.text"],
+      "expectedProargmodes": ["t", "t", "t", "t", "t"],
+      "expectedProargnames": ["restaurant_id", "role_key", "permission_key", "permission_scope", "branch_id"],
+      "comparisonRule": "Capture before and after values in the same PostgreSQL 17.6 suite and require exact equality plus exact schema-qualified return type identity; any mismatch fails closed."
+    },
+    "volatility": "STABLE",
+    "security": "SECURITY DEFINER",
+    "parallel": "PARALLEL UNSAFE",
+    "cost": 100,
+    "rows": 1000,
+    "rowsAdjustmentRule": "forbidden-unless-separately-authorized-by-independent-evidence",
+    "searchPath": "empty",
+    "rowSecurity": "on",
+    "owner": "unchanged",
+    "executeAcl": "unchanged",
+    "ownerBypassRls": false,
+    "rlsPolicies": "unchanged",
+    "tenantPredicates": "unchanged",
+    "denialSemantics": "unchanged"
+  },
+  "evidenceSemantics": {
+    "innerExecutionSharedHits": 52,
+    "classification": "diagnosis-derived-expectation-not-pass-evidence",
+    "requiredEnvironment": "fresh-isolated-local-PostgreSQL-17.6",
+    "measurementRequired": true,
+    "thresholds": "all-original-Frozen-thresholds-unchanged",
+    "failureDisposition": "fail-closed",
+    "failureProhibitions": [
+      "semantic-change",
+      "index-addition-or-change",
+      "threshold-relaxation",
+      "RLS-bypass"
+    ]
+  },
+  "guardSelfIntegrity": {
+    "argument": "--expected-self-sha256",
+    "mandatory": true,
+    "format": "exactly 64 lowercase hexadecimal characters",
+    "digestTarget": "actual bytes of the executing guard file",
+    "verificationOrder": "verify before authority parsing or any semantic PASS check",
+    "mismatchDisposition": "exit-nonzero-before-semantic-checks",
+    "successOutput": "print the verified self SHA-256",
+    "reviewInvocation": "node scripts/restaurant-performance-p2v-perf-001b-c01-remediation-guard.mjs --expected-self-sha256 <64-lowercase-hex-digest>",
+    "trustAnchorRule": "The Corrected Candidate Report publishes the final guard digest and exact invocation; the next independent D2 reviewer supplies that external digest.",
+    "circularHashProhibition": "Do not hard-code the guard's final complete SHA-256 inside the guard or authority."
+  },
+  "postImplementationVerification": {
+    "freshPostgresSuites": 2,
+    "postgresVersion": "17.6",
+    "cases": 35,
+    "thresholdProfiles": 9,
+    "requiredCoverage": [
+      "C01-outer-and-inner",
+      "C02-outer-and-inner",
+      "D01-D10-denial",
+      "A05-multi-tenant-portfolio",
+      "disabled-actors",
+      "inactive-actors",
+      "suspended-actors",
+      "revoked-actors",
+      "branch-scope-isolation",
+      "function-owner",
+      "function-execute-ACL",
+      "all-function-metadata",
+      "41-existing-migrations-plus-authorized-new-migration-full-rebuild",
+      "historical-guards-and-smokes",
+      "dataset-determinism",
+      "all-nine-Frozen-hashes"
+    ],
+    "allMandatory": true
+  },
+  "prohibitions": [
+    "runtime-remediation-in-this-candidate-phase",
+    "additional-candidate",
+    "threshold-change",
+    "dataset-size-or-semantics-change",
+    "RLS-policy-or-predicate-change",
+    "grant-or-ACL-change",
+    "index-change",
+    "schema-change-other-than-the-later-authorized-function-replacement",
+    "application-change",
+    "package-or-lockfile-change",
+    "development-or-production-connection",
+    "reuse-of-stale-performance-evidence",
+    "outer-result-replacement-by-inner-result"
+  ],
+  "lifecycle": {
+    "currentPhase": "authorization-candidate-preparation-only",
+    "nextPermittedGate": "independent-d2-review",
+    "freezeAutomatic": false,
+    "implementationAutomatic": false,
+    "b1RetryAutomatic": false
+  }
+}
