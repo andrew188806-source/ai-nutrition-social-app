@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "provenanceId": "P2V-PERF-001B-C01-DIAGNOSIS-PROVENANCE-1",
+  "status": "sanitized-candidate-provenance",
+  "sources": [
+    {"path":"/tmp/p2v-perf-001b-diagnosis-019f895b/evidence/failure-diagnosis-report.md","sha256":"73e749c1fb67a85e735cc4d44d444a3f4c7ec4c479d482e7cbbae8d516894fb2","classification":"diagnosis narrative"},
+    {"path":"/tmp/p2v-perf-001b-diagnosis-019f895b/evidence/focused-diagnosis.json","sha256":"96eda96fef9b287284b98db2fe644e08996af39d9f032bfd48c1e9b23c1724cd","classification":"raw focused EXPLAIN evidence"}
+  ],
+  "postgresVersion": "17.6",
+  "environmentIdentities": ["baseline-suite-a","baseline-suite-b","candidate-suite-a","candidate-suite-b"],
+  "candidateSha256": "4e08de96d28a5e6d9911b074fa73769ea5b3e21d9e14a089c7f420e16a4fbe72",
+  "datasetSemanticHash": "3e5dc3180770097f389a0a9d668a33f3bd0f1a6df43bcbc114b5fb88127eedc2",
+  "verifiedRawEvidence": {
+    "candidateColdSharedHitBlocks": {"candidate-suite-a":1224,"candidate-suite-b":1224},
+    "candidateMeasuredWarmSharedHitBlocks": {"candidate-suite-a":[52,52,52,52,52,52,52],"candidate-suite-b":[52,52,52,52,52,52,52]},
+    "secondFreshBackendSharedHitBlocks": {"candidate-suite-a":1949,"candidate-suite-b":1949},
+    "discardPlansSharedHitSequence": {"candidate-suite-a":[52,842,52],"candidate-suite-b":[52,842,52],"notation":"52 -> 842 -> 52"},
+    "secureDirectInnerWarm": {"planningSharedHitBlocks":790,"executionSharedHitBlocks":52,"equation":"790 planning + 52 execution = 842"},
+    "oldCold": {"executionSharedHitBlocks":1753,"executionSharedReadBlocks":179,"interpretation":"inclusive top-level Function Scan execution buffers, not Planning buffers or client wall time"},
+    "infinityNodes": [
+      {"caseId":"C01","thresholdProfile":"accessTypical","track":"inner","relation":"restaurant_membership_branch_scopes","planRows":1,"actualRows":0,"actualLoops":5},
+      {"caseId":"C01","thresholdProfile":"accessTypical","track":"inner","relation":"restaurant_branches","planRows":1,"actualRows":0,"actualLoops":5}
+    ],
+    "secureFunctionOwner": {"identity":"restaurant_membership_context_reader","rolsuper":false,"rolbypassrls":false},
+    "oldDirectInnerEvidenceDefect": "The old direct-inner track executed as postgres superuser and is BYPASSRLS evidence; it is not valid secure direct-inner threshold evidence.",
+    "outerEvidenceDisposition": "The old inner identity defect does not invalidate the outer SECURITY DEFINER formal result."
+  },
+  "inferences": [
+    "Cold high buffers arise from first-use backend-local plan/function/catalog initialization; the controlled second-call and DISCARD PLANS evidence supports the classification.",
+    "The exact internal split of the additional first-backend component is not separately exposed by top-level EXPLAIN and is not asserted as raw fact.",
+    "The zero-actual nodes are consistent with correct owner branch-scope isolation, subject to the full proof obligations in the reauthorization authority."
+  ],
+  "untouchedStatements": {
+    "repositoryWasUntouchedByDiagnosis": true,
+    "developmentWasUntouched": true,
+    "productionWasUntouched": true,
+    "gitRemoteOperations": "none"
+  },
+  "sanitization": {
+    "credentialsIncluded": false,
+    "tokensIncluded": false,
+    "passwordsIncluded": false,
+    "connectionStringsIncluded": false,
+    "jwtIncluded": false,
+    "serviceRoleKeysIncluded": false,
+    "personalDataIncluded": false,
+    "developmentOrProductionSecretsIncluded": false
+  }
+}

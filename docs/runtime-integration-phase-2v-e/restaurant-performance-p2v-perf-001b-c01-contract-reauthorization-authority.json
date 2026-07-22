@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "authorityId": "P2V-PERF-001B-C01-CONTRACT-REAUTHORIZATION-CANDIDATE-1",
+  "status": "candidate",
+  "nature": {
+    "supplemental": true,
+    "prospective": true,
+    "rewritesExistingFrozenAuthority": false,
+    "supersedingEffect": "Only the named measurement clauses are superseded after independent review and Freeze of this exact candidate.",
+    "existingBlockedSuiteDisposition": "BLOCKED remains BLOCKED; candidate creation is not PASS evidence."
+  },
+  "parentFrozenHead": "a6394ac32702c301016b5cbdef9f03d49a109ea0",
+  "parentCommit": "3c36c5c64d6b02b8da807f5715d67065ba3f7de6",
+  "immutableMigrationCandidatePath": "supabase/migrations/20260722010000_cache_restaurant_current_access_context_plan.sql",
+  "immutableMigrationCandidateSha256": "4e08de96d28a5e6d9911b074fa73769ea5b3e21d9e14a089c7f420e16a4fbe72",
+  "sourceDiagnosisReportSha256": "73e749c1fb67a85e735cc4d44d444a3f4c7ec4c479d482e7cbbae8d516894fb2",
+  "sourceFocusedEvidenceSha256": "96eda96fef9b287284b98db2fe644e08996af39d9f032bfd48c1e9b23c1724cd",
+  "datasetSemanticHash": "3e5dc3180770097f389a0a9d668a33f3bd0f1a6df43bcbc114b5fb88127eedc2",
+  "frozenBindings": {
+    "remediationAuthority": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001b-c01-remediation-authority.json","sha256":"f7babca2616f5a901a6c5946770029a39630e46f2e168977fa0b31e82abc4430"},
+    "remediationContract": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001b-c01-remediation-contract.md","sha256":"fac68f9258e8a58fcba6392e61e59274ce39efd57aca386c0d477904127b8a5c"},
+    "remediationGuard": {"path":"scripts/restaurant-performance-p2v-perf-001b-c01-remediation-guard.mjs","sha256":"1f92fc6785285fdc4fac09be39d2a69caa3fd4c28a65c1512f8b400ace69af3b"},
+    "baseContract": {"path":"docs/runtime-integration-phase-2v-e/performance-and-query-plan-contract.md","sha256":"81af13e4078a7ed820a7088472ab449b00bc50514fdeef11fdeaecc4170e28f2"},
+    "baseAuthority": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","sha256":"4bfc94a5085a537c3faff97deb8329800f8171e506cbe37c0308a66035a24ade"},
+    "baseGuard": {"path":"scripts/restaurant-performance-p2v-perf-001a-authority-guard.mjs","sha256":"dc18308ff9735fabf266cef0f4591a34bf099bf2527753146000baddee319292"},
+    "planAuthority": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001-plan-metric-semantics-authority.json","sha256":"ce9236f9a5855b041fa9edb8dc667378e8303168a12b782a1a52510cf1a22067"},
+    "planContract": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001-plan-metric-semantics-contract.md","sha256":"a9429e148c7bbfdb3e13465847a8ef60aafbc8d864344ce8dae8b67fa09ab7c4"},
+    "planGuard": {"path":"scripts/restaurant-performance-p2v-perf-001a-d1-plan-metric-semantics-guard.mjs","sha256":"137744cc9282333c691a22e206bec04e32fd540015cc7e6b303f218917687f00"},
+    "datasetAuthority": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001-dataset-semantics-authority.json","sha256":"a9b6c7669291c6ae8ebd1e09fa50c412c3b5c651b0ba3b511f783f8f4afe4a9f"},
+    "datasetContract": {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001-dataset-semantics-contract.md","sha256":"f1b8bd99629e98a2bbf244060bc2c1034942a1e6f687b9137f3778941e17c4d4"},
+    "datasetGuard": {"path":"scripts/restaurant-performance-p2v-perf-001b-dataset-semantics-guard.mjs","sha256":"ac7da82a0870b490e39ad0a953c32ddac66b819ca03058b110ef4ea6ea724601"}
+  },
+  "supersededClauseIds": [
+    "BASE.execution-buffers.maxSharedHitBlocks.cold-plus-measured",
+    "REMEDIATION.measurementContract.executionBuffers.summaryRules.maxSharedHitBlocks",
+    "PLAN.maxEstimateRatio.one-zero-actual-zero-verdict",
+    "REMEDIATION.direct-inner-execution-identity-omission",
+    "REMEDIATION.future-implementation-path-creation-prohibition-for-authorized-new-files"
+  ],
+  "preservedClauseIds": [
+    "BASE.postgresql-exact-version-17.6",
+    "BASE.41-plus-1-migration-rebuild",
+    "BASE.deterministic-dataset-and-semantic-hash",
+    "BASE.35-cases-and-9-profiles",
+    "BASE.C01-C02-outer-and-inner-tracks",
+    "BASE.D01-D10-A05-and-lifecycle-denials",
+    "BASE.function-signature-result-shape-owner-acl",
+    "BASE.RLS-tenant-predicates-and-indexes",
+    "BASE.two-fresh-independent-formal-suites",
+    "BASE.planning-execution-and-client-time-separation",
+    "BASE.cold-warm-median-and-warm-maximum-latency-thresholds",
+    "PLAN.all-non-estimate-ratio-metrics",
+    "DATASET.all-generator-semantics"
+  ],
+  "authorizedFuturePaths": [
+    {"path":"scripts/restaurant-performance-p2v-perf-001b-formal-runner.mjs","status":"new path allowed to create","purpose":"Formal PostgreSQL 17.6 runner with embedded dataset generation, catalog capture, 29-case prechecks, 35-case and 9-profile outer-inner tracks, persistent-session lifecycle, secure direct-inner, metrics, raw evidence, and --self-test."},
+    {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001b-evidence-schema.json","status":"new path allowed to create","purpose":"Closed machine-readable evidence schema for suite, environment, case, track, run, EXPLAIN, identity, buffers, cold and warm aggregation, zero-row classification, and provenance."},
+    {"path":"scripts/restaurant-performance-p2v-perf-001b-evidence-validator.mjs","status":"new path allowed to create","purpose":"Independent offline evidence validator for schema, completeness, backend continuity, aggregation, non-finite handling, secure identity, two-suite separation, and embedded negative self-tests."},
+    {"path":"scripts/restaurant-performance-p2v-perf-001b-c01-contract-implementation-guard.mjs","status":"new path allowed to create","purpose":"Contract validation script with negative self-tests for Frozen bindings, candidate SHA, four-file inventory, runner/schema/validator consistency, security prohibitions, and no-retroactive-pass."}
+  ],
+  "forbiddenPaths": [
+    "supabase/migrations/20260722010000_cache_restaurant_current_access_context_plan.sql",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "/tmp"
+  ],
+  "forbiddenChangeClasses": [
+    "existing-tracked-migration",
+    "existing-frozen-authority-contract-or-guard",
+    "dataset-case-or-profile",
+    "SQL-or-function-semantics",
+    "RLS-policy-or-tenant-predicate",
+    "index-owner-ACL-or-grant",
+    "application-code",
+    "package-or-lockfile",
+    "development-or-production-configuration",
+    "git-remote-state"
+  ],
+  "coldRunDefinition": {
+    "sequencePosition": "cold-first-session before warm-up-1, warm-up-2, and measured-1 through measured-7",
+    "samePersistentBackend": true,
+    "required": true,
+    "serverLatencyGate": "Original Frozen PostgreSQL Execution Time threshold remains mandatory and unchanged.",
+    "primingProhibited": true,
+    "requiredEvidence": ["backend PID","session identity","full EXPLAIN JSON","Planning Time","Execution Time","planning buffers","execution buffers","clientWallTimeMs","raw plan and metric-extraction provenance"]
+  },
+  "warmRunDefinition": {
+    "warmups": ["warm-up-1","warm-up-2"],
+    "measured": ["measured-1","measured-2","measured-3","measured-4","measured-5","measured-6","measured-7"],
+    "samePersistentBackendAsCold": true,
+    "reconnectProhibited": true,
+    "latencySource": "Only top-level PostgreSQL Execution Time from the seven measured warm runs.",
+    "excludedFromLatency": ["cold","warm-ups","clientWallTimeMs","inner Execution Time"]
+  },
+  "warmAggregationDefinition": {
+    "warmMedianMs": "median of exactly seven measured warm top-level PostgreSQL Execution Time values",
+    "warmMaximumMs": "maximum of exactly seven measured warm top-level PostgreSQL Execution Time values",
+    "maxSharedHitBlocks": {"threshold":256,"operator":"<=","source":"top-level execution Plan Shared Hit Blocks","runs":"exactly seven measured warm runs","aggregation":"maximum","allRunsMustPass":true},
+    "forbiddenInputs": ["cold","warm-ups","Planning buffers","clientWallTimeMs"],
+    "selectionOrMedianSubstitutionProhibited": true
+  },
+  "coldBufferClassification": {
+    "classification": "COLD_FIRST_SESSION_PLAN_INITIALIZATION",
+    "planningAndExecutionBuffersPreservedSeparately": true,
+    "warm256GateApplies": false,
+    "newColdBufferLimitInvented": false,
+    "coldExecutionTimeGatePreserved": true,
+    "twoSuitesReportedSideBySide": true,
+    "byteIdentityRequired": false,
+    "missingNonFiniteOrUnparseable": "FAIL"
+  },
+  "estimateRatioClassifications": {
+    "kind": "ordered-closed-decision-table",
+    "firstMatchWins": true,
+    "formulaPreserved": "planned = Plan Rows * Actual Loops; actual = Actual Rows * Actual Loops; ratio = zeroAwareSymmetricRatio(planned, actual)",
+    "frozenThresholdPreserved": true,
+    "finiteEvaluatedExcludesZeroActual": true,
+    "rules": [
+      {"order":1,"id":"NON_FINITE_OR_UNCLASSIFIED","when":{"planRows":"missing-or-not-number-or-non-finite-or-negative","actualRows":"any","actualLoops":"any","isolationProof":"any"},"verdict":"FAIL"},
+      {"order":2,"id":"NON_FINITE_OR_UNCLASSIFIED","when":{"planRows":"valid-non-negative-number","actualRows":"missing-or-not-number-or-non-finite-or-negative","actualLoops":"any","isolationProof":"any"},"verdict":"FAIL"},
+      {"order":3,"id":"ZERO_ESTIMATE_WITH_ACTUAL_ROWS","when":{"planRows":"equal-zero","actualRows":"greater-than-zero","actualLoops":"any","isolationProof":"any"},"verdict":"FAIL"},
+      {"order":4,"id":"NON_FINITE_OR_UNCLASSIFIED","when":{"planRows":"equal-zero","actualRows":"equal-zero","actualLoops":"any","isolationProof":"any"},"verdict":"FAIL"},
+      {"order":5,"id":"EXPECTED_ZERO_ACTUAL_ISOLATION","when":{"planRows":"greater-than-zero","actualRows":"equal-zero","actualLoops":"valid-non-negative-number","isolationProof":"complete-and-resolved"},"verdict":"SEMANTIC_NA"},
+      {"order":6,"id":"UNEXPECTED_ZERO_ACTUAL","when":{"planRows":"greater-than-zero","actualRows":"equal-zero","actualLoops":"any-other-value","isolationProof":"missing-incomplete-failed-or-unresolved"},"verdict":"FAIL"},
+      {"order":7,"id":"FINITE_EVALUATED","when":{"planRows":"greater-than-zero","actualRows":"greater-than-zero","actualLoops":"valid-non-negative-number","existingFrozenRatio":"finite"},"verdict":"APPLY_EXISTING_FROZEN_THRESHOLD"},
+      {"order":8,"id":"NON_FINITE_OR_UNCLASSIFIED","when":{"classification":"not-matched-by-orders-1-through-7"},"verdict":"FAIL"}
+    ],
+    "isolationProof": {
+      "allRequired": true,
+      "truthySubstitutionProhibited": true,
+      "requiredFields": [
+        {"id":"frozenCaseIsolationRequirement","type":"object","requiredKeys":["caseId","requirementId","isolationKind","referenceKind","sourceArtifact","jsonPointer"],"allowedIsolationKinds":["branch","tenant"],"referenceMustResolve":true},
+        {"id":"outerAuthorizationPass","type":"boolean","const":true},
+        {"id":"outerRowCountSemanticsPass","type":"boolean","const":true},
+        {"id":"outerPayloadSemanticsPass","type":"boolean","const":true},
+        {"id":"auditableNodeIsolationPredicateReference","type":"object","requiredKeys":["nodePath","predicateField","predicateText","policyOrJoinReference","referenceKind","sourceArtifact","jsonPointer"],"referenceMustResolve":true},
+        {"id":"directInnerFunctionOwner","type":"string","const":"restaurant_membership_context_reader"},
+        {"id":"directInnerOwnerRolsuper","type":"boolean","const":false},
+        {"id":"directInnerOwnerRolbypassrls","type":"boolean","const":false},
+        {"id":"actorFrozenDatasetReference","type":"object","requiredKeys":["actorId","referenceKind","sourceArtifact","jsonPointer"],"referenceMustResolve":true},
+        {"id":"tenantFrozenDatasetReference","type":"object","requiredKeys":["tenantId","referenceKind","sourceArtifact","jsonPointer"],"referenceMustResolve":true},
+        {"id":"branchFrozenDatasetReference","type":"object","requiredKeys":["branchDisposition","referenceKind","sourceArtifact","jsonPointer"],"referenceMustResolve":true},
+        {"id":"claimsFrozenDatasetReference","type":"object","requiredKeys":["claimSubject","referenceKind","sourceArtifact","jsonPointer"],"referenceMustResolve":true},
+        {"id":"planRows","type":"finite-non-negative-number","preservedInRawEvidence":true},
+        {"id":"actualRows","type":"finite-non-negative-number","const":0,"preservedInRawEvidence":true},
+        {"id":"actualLoops","type":"finite-non-negative-number","preservedInRawEvidence":true},
+        {"id":"evidenceReferences","type":"array","minimumItems":5,"requiredKeys":["claimId","referenceKind","sourceArtifact","jsonPointer"],"eachReferenceMustExistAndResolve":true}
+      ]
+    },
+    "referenceResolution": {
+      "callerSuppliedResolutionFlagsAuthoritative": false,
+      "completenessDeterminedBy": "Guard runtime artifact identity, RFC 6901 pointer, and expected-target semantic resolution",
+      "descriptorFields": ["referenceKind","sourceArtifact","jsonPointer"],
+      "failureDisposition": "FAIL",
+      "closedArtifactAllowlist": [
+        {"path":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","sha256":"4bfc94a5085a537c3faff97deb8329800f8171e506cbe37c0308a66035a24ade","referenceKinds":["frozen-case-isolation","isolation-predicate","actor","tenant","branch","claims"]},
+        {"path":"docs/runtime-integration-phase-2v-e/restaurant-performance-p2v-perf-001b-c01-diagnosis-provenance.json","sha256":"bff5009d76878f2e459ac81db63b0ca935d205b7dc2db198d70285a55c49e5a1","referenceKinds":["diagnosis-evidence"]}
+      ],
+      "pathSafety": {"repositoryRelativePosixOnly":true,"absoluteTraversalBackslashNulUriRejected":true,"regularFileRequired":true,"symlinkRejected":true,"realpathContainmentRequired":true},
+      "jsonPointer": {"standard":"RFC 6901","rootPointerAllowed":false,"tildeZeroAndOneDecoded":true,"illegalEscapeRejected":true,"canonicalArrayIndexesOnly":true,"dashRejected":true,"existenceIndependentOfTruthiness":true},
+      "expectedTargets": [
+        {"referenceKind":"frozen-case-isolation","sourceArtifact":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","jsonPointer":"/cases/0","targetSha256":"dd979d2bd0cf13f95a6d26a10d76667c7d4d1022e5da9e6ef9bad8e95e5f4acd"},
+        {"referenceKind":"isolation-predicate","sourceArtifact":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","jsonPointer":"/functions/0/filter","targetSha256":"24644038ce8bfc0e526fc7a3b1eb3d3d38c35c04122d902aab255dd77f4611aa"},
+        {"referenceKind":"actor","sourceArtifact":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","jsonPointer":"/actors/3","targetSha256":"133141294623fb507ebe692879e1451c93cc78dff547eec7bfe9fe9ea5acd276"},
+        {"referenceKind":"tenant","sourceArtifact":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","jsonPointer":"/targets/noiseTenant01","targetSha256":"9b19dca6f15fbacd6ad915fce397e8b7c40d9445896741c180339d9cb46c88f5"},
+        {"referenceKind":"branch","sourceArtifact":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","jsonPointer":"/actors/3/branchUuids","targetSha256":"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"},
+        {"referenceKind":"claims","sourceArtifact":"docs/runtime-integration-phase-2v-e/p2v-perf-001-representative-scale-authority.json","jsonPointer":"/actors/3/authUserUuid","targetSha256":"a24ab25ae82fb620ab6f5ab70ae9c9c22129fe481252c3518b3df771ec1b0220"},
+        {"referenceKind":"diagnosis-evidence","claimId":"candidate-cold-suite-a","sourceArtifact":"docs/runtime-integration-phase-2v-e/restaurant-performance-p2v-perf-001b-c01-diagnosis-provenance.json","jsonPointer":"/verifiedRawEvidence/candidateColdSharedHitBlocks/candidate-suite-a","targetSha256":"0d866ba9f9fd0f2cbb2134daf52356d2021a3686352d5c19d967305bf9e4bbdc"},
+        {"referenceKind":"diagnosis-evidence","claimId":"candidate-warm-suite-a-first","sourceArtifact":"docs/runtime-integration-phase-2v-e/restaurant-performance-p2v-perf-001b-c01-diagnosis-provenance.json","jsonPointer":"/verifiedRawEvidence/candidateMeasuredWarmSharedHitBlocks/candidate-suite-a/0","targetSha256":"41cfc0d1f2d127b04555b7246d84019b4d27710a3f3aff6e7764375b1e06e05d"},
+        {"referenceKind":"diagnosis-evidence","claimId":"second-backend-suite-a","sourceArtifact":"docs/runtime-integration-phase-2v-e/restaurant-performance-p2v-perf-001b-c01-diagnosis-provenance.json","jsonPointer":"/verifiedRawEvidence/secondFreshBackendSharedHitBlocks/candidate-suite-a","targetSha256":"82887006d04d939ffca870bc268a940df6cf01dbdf12e228ccf476d07d7c9424"},
+        {"referenceKind":"diagnosis-evidence","claimId":"discard-sequence-suite-a","sourceArtifact":"docs/runtime-integration-phase-2v-e/restaurant-performance-p2v-perf-001b-c01-diagnosis-provenance.json","jsonPointer":"/verifiedRawEvidence/discardPlansSharedHitSequence/candidate-suite-a","targetSha256":"a428267c8338c5f1f060e7147c2e1fbe184301baa7ef3f5fc703302616b86e82"},
+        {"referenceKind":"diagnosis-evidence","claimId":"c01-inner-zero-node","sourceArtifact":"docs/runtime-integration-phase-2v-e/restaurant-performance-p2v-perf-001b-c01-diagnosis-provenance.json","jsonPointer":"/verifiedRawEvidence/infinityNodes/0","targetSha256":"68d853c9d02e3301cf00248802a896bd2a90f827a785fb283a6ac049a6ab0d41"}
+      ]
+    },
+    "partitionProperties": {
+      "deterministic": true,
+      "mutuallyExclusiveByFirstMatch": true,
+      "completeByFinalFailClosedRule": true,
+      "zeroEstimatePositiveActualCannotFallThrough": true,
+      "zeroEstimateZeroActualFails": true,
+      "unclassifiedFails": true
+    }
+  },
+  "directInnerIdentityRequirements": {
+    "executionRole": "exact function owner restaurant_membership_context_reader",
+    "postgresSuperuserProhibited": true,
+    "bypassRlsProhibited": true,
+    "serviceRoleShortcutProhibited": true,
+    "requiredRoleProof": {"rolsuper":false,"rolbypassrls":false},
+    "sameOuterContextRequired": ["actor","tenant","branch","claims","transaction context"],
+    "requiredEvidence": ["current_user","session_user","backend PID","role metadata","RLS predicate effectiveness","tenant predicate effectiveness"],
+    "missingIdentityClaimsOrRlsProof": "FAIL",
+    "oldSuperuserDirectInnerEvidence": "invalid for new inner threshold evidence; does not invalidate the outer SECURITY DEFINER result"
+  },
+  "twoSuiteRequirements": {
+    "count": 2,
+    "fresh": true,
+    "independent": true,
+    "postgresVersion": "17.6",
+    "migrationRebuild": "41 existing tracked migrations plus the same immutable candidate SHA",
+    "rerunAfterFreeze": true,
+    "coverage": "all 35 cases, all 9 profiles, both outer and inner tracks, all security and semantic prechecks",
+    "suiteSeparationRequired": true
+  },
+  "securityInvariants": [
+    "function identity signature return shape owner and ACL unchanged",
+    "owner remains NOBYPASSRLS",
+    "RLS and tenant predicates remain effective and unchanged",
+    "indexes remain unchanged",
+    "branch isolation and cross-tenant denial remain Frozen",
+    "disabled inactive suspended and revoked actors remain denied",
+    "outer authorization evidence remains authoritative"
+  ],
+  "requiredIndependentReview": true,
+  "requiredFreezeBeforeImplementation": true,
+  "noRetroactivePass": true,
+  "failureSemantics": {
+    "missingEvidence": "FAIL",
+    "invalidOrNonFiniteMetric": "FAIL",
+    "identityOrSecurityProofMissing": "FAIL",
+    "inventoryOrHashMismatch": "FAIL",
+    "unauthorizedChange": "FAIL",
+    "candidateLifecycle": "This candidate permits no implementation, formal suite, Freeze, or retrospective PASS."
+  }
+}
