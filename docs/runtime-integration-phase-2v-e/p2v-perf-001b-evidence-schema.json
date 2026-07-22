@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tastkind.p2v-perf-001b.evidence.schema.v1",
+  "title": "P2V-PERF-001B formal evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contract", "environments", "caseInventory", "profileInventory", "suites", "rawObservations", "technicalInferences", "finalDisposition"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorityId", "frozenHead", "postgresVersion", "migrationCount", "migrationCandidatePath", "migrationCandidateSha256", "datasetSemanticHash", "noRetroactivePass"],
+      "properties": {
+        "authorityId": {"const": "P2V-PERF-001B-C01-CONTRACT-REAUTHORIZATION-CANDIDATE-1"},
+        "frozenHead": {"const": "957be8a5a114d5f818d5f02fbab7f87a534da130"},
+        "postgresVersion": {"const": "17.6"},
+        "migrationCount": {"const": 42},
+        "migrationCandidatePath": {"const": "supabase/migrations/20260722010000_cache_restaurant_current_access_context_plan.sql"},
+        "migrationCandidateSha256": {"const": "4e08de96d28a5e6d9911b074fa73769ea5b3e21d9e14a089c7f420e16a4fbe72"},
+        "datasetSemanticHash": {"const": "3e5dc3180770097f389a0a9d668a33f3bd0f1a6df43bcbc114b5fb88127eedc2"},
+        "noRetroactivePass": {"const": true}
+      }
+    },
+    "environments": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/environmentA"},
+        {"$ref": "#/$defs/environmentB"}
+      ],
+      "items": false
+    },
+    "caseInventory": {
+      "type": "array",
+      "minItems": 35,
+      "maxItems": 35,
+      "prefixItems": [
+        {"const":"C01"},{"const":"C02"},{"const":"R01"},{"const":"R02"},{"const":"B01"},{"const":"B02"},{"const":"M01"},{"const":"M02"},{"const":"K01"},{"const":"K02"},{"const":"I01"},{"const":"I02"},{"const":"I03"},{"const":"J01"},{"const":"J02"},{"const":"J03"},{"const":"N01"},{"const":"N02"},{"const":"N03"},{"const":"D01"},{"const":"D02"},{"const":"D03"},{"const":"D04"},{"const":"D05"},{"const":"D06"},{"const":"D07"},{"const":"D08"},{"const":"D09"},{"const":"D10"},{"const":"P01"},{"const":"P02"},{"const":"P03"},{"const":"P04"},{"const":"P05"},{"const":"P06"}
+      ],
+      "items": false
+    },
+    "profileInventory": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {"const":"accessTypical"},{"const":"accessWorst"},{"const":"smallTypical"},{"const":"smallWorst"},{"const":"itemsWorst"},{"const":"branchItemsWorst"},{"const":"nutritionWorst"},{"const":"denial"},{"const":"pageDiagnostic"}
+      ],
+      "items": false
+    },
+    "suites": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref":"#/$defs/suiteA"},
+        {"$ref":"#/$defs/suiteB"}
+      ],
+      "items": false
+    },
+    "rawObservations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["discardPlansSharedHitSequence"],
+      "properties": {
+        "discardPlansSharedHitSequence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["suite-a", "suite-b"],
+          "properties": {
+            "suite-a": {"$ref":"#/$defs/discardSequence"},
+            "suite-b": {"$ref":"#/$defs/discardSequence"}
+          }
+        }
+      }
+    },
+    "technicalInferences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["inferenceId", "statement", "supportingRawPointers", "authoritativeForPass"],
+        "properties": {
+          "inferenceId": {"type":"string","minLength":1},
+          "statement": {"type":"string","minLength":1},
+          "supportingRawPointers": {"type":"array","minItems":1,"items":{"type":"string","pattern":"^/"}},
+          "authoritativeForPass": {"const":false}
+        }
+      }
+    },
+    "finalDisposition": {"enum":["PASS","FAIL","INCOMPLETE"]}
+  },
+  "$defs": {
+    "sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "nonNegativeFinite": {"type":"number","minimum":0},
+    "environment": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["suiteId","environmentId","databaseSystem","postgresVersion","serverVersionNum","freshRebuild","trackedMigrationCount","candidateMigrationSha256","datasetSemanticHash","developmentTouched","productionTouched"],
+      "properties": {
+        "suiteId":{"enum":["suite-a","suite-b"]},
+        "environmentId":{"type":"string","minLength":1},
+        "databaseSystem":{"const":"PostgreSQL"},
+        "postgresVersion":{"const":"17.6"},
+        "serverVersionNum":{"const":170006},
+        "freshRebuild":{"const":true},
+        "trackedMigrationCount":{"const":41},
+        "candidateMigrationSha256":{"const":"4e08de96d28a5e6d9911b074fa73769ea5b3e21d9e14a089c7f420e16a4fbe72"},
+        "datasetSemanticHash":{"const":"3e5dc3180770097f389a0a9d668a33f3bd0f1a6df43bcbc114b5fb88127eedc2"},
+        "developmentTouched":{"const":false},
+        "productionTouched":{"const":false}
+      }
+    },
+    "environmentA":{"allOf":[{"$ref":"#/$defs/environment"},{"properties":{"suiteId":{"const":"suite-a"}}}]},
+    "environmentB":{"allOf":[{"$ref":"#/$defs/environment"},{"properties":{"suiteId":{"const":"suite-b"}}}]},
+    "suite": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["suiteId","environmentId","freshBackendProof","prechecks","cases","suiteDisposition"],
+      "properties": {
+        "suiteId":{"enum":["suite-a","suite-b"]},
+        "environmentId":{"type":"string","minLength":1},
+        "freshBackendProof":{"type":"object","additionalProperties":false,"required":["trackReferences"],"properties":{"trackReferences":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/freshTrackReference"}}}},
+        "prechecks":{"type":"array","minItems":29,"maxItems":29,"items":{"type":"object","additionalProperties":false,"required":["precheckId","passed","rawEvidence"],"properties":{"precheckId":{"type":"string","pattern":"^PRE-[0-9]{2}$"},"passed":{"type":"boolean"},"rawEvidence":{}}}},
+        "cases":{"type":"array","minItems":35,"maxItems":35,"items":{"$ref":"#/$defs/caseEvidence"}},
+        "suiteDisposition":{"enum":["PASS","FAIL","INCOMPLETE"]}
+      }
+    },
+    "suiteA":{"allOf":[{"$ref":"#/$defs/suite"},{"properties":{"suiteId":{"const":"suite-a"}}}]},
+    "suiteB":{"allOf":[{"$ref":"#/$defs/suite"},{"properties":{"suiteId":{"const":"suite-b"}}}]},
+    "caseEvidence": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["caseId","thresholdProfile","expectedRows","outerAuthorization","tracks","caseDisposition"],
+      "properties": {
+        "caseId":{"enum":["C01","C02","R01","R02","B01","B02","M01","M02","K01","K02","I01","I02","I03","J01","J02","J03","N01","N02","N03","D01","D02","D03","D04","D05","D06","D07","D08","D09","D10","P01","P02","P03","P04","P05","P06"]},
+        "thresholdProfile":{"enum":["accessTypical","accessWorst","smallTypical","smallWorst","itemsWorst","branchItemsWorst","nutritionWorst","denial","pageDiagnostic"]},
+        "expectedRows":{"type":"integer","minimum":0},
+        "outerAuthorization":{"type":"object","additionalProperties":false,"required":["rowCount","rowCountPass","payloadSemanticsPass","authorizationPass","rawPayloadSha256"],"properties":{"rowCount":{"type":"integer","minimum":0},"rowCountPass":{"type":"boolean"},"payloadSemanticsPass":{"type":"boolean"},"authorizationPass":{"type":"boolean"},"rawPayloadSha256":{"$ref":"#/$defs/sha256"}}},
+        "tracks":{"type":"object","additionalProperties":false,"required":["outer","inner"],"properties":{"outer":{"anyOf":[{"$ref":"#/$defs/track"},{"type":"null"}]},"inner":{"anyOf":[{"$ref":"#/$defs/track"},{"type":"null"}]}}},
+        "caseDisposition":{"enum":["PASS","FAIL","DIAGNOSTIC_REVIEW_REQUIRED","INCOMPLETE"]}
+      }
+    },
+    "track": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["trackKind","sessionIdentity","cold","warmups","measuredWarm","secondFreshBackend","aggregation","semanticEvidence","trackDisposition"],
+      "properties": {
+        "trackKind":{"enum":["outer-security-definer","secure-direct-inner"]},
+        "sessionIdentity":{"$ref":"#/$defs/identity"},
+        "cold":{"$ref":"#/$defs/run"},
+        "warmups":{"type":"array","minItems":2,"maxItems":2,"prefixItems":[{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"}],"items":false},
+        "measuredWarm":{"type":"array","minItems":7,"maxItems":7,"prefixItems":[{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/run"}],"items":false},
+        "secondFreshBackend":{"type":"object","additionalProperties":false,"required":["sessionIdentity","executionSharedHitBlocks"],"properties":{"sessionIdentity":{"$ref":"#/$defs/identity"},"executionSharedHitBlocks":{"$ref":"#/$defs/nonNegativeFinite"}}},
+        "aggregation":{"type":"object","additionalProperties":false,"required":["warmExecutionTimesMs","warmMedianMs","warmMaximumMs","warmMaxExecutionSharedHitBlocks","coldClassification"],"properties":{"warmExecutionTimesMs":{"type":"array","minItems":7,"maxItems":7,"items":{"$ref":"#/$defs/nonNegativeFinite"}},"warmMedianMs":{"$ref":"#/$defs/nonNegativeFinite"},"warmMaximumMs":{"$ref":"#/$defs/nonNegativeFinite"},"warmMaxExecutionSharedHitBlocks":{"$ref":"#/$defs/nonNegativeFinite"},"coldClassification":{"const":"COLD_FIRST_SESSION_PLAN_INITIALIZATION"}}},
+        "semanticEvidence":{"type":"object","additionalProperties":false,"required":["planNodes","zeroRowClassifications"],"properties":{"planNodes":{"type":"array","items":{"$ref":"#/$defs/planNode"}},"zeroRowClassifications":{"type":"array","items":{"$ref":"#/$defs/zeroClassification"}}}},
+        "trackDisposition":{"enum":["PASS","FAIL","INCOMPLETE"]}
+      }
+    },
+    "identity": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["backendPid","sessionId","sessionUser","currentUser","executionRole","rolsuper","rolbypassrls","rowSecurityOn","tenantPredicateEffective"],
+      "properties":{"backendPid":{"type":"integer","minimum":1},"sessionId":{"type":"string","minLength":1},"sessionUser":{"type":"string","minLength":1},"currentUser":{"type":"string","minLength":1},"executionRole":{"type":"string","minLength":1},"rolsuper":{"type":"boolean"},"rolbypassrls":{"type":"boolean"},"rowSecurityOn":{"const":true},"tenantPredicateEffective":{"const":true}}
+    },
+    "freshTrackReference": {
+      "type":"object","additionalProperties":false,
+      "required":["caseId","trackName","primaryBackendPid","primarySessionId","secondBackendPid","secondSessionId"],
+      "properties":{"caseId":{"type":"string","minLength":1},"trackName":{"enum":["outer","inner"]},"primaryBackendPid":{"type":"integer","minimum":1},"primarySessionId":{"type":"string","minLength":1},"secondBackendPid":{"type":"integer","minimum":1},"secondSessionId":{"type":"string","minLength":1}}
+    },
+    "run": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["sequenceLabel","backendPid","sessionId","planningTimeMs","executionTimeMs","clientWallTimeMs","planningBuffers","executionBuffers","explainJson","explainSha256"],
+      "properties":{"sequenceLabel":{"enum":["cold","warm-up-1","warm-up-2","measured-1","measured-2","measured-3","measured-4","measured-5","measured-6","measured-7"]},"backendPid":{"type":"integer","minimum":1},"sessionId":{"type":"string","minLength":1},"planningTimeMs":{"$ref":"#/$defs/nonNegativeFinite"},"executionTimeMs":{"$ref":"#/$defs/nonNegativeFinite"},"clientWallTimeMs":{"$ref":"#/$defs/nonNegativeFinite"},"planningBuffers":{"$ref":"#/$defs/buffers"},"executionBuffers":{"$ref":"#/$defs/buffers"},"explainJson":{"type":"array","minItems":1,"maxItems":1},"explainSha256":{"$ref":"#/$defs/sha256"}}
+    },
+    "buffers": {
+      "type":"object","additionalProperties":false,
+      "required":["sharedHit","sharedRead","sharedDirtied","sharedWritten","localHit","localRead","localDirtied","localWritten","tempRead","tempWritten"],
+      "properties":{"sharedHit":{"$ref":"#/$defs/nonNegativeFinite"},"sharedRead":{"$ref":"#/$defs/nonNegativeFinite"},"sharedDirtied":{"$ref":"#/$defs/nonNegativeFinite"},"sharedWritten":{"$ref":"#/$defs/nonNegativeFinite"},"localHit":{"$ref":"#/$defs/nonNegativeFinite"},"localRead":{"$ref":"#/$defs/nonNegativeFinite"},"localDirtied":{"$ref":"#/$defs/nonNegativeFinite"},"localWritten":{"$ref":"#/$defs/nonNegativeFinite"},"tempRead":{"$ref":"#/$defs/nonNegativeFinite"},"tempWritten":{"$ref":"#/$defs/nonNegativeFinite"}}
+    },
+    "planNode": {
+      "type":"object","additionalProperties":false,"required":["runPointer","explainSha256","nodePath","nodeType","planRows","actualRows","actualLoops"],
+      "properties":{"runPointer":{"type":"string","pattern":"^/suites/[01]/cases/(?:0|[1-9][0-9]*)/tracks/(?:outer|inner)/(?:cold|warmups/[01]|measuredWarm/[0-6])$"},"explainSha256":{"$ref":"#/$defs/sha256"},"nodePath":{"type":"string","pattern":"^/Plan"},"nodeType":{"type":"string","minLength":1},"planRows":{"$ref":"#/$defs/nonNegativeFinite"},"actualRows":{"$ref":"#/$defs/nonNegativeFinite"},"actualLoops":{"$ref":"#/$defs/nonNegativeFinite"}}
+    },
+    "reference": {
+      "type":"object","additionalProperties":false,"required":["referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"referenceKind":{"enum":["frozen-case-isolation","isolation-predicate","actor","tenant","branch","claims","diagnosis-evidence"]},"sourceArtifact":{"type":"string","minLength":1,"pattern":"^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)(?![A-Za-z][A-Za-z0-9+.-]*:)[^\\u0000]+$"},"jsonPointer":{"type":"string","pattern":"^/(?:[^~]|~[01])+$"},"claimId":{"type":"string","minLength":1}}
+    },
+    "caseIsolationReference": {
+      "type":"object","additionalProperties":false,
+      "required":["caseId","requirementId","isolationKind","referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"caseId":{"type":"string","minLength":1},"requirementId":{"type":"string","minLength":1},"isolationKind":{"enum":["branch","tenant"]},"referenceKind":{"const":"frozen-case-isolation"},"sourceArtifact":{"type":"string","minLength":1},"jsonPointer":{"type":"string","minLength":1}}
+    },
+    "predicateReference": {
+      "type":"object","additionalProperties":false,
+      "required":["nodePath","predicateField","predicateText","policyOrJoinReference","referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"nodePath":{"type":"string","pattern":"^/Plan"},"predicateField":{"type":"string","minLength":1},"predicateText":{"type":"string","minLength":1},"policyOrJoinReference":{"type":"string","minLength":1},"referenceKind":{"const":"isolation-predicate"},"sourceArtifact":{"type":"string","minLength":1},"jsonPointer":{"type":"string","minLength":1}}
+    },
+    "actorReference": {
+      "type":"object","additionalProperties":false,"required":["actorId","referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"actorId":{"type":"string","minLength":1},"referenceKind":{"const":"actor"},"sourceArtifact":{"type":"string","minLength":1},"jsonPointer":{"type":"string","minLength":1}}
+    },
+    "tenantReference": {
+      "type":"object","additionalProperties":false,"required":["tenantId","referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"tenantId":{"type":"string","minLength":1},"referenceKind":{"const":"tenant"},"sourceArtifact":{"type":"string","minLength":1},"jsonPointer":{"type":"string","minLength":1}}
+    },
+    "branchReference": {
+      "type":"object","additionalProperties":false,"required":["branchDisposition","referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"branchDisposition":{"const":"NO_ACTIVE_BRANCH_SCOPES"},"referenceKind":{"const":"branch"},"sourceArtifact":{"type":"string","minLength":1},"jsonPointer":{"type":"string","minLength":1}}
+    },
+    "claimsReference": {
+      "type":"object","additionalProperties":false,"required":["claimSubject","referenceKind","sourceArtifact","jsonPointer"],
+      "properties":{"claimSubject":{"type":"string","minLength":1},"referenceKind":{"const":"claims"},"sourceArtifact":{"type":"string","minLength":1},"jsonPointer":{"type":"string","minLength":1}}
+    },
+    "isolationProof": {
+      "type":"object","additionalProperties":false,
+      "required":["frozenCaseIsolationRequirement","outerAuthorizationPass","outerRowCountSemanticsPass","outerPayloadSemanticsPass","auditableNodeIsolationPredicateReference","directInnerFunctionOwner","directInnerOwnerRolsuper","directInnerOwnerRolbypassrls","actorFrozenDatasetReference","tenantFrozenDatasetReference","branchFrozenDatasetReference","claimsFrozenDatasetReference","planRows","actualRows","actualLoops","evidenceReferences"],
+      "properties":{"frozenCaseIsolationRequirement":{"$ref":"#/$defs/caseIsolationReference"},"outerAuthorizationPass":{"const":true},"outerRowCountSemanticsPass":{"const":true},"outerPayloadSemanticsPass":{"const":true},"auditableNodeIsolationPredicateReference":{"$ref":"#/$defs/predicateReference"},"directInnerFunctionOwner":{"const":"restaurant_membership_context_reader"},"directInnerOwnerRolsuper":{"const":false},"directInnerOwnerRolbypassrls":{"const":false},"actorFrozenDatasetReference":{"$ref":"#/$defs/actorReference"},"tenantFrozenDatasetReference":{"$ref":"#/$defs/tenantReference"},"branchFrozenDatasetReference":{"$ref":"#/$defs/branchReference"},"claimsFrozenDatasetReference":{"$ref":"#/$defs/claimsReference"},"planRows":{"$ref":"#/$defs/nonNegativeFinite"},"actualRows":{"const":0},"actualLoops":{"$ref":"#/$defs/nonNegativeFinite"},"evidenceReferences":{"type":"array","minItems":5,"maxItems":5,"items":{"$ref":"#/$defs/reference"}}}
+    },
+    "zeroClassification": {
+      "type":"object","additionalProperties":false,"required":["runPointer","explainSha256","nodePath","nodeType","planRows","actualRows","actualLoops","classification","verdict","isolationProof"],
+      "properties":{"runPointer":{"type":"string","minLength":1},"explainSha256":{"$ref":"#/$defs/sha256"},"nodePath":{"type":"string","pattern":"^/Plan"},"nodeType":{"type":"string","minLength":1},"planRows":{"$ref":"#/$defs/nonNegativeFinite"},"actualRows":{"$ref":"#/$defs/nonNegativeFinite"},"actualLoops":{"$ref":"#/$defs/nonNegativeFinite"},"classification":{"enum":["NON_FINITE_OR_UNCLASSIFIED","ZERO_ESTIMATE_WITH_ACTUAL_ROWS","EXPECTED_ZERO_ACTUAL_ISOLATION","UNEXPECTED_ZERO_ACTUAL","FINITE_EVALUATED"]},"verdict":{"enum":["FAIL","SEMANTIC_NA","APPLY_EXISTING_FROZEN_THRESHOLD"]},"isolationProof":{"anyOf":[{"$ref":"#/$defs/isolationProof"},{"type":"null"}]}}
+    },
+    "discardSequence": {
+      "type":"array","minItems":3,"maxItems":3,
+      "prefixItems":[
+        {"type":"object","additionalProperties":false,"required":["step","executionSharedHitBlocks"],"properties":{"step":{"const":"before-discard"},"executionSharedHitBlocks":{"const":52}}},
+        {"type":"object","additionalProperties":false,"required":["step","executionSharedHitBlocks"],"properties":{"step":{"const":"first-after-discard-plans"},"executionSharedHitBlocks":{"const":842}}},
+        {"type":"object","additionalProperties":false,"required":["step","executionSharedHitBlocks"],"properties":{"step":{"const":"second-after-discard-plans"},"executionSharedHitBlocks":{"const":52}}}
+      ],
+      "items":false
+    }
+  }
+}
