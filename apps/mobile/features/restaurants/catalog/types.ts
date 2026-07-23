@@ -8,6 +8,8 @@ export type RestaurantCatalogRuntimeFlags = {
 };
 
 export type CatalogMenuItemViewModel = RecommendedMenuItemViewModel & {
+  branchMenuItemId: string;
+  availability: "available" | "limited";
   menuId: string;
   menuCategoryId: string;
   description: string;

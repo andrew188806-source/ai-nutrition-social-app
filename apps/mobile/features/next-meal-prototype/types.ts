@@ -10,6 +10,10 @@ export type U1NextMealPresentationSource =
 
 export type U1NextMealCandidateViewModel = {
   prototypeId: string;
+  branchMenuItemId?: string;
+  menuItemId?: string;
+  restaurantId?: string;
+  branchId?: string | null;
   source: U1NextMealPresentationSource;
   isSampleData: boolean;
   ordinal: number;

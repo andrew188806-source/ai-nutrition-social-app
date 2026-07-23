@@ -1,4 +1,8 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
+import type {
+  MealIdentificationCandidate,
+  MealSourceContext
+} from "../meal-identification";
 import type { CorrectionSectionKey, MatchState, MealAnalysisMode } from "./types";
 
 export type AnalysisSessionState = {
@@ -13,6 +17,8 @@ export type AnalysisSessionState = {
   externalBreakdownTriggered: boolean;
   restaurantName: string;
   mealName: string;
+  sourceContext: MealSourceContext;
+  selectedCandidate: MealIdentificationCandidate | null;
   correctedRows: Record<string, boolean>;
   selectedMealPeriod: string;
   mealSaved: boolean;
@@ -34,6 +40,8 @@ function createDefaultSession(): AnalysisSessionState {
     externalBreakdownTriggered: false,
     restaurantName: zhTW.mobile.analysis.candidates[0].restaurant,
     mealName: zhTW.mobile.analysis.candidates[0].meal,
+    sourceContext: "unknown",
+    selectedCandidate: null,
     correctedRows: {},
     selectedMealPeriod: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1],
     mealSaved: false,

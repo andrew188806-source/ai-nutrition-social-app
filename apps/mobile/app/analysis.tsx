@@ -13,6 +13,14 @@ import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getNextMealCandidateCount } from "../features/next-meal-prototype";
 import { getPlannedDinner } from "../features/planned-meal";
 import { useConsumerRuntime } from "../features/consumer-runtime";
+import {
+  isSameCatalogCandidate,
+  resolveCatalogMealCandidates,
+  toTrustedCanonicalIdentity,
+  type CatalogMealIdentificationCandidate,
+  type MealIdentificationCandidateResolution
+} from "../features/meal-identification";
+import { useRestaurantCatalog } from "../features/restaurants/catalog";
 import { mobileMenuItemService } from "../services/mobile-menu-item-service";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
 import { Icon } from "../theme/icons";
@@ -65,6 +73,7 @@ export default function AnalysisScreen() {
   const params = useLocalSearchParams<{ mealSlot?: string }>();
   const analysis = useAnalysisCorrectionState();
   const consumerRuntime = useConsumerRuntime();
+  const restaurantCatalog = useRestaurantCatalog();
   const [demoMode] = useDemoUserPlan();
   const session = getAnalysisSession();
   const [mealSaved, setMealSaved] = useState(session.mealSaved);
@@ -83,6 +92,14 @@ export default function AnalysisScreen() {
   const nextMealRecommendations = useMemo(
     () => buildNextMealRecommendationCards(getNextMealCandidateCount(demoMode), referenceCalories),
     [demoMode, referenceCalories]
+  );
+  const candidateResolution = useMemo(
+    () =>
+      resolveCatalogMealCandidates(restaurantCatalog.state, {
+        restaurantName: analysis.restaurantName,
+        mealItemName: analysis.mealName
+      }),
+    [analysis.mealName, analysis.restaurantName, restaurantCatalog.state]
   );
 
   useEffect(() => {
@@ -144,7 +161,7 @@ export default function AnalysisScreen() {
       },
       isSelfCooked: analysis.isSelfCooked,
       wasUserCorrected: analysis.nutritionRefreshed || analysis.correctionCompleted || Object.keys(analysis.correctedRows).length > 0 || analysis.mealName !== originalDetectedName,
-      trustedCanonicalIdentity: null
+      trustedCanonicalIdentity: toTrustedCanonicalIdentity(analysis.selectedCandidate)
     });
     completeSuccessfulMealWrite(result);
   }
@@ -256,10 +273,21 @@ export default function AnalysisScreen() {
               onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
             />
           ) : (
-            <ExternalDiningAnalysis analysis={analysis} />
+            <ExternalDiningAnalysis
+              analysis={analysis}
+              resolution={candidateResolution}
+              onRetry={restaurantCatalog.refresh}
+            />
           )}
 
-          {!analysis.isSelfCooked && analysis.matchState === "editing" ? <CandidateCorrectionList analysis={analysis} renderSuccessActions={renderSuccessActions} /> : null}
+          {!analysis.isSelfCooked && analysis.matchState === "editing" ? (
+            <CandidateCorrectionList
+              analysis={analysis}
+              resolution={candidateResolution}
+              onRetry={restaurantCatalog.refresh}
+              renderSuccessActions={renderSuccessActions}
+            />
+          ) : null}
 
           {consumerRuntime.mealWriteState.status === "submitting" ? (
             <Card><SectionTitle title={zhTW.mobile.consumerMealWrite.submitting} /></Card>
@@ -626,23 +654,42 @@ function TodayIntakeSummary({ onFindBuddy, onNextMeal, onOpenMealLog }: { onFind
   );
 }
 
-function ExternalDiningAnalysis({ analysis }: { analysis: ReturnType<typeof useAnalysisCorrectionState> }) {
+function ExternalDiningAnalysis({
+  analysis,
+  resolution,
+  onRetry
+}: {
+  analysis: ReturnType<typeof useAnalysisCorrectionState>;
+  resolution: MealIdentificationCandidateResolution;
+  onRetry: () => Promise<void>;
+}) {
   const [showDetails, setShowDetails] = useState(false);
+  const topCandidate =
+    analysis.selectedCandidate?.kind === "catalog_item"
+      ? analysis.selectedCandidate
+      : resolution.status === "available"
+        ? resolution.candidates[0]
+        : null;
+  const catalogFailed =
+    resolution.status === "unavailable" || resolution.status === "error";
 
   return (
     <SnowCard tone="ai">
       <SnowSectionHeader title={zhTW.mobile.analysis.precisionTitle} subtitle={zhTW.mobile.analysis.precisionBody} />
       <View style={styles.chipRow}>
-        <Chip label={zhTW.mobile.analysis.locationLabel} />
-        <Chip label={zhTW.mobile.analysis.topMatchTitle} />
-        <Chip label={zhTW.mobile.analysis.confidenceLabel} />
+        <Chip label={topCandidate?.branchContext || zhTW.mobile.analysis.locationLabel} />
+        <Chip label={topCandidate ? `${topCandidate.restaurantName}｜${topCandidate.mealItemName}` : zhTW.mobile.analysis.catalogFallbackLabel} />
+        <Chip label={zhTW.mobile.analysis.explicitConfirmationLabel} />
       </View>
       <View style={styles.restaurantSummary}>
         <Text style={styles.summaryLabel}>{zhTW.mobile.finalUx.restaurantNameLabel}</Text>
-        <Text style={styles.summaryValue}>{zhTW.mobile.analysis.candidates[0].restaurant}</Text>
+        <Text style={styles.summaryValue}>{topCandidate?.restaurantName ?? analysis.restaurantName}</Text>
+        {topCandidate ? <Text style={styles.candidateBody}>{topCandidate.branchName} · {topCandidate.menuName} / {topCandidate.menuCategoryName}</Text> : null}
         <Text style={styles.summaryLabel}>{zhTW.mobile.finalUx.mealNameLabel}</Text>
-        <Text style={styles.summaryValue}>{zhTW.mobile.analysis.candidates[0].meal}</Text>
+        <Text style={styles.summaryValue}>{topCandidate?.mealItemName ?? analysis.mealName}</Text>
+        {topCandidate ? <Text style={styles.candidateBody}>NT${topCandidate.price} · {nutritionProvenanceLabel(topCandidate)}</Text> : null}
       </View>
+      <CandidateResolutionState resolution={resolution} onRetry={onRetry} />
       <MacroChipsRow nutritionSummary={analysis.nutritionSummary} />
       <SecondaryButton
         icon="chevron"
@@ -653,7 +700,7 @@ function ExternalDiningAnalysis({ analysis }: { analysis: ReturnType<typeof useA
         <>
           <Text style={styles.costHint}>{zhTW.mobile.finalUx.aiCostControlHint}</Text>
           <View style={styles.chipRow}>
-            {zhTW.mobile.finalUx.databaseMatchSources.map((source) => (
+            {zhTW.mobile.analysis.catalogMatchSources.map((source) => (
               <Chip key={source} label={source} />
             ))}
           </View>
@@ -668,10 +715,16 @@ function ExternalDiningAnalysis({ analysis }: { analysis: ReturnType<typeof useA
       ) : null}
       <View style={styles.ctaRow2}>
         <View style={styles.ctaItem}>
-          <PrimaryButton icon="check" label={zhTW.mobile.analysis.confirmMatch} onPress={() => analysis.setMatchState("confirmed")} />
+          {topCandidate ? (
+            <PrimaryButton icon="check" label={zhTW.mobile.analysis.confirmMatch} onPress={() => analysis.confirmCatalogCandidate(topCandidate)} />
+          ) : catalogFailed ? (
+            <PrimaryButton icon="edit" label={zhTW.mobile.analysis.catalogManualCta} onPress={analysis.openCatalogUnavailableFallback} />
+          ) : (
+            <PrimaryButton icon="edit" label={zhTW.mobile.finalUx.supplementalDataCta} onPress={analysis.chooseNoneOfTheAbove} />
+          )}
         </View>
         <View style={styles.ctaItem}>
-          <SecondaryButton icon="edit" label={zhTW.mobile.analysis.notThis} onPress={() => analysis.setMatchState("editing")} />
+          <SecondaryButton icon="edit" label={zhTW.mobile.analysis.notThis} onPress={analysis.chooseNoneOfTheAbove} />
         </View>
       </View>
       {analysis.matchState === "confirmed" ? <Text style={styles.stateText}>{zhTW.mobile.analysis.confirmedMatch}</Text> : null}
@@ -685,28 +738,55 @@ function ExternalDiningAnalysis({ analysis }: { analysis: ReturnType<typeof useA
   );
 }
 
-function CandidateCorrectionList({ analysis, renderSuccessActions }: { analysis: ReturnType<typeof useAnalysisCorrectionState>; renderSuccessActions: () => ReactNode }) {
+function CandidateCorrectionList({
+  analysis,
+  resolution,
+  onRetry,
+  renderSuccessActions
+}: {
+  analysis: ReturnType<typeof useAnalysisCorrectionState>;
+  resolution: MealIdentificationCandidateResolution;
+  onRetry: () => Promise<void>;
+  renderSuccessActions: () => ReactNode;
+}) {
+  const selectedCatalogCandidate =
+    analysis.selectedCandidate?.kind === "catalog_item" ? analysis.selectedCandidate : null;
   return (
     <SnowCard>
       <SnowSectionHeader title={zhTW.mobile.finalUx.notThisMenuTitle} subtitle={zhTW.mobile.finalUx.notThisMenuBody} />
       <View style={styles.candidateList}>
-        {zhTW.mobile.analysis.candidates.map((candidate) => (
-          <Pressable key={`${candidate.restaurant}-${candidate.meal}`} style={styles.candidate} onPress={() => analysis.setMatchState("confirmed")}>
+        <CandidateResolutionState resolution={resolution} onRetry={onRetry} />
+        {resolution.status === "available" ? resolution.candidates.map((candidate) => {
+          const isSelected = isSameCatalogCandidate(selectedCatalogCandidate, candidate);
+          return (
+          <Pressable
+            key={candidate.identity.branchMenuItemId}
+            style={[styles.candidate, isSelected && styles.activeMode]}
+            onPress={() => analysis.selectCatalogCandidate(candidate)}
+          >
             <View style={styles.candidateHeader}>
               <View style={styles.flex}>
-                <Text style={styles.candidateTitle}>{candidate.restaurant}</Text>
-                <Text style={styles.candidateBody}>{candidate.meal}</Text>
+                <Text style={styles.candidateTitle}>{candidate.restaurantName} · {candidate.branchName}</Text>
+                <Text style={styles.candidateBody}>{candidate.mealItemName}</Text>
+                <Text style={styles.candidateBody}>{candidate.menuName} / {candidate.menuCategoryName} · NT${candidate.price}</Text>
               </View>
               <View style={styles.candidateConfidence}>
                 <Icon name="check" size={14} color={snow.primaryDeep} />
-                <Text style={styles.candidateConfidenceText}>{candidate.confidence}</Text>
+                <Text style={styles.candidateConfidenceText}>{nutritionProvenanceLabel(candidate)}</Text>
               </View>
             </View>
             <TagRow tags={candidate.tags} />
-            <Text style={styles.optionCta}>{zhTW.mobile.finalUx.candidateOptionCta}</Text>
+            <Text style={styles.optionCta}>{isSelected ? zhTW.mobile.analysis.candidateSelectedLabel : zhTW.mobile.finalUx.candidateOptionCta}</Text>
           </Pressable>
-        ))}
-        <Pressable style={[styles.candidate, styles.supplementalCandidate]} onPress={analysis.openSupplementalData}>
+        ); }) : null}
+        {selectedCatalogCandidate ? (
+          <PrimaryButton
+            icon="check"
+            label={zhTW.mobile.analysis.confirmSelectedCandidate}
+            onPress={() => analysis.confirmCatalogCandidate()}
+          />
+        ) : null}
+        <Pressable style={[styles.candidate, styles.supplementalCandidate]} onPress={analysis.chooseNoneOfTheAbove}>
           <Text style={styles.candidateTitle}>{zhTW.mobile.finalUx.supplementalDataTitle}</Text>
           <Text style={styles.candidateBody}>{zhTW.mobile.finalUx.supplementalDataBody}</Text>
           <Text style={styles.optionCta}>{zhTW.mobile.finalUx.supplementalDataCta}</Text>
@@ -735,6 +815,40 @@ function CandidateCorrectionList({ analysis, renderSuccessActions }: { analysis:
       {analysis.correctionCompleted ? renderSuccessActions() : null}
     </SnowCard>
   );
+}
+
+function CandidateResolutionState({
+  resolution,
+  onRetry
+}: {
+  resolution: MealIdentificationCandidateResolution;
+  onRetry: () => Promise<void>;
+}) {
+  if (resolution.status === "available") return null;
+  const label =
+    resolution.status === "loading"
+      ? zhTW.mobile.analysis.catalogLoading
+      : resolution.status === "empty"
+        ? zhTW.mobile.analysis.catalogEmpty
+        : resolution.status === "unavailable"
+          ? zhTW.mobile.analysis.catalogUnavailable
+          : zhTW.mobile.analysis.catalogError;
+  return (
+    <View style={styles.ctaColumn}>
+      <Text style={styles.stateText}>{label}</Text>
+      {resolution.status === "error" && resolution.retryable ? (
+        <SecondaryButton icon="clock" label={zhTW.mobile.analysis.catalogRetry} onPress={() => void onRetry()} />
+      ) : null}
+      <Text style={styles.candidateBody}>{zhTW.mobile.analysis.catalogManualFallback}</Text>
+    </View>
+  );
+}
+
+function nutritionProvenanceLabel(candidate: CatalogMealIdentificationCandidate): string {
+  if (candidate.nutritionProvenance === "ai_estimated") return zhTW.mobile.analysis.nutritionAiEstimated;
+  if (candidate.nutritionProvenance === "restaurant_confirmed") return zhTW.mobile.analysis.nutritionRestaurantVerified;
+  if (candidate.nutritionProvenance === "platform_reviewed") return zhTW.mobile.analysis.nutritionPlatformReviewed;
+  return zhTW.mobile.analysis.nutritionMissing;
 }
 
 const styles = StyleSheet.create({

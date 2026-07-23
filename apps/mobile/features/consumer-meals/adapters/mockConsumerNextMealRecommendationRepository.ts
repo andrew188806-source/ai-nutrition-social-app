@@ -12,6 +12,7 @@ export const MOCK_NEXT_MEAL_RECOMMENDATION_CANDIDATES_COUNT = 5;
 
 type MockCandidateSeed = {
   candidateId: string;
+  menuItemId: string;
   restaurantId: string;
   mealName: string;
   restaurantName: string;
@@ -24,7 +25,8 @@ type MockCandidateSeed = {
 
 const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
   {
-    candidateId: "mock-next-meal-phase2q-haochu-bowl",
+    candidateId: "mock-branch-offer-phase2q-haochu-bowl",
+    menuItemId: "mock-menu-item-phase2q-haochu-bowl",
     restaurantId: "mock-restaurant-haochu-01",
     mealName: "好廚碗",
     restaurantName: "好廚示範廚房",
@@ -35,7 +37,8 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     calorieProximityDelta: 10
   },
   {
-    candidateId: "mock-next-meal-phase2q-salad-bowl",
+    candidateId: "mock-branch-offer-phase2q-salad-bowl",
+    menuItemId: "mock-menu-item-phase2q-salad-bowl",
     restaurantId: "mock-restaurant-haochu-02",
     mealName: "輕食沙拉碗",
     restaurantName: "清爽廚房",
@@ -46,7 +49,8 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     calorieProximityDelta: 140
   },
   {
-    candidateId: "mock-next-meal-phase2q-noodle-soup",
+    candidateId: "mock-branch-offer-phase2q-noodle-soup",
+    menuItemId: "mock-menu-item-phase2q-noodle-soup",
     restaurantId: "mock-restaurant-haochu-03",
     mealName: "清燉牛肉麵",
     restaurantName: "台灣麵館",
@@ -57,7 +61,8 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     calorieProximityDelta: 40
   },
   {
-    candidateId: "mock-next-meal-phase2q-rice-box",
+    candidateId: "mock-branch-offer-phase2q-rice-box",
+    menuItemId: "mock-menu-item-phase2q-rice-box",
     restaurantId: "mock-restaurant-haochu-04",
     mealName: "雞腿便當",
     restaurantName: "好吃便當",
@@ -68,7 +73,8 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     calorieProximityDelta: 100
   },
   {
-    candidateId: "mock-next-meal-phase2q-veggie-plate",
+    candidateId: "mock-branch-offer-phase2q-veggie-plate",
+    menuItemId: "mock-menu-item-phase2q-veggie-plate",
     restaurantId: "mock-restaurant-haochu-05",
     mealName: "蔬食拼盤",
     restaurantName: "蔬食餐廳",
@@ -108,6 +114,8 @@ export class MockConsumerNextMealRecommendationRepository implements ConsumerNex
 
     const candidates: ConsumerNextMealCandidate[] = sliced.map((seed, index) => ({
       candidateId: seed.candidateId,
+      branchMenuItemId: seed.candidateId,
+      menuItemId: seed.menuItemId,
       restaurantId: seed.restaurantId,
       mealName: seed.mealName,
       restaurantName: seed.restaurantName,

@@ -32,13 +32,15 @@ export class LocalMenuDemoConsumerNextMealRecommendationRepository implements Co
       const candidates: ConsumerNextMealCandidate[] = ranked
         .map((item, index): ConsumerNextMealCandidate | null => {
           const restaurant = mobileRestaurantService.findRestaurantById(item.restaurantId);
-          if (!restaurant) return null;
+          if (!restaurant || !item.branchMenuItemId) return null;
           const nutrition: ConsumerNutritionSnapshot = {
             calories: item.calories,
             protein: item.protein
           };
           return {
-            candidateId: item.menuItemId,
+            candidateId: item.branchMenuItemId,
+            branchMenuItemId: item.branchMenuItemId,
+            menuItemId: item.menuItemId,
             restaurantId: item.restaurantId,
             branchId: item.branchId ?? null,
             mealName: item.dishName,

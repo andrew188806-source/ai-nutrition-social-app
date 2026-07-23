@@ -102,6 +102,8 @@ function mapRowToCandidate(
 
   return {
     candidateId: row.candidate_id,
+    branchMenuItemId: row.candidate_id,
+    menuItemId: row.menu_item_id,
     restaurantId: row.restaurant_id,
     branchId: row.branch_id ?? null,
     mealName: row.meal_name,

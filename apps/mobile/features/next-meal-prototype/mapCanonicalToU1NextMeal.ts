@@ -37,6 +37,10 @@ function toCandidateViewModel(
 ): U1NextMealCandidateViewModel {
   return {
     prototypeId: candidate.candidateId,
+    branchMenuItemId: candidate.branchMenuItemId,
+    menuItemId: candidate.menuItemId,
+    restaurantId: candidate.restaurantId,
+    branchId: candidate.branchId ?? null,
     source: presentationSource,
     isSampleData: true,
     ordinal: index,

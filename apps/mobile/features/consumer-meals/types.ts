@@ -607,7 +607,13 @@ export type ConsumerNextMealCandidateReason = {
 };
 
 export type ConsumerNextMealCandidate = {
+  /**
+   * Backward-compatible projection identity. For canonical rows this is the
+   * branch-menu-item (branch offer) ID and must equal branchMenuItemId.
+   */
   candidateId: string;
+  branchMenuItemId: string;
+  menuItemId: string;
   restaurantId: string;
   branchId?: string | null;
   mealName: string;

@@ -62,16 +62,17 @@ export function createCanonicalNextMealPrototypeProvider(
             recommendation: {
               ...mapped.recommendation,
               isSampleData: false,
-              candidates: mapped.recommendation.candidates.map((candidate, index) => {
-                const canonicalCandidate = result.recommendation.candidates[index];
+              candidates: mapped.recommendation.candidates.map((candidate) => {
                 return {
                   ...candidate,
                   isSampleData: false,
-                  canonicalFeedbackTarget: canonicalCandidate
+                  canonicalFeedbackTarget:
+                    candidate.restaurantId && candidate.menuItemId
                     ? {
-                        kind: "restaurant" as const,
-                        restaurantId: canonicalCandidate.restaurantId,
-                        branchId: canonicalCandidate.branchId ?? null,
+                        kind: "menu_item" as const,
+                        restaurantId: candidate.restaurantId,
+                        branchId: candidate.branchId ?? null,
+                        menuItemId: candidate.menuItemId,
                         identityEvidence: "canonical" as const
                       }
                     : undefined
