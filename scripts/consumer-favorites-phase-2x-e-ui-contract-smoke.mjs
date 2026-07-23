@@ -88,8 +88,16 @@ try {
   check("meal-log shows disabled state from consumerFavorites i18n", /consumerFavorites\.disabled/.test(mealLogSrc));
   check("meal-log shows loginRequired state from consumerFavorites i18n", /consumerFavorites\.loginRequired/.test(mealLogSrc));
   check("meal-log shows empty state from consumerFavorites i18n", /consumerFavorites\.empty/.test(mealLogSrc));
-  check("meal-log getCanonicalMenuItemById used in LiveFavoriteFoodCard", /getCanonicalMenuItemById/.test(mealLogSrc));
-  check("meal-log getCanonicalRestaurantById used in LiveFavoriteFoodCard", /getCanonicalRestaurantById/.test(mealLogSrc));
+  check(
+    "meal-log restores menu-item Favorites through the selected Catalog source",
+    /useRestaurantCatalog/.test(mealLogSrc) &&
+      /restaurantCatalog\.findMenuItemById\(target\.menuItemId\)/.test(mealLogSrc)
+  );
+  check(
+    "meal-log restores restaurant identity through the selected Catalog source",
+    /restaurantCatalog\.findRestaurantById\(target\.restaurantId\)/.test(mealLogSrc) &&
+      !/getCanonicalMenuItemById|getCanonicalRestaurantById/.test(mealLogSrc)
+  );
   // --- Local meal / unsupported item isolation ---
   check("meal-log has no mealFavoriteIds route-local favorite array", !/mealFavoriteIds/.test(mealLogSrc));
   check("meal-log has no route-local favorite Set or array keyed by meal record id", !/useState.*string\[\].*\[\].*meal|mealFav|toggleMealFav/i.test(mealLogSrc));

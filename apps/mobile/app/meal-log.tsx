@@ -14,7 +14,7 @@ import type { ConsumerFavoriteRecord, ConsumerMenuItemFavoriteTarget } from "../
 import { createMobileConsumerRatingComposition } from "../features/consumer-ratings/consumerRatingComposition";
 import { mapConsumerRatingTarget } from "../features/consumer-ratings/consumerRatingTargetMapper";
 import { useConsumerRatingUiModel } from "../features/consumer-ratings/consumerRatingUiModel";
-import { getCanonicalMenuItemById, getCanonicalRestaurantById } from "../features/restaurants";
+import { useRestaurantCatalog } from "../features/restaurants/catalog";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes, type SelfMadeDish } from "../features/self-made-dishes";
 import { Card, Chip, CompactRow, SecondaryButton, SectionHeader } from "../theme/components";
@@ -81,6 +81,7 @@ export default function MealLogScreen() {
   const [selectedRankingOption, setSelectedRankingOption] = useState<string | null>(null);
   const [mockMessage, setMockMessage] = useState("");
   const [editingMeal, setEditingMeal] = useState<MealCard | null>(null);
+  const restaurantCatalog = useRestaurantCatalog();
   const favoriteComposition = useMemo(() => {
     try {
       return createMobileConsumerFavoriteComposition();
@@ -322,11 +323,27 @@ export default function MealLogScreen() {
               <Text style={styles.note}>{zhTW.mobile.consumerFavorites.failed}</Text>
             ) : menuItemFavorites.status === "empty" || (menuItemFavorites.status === "loaded" && menuItemFavorites.records.length === 0) ? (
               <Text style={styles.note}>{zhTW.mobile.consumerFavorites.empty}</Text>
-            ) : menuItemFavorites.status === "loaded" ? (
+            ) : menuItemFavorites.status === "loaded" && restaurantCatalog.state.status === "loading" ? (
+              <Text style={styles.note}>正在還原收藏餐點資料。</Text>
+            ) : menuItemFavorites.status === "loaded" && restaurantCatalog.state.status !== "success" ? (
+              <Text style={styles.note}>收藏已保留，但目前無法取得公開餐廳目錄。</Text>
+            ) : menuItemFavorites.status === "loaded" && restaurantCatalog.state.status === "success" ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.favoritesRow}>
-                {menuItemFavorites.records.map((record) => (
-                  <LiveFavoriteFoodCard key={record.favoriteId} record={record} onMockAction={setMockMessage} shareCta={diary.shareCta} />
-                ))}
+                {menuItemFavorites.records.map((record) => {
+                  const target = record.target as ConsumerMenuItemFavoriteTarget;
+                  const menuItem = restaurantCatalog.findMenuItemById(target.menuItemId);
+                  const restaurant = restaurantCatalog.findRestaurantById(target.restaurantId);
+                  return (
+                    <LiveFavoriteFoodCard
+                      key={record.favoriteId}
+                      menuItemName={menuItem?.name}
+                      onMockAction={setMockMessage}
+                      record={record}
+                      restaurantName={restaurant?.name}
+                      shareCta={diary.shareCta}
+                    />
+                  );
+                })}
               </ScrollView>
             ) : null}
           </View>
@@ -574,12 +591,21 @@ function MonthlyScoreCard({ card, onMockAction, shareCta }: { card: MonthlyCard;
   );
 }
 
-function LiveFavoriteFoodCard({ record, onMockAction, shareCta }: { record: ConsumerFavoriteRecord; onMockAction: (message: string) => void; shareCta: string }) {
-  const target = record.target as ConsumerMenuItemFavoriteTarget;
-  const menuItem = getCanonicalMenuItemById(target.menuItemId);
-  const restaurant = getCanonicalRestaurantById(target.restaurantId);
-  const title = menuItem?.name ?? record.collectionLabel ?? zhTW.mobile.consumerFavorites.listTitle;
-  const meta = restaurant?.name ? `收藏美食卡｜${restaurant.name}` : "收藏美食卡";
+function LiveFavoriteFoodCard({
+  menuItemName,
+  onMockAction,
+  record,
+  restaurantName,
+  shareCta
+}: {
+  menuItemName?: string;
+  onMockAction: (message: string) => void;
+  record: ConsumerFavoriteRecord;
+  restaurantName?: string;
+  shareCta: string;
+}) {
+  const title = menuItemName ?? record.collectionLabel ?? zhTW.mobile.consumerFavorites.listTitle;
+  const meta = restaurantName ? `收藏美食卡｜${restaurantName}` : "收藏美食卡";
   return (
     <View style={styles.favoriteCard}>
       <View style={styles.favoriteHero}>

@@ -1,6 +1,13 @@
 import type { RestaurantDomain } from "@haocu/shared/domain";
 
-export type NutritionSourceLabel = "restaurant_verified" | "admin_verified" | "ai_estimated" | "pending" | "missing";
+export type NutritionSourceLabel =
+  | "restaurant_verified"
+  | "admin_verified"
+  | "restaurant_confirmed"
+  | "platform_reviewed"
+  | "ai_estimated"
+  | "pending"
+  | "missing";
 
 export type MobileMenuVerificationStatus = "restaurant_verified" | "ai_estimated" | "pending_review";
 

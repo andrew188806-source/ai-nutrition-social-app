@@ -10,7 +10,13 @@ import { PremiumBadge, colors } from "../components/DemoUi";
 import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getEffectiveCurrentDate } from "../features/demo-time";
-import { getCanonicalRestaurantById, getCanonicalRestaurantMenuItems, getCanonicalRestaurants, type CanonicalRestaurant, type CanonicalRestaurantMenuItem } from "../features/restaurants";
+import {
+  flattenBranchItems,
+  useRestaurantCatalog,
+  type CatalogBranchViewModel,
+  type CatalogMenuItemViewModel,
+  type CatalogRestaurantViewModel
+} from "../features/restaurants/catalog";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -34,7 +40,7 @@ const locationTree = {
 
 type City = keyof typeof locationTree;
 type District<C extends City = City> = keyof (typeof locationTree)[C];
-type Restaurant = CanonicalRestaurant;
+type Restaurant = CatalogRestaurantViewModel;
 type DiningDateOption = (typeof zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions)[number];
 type RecommendationMode = "ai" | "custom";
 type DropdownKey = "locationScope" | "city" | "district" | "place" | "diningGoal" | "cuisineType" | "diningSituation" | null;
@@ -63,20 +69,19 @@ const defaultFilters: RestaurantFilters = {
   place: "市府商圈"
 };
 
-function getRestaurantDishes(restaurant: Restaurant) {
-  return getCanonicalRestaurantMenuItems(restaurant.restaurantId);
+function getRestaurantDishes(restaurant: Restaurant, branch?: CatalogBranchViewModel) {
+  return flattenBranchItems(branch ?? restaurant.branches[0]);
 }
 
-function getDishStatusLabel(dish: CanonicalRestaurantMenuItem) {
-  if (dish.source === "ai_user_uploaded") {
-    return dish.verificationStatus === "pending_review" ? "使用者拍照上傳・待確認" : "使用者拍照上傳・AI 估算";
-  }
+function getDishStatusLabel(dish: CatalogMenuItemViewModel) {
+  if (!dish.publishedNutrition) return "尚無公開營養資料";
   return dish.verificationStatus === "ai_estimated" ? "AI 估算營養值" : null;
 }
 
 export default function RestaurantsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ restaurantId?: string }>();
+  const catalog = useRestaurantCatalog();
   const [demoMode] = useDemoUserPlan();
   const [filters, setFilters] = useState<RestaurantFilters>(defaultFilters);
   const [draftFilters, setDraftFilters] = useState<RestaurantFilters>(filters);
@@ -87,7 +92,7 @@ export default function RestaurantsScreen() {
   const [diningDateOption, setDiningDateOption] = useState<DiningDateOption>(zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[0]);
   const [customDiningDate, setCustomDiningDate] = useState("");
   const [pendingTableRestaurant, setPendingTableRestaurant] = useState<Restaurant | null>(null);
-  const [createdRestaurantNames, setCreatedRestaurantNames] = useState<string[]>([]);
+  const [createdRestaurantIds, setCreatedRestaurantIds] = useState<string[]>([]);
   const favoriteComposition = useMemo(() => {
     try {
       return createMobileConsumerFavoriteComposition();
@@ -105,8 +110,8 @@ export default function RestaurantsScreen() {
   const selectedPlaces = (locationTree[draftFilters.city] as Record<string, readonly string[]>)[draftFilters.district] ?? [];
 
   const recommendedRestaurants = useMemo(() => {
-    return [...getCanonicalRestaurants()].sort((a, b) => restaurantScore(b, filters) - restaurantScore(a, filters));
-  }, [filters]);
+    return [...catalog.state.restaurants].sort((a, b) => restaurantScore(b, filters) - restaurantScore(a, filters));
+  }, [catalog.state.restaurants, filters]);
 
   // Arriving with a specific restaurant (e.g. "查看餐廳" from a recommendation card)
   // should show that restaurant immediately instead of a generic list the user has
@@ -115,13 +120,13 @@ export default function RestaurantsScreen() {
     if (!params.restaurantId) {
       return;
     }
-    const restaurant = getCanonicalRestaurantById(params.restaurantId);
+    const restaurant = catalog.findRestaurantById(params.restaurantId);
     if (!restaurant) {
       return;
     }
     setFilters(defaultFilters);
     setDetailRestaurant(restaurant);
-  }, [params.restaurantId]);
+  }, [catalog.state.status, params.restaurantId]);
 
   function openRecommendationModal() {
     setDraftFilters(filters);
@@ -176,7 +181,9 @@ export default function RestaurantsScreen() {
     const card = getRestaurantMealBuddyCard(restaurant.name, restaurant.restaurantId, primaryDish?.menuItemId, restaurant.tags.join("、"), filters.location, preferredTime, diningDate);
     upsertMealBuddyCardWithQuota(card, demoMode);
     closeMealBuddyPanel();
-    setCreatedRestaurantNames((current) => (current.includes(restaurant.name) ? current : [...current, restaurant.name]));
+    setCreatedRestaurantIds((current) =>
+      current.includes(restaurant.restaurantId) ? current : [...current, restaurant.restaurantId]
+    );
     setDetailRestaurant(null);
     router.push({
       pathname: "/meal-buddies",
@@ -227,6 +234,38 @@ export default function RestaurantsScreen() {
     setPendingTableRestaurant(null);
   }
 
+  if (catalog.state.status === "loading") {
+    return (
+      <PlaceholderScreen title={zhTW.mobile.mainSections.exploreTitle} subtitle="正在載入公開餐廳與菜單。">
+        <SnowCard>
+          <SnowSectionHeader title="餐廳載入中" subtitle="正在取得最新公開菜單，請稍候。" />
+        </SnowCard>
+      </PlaceholderScreen>
+    );
+  }
+
+  if (catalog.state.status === "empty") {
+    return (
+      <PlaceholderScreen title={zhTW.mobile.mainSections.exploreTitle} subtitle="目前沒有可公開瀏覽的餐廳。">
+        <SnowCard>
+          <SnowSectionHeader title="目前沒有公開餐廳" subtitle="餐廳發布菜單後會顯示在這裡。" />
+          <SecondaryButton label="重新整理" onPress={() => void catalog.refresh()} />
+        </SnowCard>
+      </PlaceholderScreen>
+    );
+  }
+
+  if (catalog.state.status === "error" || catalog.state.status === "unavailable") {
+    return (
+      <PlaceholderScreen title={zhTW.mobile.mainSections.exploreTitle} subtitle="餐廳目錄目前無法使用。">
+        <SnowCard>
+          <SnowSectionHeader title="無法取得餐廳目錄" subtitle={catalog.state.message} />
+          <SecondaryButton label="重試" onPress={() => void catalog.refresh()} />
+        </SnowCard>
+      </PlaceholderScreen>
+    );
+  }
+
   return (
     <PlaceholderScreen
       title={zhTW.mobile.mainSections.exploreTitle}
@@ -259,9 +298,9 @@ export default function RestaurantsScreen() {
           const reasons = getRecommendationReasons(restaurant, filters);
           const saved = restaurantFavorites.favoritedIds.has(restaurant.restaurantId);
           const verified = isRestaurantVerified(restaurant);
-          const created = createdRestaurantNames.includes(restaurant.name);
+          const created = createdRestaurantIds.includes(restaurant.restaurantId);
           return (
-            <Fragment key={restaurant.name}>
+            <Fragment key={restaurant.restaurantId}>
             <SnowCard style={styles.restaurantCard}>
               <Pressable accessibilityRole="button" style={styles.restaurantCardTouchable} onPress={() => openRestaurantDetail(restaurant)}>
                 <View style={styles.restaurantHero}>
@@ -331,7 +370,7 @@ export default function RestaurantsScreen() {
                 </View>
               </View>
             </SnowCard>
-            {pendingRestaurant && pendingRestaurant.name === restaurant.name ? (
+            {pendingRestaurant?.restaurantId === restaurant.restaurantId ? (
               <SnowCard tone="primary">
                 <SnowSectionHeader title={zhTW.mobile.refinedLogic.mealBuddyCard.diningDateQuestion} subtitle={pendingRestaurant.name} />
                 <View style={styles.snowChipRow}>
@@ -413,7 +452,7 @@ export default function RestaurantsScreen() {
       />
 
       <RestaurantDetailModal
-        created={detailRestaurant ? createdRestaurantNames.includes(detailRestaurant.name) : false}
+        created={detailRestaurant ? createdRestaurantIds.includes(detailRestaurant.restaurantId) : false}
         onClose={closeRestaurantDetail}
         onCreateCard={startCreateFromDetail}
         onCreateTable={startTableFromDetail}
@@ -640,8 +679,16 @@ function RestaurantDetailModal({
   onCreateTable: (restaurant: Restaurant) => void;
   restaurant: Restaurant | null;
 }) {
-  const verified = restaurant ? isRestaurantVerified(restaurant) : false;
-  const dishes = restaurant ? getRestaurantDishes(restaurant) : [];
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedBranchId(restaurant?.branches[0]?.branchId ?? null);
+  }, [restaurant?.restaurantId]);
+  const nutritionStatus = restaurant ? getRestaurantNutritionStatus(restaurant) : "missing";
+  const verified = nutritionStatus === "verified";
+  const selectedBranch =
+    restaurant?.branches.find((branch) => branch.branchId === selectedBranchId) ??
+    restaurant?.branches[0];
+  const dishes = restaurant ? getRestaurantDishes(restaurant, selectedBranch) : [];
 
   return (
     <Modal transparent animationType="fade" visible={Boolean(restaurant)} onRequestClose={onClose}>
@@ -676,9 +723,19 @@ function RestaurantDetailModal({
                 <View style={[styles.nutritionInfoBox, verified && styles.nutritionInfoBoxVerified]}>
                   <Icon name={verified ? "shield" : "leaf"} size={16} color={verified ? snow.green : snow.sub} />
                   <View style={styles.nutritionInfoTextGroup}>
-                    <Text style={styles.nutritionInfoTitle}>{verified ? "營養標示已驗證" : "營養標示估算中"}</Text>
+                    <Text style={styles.nutritionInfoTitle}>
+                      {verified
+                        ? "營養標示已驗證"
+                        : nutritionStatus === "estimated"
+                          ? "營養標示為 AI 估算"
+                          : "尚無公開營養資料"}
+                    </Text>
                     <Text style={styles.nutritionInfoBody}>
-                      {verified ? "本店菜單熱量與營養已由豪食友核實，外食也能安心均衡。" : "尚未核實，數值為 AI 估算，僅供參考。"}
+                      {verified
+                        ? "本店菜單熱量與營養已由豪食友核實，外食也能安心均衡。"
+                        : nutritionStatus === "estimated"
+                          ? "尚未核實，公開數值為 AI 估算，僅供參考。"
+                          : "餐點仍可瀏覽與收藏；營養資料發布後才會顯示。"}
                     </Text>
                   </View>
                 </View>
@@ -691,31 +748,71 @@ function RestaurantDetailModal({
                   ))}
                 </View>
 
-                <Text style={styles.detailSectionLabel}>均衡推薦</Text>
+                {restaurant.branches.length > 1 ? (
+                  <>
+                    <Text style={styles.detailSectionLabel}>選擇分店</Text>
+                    <View style={styles.snowChipRow}>
+                      {restaurant.branches.map((branch) => (
+                        <Chip
+                          key={branch.branchId}
+                          label={branch.name}
+                          active={branch.branchId === selectedBranch?.branchId}
+                          onPress={() => setSelectedBranchId(branch.branchId)}
+                        />
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+
+                {selectedBranch ? (
+                  <Text style={styles.restaurantMetaSnow}>
+                    {selectedBranch.name} · {selectedBranch.district} · {selectedBranch.address}
+                  </Text>
+                ) : null}
+
+                <Text style={styles.detailSectionLabel}>公開菜單</Text>
                 {dishes.length > 0 ? (
                   <View style={styles.dishList}>
-                    {dishes.map((dish) => {
-                      const statusLabel = getDishStatusLabel(dish);
-                      return (
-                        <View key={dish.menuItemId} style={styles.dishRow}>
-                          <View style={styles.dishIconBox}>
-                            <Icon name="plate" size={16} color={snow.primaryDeep} />
-                          </View>
-                          <View style={styles.dishContent}>
-                            <View style={styles.dishMainRow}>
-                              <Text style={styles.dishName}>{dish.name}</Text>
-                              {dish.tags[0] ? (
-                                <View style={styles.dishTag}>
-                                  <Text style={styles.dishTagText}>{dish.tags[0]}</Text>
+                    {selectedBranch?.menus.map((menu) => (
+                      <View key={menu.menuId}>
+                        <Text style={styles.detailSectionLabel}>{menu.name}</Text>
+                        {menu.categories.map((category) => (
+                          <View key={category.menuCategoryId}>
+                            <Text style={styles.dishStatusNote}>{category.name}</Text>
+                            {category.items.map((dish) => {
+                              const statusLabel = getDishStatusLabel(dish);
+                              return (
+                                <View key={dish.branchMenuItemId} style={styles.dishRow}>
+                                  <View style={styles.dishIconBox}>
+                                    <Icon name="plate" size={16} color={snow.primaryDeep} />
+                                  </View>
+                                  <View style={styles.dishContent}>
+                                    <View style={styles.dishMainRow}>
+                                      <Text style={styles.dishName}>{dish.name}</Text>
+                                      {dish.tags[0] ? (
+                                        <View style={styles.dishTag}>
+                                          <Text style={styles.dishTagText}>{dish.tags[0]}</Text>
+                                        </View>
+                                      ) : null}
+                                      <Text style={styles.dishCalories}>
+                                        NT${dish.price}
+                                        {dish.publishedNutrition?.calories != null
+                                          ? ` · ${dish.publishedNutrition.calories} kcal`
+                                          : ""}
+                                      </Text>
+                                    </View>
+                                    <Text style={styles.dishStatusNote}>
+                                      {dish.availability === "limited" ? "限量供應" : "供應中"}
+                                      {statusLabel ? ` · ${statusLabel}` : ""}
+                                    </Text>
+                                  </View>
                                 </View>
-                              ) : null}
-                              <Text style={styles.dishCalories}>{dish.calories} kcal</Text>
-                            </View>
-                            {statusLabel ? <Text style={styles.dishStatusNote}>{statusLabel}</Text> : null}
+                              );
+                            })}
                           </View>
-                        </View>
-                      );
-                    })}
+                        ))}
+                      </View>
+                    ))}
                   </View>
                 ) : (
                   <View style={styles.dishEmptyState}>
@@ -797,14 +894,19 @@ function resolveDiningDate(option: string, customDate: string) {
 
 function restaurantScore(restaurant: Restaurant, filters: RestaurantFilters) {
   const distance = Number.parseFloat(restaurant.distanceDisplay.replace("km", "").replace("m", ""));
-  const distanceScore = restaurant.distanceDisplay.includes("m") ? 45 : Math.max(10, 35 - distance * 8);
+  const distanceScore = Number.isFinite(distance)
+    ? restaurant.distanceDisplay.includes("m")
+      ? 45
+      : Math.max(10, 35 - distance * 8)
+    : 10;
   const tags = restaurant.tags.join(" ");
   const aiBaseScore = filters.mode === "ai" ? 70 : 35;
   const nutritionScore = filters.mode === "ai" && tags.includes("高蛋白") ? 26 : 0;
   const goalScore = filters.diningGoal !== "都可以" && tags.includes(filters.diningGoal.replace("餐", "").replace("型", "")) ? 35 : 0;
   const cuisineScore = filters.cuisineType !== "都可以" && inferCuisineType(restaurant).includes(filters.cuisineType) ? 28 : 0;
   const situationScore = filters.diningSituation !== "都可以" ? getSituationBoost(restaurant, filters.diningSituation) : 0;
-  const popularityScore = Number.parseInt(restaurant.score, 10) / 5;
+  const parsedScore = Number.parseInt(restaurant.score, 10);
+  const popularityScore = Number.isFinite(parsedScore) ? parsedScore / 5 : 0;
   const socialScore = getSocialHint(restaurant).includes("飯友") ? 12 : 8;
   return aiBaseScore + distanceScore + nutritionScore + goalScore + cuisineScore + situationScore + popularityScore + socialScore;
 }
@@ -838,9 +940,15 @@ function getSocialHint(restaurant: Restaurant) {
   return "附近有人收藏過這家店";
 }
 
+function getRestaurantNutritionStatus(restaurant: Restaurant): "verified" | "estimated" | "missing" {
+  const items = restaurant.branches.flatMap((branch) => flattenBranchItems(branch));
+  if (items.some((item) => item.verificationStatus === "restaurant_verified")) return "verified";
+  if (items.some((item) => item.verificationStatus === "ai_estimated")) return "estimated";
+  return "missing";
+}
+
 function isRestaurantVerified(restaurant: Restaurant) {
-  const tags: readonly string[] = restaurant.tags;
-  return tags.includes(zhTW.common.verified);
+  return getRestaurantNutritionStatus(restaurant) === "verified";
 }
 
 function inferCuisineType(restaurant: Restaurant) {
