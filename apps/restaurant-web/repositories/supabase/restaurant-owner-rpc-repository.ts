@@ -22,13 +22,42 @@ function rows(data: unknown, operation: string): unknown[] {
   return data;
 }
 
+// Postgres statement-timeout cancellation (57014) is a well-known transient
+// condition, not a permanent failure; the Development instance occasionally
+// hits it under connection contention even for individually-fast queries.
+// Every other error code (e.g. 42501 permission denied) still fails immediately
+// and is never retried.
+//
+// The `authenticated` role's statement_timeout is a fixed 8s (confirmed via
+// pg_roles.rolconfig), so a single attempt is bounded at 8s. Callers such as
+// loadLiveDashboard/loadLiveMenu make up to five of these calls sequentially,
+// so the retry budget must stay small: at MAX_TRANSIENT_RETRIES=1, one page
+// load's worst case is 5 calls x 2 attempts x 8s = 80s. The previous value
+// of 2 retries produced a worst case of 5 x 3 x 8s = 120s, which is what
+// produced one observed ~99s page load; capping at 1 retry keeps the
+// amplification bounded without removing the transient-recovery benefit.
+const TRANSIENT_RETRY_CODE = "57014";
+const MAX_TRANSIENT_RETRIES = 1;
+const RETRY_DELAY_MS = 300;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function createRestaurantOwnerRpcRepository(): RestaurantOwnerReadRepository {
   const client = createRestaurantSupabaseServerClient();
   async function call(name: string, args?: Record<string, string>) {
-    const result = await client.rpc(name, args);
-    if (result.error) throw new SupabaseQueryError(`${name} failed: ${result.error.code ?? "rpc_error"}`);
-    if (result.data === null || result.data === undefined) throw new SupabaseQueryError(`${name} returned no data.`);
-    return rows(result.data, name);
+    let attempt = 0;
+    for (;;) {
+      const result = await client.rpc(name, args);
+      if (result.error) {
+        if (result.error.code === TRANSIENT_RETRY_CODE && attempt < MAX_TRANSIENT_RETRIES) {
+          attempt += 1;
+          await wait(RETRY_DELAY_MS * attempt);
+          continue;
+        }
+        throw new SupabaseQueryError(`${name} failed: ${result.error.code ?? "rpc_error"}`);
+      }
+      if (result.data === null || result.data === undefined) throw new SupabaseQueryError(`${name} returned no data.`);
+      return rows(result.data, name);
+    }
   }
 
   return {

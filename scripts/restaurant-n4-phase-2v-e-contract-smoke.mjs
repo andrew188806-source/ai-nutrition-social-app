@@ -10,8 +10,19 @@ function check(name, condition, details = "") {
   checks.push({ name, pass: Boolean(condition), details });
   if (!condition) issues.push({ name, details });
 }
+function extractFunctionBody(source, functionName) {
+  const startMatch = source.match(new RegExp(`export async function ${functionName}\\s*\\([^)]*\\)\\s*\\{`));
+  if (!startMatch) return "";
+  const start = startMatch.index + startMatch[0].length;
+  const rest = source.slice(start);
+  const nextExportIndex = rest.search(/\nexport (async function|function)\s/);
+  return nextExportIndex === -1 ? rest : rest.slice(0, nextExportIndex);
+}
 
 const liveReads = read("apps/restaurant-web/runtime/live-restaurant-reads.ts");
+const ownerRepository = read("apps/restaurant-web/repositories/supabase/restaurant-owner-rpc-repository.ts");
+const dashboardPage = read("apps/restaurant-web/app/restaurant/page.tsx");
+const menuPage = read("apps/restaurant-web/app/restaurant/menu/page.tsx");
 const factory = read("apps/restaurant-web/repositories/restaurant-read-repository-factory.ts");
 const publicRepository = read("apps/restaurant-web/repositories/supabase/supabase-public-nutrition-repository.ts");
 const closure = read("docs/runtime-integration-phase-2v-e/raw-runtime-dependency-closure.md");
@@ -35,9 +46,54 @@ const pageBudgets = {
   menu: { access: 1, data: 5, total: 6 },
   nutrition: { access: 1, data: 2, total: 3 }
 };
-check("dashboard uses five parallel data RPCs", /loadLiveDashboard[\s\S]*Promise\.all\(\[[\s\S]*listBranches[\s\S]*listMenus[\s\S]*listMenuItems[\s\S]*listBranchMenuItems[\s\S]*listCurrentNutrition/.test(liveReads));
-check("menu uses five parallel data RPCs", /loadLiveMenu[\s\S]*Promise\.all\(\[[\s\S]*listMenus[\s\S]*listMenuCategories[\s\S]*listMenuItems[\s\S]*listBranchMenuItems[\s\S]*listCurrentNutrition/.test(liveReads));
+// Superseded 2026-07-23: five-way Promise.all on Dashboard/Menu was proven to
+// intermittently trigger Postgres statement-timeout cancellation (SQLSTATE
+// 57014) on the Development instance under connection contention, even
+// though each individual RPC call is fast. Dashboard/Menu now fetch their
+// five data RPCs sequentially instead; these two checks assert that
+// corrected behavior. Nutrition (two calls) was never observed to fail and
+// remains Promise.all by design.
+const dashboardBody = extractFunctionBody(liveReads, "loadLiveDashboard");
+const menuBody = extractFunctionBody(liveReads, "loadLiveMenu");
+check("dashboard fetches five data RPCs sequentially, not via Promise.all",
+  !/Promise\.all\(/.test(dashboardBody) &&
+  /await repository\.listBranches\(restaurant\.id\)/.test(dashboardBody) &&
+  /await repository\.listMenus\(restaurant\.id\)/.test(dashboardBody) &&
+  /await repository\.listMenuItems\(restaurant\.id\)/.test(dashboardBody) &&
+  /await repository\.listBranchMenuItems\(restaurant\.id\)/.test(dashboardBody) &&
+  /await repository\.listCurrentNutrition\(restaurant\.id\)/.test(dashboardBody));
+check("menu fetches five data RPCs sequentially, not via Promise.all",
+  !/Promise\.all\(/.test(menuBody) &&
+  /await repository\.listMenus\(restaurant\.id\)/.test(menuBody) &&
+  /await repository\.listMenuCategories\(restaurant\.id\)/.test(menuBody) &&
+  /await repository\.listMenuItems\(restaurant\.id\)/.test(menuBody) &&
+  /await repository\.listBranchMenuItems\(restaurant\.id\)/.test(menuBody) &&
+  /await repository\.listCurrentNutrition\(restaurant\.id\)/.test(menuBody));
 check("nutrition uses two parallel data RPCs", /loadLiveNutrition[\s\S]*Promise\.all\(\[repository\.listMenuItems[\s\S]*repository\.listCurrentNutrition/.test(liveReads));
+
+// 2026-07-23 retry hardening: the owner RPC repository retries only the
+// specific transient SQLSTATE 57014 (Postgres statement-timeout
+// cancellation), bounded, and never retries any other error code.
+check("owner RPC retry targets only SQLSTATE 57014",
+  /const TRANSIENT_RETRY_CODE = "57014"/.test(ownerRepository));
+check("owner RPC retry count is bounded and explicit",
+  /const MAX_TRANSIENT_RETRIES = 1/.test(ownerRepository));
+check("owner RPC retry gate requires the transient code before retrying",
+  /result\.error\.code === TRANSIENT_RETRY_CODE && attempt < MAX_TRANSIENT_RETRIES/.test(ownerRepository));
+check("owner RPC throws (never silently succeeds) once retries are exhausted",
+  /throw new SupabaseQueryError\(`\$\{name\} failed: \$\{result\.error\.code/.test(ownerRepository));
+
+// 2026-07-23 branch filter wiring (Phase 2V-F Test Group 7): Dashboard and
+// Menu must both source their branch context from the existing
+// loadValidatedBranch() and fail closed (redirect, no data load) on an
+// invalid selection.
+for (const [label, page] of [["dashboard", dashboardPage], ["menu", menuPage]]) {
+  check(`${label} page validates branch selection via loadValidatedBranch()`,
+    /loadValidatedBranch/.test(page));
+  check(`${label} page redirects on invalid branch before loading live data`,
+    /branch\.invalid[\s\S]{0,40}redirect\(/.test(page) &&
+    page.indexOf("branch.invalid") < page.indexOf(label === "dashboard" ? "loadLiveDashboard()" : "loadLiveMenu()"));
+}
 check("public-safe repository has exactly two read methods", (publicRepository.match(/async\s+(?:get|list)PublicPublishedNutrition/g) ?? []).length === 2);
 check("public-safe repository queries one approved view", (publicRepository.match(/client\.select/g) ?? []).length === 2 && !/restaurants["']|restaurant_branches|branch_menu_items/.test(publicRepository));
 check("mock repository remains explicit", /dataSource==="mock"/.test(factory));

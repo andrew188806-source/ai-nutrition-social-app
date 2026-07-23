@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { OwnerBranch } from "../runtime/restaurant-rpc-contracts";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`rounded-lg border border-stone-200 bg-white p-5 shadow-sm ${className}`}>{children}</div>;
@@ -71,6 +72,25 @@ export function ErrorState({ title = "資料暫時無法載入", body = "請稍�
     <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">
       <p className="font-bold">{title}</p>
       <p>{body}</p>
+    </div>
+  );
+}
+
+export function BranchFilterPicker({ basePath, branches, selectedBranchId }: { basePath: string; branches: OwnerBranch[]; selectedBranchId: string | null }) {
+  if (branches.length === 0) return null;
+  const pill = (href: string, label: string, active: boolean) => (
+    <a
+      className={`rounded-md px-3 py-1.5 text-xs font-bold ${active ? "bg-teal-700 text-white" : "border border-stone-200 bg-white text-stone-600 hover:bg-stone-50"}`}
+      href={href}
+      key={href}
+    >
+      {label}
+    </a>
+  );
+  return (
+    <div className="flex flex-wrap gap-2">
+      {pill(basePath, "全部分店", selectedBranchId === null)}
+      {branches.map((branch) => pill(`${basePath}?branch=${encodeURIComponent(branch.id)}`, branch.name, branch.id === selectedBranchId))}
     </div>
   );
 }

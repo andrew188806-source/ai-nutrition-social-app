@@ -16,10 +16,14 @@ function requireReference(condition: boolean, relationship: string) {
 export async function loadLiveDashboard() {
   const restaurant = await selectedRestaurant();
   const repository = createRestaurantOwnerRpcRepository();
-  const [branches, menus, items, branchItems, nutrition] = await Promise.all([
-    repository.listBranches(restaurant.id), repository.listMenus(restaurant.id), repository.listMenuItems(restaurant.id),
-    repository.listBranchMenuItems(restaurant.id), repository.listCurrentNutrition(restaurant.id)
-  ]);
+  // Sequential, not Promise.all: five concurrent RPCs against the Development
+  // instance intermittently hit Postgres statement-timeout cancellation
+  // (SQLSTATE 57014) under contention, even though each call alone is fast.
+  const branches = await repository.listBranches(restaurant.id);
+  const menus = await repository.listMenus(restaurant.id);
+  const items = await repository.listMenuItems(restaurant.id);
+  const branchItems = await repository.listBranchMenuItems(restaurant.id);
+  const nutrition = await repository.listCurrentNutrition(restaurant.id);
   const branchIds=new Set(branches.map(row=>row.id)); const itemIds=new Set(items.map(row=>row.id));
   branchItems.forEach(row=>{requireReference(branchIds.has(row.branchId),"branch item → branch");requireReference(itemIds.has(row.menuItemId),"branch item → menu item");});
   nutrition.forEach(row=>requireReference(itemIds.has(row.menuItemId),"nutrition → menu item"));
@@ -34,10 +38,13 @@ export async function loadLiveLocations() {
 export async function loadLiveMenu() {
   const restaurant = await selectedRestaurant();
   const repository = createRestaurantOwnerRpcRepository();
-  const [menus, categories, items, branchItems, nutrition] = await Promise.all([
-    repository.listMenus(restaurant.id), repository.listMenuCategories(restaurant.id), repository.listMenuItems(restaurant.id),
-    repository.listBranchMenuItems(restaurant.id), repository.listCurrentNutrition(restaurant.id)
-  ]);
+  // Sequential, not Promise.all: see loadLiveDashboard for the SQLSTATE 57014
+  // contention this avoids.
+  const menus = await repository.listMenus(restaurant.id);
+  const categories = await repository.listMenuCategories(restaurant.id);
+  const items = await repository.listMenuItems(restaurant.id);
+  const branchItems = await repository.listBranchMenuItems(restaurant.id);
+  const nutrition = await repository.listCurrentNutrition(restaurant.id);
   const menuIds=new Set(menus.map(row=>row.id)); const categoryIds=new Set(categories.map(row=>row.id)); const itemIds=new Set(items.map(row=>row.id));
   categories.forEach(row=>requireReference(menuIds.has(row.menuId),"category → menu"));
   items.forEach(row=>requireReference(categoryIds.has(row.menuCategoryId),"menu item → category"));
