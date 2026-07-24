@@ -78,6 +78,43 @@ export const zhTW = {
       errorTitle: "目前無法加入今日飲食",
       errorBody: "這筆餐點尚未保存，請確認登入與資料後再試一次。"
     },
+    mealIdentificationFinalization: {
+      submitting: "正在完整保存餐點分析…",
+      uncertainTitle: "尚未確認餐點分析是否已保存",
+      uncertainBody: "連線結果不確定。請使用同一筆請求重試，或先前往今日飲食確認。",
+      retrySameRequest: "重試同一筆請求",
+      checkTodayIntake: "前往今日飲食確認",
+      errors: {
+        authentication: {
+          title: "請重新登入後再保存",
+          body: "目前沒有可用的登入狀態，這筆餐點尚未建立。"
+        },
+        invalid: {
+          title: "餐點資料需要確認",
+          body: "這筆分析尚未送出，請檢查餐點選擇與營養內容。"
+        },
+        catalog: {
+          title: "正式餐點資料已變更",
+          body: "這筆餐廳餐點目前無法確認，請重新選擇或改用私人手動輸入。"
+        },
+        invariant: {
+          title: "餐點分析目前無法保存",
+          body: "分析或修正內容未通過完整性檢查，請確認內容後再試。"
+        },
+        conflict: {
+          title: "同一筆請求的內容不一致",
+          body: "請勿重複送出目前內容；確認或修改餐點後，才能開始新的保存請求。"
+        },
+        authorization: {
+          title: "目前無法保存這筆餐點",
+          body: "登入權限無法完成這次保存，這筆餐點尚未建立。"
+        },
+        generic: {
+          title: "餐點分析暫時無法保存",
+          body: "這筆餐點尚未確認完成，請稍後再試或先前往今日飲食查看。"
+        }
+      }
+    },
     mealPhotoTitle: "拍攝或上傳餐點照片",
     mealPhotoSubtitle: "先選擇外食或自己煮，再用餐點照片開始分析。外食會先找附近餐廳菜單；自煮會直接估算食材與份量。",
     analysisTitle: "AI 餐點分析",

@@ -17,6 +17,8 @@
     "test:meal-identification-mi-c-d": "node scripts/meal-identification-mi-c-d-guard.mjs",
     "test:meal-identification-mi-c-d-smoke": "node scripts/meal-identification-mi-c-d-contract-smoke.mjs",
     "test:meal-identification-mi-d-a": "node scripts/meal-identification-mi-d-a-guard.mjs",
+    "test:meal-identification-mi-d-b": "node scripts/meal-identification-mi-d-b-guard.mjs",
+    "test:meal-identification-mi-d-b-smoke": "node scripts/meal-identification-mi-d-b-contract-smoke.mjs",
     "test:consumer-phase1a": "node scripts/consumer-auth-phase-1a-guard.mjs",
     "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs",
     "test:consumer-phase1c": "node scripts/consumer-auth-phase-1c-guard.mjs",

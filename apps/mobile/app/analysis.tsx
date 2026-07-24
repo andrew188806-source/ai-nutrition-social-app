@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -8,6 +8,10 @@ import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, getAnalysisSession, useAnalysisCorrectionState } from "../features/analysis";
 import { getTodayMealRecords, saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
 import { getEffectiveCalories } from "../features/analysis/nutritionSummary";
+import {
+  buildAnalysisMealIdentificationFinalizationDraft,
+  mapMealIdentificationFinalizationUiError
+} from "../features/analysis/mealIdentificationFinalizationAdapter";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getNextMealCandidateCount } from "../features/next-meal-prototype";
@@ -16,7 +20,6 @@ import { useConsumerRuntime } from "../features/consumer-runtime";
 import {
   isSameCatalogCandidate,
   resolveCatalogMealCandidates,
-  toTrustedCanonicalIdentity,
   type CatalogMealIdentificationCandidate,
   type MealIdentificationCandidateResolution
 } from "../features/meal-identification";
@@ -77,6 +80,10 @@ export default function AnalysisScreen() {
   const [demoMode] = useDemoUserPlan();
   const session = getAnalysisSession();
   const [mealSaved, setMealSaved] = useState(session.mealSaved);
+  const [analysisObservedAt] = useState(() => new Date().toISOString());
+  const [localFinalizationErrorCode, setLocalFinalizationErrorCode] = useState<string | null>(null);
+  const finalizationInvocationRef = useRef(false);
+  const conflictFingerprintRef = useRef<string | null>(null);
   const defaultMealPeriod = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1];
   const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : session.selectedMealPeriod || defaultMealPeriod;
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(initialMealPeriod);
@@ -146,39 +153,98 @@ export default function AnalysisScreen() {
     });
   }
 
-  async function saveMealRecordFromExplicitGesture() {
-    const originalDetectedName = zhTW.mobile.analysis.candidates[0].meal;
-    const result = await consumerRuntime.createMealRecord({
+  async function finalizeMealIdentificationFromExplicitGesture() {
+    if (
+      finalizationInvocationRef.current ||
+      consumerRuntime.mealIdentificationFinalizationState.status === "submitting"
+    ) {
+      return;
+    }
+    const adapted = buildAnalysisMealIdentificationFinalizationDraft({
       selectedMealPeriod,
+      restaurantName: analysis.restaurantName,
       mealName: analysis.mealName,
-      originalDetectedName,
-      portion: analysis.nutritionSummary.portion,
-      nutrition: {
-        calories: analysis.nutritionSummary.calories,
-        protein: analysis.nutritionSummary.protein,
-        carbohydrates: analysis.nutritionSummary.carbohydrates,
-        fat: analysis.nutritionSummary.fat
-      },
+      sourceContext: analysis.sourceContext,
+      selectedCandidate: analysis.selectedCandidate,
+      catalogConfirmed: analysis.matchState === "confirmed",
       isSelfCooked: analysis.isSelfCooked,
-      wasUserCorrected: analysis.nutritionRefreshed || analysis.correctionCompleted || Object.keys(analysis.correctedRows).length > 0 || analysis.mealName !== originalDetectedName,
-      trustedCanonicalIdentity: toTrustedCanonicalIdentity(analysis.selectedCandidate)
+      nutritionSummary: analysis.nutritionSummary,
+      nutritionRefreshed: analysis.nutritionRefreshed,
+      correctionCompleted: analysis.correctionCompleted,
+      correctedRows: analysis.correctedRows,
+      preMealPhotoIds,
+      analysisAvailability: "available",
+      observedAt: analysisObservedAt
     });
-    completeSuccessfulMealWrite(result);
+    if (!adapted.ok) {
+      setLocalFinalizationErrorCode("finalization_invalid_input");
+      return;
+    }
+    const fingerprint = JSON.stringify(adapted.value);
+    if (
+      consumerRuntime.mealIdentificationFinalizationState.errorCode ===
+        "finalization_idempotency_conflict" &&
+      conflictFingerprintRef.current === fingerprint
+    ) {
+      setLocalFinalizationErrorCode("finalization_idempotency_conflict");
+      return;
+    }
+
+    finalizationInvocationRef.current = true;
+    setLocalFinalizationErrorCode(null);
+    try {
+      const result = await consumerRuntime.finalizeMealIdentification(adapted.value);
+      if (result.errorCode === "finalization_idempotency_conflict") {
+        conflictFingerprintRef.current = fingerprint;
+      } else if (result.status === "succeeded") {
+        conflictFingerprintRef.current = null;
+      }
+      completeSuccessfulMealIdentificationFinalization(result);
+    } finally {
+      finalizationInvocationRef.current = false;
+    }
   }
 
-  async function retryPendingMealRecord() {
-    completeSuccessfulMealWrite(await consumerRuntime.retryPendingMealRecord());
+  async function retryPendingMealIdentificationFinalization() {
+    if (finalizationInvocationRef.current) return;
+    finalizationInvocationRef.current = true;
+    try {
+      completeSuccessfulMealIdentificationFinalization(
+        await consumerRuntime.retryPendingMealIdentificationFinalization()
+      );
+    } finally {
+      finalizationInvocationRef.current = false;
+    }
   }
 
-  function completeSuccessfulMealWrite(result: typeof consumerRuntime.mealWriteState) {
-    if (result.status !== "succeeded" || !result.mealRecordId || !result.mealDate) return;
-    if (consumerRuntime.mode === "mock") persistCanonicalMealToExplicitDemoStore(result.mealRecordId, result.mealDate);
+  function completeSuccessfulMealIdentificationFinalization(
+    result: typeof consumerRuntime.mealIdentificationFinalizationState
+  ) {
+    if (
+      result.status !== "succeeded" ||
+      !result.mealRecordId ||
+      !result.mealRecordItemId ||
+      !result.mealAnalysisId ||
+      !result.mealIdentificationFinalizationId ||
+      !result.mealCorrectionIds
+    ) {
+      return;
+    }
+    if (consumerRuntime.mode === "mock") {
+      persistCanonicalMealToExplicitDemoStore(
+        result.mealRecordId,
+        new Date().toISOString().slice(0, 10)
+      );
+    }
     setMealSaved(true);
     router.push("/today-intake");
   }
 
   function renderSuccessActions() {
-    return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={saveMealRecordFromExplicitGesture} onOpenSocial={() => router.push("/meal-buddies")} />;
+    if (consumerRuntime.mealIdentificationFinalizationState.status === "submitting") {
+      return null;
+    }
+    return <CorrectionSuccessActions hasRestaurantContext={analysis.hasRestaurantContext} onOpenMealLog={finalizeMealIdentificationFromExplicitGesture} onOpenSocial={() => router.push("/meal-buddies")} />;
   }
 
   function openNextMealRecommendation(meal: NextMealRecommendationCard) {
@@ -264,7 +330,8 @@ export default function AnalysisScreen() {
               nutritionSummary={analysis.nutritionSummary}
               mealName={analysis.mealName}
               guiltSharingResult={guiltSharingResult}
-              onOpenMealLog={saveMealRecordFromExplicitGesture}
+              onOpenMealLog={finalizeMealIdentificationFromExplicitGesture}
+              finalizing={consumerRuntime.mealIdentificationFinalizationState.status === "submitting"}
               onOpenNutritionRecord={() => router.push("/meal-log")}
               onGuiltShare={handleGuiltSharingConfirm}
               nextMealRecommendations={nextMealRecommendations}
@@ -289,19 +356,25 @@ export default function AnalysisScreen() {
             />
           ) : null}
 
-          {consumerRuntime.mealWriteState.status === "submitting" ? (
-            <Card><SectionTitle title={zhTW.mobile.consumerMealWrite.submitting} /></Card>
+          {consumerRuntime.mealIdentificationFinalizationState.status === "submitting" ? (
+            <Card><SectionTitle title={zhTW.mobile.mealIdentificationFinalization.submitting} /></Card>
           ) : null}
-          {consumerRuntime.mealWriteState.status === "uncertain" ? (
+          {consumerRuntime.mealIdentificationFinalizationState.status === "uncertain" ? (
             <Card>
-              <SectionTitle title={zhTW.mobile.consumerMealWrite.uncertainTitle} subtitle={zhTW.mobile.consumerMealWrite.uncertainBody} />
+              <SectionTitle title={zhTW.mobile.mealIdentificationFinalization.uncertainTitle} subtitle={zhTW.mobile.mealIdentificationFinalization.uncertainBody} />
               <View style={styles.ctaColumn}>
-                <PrimaryButton icon="check" label={zhTW.mobile.consumerMealWrite.retrySameRequest} onPress={retryPendingMealRecord} />
-                <SecondaryButton icon="chart" label={zhTW.mobile.consumerMealWrite.checkTodayIntake} onPress={() => router.push("/today-intake")} />
+                <PrimaryButton icon="check" label={zhTW.mobile.mealIdentificationFinalization.retrySameRequest} onPress={retryPendingMealIdentificationFinalization} />
+                <SecondaryButton icon="chart" label={zhTW.mobile.mealIdentificationFinalization.checkTodayIntake} onPress={() => router.push("/today-intake")} />
               </View>
             </Card>
-          ) : consumerRuntime.mealWriteState.status === "error" ? (
-            <Card><SectionTitle title={zhTW.mobile.consumerMealWrite.errorTitle} subtitle={zhTW.mobile.consumerMealWrite.errorBody} /></Card>
+          ) : consumerRuntime.mealIdentificationFinalizationState.status === "error" || localFinalizationErrorCode ? (
+            <MealIdentificationFinalizationErrorCard
+              kind={mapMealIdentificationFinalizationUiError(
+                localFinalizationErrorCode ??
+                  consumerRuntime.mealIdentificationFinalizationState.errorCode
+              )}
+              onCheckTodayIntake={() => router.push("/today-intake")}
+            />
           ) : null}
 
           {!isAnalysisConfirmed ? (
@@ -434,6 +507,7 @@ function SelfCookedIntro({ nutritionSummary }: { nutritionSummary: ReturnType<ty
 function CompletedAnalysisHero({
   nutritionSummary,
   mealName,
+  finalizing,
   guiltSharingResult,
   onOpenMealLog,
   onOpenNutritionRecord,
@@ -445,6 +519,7 @@ function CompletedAnalysisHero({
 }: {
   nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"];
   mealName: string;
+  finalizing: boolean;
   guiltSharingResult: { peopleCount: number; sharedCaloriesPerPerson: number } | null;
   onOpenMealLog: () => void;
   onOpenNutritionRecord: () => void;
@@ -474,7 +549,11 @@ function CompletedAnalysisHero({
       <View style={styles.ctaColumn}>
         <View style={styles.ctaRow2}>
           <View style={styles.ctaItem}>
-            <SecondaryButton icon="check" label={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord} onPress={onOpenMealLog} />
+            <SecondaryButton
+              icon="check"
+              label={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord}
+              onPress={finalizing ? undefined : onOpenMealLog}
+            />
           </View>
           <View style={styles.ctaItem}>
             <SecondaryButton icon="chart" label={zhTW.mobile.refinedLogic.analysisFlow.viewNutritionRecord} onPress={onOpenNutritionRecord} />
@@ -482,6 +561,30 @@ function CompletedAnalysisHero({
         </View>
       </View>
     </SnowCard>
+  );
+}
+
+function MealIdentificationFinalizationErrorCard({
+  kind,
+  onCheckTodayIntake
+}: {
+  kind: ReturnType<typeof mapMealIdentificationFinalizationUiError>;
+  onCheckTodayIntake: () => void;
+}) {
+  const copy = zhTW.mobile.mealIdentificationFinalization.errors[kind];
+  return (
+    <Card>
+      <SectionTitle title={copy.title} subtitle={copy.body} />
+      {(kind === "conflict" || kind === "catalog" || kind === "generic") ? (
+        <View style={styles.ctaColumn}>
+          <SecondaryButton
+            icon="chart"
+            label={zhTW.mobile.mealIdentificationFinalization.checkTodayIntake}
+            onPress={onCheckTodayIntake}
+          />
+        </View>
+      ) : null}
+    </Card>
   );
 }
 
