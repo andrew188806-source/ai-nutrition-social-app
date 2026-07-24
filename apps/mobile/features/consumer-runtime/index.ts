@@ -3,5 +3,7 @@ export * from "./ConsumerRuntimeProvider";
 export * from "./consumerMealWriteMapper";
 export * from "./consumerMealWriteOperationStore";
 export * from "./consumerMealWriteRuntime";
+export * from "./consumerMealIdentificationFinalizationOperationStore";
+export * from "./consumerMealIdentificationFinalizationRuntime";
 export * from "./consumerPlannedMealMapper";
 export * from "./consumerPlannedMealRuntime";

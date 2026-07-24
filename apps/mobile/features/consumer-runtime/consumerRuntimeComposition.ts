@@ -25,8 +25,13 @@ import type { ConsumerPlannedMeal, ConsumerPlannedMealsReadResult } from "../con
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
 import type { ConsumerPlannedMealV2Service } from "../consumer-meals/consumerPlannedMealV2Service";
 import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseMealContracts";
+import { getConsumerMealIdentificationFinalizationRuntimeFlags } from "../meal-identification-finalization/featureFlags";
+import type { ConsumerMealIdentificationFinalizationRuntimeFlags } from "../meal-identification-finalization/types";
+import type { SupabaseConsumerMealIdentificationFinalizationClientLike } from "../meal-identification-finalization/supabaseMealIdentificationFinalizationContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
+import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
+import { ConsumerMealIdentificationFinalizationRuntime } from "./consumerMealIdentificationFinalizationRuntime";
 import { ConsumerPlannedMealOperationStore } from "./consumerPlannedMealOperationStore";
 import { ConsumerPlannedMealRuntime } from "./consumerPlannedMealRuntime";
 
@@ -269,6 +274,7 @@ export type ConsumerRuntimeComposition = {
   flags: ConsumerRuntimeFlags;
   controller: ConsumerAuthProfileRuntime;
   mealWriteRuntime: ConsumerMealWriteRuntime;
+  mealIdentificationFinalizationRuntime: ConsumerMealIdentificationFinalizationRuntime;
   plannedMealRuntime: ConsumerPlannedMealRuntime;
   plannedMealService: Pick<ConsumerPlannedMealV2Service, "update" | "cancel">;
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMealsReadResult>;
@@ -287,6 +293,7 @@ export type ConsumerRuntimeCompositionOptions = {
   mealFlags?: ConsumerMealRuntimeFlags;
   operationStorage?: ConsumerAuthStorage;
   mealWriteRuntime?: ConsumerMealWriteRuntime;
+  mealIdentificationFinalizationRuntime?: ConsumerMealIdentificationFinalizationRuntime;
   plannedMealRuntime?: ConsumerPlannedMealRuntime;
   plannedMealService?: ConsumerPlannedMealV2Service;
   overviewService?: ConsumerTodayIntakeOverviewService;
@@ -318,6 +325,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         storage,
         mealFlags: options.mealFlags,
         mealWriteRuntime: options.mealWriteRuntime,
+        mealIdentificationFinalizationRuntime: options.mealIdentificationFinalizationRuntime,
         plannedMealRuntime: options.plannedMealRuntime,
         plannedMealService: options.plannedMealService,
         overviewService: options.overviewService
@@ -356,6 +364,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         mealClient: client as unknown as SupabaseConsumerMealClientLike,
         mealFlags: options.mealFlags,
         mealWriteRuntime: options.mealWriteRuntime,
+        mealIdentificationFinalizationRuntime: options.mealIdentificationFinalizationRuntime,
         plannedMealRuntime: options.plannedMealRuntime,
         plannedMealService: options.plannedMealService,
         overviewService: options.overviewService
@@ -404,6 +413,7 @@ function createMealRuntimeParts(input: {
   mealClient?: SupabaseConsumerMealClientLike;
   mealFlags?: ConsumerMealRuntimeFlags;
   mealWriteRuntime?: ConsumerMealWriteRuntime;
+  mealIdentificationFinalizationRuntime?: ConsumerMealIdentificationFinalizationRuntime;
   plannedMealRuntime?: ConsumerPlannedMealRuntime;
   plannedMealService?: ConsumerPlannedMealV2Service;
   overviewService?: ConsumerTodayIntakeOverviewService;
@@ -418,6 +428,10 @@ function createMealRuntimeParts(input: {
     createConsumerTodayIntakeOverviewService
   } = require("../consumer-meals/factories") as typeof import("../consumer-meals/factories");
   const { ConsumerPlannedMealsService } = require("../consumer-meals/consumerPlannedMealsService") as typeof import("../consumer-meals/consumerPlannedMealsService");
+  const { createConsumerMealIdentificationFinalizationRepository } =
+    require("../meal-identification-finalization/factories") as typeof import("../meal-identification-finalization/factories");
+  const { ConsumerMealIdentificationFinalizationService } =
+    require("../meal-identification-finalization/consumerMealIdentificationFinalizationService") as typeof import("../meal-identification-finalization/consumerMealIdentificationFinalizationService");
   const rawMealFlags = input.mealFlags ?? getConsumerMealRuntimeFlags();
   if (rawMealFlags.authSource !== input.authFlags.authSource) return null;
   const writeFlags = normalizeMealWriteFlags(rawMealFlags, input.authFlags.authSource);
@@ -429,6 +443,26 @@ function createMealRuntimeParts(input: {
     service: createConsumerMealRecordWriteService(writeFlags, dependencies),
     operationStore: new ConsumerMealWriteOperationStore(input.storage)
   });
+  const finalizationFlags = normalizeMealIdentificationFinalizationFlags(
+    getConsumerMealIdentificationFinalizationRuntimeFlags(),
+    input.authFlags.authSource
+  );
+  const mealIdentificationFinalizationRepository = createConsumerMealIdentificationFinalizationRepository(
+    finalizationFlags,
+    {
+      authPort: input.authPort,
+      finalizationClient: input.mealClient as unknown as SupabaseConsumerMealIdentificationFinalizationClientLike
+    }
+  );
+  const mealIdentificationFinalizationRuntime =
+    input.mealIdentificationFinalizationRuntime ??
+    new ConsumerMealIdentificationFinalizationRuntime({
+      service: new ConsumerMealIdentificationFinalizationService({
+        authPort: input.authPort,
+        repository: mealIdentificationFinalizationRepository
+      }),
+      operationStore: new ConsumerMealIdentificationFinalizationOperationStore(input.storage)
+    });
   const basePlannedMealsService = createConsumerPlannedMealsService(overviewFlags, dependencies);
   const basePlannedMealService = input.plannedMealService ?? createConsumerPlannedMealV2Service(plannedWriteFlags, dependencies);
   const trackedRows = new Map<string, Map<string, ConsumerPlannedMeal>>();
@@ -476,6 +510,7 @@ function createMealRuntimeParts(input: {
   });
   return {
     mealWriteRuntime,
+    mealIdentificationFinalizationRuntime,
     plannedMealRuntime,
     plannedMealService,
     getPlannedMeals: (plannedDate: string) => plannedMealsService.getCurrentUserPlannedMeals({ plannedDate }),
@@ -484,6 +519,16 @@ function createMealRuntimeParts(input: {
       { ...dependencies, plannedMealsService, timezone }
     )
   };
+}
+
+function normalizeMealIdentificationFinalizationFlags(
+  flags: ConsumerMealIdentificationFinalizationRuntimeFlags,
+  authSource: ConsumerRuntimeFlags["authSource"]
+): ConsumerMealIdentificationFinalizationRuntimeFlags {
+  if (authSource === "mock") {
+    return { source: "mock", issues: [] };
+  }
+  return flags;
 }
 
 function normalizeAuthFlagsForMealWrite(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {

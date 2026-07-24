@@ -13,6 +13,10 @@ import {
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
 import type { ConsumerAnalysisMealWriteDraft } from "./consumerMealWriteMapper";
 import type { ConsumerMealWriteRuntimeState } from "./consumerMealWriteRuntime";
+import type {
+  ConsumerMealIdentificationFinalizationDraft,
+  ConsumerMealIdentificationFinalizationRuntimeState
+} from "./consumerMealIdentificationFinalizationRuntime";
 import type { ConsumerPlannedMeal, ConsumerUpdatePlannedMealV2Input } from "../consumer-meals/types";
 import type { ConsumerPlannedMealDraft } from "./consumerPlannedMealMapper";
 import type { ConsumerPlannedMealRuntimeState } from "./consumerPlannedMealRuntime";
@@ -33,6 +37,10 @@ export type ConsumerRuntimeContextValue = {
   retryProfile(): Promise<boolean>;
   createMealRecord(draft: ConsumerAnalysisMealWriteDraft): Promise<ConsumerMealWriteRuntimeState>;
   retryPendingMealRecord(): Promise<ConsumerMealWriteRuntimeState>;
+  finalizeMealIdentification(
+    draft: ConsumerMealIdentificationFinalizationDraft
+  ): Promise<ConsumerMealIdentificationFinalizationRuntimeState>;
+  retryPendingMealIdentificationFinalization(): Promise<ConsumerMealIdentificationFinalizationRuntimeState>;
   createPlannedMeal(draft: ConsumerPlannedMealDraft): Promise<ConsumerPlannedMealRuntimeState>;
   retryPendingPlannedMeal(): Promise<ConsumerPlannedMealRuntimeState>;
   updatePlannedMeal(input: ConsumerUpdatePlannedMealV2Input): Promise<ConsumerPlannedMealMutationState>;
@@ -40,6 +48,7 @@ export type ConsumerRuntimeContextValue = {
   convertPlannedMeal(input: { plannedMealId: string; expectedUpdatedAt: string }): Promise<ConsumerPlannedMealRuntimeState>;
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMeal[]>;
   mealWriteState: ConsumerMealWriteRuntimeState;
+  mealIdentificationFinalizationState: ConsumerMealIdentificationFinalizationRuntimeState;
   plannedMealState: ConsumerPlannedMealRuntimeState;
   plannedMealMutationState: ConsumerPlannedMealMutationState;
   consumerDataRevision: number;
@@ -65,6 +74,17 @@ const unavailableMealWriteState: ConsumerMealWriteRuntimeState = {
   pending: false,
   mealDataRevision: 0
 };
+const unavailableMealIdentificationFinalizationState: ConsumerMealIdentificationFinalizationRuntimeState = {
+  status: "error",
+  errorCode: "finalization_configuration_invalid",
+  mealRecordId: null,
+  mealRecordItemId: null,
+  mealAnalysisId: null,
+  mealIdentificationFinalizationId: null,
+  mealCorrectionIds: null,
+  pending: false,
+  finalizationDataRevision: 0
+};
 const unavailablePlannedMealState: ConsumerPlannedMealRuntimeState = {
   status: "error", pendingKind: null, errorCode: "configuration_error", plannedMealId: null, mealRecordId: null, revision: 0
 };
@@ -76,11 +96,16 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
   const composition = compositionRef.current;
   const controller = composition.ok ? composition.value.controller : null;
   const mealWriteRuntime = composition.ok ? composition.value.mealWriteRuntime : null;
+  const mealIdentificationFinalizationRuntime = composition.ok ? composition.value.mealIdentificationFinalizationRuntime : null;
   const plannedMealRuntime = composition.ok ? composition.value.plannedMealRuntime : null;
   const [state, setState] = useState<ConsumerRuntimeState>(() => controller?.getState() ?? unavailableState);
   const runtimeStateRef = useRef(state);
   runtimeStateRef.current = state;
   const [mealWriteState, setMealWriteState] = useState<ConsumerMealWriteRuntimeState>(() => mealWriteRuntime?.getState() ?? unavailableMealWriteState);
+  const [mealIdentificationFinalizationState, setMealIdentificationFinalizationState] =
+    useState<ConsumerMealIdentificationFinalizationRuntimeState>(
+      () => mealIdentificationFinalizationRuntime?.getState() ?? unavailableMealIdentificationFinalizationState
+    );
   const [plannedMealState, setPlannedMealState] = useState<ConsumerPlannedMealRuntimeState>(() => plannedMealRuntime?.getState() ?? unavailablePlannedMealState);
   const [plannedMealMutationState, setPlannedMealMutationState] = useState<ConsumerPlannedMealMutationState>(idlePlannedMealMutationState);
   const [plannedMealMutationRevision, setPlannedMealMutationRevision] = useState(0);
@@ -101,6 +126,11 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
   }, [mealWriteRuntime]);
 
   useEffect(() => {
+    if (!mealIdentificationFinalizationRuntime) return;
+    return mealIdentificationFinalizationRuntime.subscribe(setMealIdentificationFinalizationState);
+  }, [mealIdentificationFinalizationRuntime]);
+
+  useEffect(() => {
     if (!plannedMealRuntime) return;
     return plannedMealRuntime.subscribe(setPlannedMealState);
   }, [plannedMealRuntime]);
@@ -109,6 +139,11 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
     if (!mealWriteRuntime) return;
     void mealWriteRuntime.setActor(state.actorKey, state.actorGeneration);
   }, [mealWriteRuntime, state.actorGeneration, state.actorKey]);
+
+  useEffect(() => {
+    if (!mealIdentificationFinalizationRuntime) return;
+    void mealIdentificationFinalizationRuntime.setActor(state.actorKey, state.actorGeneration);
+  }, [mealIdentificationFinalizationRuntime, state.actorGeneration, state.actorKey]);
 
   useEffect(() => {
     if (!plannedMealRuntime) return;
@@ -146,6 +181,33 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
         return Promise.resolve(mealWriteRuntime?.reject("authentication_required") ?? unavailableMealWriteState);
       }
       return mealWriteRuntime.retry({ actorKey: state.actorKey, actorGeneration: state.actorGeneration });
+    },
+    finalizeMealIdentification: (draft) => {
+      if (!mealIdentificationFinalizationRuntime || !state.actorKey || state.authState.status !== "signedIn") {
+        return Promise.resolve(
+          mealIdentificationFinalizationRuntime?.reject("finalization_authentication_required") ??
+            unavailableMealIdentificationFinalizationState
+        );
+      }
+      if (!isValidIanaTimezone(profileTimezone)) {
+        return Promise.resolve(mealIdentificationFinalizationRuntime.reject("profile_timezone_required"));
+      }
+      return mealIdentificationFinalizationRuntime.submit(
+        { actorKey: state.actorKey, actorGeneration: state.actorGeneration, timezone: profileTimezone },
+        draft
+      );
+    },
+    retryPendingMealIdentificationFinalization: () => {
+      if (!mealIdentificationFinalizationRuntime || !state.actorKey || state.authState.status !== "signedIn") {
+        return Promise.resolve(
+          mealIdentificationFinalizationRuntime?.reject("finalization_authentication_required") ??
+            unavailableMealIdentificationFinalizationState
+        );
+      }
+      return mealIdentificationFinalizationRuntime.retry({
+        actorKey: state.actorKey,
+        actorGeneration: state.actorGeneration
+      });
     },
     createPlannedMeal: (draft) => {
       if (!plannedMealRuntime || !state.actorKey || state.authState.status !== "signedIn") return Promise.resolve(unavailablePlannedMealState);
@@ -204,12 +266,35 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
       } catch { return []; }
     },
     mealWriteState,
+    mealIdentificationFinalizationState,
     plannedMealState,
     plannedMealMutationState,
-    consumerDataRevision: mealWriteState.mealDataRevision + plannedMealState.revision + plannedMealMutationRevision,
-    mealDataRevision: mealWriteState.mealDataRevision + plannedMealState.revision + plannedMealMutationRevision,
+    consumerDataRevision:
+      mealWriteState.mealDataRevision +
+      mealIdentificationFinalizationState.finalizationDataRevision +
+      plannedMealState.revision +
+      plannedMealMutationRevision,
+    mealDataRevision:
+      mealWriteState.mealDataRevision +
+      mealIdentificationFinalizationState.finalizationDataRevision +
+      plannedMealState.revision +
+      plannedMealMutationRevision,
     overviewService
-  }), [composition, controller, mealWriteRuntime, mealWriteState, overviewService, plannedMealMutationRevision, plannedMealMutationState, plannedMealRuntime, plannedMealState, profileTimezone, state]);
+  }), [
+    composition,
+    controller,
+    mealWriteRuntime,
+    mealWriteState,
+    mealIdentificationFinalizationRuntime,
+    mealIdentificationFinalizationState,
+    overviewService,
+    plannedMealMutationRevision,
+    plannedMealMutationState,
+    plannedMealRuntime,
+    plannedMealState,
+    profileTimezone,
+    state
+  ]);
 
   return <ConsumerRuntimeContext.Provider value={value}>{children}</ConsumerRuntimeContext.Provider>;
 }
