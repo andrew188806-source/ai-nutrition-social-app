@@ -5,7 +5,7 @@ import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, ScanningBar, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getPlannedDinnerEstimateOptions, type DinnerEstimate } from "../features/analysis/analysisMealRecordStore";
-import { resetAnalysisSession } from "../features/analysis";
+import { beginAnalysisCapture, resetAnalysisSession } from "../features/analysis";
 import { type PlannedMeal } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 
@@ -56,8 +56,10 @@ export default function MealPhotoScreen() {
 
   function startFakeAnalysis(nextSource: ImageSource) {
     // TODO: Replace fake demo analysis with real AI image analysis API.
-    // A new photo means a new AI Analysis session: clear any previously completed analysis.
-    resetAnalysisSession();
+    // A new photo means a new AI Analysis session: clear any previously completed analysis,
+    // and record how this photo was obtained (camera vs. gallery) so analysis.tsx knows
+    // whether to show the current/post-hoc confirmation (camera: never; gallery: always).
+    beginAnalysisCapture(nextSource === "camera" ? "camera" : "gallery");
     setSource(nextSource);
     setIsSheetOpen(false);
     setIsAnalyzing(true);

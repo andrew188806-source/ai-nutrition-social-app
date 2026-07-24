@@ -12,6 +12,11 @@ import {
   buildAnalysisMealIdentificationFinalizationDraft,
   mapMealIdentificationFinalizationUiError
 } from "../features/analysis/mealIdentificationFinalizationAdapter";
+import {
+  MEAL_OCCURRENCE_TIME_OPTIONS,
+  buildRecentMealDateOptions,
+  filterMealOccurrenceTimeOptions
+} from "../features/analysis/mealOccurrenceTime";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getNextMealCandidateCount } from "../features/next-meal-prototype";
@@ -88,6 +93,13 @@ export default function AnalysisScreen() {
   const initialMealPeriod = typeof params.mealSlot === "string" ? params.mealSlot : session.selectedMealPeriod || defaultMealPeriod;
   const [selectedMealPeriod, setSelectedMealPeriod] = useState(initialMealPeriod);
   const isAnalysisConfirmed = analysis.matchState === "confirmed";
+  const profileTimezone =
+    consumerRuntime.state.profileState.status === "available"
+      ? consumerRuntime.state.profileState.profile.timezone
+      : consumerRuntime.mode === "mock"
+        ? "Asia/Taipei"
+        : "";
+  const canFinalize = Boolean(analysis.mealSource) && analysis.recordTimingConfirmed && Boolean(analysis.occurredAt);
   // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
   // Reused across remounts within the same AI Analysis session (see analysisSessionStore).
   const [mealId] = useState(() => session.mealId || generateMealId());
@@ -160,13 +172,20 @@ export default function AnalysisScreen() {
     ) {
       return;
     }
+    if (!canFinalize || !analysis.occurredAt) {
+      // Required meal source and/or actual meal time selection is incomplete — this
+      // mirrors the existing "adapter rejected the draft" error surface rather than
+      // silently submitting with a guessed source or timing.
+      setLocalFinalizationErrorCode("finalization_invalid_input");
+      return;
+    }
     const adapted = buildAnalysisMealIdentificationFinalizationDraft({
       selectedMealPeriod,
       restaurantName: analysis.restaurantName,
       mealName: analysis.mealName,
       sourceContext: analysis.sourceContext,
-      recordTiming: "current",
-      occurredAt: analysisObservedAt,
+      recordTiming: analysis.recordTiming,
+      occurredAt: analysis.occurredAt,
       selectedCandidate: analysis.selectedCandidate,
       catalogConfirmed: analysis.matchState === "confirmed",
       isSelfCooked: analysis.isSelfCooked,
@@ -303,27 +322,19 @@ export default function AnalysisScreen() {
                 <Chip key={period} label={period} active={selectedMealPeriod === period} onPress={() => setSelectedMealPeriod(period)} />
               ))}
             </View>
-            <View style={styles.mealSourceRow}>
-              <Pressable style={[styles.mealSourceCard, !analysis.isSelfCooked && styles.mealSourceCardActive]} onPress={() => analysis.setMode("restaurant")}>
-                {!analysis.isSelfCooked ? (
-                  <View style={styles.mealSourceCheck}>
-                    <Icon name="check" size={12} color="#FFFFFF" />
-                  </View>
-                ) : null}
-                <Text style={[styles.mealSourceTitle, !analysis.isSelfCooked && styles.mealSourceTitleActive]}>{zhTW.mobile.analysis.restaurantMode}</Text>
-                <Text style={styles.mealSourceSubtitle}>{zhTW.mobile.analysis.restaurantModeSubtitle}</Text>
-              </Pressable>
-              <Pressable style={[styles.mealSourceCard, analysis.isSelfCooked && styles.mealSourceCardActive]} onPress={() => analysis.setMode("selfCooked")}>
-                {analysis.isSelfCooked ? (
-                  <View style={styles.mealSourceCheck}>
-                    <Icon name="check" size={12} color="#FFFFFF" />
-                  </View>
-                ) : null}
-                <Text style={[styles.mealSourceTitle, analysis.isSelfCooked && styles.mealSourceTitleActive]}>{zhTW.mobile.analysis.selfCookedMode}</Text>
-                <Text style={styles.mealSourceSubtitle}>{zhTW.mobile.analysis.selfCookedModeSubtitle}</Text>
-              </Pressable>
-            </View>
           </SnowCard>
+
+          <SnowCard>
+            <SnowSectionHeader title={zhTW.mobile.analysis.mealSourceTitle} subtitle={zhTW.mobile.analysis.mealSourceSubtitle} />
+            <View style={styles.chipRow}>
+              <Chip label={zhTW.mobile.analysis.mealSourceDineIn} active={analysis.mealSource === "dine_in"} onPress={() => analysis.setMealSource("dine_in")} />
+              <Chip label={zhTW.mobile.analysis.mealSourceTakeout} active={analysis.mealSource === "takeout"} onPress={() => analysis.setMealSource("takeout")} />
+              <Chip label={zhTW.mobile.analysis.mealSourceSelfCooked} active={analysis.mealSource === "self_cooked"} onPress={() => analysis.setMealSource("self_cooked")} />
+            </View>
+            {!analysis.mealSource ? <Text style={styles.stateText}>{zhTW.mobile.analysis.mealSourceRequiredHint}</Text> : null}
+          </SnowCard>
+
+          <RecordTimingSection analysis={analysis} timezone={profileTimezone} />
 
           {analysis.isSelfCooked ? (
             <SelfCookedIntro nutritionSummary={analysis.nutritionSummary} />
@@ -333,7 +344,7 @@ export default function AnalysisScreen() {
               mealName={analysis.mealName}
               guiltSharingResult={guiltSharingResult}
               onOpenMealLog={finalizeMealIdentificationFromExplicitGesture}
-              finalizing={consumerRuntime.mealIdentificationFinalizationState.status === "submitting"}
+              finalizing={consumerRuntime.mealIdentificationFinalizationState.status === "submitting" || !canFinalize}
               onOpenNutritionRecord={() => router.push("/meal-log")}
               onGuiltShare={handleGuiltSharingConfirm}
               nextMealRecommendations={nextMealRecommendations}
@@ -588,6 +599,158 @@ function MealIdentificationFinalizationErrorCard({
       ) : null}
     </Card>
   );
+}
+
+// Shows and lets the user edit meal source timing before finalization (Section E of
+// MI-E-B2). Camera-captured sessions never render a current/post-hoc toggle at all —
+// recordTiming stays "current" with no way to switch, matching the frozen product rule
+// that camera flow cannot accidentally become post_hoc.
+function RecordTimingSection({
+  analysis,
+  timezone
+}: {
+  analysis: ReturnType<typeof useAnalysisCorrectionState>;
+  timezone: string;
+}) {
+  const copy = zhTW.mobile.mealRecordTiming;
+
+  if (analysis.captureMethod === "camera") {
+    return (
+      <SnowCard>
+        <SnowSectionHeader title={copy.actualMealTimeTitle} />
+        <Text style={styles.stateText}>{copy.currentSummaryLabel}</Text>
+      </SnowCard>
+    );
+  }
+
+  if (analysis.recordTiming === "post_hoc" && !analysis.recordTimingConfirmed) {
+    return <PostHocPicker analysis={analysis} timezone={timezone} />;
+  }
+
+  if (!analysis.recordTimingConfirmed) {
+    return (
+      <SnowCard tone="ai">
+        <SnowSectionHeader title={copy.confirmTitle} subtitle={copy.confirmBody} />
+        <View style={styles.ctaColumn}>
+          <PrimaryButton icon="check" label={copy.currentOption} onPress={analysis.confirmRecordTimingCurrent} />
+          <SecondaryButton icon="clock" label={copy.postHocOption} onPress={analysis.beginRecordTimingPostHoc} />
+        </View>
+      </SnowCard>
+    );
+  }
+
+  return (
+    <SnowCard>
+      <SnowSectionHeader title={copy.actualMealTimeTitle} />
+      <Text style={styles.stateText}>
+        {analysis.recordTiming === "current"
+          ? copy.currentSummaryLabel
+          : `${copy.postHocSummaryLabel}：${formatMealOccurrenceDisplay(analysis.occurredAt, timezone)}`}
+      </Text>
+      <View style={styles.ctaRow2}>
+        <View style={styles.ctaItem}>
+          <SecondaryButton icon="edit" label={copy.editLabel} onPress={analysis.beginRecordTimingPostHoc} />
+        </View>
+        {analysis.recordTiming === "post_hoc" ? (
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="clock" label={copy.cancelPostHocLabel} onPress={analysis.confirmRecordTimingCurrent} />
+          </View>
+        ) : null}
+      </View>
+    </SnowCard>
+  );
+}
+
+function PostHocPicker({
+  analysis,
+  timezone
+}: {
+  analysis: ReturnType<typeof useAnalysisCorrectionState>;
+  timezone: string;
+}) {
+  const copy = zhTW.mobile.mealRecordTiming;
+  // Stable for the lifetime of this picker mount so the chip lists don't shift under the
+  // user's finger while they're mid-selection.
+  const [referenceNow] = useState(() => new Date());
+  const dateOptions = useMemo(() => buildRecentMealDateOptions(referenceNow, timezone), [referenceNow, timezone]);
+  const [selectedDate, setSelectedDate] = useState(analysis.postHocDateKey ?? dateOptions[0]?.key ?? "");
+  const timeOptions = useMemo(
+    () => filterMealOccurrenceTimeOptions(selectedDate, MEAL_OCCURRENCE_TIME_OPTIONS, referenceNow, timezone),
+    [selectedDate, referenceNow, timezone]
+  );
+  const [selectedTime, setSelectedTime] = useState(analysis.postHocTimeKey ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function confirm() {
+    if (!selectedDate || !selectedTime) {
+      setError(copy.missingSelectionHint);
+      return;
+    }
+    const ok = analysis.setPostHocMealTime(selectedDate, selectedTime, timezone);
+    if (!ok) {
+      setError(copy.futureTimeHint);
+      return;
+    }
+    setError(null);
+  }
+
+  return (
+    <SnowCard tone="ai">
+      <SnowSectionHeader title={copy.actualMealTimeTitle} subtitle={copy.actualMealTimeBody} />
+      <Text style={styles.formLabel}>{copy.dateLabel}</Text>
+      <View style={styles.chipRow}>
+        {dateOptions.map((option) => (
+          <Chip
+            key={option.key}
+            label={option.label}
+            active={selectedDate === option.key}
+            onPress={() => {
+              setSelectedDate(option.key);
+              setSelectedTime("");
+              setError(null);
+            }}
+          />
+        ))}
+      </View>
+      <Text style={styles.formLabel}>{copy.timeLabel}</Text>
+      <View style={styles.chipRow}>
+        {timeOptions.map((option) => (
+          <Chip
+            key={option.key}
+            label={option.label}
+            active={selectedTime === option.key}
+            onPress={() => {
+              setSelectedTime(option.key);
+              setError(null);
+            }}
+          />
+        ))}
+      </View>
+      {error ? <Text style={styles.disclaimer}>{error}</Text> : null}
+      <View style={styles.ctaColumn}>
+        <PrimaryButton icon="check" label={copy.confirmPostHocCta} onPress={confirm} />
+        <SecondaryButton icon="clock" label={copy.cancelPostHocLabel} onPress={analysis.confirmRecordTimingCurrent} />
+      </View>
+    </SnowCard>
+  );
+}
+
+function formatMealOccurrenceDisplay(iso: string | null, timezone: string): string {
+  if (!iso) return "";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat("zh-TW", {
+      timeZone: timezone || undefined,
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(parsed);
+  } catch {
+    return parsed.toLocaleString();
+  }
 }
 
 function NextMealRecommendationCarousel({
