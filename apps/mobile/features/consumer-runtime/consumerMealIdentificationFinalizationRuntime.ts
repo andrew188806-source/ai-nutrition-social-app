@@ -158,11 +158,15 @@ export class ConsumerMealIdentificationFinalizationRuntime {
     try {
       const submittedAt = this.options.clock?.now() ?? new Date();
       const clientRequestId = (this.options.uuidFactory ?? secureUuidV4)();
+      const occurredAt = new Date(draft.finalization.occurredAt);
+      if (Number.isNaN(occurredAt.getTime())) {
+        throw new Error("Actual meal time is invalid.");
+      }
       const input: FinalizeCurrentUserMealIdentificationInput = {
         clientRequestId,
         mealType: draft.mealType,
-        occurredAt: submittedAt.toISOString(),
-        mealDate: toDateKeyInTimeZone(submittedAt, timezone),
+        occurredAt: draft.finalization.occurredAt,
+        mealDate: toDateKeyInTimeZone(occurredAt, timezone),
         timezone,
         finalization: draft.finalization
       };

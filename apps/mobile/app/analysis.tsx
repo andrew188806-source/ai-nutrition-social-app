@@ -165,6 +165,8 @@ export default function AnalysisScreen() {
       restaurantName: analysis.restaurantName,
       mealName: analysis.mealName,
       sourceContext: analysis.sourceContext,
+      recordTiming: "current",
+      occurredAt: analysisObservedAt,
       selectedCandidate: analysis.selectedCandidate,
       catalogConfirmed: analysis.matchState === "confirmed",
       isSelfCooked: analysis.isSelfCooked,

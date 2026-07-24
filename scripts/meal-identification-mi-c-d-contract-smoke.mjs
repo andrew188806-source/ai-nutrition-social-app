@@ -126,6 +126,8 @@ function catalogCandidateInput() {
 function confirmedFinalizationInput() {
   return {
     version: meal.MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+    recordTiming: "current",
+    occurredAt: "2026-07-25T09:05:00.000Z",
     originalAnalysis: baseOriginalAnalysis(),
     selection: {
       kind: "catalog_selection",
@@ -142,6 +144,8 @@ function unresolvedFinalizationInput(reason) {
   const isSelfCooked = reason === "self_cooked";
   return {
     version: meal.MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+    recordTiming: "current",
+    occurredAt: "2026-07-25T09:05:00.000Z",
     originalAnalysis: baseOriginalAnalysis(),
     selection: {
       kind: "personal_unresolved_selection",

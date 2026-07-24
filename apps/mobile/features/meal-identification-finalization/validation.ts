@@ -38,6 +38,9 @@ export function validateFinalizeCurrentUserMealIdentificationInput(
   if (!revalidated.ok) {
     return failure(`Meal identification finalization command is invalid: ${revalidated.error.code}.`);
   }
+  if (revalidated.value.occurredAt !== input.occurredAt) {
+    return failure("Meal identification finalization occurredAt must match the canonical finalization command.");
+  }
   return { ok: true, value: { ...input, finalization: revalidated.value } };
 }
 

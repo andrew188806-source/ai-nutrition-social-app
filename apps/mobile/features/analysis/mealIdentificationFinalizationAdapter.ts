@@ -4,6 +4,8 @@ import {
   MEAL_IDENTIFICATION_FINALIZATION_VERSION,
   type MealIdentificationCandidate,
   type MealIdentificationFinalizationError,
+  type MealOccurrenceTimestamp,
+  type MealRecordTiming,
   type MealSourceContext
 } from "../meal-identification";
 import type { NutritionSummary } from "./types";
@@ -15,6 +17,8 @@ export type AnalysisMealIdentificationFinalizationAdapterInput = Readonly<{
   restaurantName: string;
   mealName: string;
   sourceContext: MealSourceContext;
+  recordTiming: MealRecordTiming;
+  occurredAt: MealOccurrenceTimestamp;
   selectedCandidate: MealIdentificationCandidate | null;
   catalogConfirmed: boolean;
   isSelfCooked: boolean;
@@ -45,6 +49,8 @@ export function buildAnalysisMealIdentificationFinalizationDraft(
 ): AnalysisMealIdentificationFinalizationAdapterResult {
   const result = buildMealIdentificationFinalization({
     version: MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+    recordTiming: input.recordTiming,
+    occurredAt: input.occurredAt,
     originalAnalysis:
       input.analysisAvailability === "available"
         ? {

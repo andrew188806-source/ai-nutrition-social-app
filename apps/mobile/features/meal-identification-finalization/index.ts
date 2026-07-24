@@ -3,6 +3,7 @@ export * from "./errors";
 export * from "./factories";
 export * from "./featureFlags";
 export * from "./mealIdentificationFinalizationMappers";
+export * from "./mealIdentificationFinalizationReadMapper";
 export * from "./ports";
 export * from "./types";
 export * from "./validation";

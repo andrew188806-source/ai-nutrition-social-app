@@ -91,6 +91,8 @@ const base = {
   restaurantName: "好初健康碗",
   mealName: "雞胸碗",
   sourceContext: "dine_in",
+  recordTiming: "current",
+  occurredAt: "2026-07-25T09:05:00.000Z",
   selectedCandidate: candidate,
   catalogConfirmed: true,
   isSelfCooked: false,

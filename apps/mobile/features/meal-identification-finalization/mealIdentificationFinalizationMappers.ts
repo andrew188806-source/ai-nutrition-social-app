@@ -36,7 +36,7 @@ export function buildFinalizeMealIdentificationRpcArgs(
     p_occurred_at: input.occurredAt,
     p_meal_date: input.mealDate,
     p_timezone: input.timezone,
-    p_finalization: input.finalization as unknown as Record<string, unknown>
+    p_finalization: input.finalization
   };
 }
 

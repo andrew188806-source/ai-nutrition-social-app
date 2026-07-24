@@ -5,8 +5,13 @@ export type MealSourceContext =
   | "takeout"
   | "delivery"
   | "self_cooked"
-  | "post_hoc"
   | "unknown";
+
+export type LegacyMealSourceContext = MealSourceContext | "post_hoc";
+
+export type MealRecordTiming = "current" | "post_hoc";
+
+export type MealOccurrenceTimestamp = string;
 
 export type CatalogMealCandidateIdentity = {
   restaurantId: string;

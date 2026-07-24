@@ -95,6 +95,8 @@ const originalAnalysis = {
 
 const baseInput = {
   version: MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+  recordTiming: "current",
+  occurredAt: "2026-07-24T04:05:00.000Z",
   originalAnalysis,
   selection: {
     kind: "catalog_selection",
@@ -245,6 +247,8 @@ try {
     const isSelfCooked = reason === "self_cooked";
     const unresolvedInput = {
       version: MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+      recordTiming: "current",
+      occurredAt: "2026-07-24T04:05:00.000Z",
       originalAnalysis:
         reason === "manual" ? clone(originalAnalysis) : clone(unavailableOriginal),
       selection: {
@@ -398,6 +402,8 @@ try {
 
   const unresolvedWithIdentity = {
     version: MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+    recordTiming: "current",
+    occurredAt: "2026-07-24T04:05:00.000Z",
     originalAnalysis: clone(unavailableOriginal),
     selection: {
       kind: "personal_unresolved_selection",
@@ -450,7 +456,7 @@ try {
   );
 
   const unsupportedVersion = clone(baseInput);
-  unsupportedVersion.version = "meal-identification-finalization-v2";
+  unsupportedVersion.version = "meal-identification-finalization-v999";
   const unsupportedVersionResult =
     buildMealIdentificationFinalization(unsupportedVersion);
   expect(

@@ -6,6 +6,8 @@ import type { ConsumerAnalysisMealWriteDraft } from "../consumer-runtime/consume
 import type {
   CatalogMealCandidateIdentity,
   CatalogMealIdentificationCandidate,
+  MealOccurrenceTimestamp,
+  MealRecordTiming,
   MealSourceContext,
   PersonalUnresolvedMealCandidate,
   PersonalUnresolvedMealIdentity,
@@ -13,7 +15,7 @@ import type {
 } from "./types";
 
 export const MEAL_IDENTIFICATION_FINALIZATION_VERSION =
-  "meal-identification-finalization-v1" as const;
+  "meal-identification-finalization-v2" as const;
 
 export type MealIdentificationFinalizationVersion =
   typeof MEAL_IDENTIFICATION_FINALIZATION_VERSION;
@@ -91,6 +93,8 @@ export type MealIdentificationMealWriteProjectionInput = Readonly<{
 
 export type MealIdentificationFinalizationInput = Readonly<{
   version: MealIdentificationFinalizationVersion;
+  recordTiming: MealRecordTiming;
+  occurredAt: MealOccurrenceTimestamp;
   originalAnalysis: MealIdentificationOriginalAnalysisSnapshot;
   selection: MealIdentificationFinalSelectionInput;
   corrections: readonly MealIdentificationCorrectionEventInput[];
@@ -99,6 +103,8 @@ export type MealIdentificationFinalizationInput = Readonly<{
 
 export type MealIdentificationFinalizationCommand = Readonly<{
   version: MealIdentificationFinalizationVersion;
+  recordTiming: MealRecordTiming;
+  occurredAt: MealOccurrenceTimestamp;
   originalAnalysis: MealIdentificationOriginalAnalysisSnapshot;
   selection: MealIdentificationFinalSelection;
   corrections: readonly MealIdentificationCorrectionEvent[];
@@ -113,6 +119,8 @@ export type MealIdentificationFinalizationErrorCode =
   | "invalid_catalog_identity"
   | "invalid_unresolved_reason"
   | "unresolved_identity_present"
+  | "invalid_record_timing"
+  | "invalid_occurred_at"
   | "invalid_correction_event"
   | "invalid_meal_write_projection"
   | "semantic_conflict";
@@ -140,7 +148,6 @@ const sourceContexts = new Set<MealSourceContext>([
   "takeout",
   "delivery",
   "self_cooked",
-  "post_hoc",
   "unknown"
 ]);
 
@@ -177,6 +184,15 @@ export function buildMealIdentificationFinalization(
     return failure("unsupported_version", "Finalization contract version is missing or unsupported.");
   }
 
+  const recordTiming = parseRecordTiming(input.recordTiming);
+  if (!recordTiming) {
+    return failure("invalid_record_timing", "Record timing must be current or post_hoc.");
+  }
+  const occurredAt = parseRequiredTimestamp(input.occurredAt);
+  if (!occurredAt) {
+    return failure("invalid_occurred_at", "Actual meal time must be a valid explicit timestamp.");
+  }
+
   const originalAnalysis = parseOriginalAnalysis(input.originalAnalysis);
   if (!originalAnalysis.ok) return originalAnalysis;
 
@@ -198,6 +214,8 @@ export function buildMealIdentificationFinalization(
   return success(
     deepFreeze({
       version: MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+      recordTiming,
+      occurredAt,
       originalAnalysis: originalAnalysis.value,
       selection: selection.value,
       corrections: corrections.value,
@@ -214,6 +232,15 @@ export function validateMealIdentificationFinalizationCommand(
   }
   if (command.version !== MEAL_IDENTIFICATION_FINALIZATION_VERSION) {
     return failure("unsupported_version", "Finalization command version is missing or unsupported.");
+  }
+
+  const recordTiming = parseRecordTiming(command.recordTiming);
+  if (!recordTiming) {
+    return failure("invalid_record_timing", "Record timing must be current or post_hoc.");
+  }
+  const occurredAt = parseRequiredTimestamp(command.occurredAt);
+  if (!occurredAt) {
+    return failure("invalid_occurred_at", "Actual meal time must be a valid explicit timestamp.");
   }
 
   const originalAnalysis = parseOriginalAnalysis(command.originalAnalysis);
@@ -237,6 +264,8 @@ export function validateMealIdentificationFinalizationCommand(
   return success(
     deepFreeze({
       version: MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+      recordTiming,
+      occurredAt,
       originalAnalysis: originalAnalysis.value,
       selection: selection.value,
       corrections: corrections.value,
@@ -775,6 +804,15 @@ function parseNullableTimestamp(value: unknown): string | null | undefined {
     : undefined;
 }
 
+function parseRequiredTimestamp(value: unknown): MealOccurrenceTimestamp | null {
+  return typeof value === "string" &&
+    value.trim() === value &&
+    value.length > 0 &&
+    Number.isFinite(Date.parse(value))
+    ? value
+    : null;
+}
+
 function parseStringArray(value: unknown): readonly string[] | null {
   if (!Array.isArray(value)) return null;
   const result: string[] = [];
@@ -809,6 +847,11 @@ function parseNullableDisplayText(value: unknown): string | null | undefined {
 
 function isSourceContext(value: unknown): value is MealSourceContext {
   return typeof value === "string" && sourceContexts.has(value as MealSourceContext);
+}
+
+function parseRecordTiming(value: unknown): MealRecordTiming | null {
+  if (value === "current" || value === "post_hoc") return value;
+  return null;
 }
 
 function isUnresolvedReason(value: unknown): value is PersonalUnresolvedReason {
