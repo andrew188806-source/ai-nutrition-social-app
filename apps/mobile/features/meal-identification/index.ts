@@ -8,6 +8,30 @@ export {
   isSameCatalogCandidate,
   toTrustedCanonicalIdentity
 } from "./sourceResolutionPolicy";
+export {
+  buildMealIdentificationFinalization,
+  MEAL_IDENTIFICATION_FINALIZATION_VERSION,
+  projectMealIdentificationFinalizationToMealWrite,
+  validateMealIdentificationFinalizationCommand
+} from "./finalizationContract";
+export type {
+  MealIdentificationCatalogSelectionInput,
+  MealIdentificationConfirmedCatalogSelection,
+  MealIdentificationCorrectionEvent,
+  MealIdentificationCorrectionEventInput,
+  MealIdentificationFinalizationCommand,
+  MealIdentificationFinalizationError,
+  MealIdentificationFinalizationErrorCode,
+  MealIdentificationFinalizationInput,
+  MealIdentificationFinalizationResult,
+  MealIdentificationFinalSelection,
+  MealIdentificationFinalSelectionInput,
+  MealIdentificationFinalizationVersion,
+  MealIdentificationMealWriteProjectionInput,
+  MealIdentificationOriginalAnalysisSnapshot,
+  MealIdentificationPersonalUnresolvedSelection,
+  MealIdentificationUnresolvedSelectionInput
+} from "./finalizationContract";
 export type {
   CatalogMealCandidateIdentity,
   CatalogMealIdentificationCandidate,
