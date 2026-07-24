@@ -6,17 +6,21 @@ import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
 const baseline = "616c85c9269a60d8dd775fa760b00f8ef60a64f2";
+const miCbFrozenHead = "d9f76317f052636be7c72a209370d021aa882a98";
 const protectedMigration =
   "supabase/migrations/20260722010000_cache_restaurant_current_access_context_plan.sql";
 const migration =
   "supabase/migrations/20260724020000_consumer_meal_identification_atomic_finalization.sql";
-const candidatePaths = new Set([
+// The MI-C-B commit (miCbFrozenHead) is already frozen; this correction round
+// edits only the migration syntax and this guard on top of that commit.
+const correctionCandidatePaths = new Set([
   migration,
-  "scripts/meal-identification-mi-c-b-guard.mjs",
-  "scripts/meal-identification-mi-c-b-contract-smoke.mjs",
-  "package.json"
+  "scripts/meal-identification-mi-c-b-guard.mjs"
 ]);
-const expectedChangedPaths = new Set([...candidatePaths, protectedMigration]);
+const expectedCorrectionChangedPaths = new Set([
+  ...correctionCandidatePaths,
+  protectedMigration
+]);
 const checks = [];
 const failures = [];
 
@@ -66,16 +70,20 @@ try {
   const paths = changedPaths();
 
   record("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
-  record("HEAD remains MI-C-A Frozen", git(["rev-parse", "HEAD"]).stdout.trim() === baseline);
+  record(
+    "HEAD remains MI-C-B Frozen pending this correction",
+    git(["rev-parse", "HEAD"]).stdout.trim() === miCbFrozenHead
+  );
   record("staged diff is empty", git(["diff", "--cached", "--quiet"]).status === 0);
   record(
-    "exact four-path candidate plus protected migration",
-    paths.length === expectedChangedPaths.size &&
-      paths.every((entry) => expectedChangedPaths.has(entry))
+    "exact correction candidate plus protected migration",
+    paths.length === expectedCorrectionChangedPaths.size &&
+      paths.every((entry) => expectedCorrectionChangedPaths.has(entry))
   );
   record(
     "protected migration is excluded from candidate",
-    !candidatePaths.has(protectedMigration) && paths.includes(protectedMigration)
+    !correctionCandidatePaths.has(protectedMigration) &&
+      paths.includes(protectedMigration)
   );
 
   record(
@@ -219,9 +227,21 @@ try {
   );
   record(
     "UUID v4 request key is validated",
-    /p_client_request_id is null[\s\S]*substring\(p_client_request_id::text from 15 for 1\) <> '4'/.test(
+    /p_client_request_id is null[\s\S]*pg_catalog\.substr\(p_client_request_id::text, 15, 1\) <> '4'/.test(
       normalized
     )
+  );
+  record(
+    "migration never reintroduces schema-qualified substring special-form syntax",
+    !/pg_catalog\.substring\s*\(/.test(normalized)
+  );
+  record(
+    "legal pg_catalog.substr three-argument form is used for the UUID v4 nibble read",
+    /pg_catalog\.substr\(p_client_request_id::text, 15, 1\)/.test(normalized)
+  );
+  record(
+    "UUID v4 version nibble is still compared to character 4",
+    /pg_catalog\.substr\(p_client_request_id::text, 15, 1\) <> '4'/.test(normalized)
   );
   record(
     "confirmed identity JSON values must be strings",

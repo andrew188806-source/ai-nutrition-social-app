@@ -201,7 +201,7 @@ BEGIN
   END IF;
 
   IF p_client_request_id IS NULL
-     OR pg_catalog.substring(p_client_request_id::text FROM 15 FOR 1) <> '4' THEN
+     OR pg_catalog.substr(p_client_request_id::text, 15, 1) <> '4' THEN
     RAISE EXCEPTION 'INVALID_FINALIZATION' USING ERRCODE = '22023';
   END IF;
 
