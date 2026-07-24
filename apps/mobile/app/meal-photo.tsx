@@ -1,15 +1,15 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, ScanningBar, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getPlannedDinnerEstimateOptions, type DinnerEstimate } from "../features/analysis/analysisMealRecordStore";
-import { beginAnalysisCapture, resetAnalysisSession } from "../features/analysis";
+import { beginAnalysisCapture, resetAnalysisSession, type MealPhotoCaptureMethod } from "../features/analysis";
+import { captureMealPhotoFromCamera, pickMealPhotoFromLibrary, type MediaCaptureOutcome } from "../features/analysis/mediaCapture";
 import { type PlannedMeal } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 
-type ImageSource = "camera" | "gallery";
 type PlannedDinnerType = (typeof zhTW.mobile.plannedDinnerHelper.mealTypes)[number];
 
 const helperCopy = zhTW.mobile.plannedDinnerHelper;
@@ -23,7 +23,8 @@ export default function MealPhotoScreen() {
   const actorTimezone = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile.timezone : runtime.mode === "mock" ? "Asia/Taipei" : "";
   const [isSheetOpen, setIsSheetOpen] = useState(() => autoOpen === "true");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [source, setSource] = useState<ImageSource | null>(null);
+  const [source, setSource] = useState<MealPhotoCaptureMethod | null>(null);
+  const [isRequestingMedia, setIsRequestingMedia] = useState(false);
   const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(null);
   const [isDinnerFormOpen, setIsDinnerFormOpen] = useState(false);
   const [restaurantName, setRestaurantName] = useState(plannedDinner?.restaurantName ?? "");
@@ -44,23 +45,73 @@ export default function MealPhotoScreen() {
     setIsSheetOpen(true);
   }
 
-  function openCamera() {
-    // TODO: Connect camera image pipeline.
-    startFakeAnalysis("camera");
+  async function openCamera() {
+    if (isRequestingMedia) return;
+    setIsRequestingMedia(true);
+    try {
+      const outcome = await captureMealPhotoFromCamera();
+      handleMediaOutcome("camera", outcome);
+    } finally {
+      setIsRequestingMedia(false);
+    }
   }
 
-  function uploadFromGallery() {
-    // TODO: Connect uploaded image preprocessing.
-    startFakeAnalysis("gallery");
+  async function uploadFromGallery() {
+    if (isRequestingMedia) return;
+    setIsRequestingMedia(true);
+    try {
+      const outcome = await pickMealPhotoFromLibrary();
+      handleMediaOutcome("photo_library", outcome);
+    } finally {
+      setIsRequestingMedia(false);
+    }
   }
 
-  function startFakeAnalysis(nextSource: ImageSource) {
-    // TODO: Replace fake demo analysis with real AI image analysis API.
-    // A new photo means a new AI Analysis session: clear any previously completed analysis,
-    // and record how this photo was obtained (camera vs. gallery) so analysis.tsx knows
-    // whether to show the current/post-hoc confirmation (camera: never; gallery: always).
-    beginAnalysisCapture(nextSource === "camera" ? "camera" : "gallery");
-    setSource(nextSource);
+  function handleMediaOutcome(method: MealPhotoCaptureMethod, outcome: MediaCaptureOutcome) {
+    if (outcome.status === "captured") {
+      startRealAnalysis(method, outcome.uri, new Date(outcome.capturedAt));
+      return;
+    }
+    if (outcome.status === "canceled") {
+      // No intent, no occurredAt, nothing carried over — stay on the source-selection sheet.
+      return;
+    }
+    if (outcome.status === "permission_denied") {
+      showPermissionDeniedAlert(method, outcome.canAskAgain);
+      return;
+    }
+    showCaptureUnavailableAlert();
+  }
+
+  function showPermissionDeniedAlert(method: MealPhotoCaptureMethod, canAskAgain: boolean) {
+    const copy = zhTW.mobile.mediaCapture;
+    const title = method === "camera" ? copy.cameraPermissionDeniedTitle : copy.galleryPermissionDeniedTitle;
+    if (canAskAgain) {
+      const body = method === "camera" ? copy.cameraPermissionAskAgainBody : copy.galleryPermissionAskAgainBody;
+      Alert.alert(title, body, [{ text: zhTW.common.close }]);
+      return;
+    }
+    const body = method === "camera" ? copy.cameraPermissionDeniedBody : copy.galleryPermissionDeniedBody;
+    Alert.alert(title, body, [
+      { text: zhTW.common.close, style: "cancel" },
+      { text: copy.openSettingsCta, onPress: () => { void Linking.openSettings(); } }
+    ]);
+  }
+
+  function showCaptureUnavailableAlert() {
+    const copy = zhTW.mobile.mediaCapture;
+    Alert.alert(copy.captureUnavailableTitle, copy.captureUnavailableBody, [{ text: zhTW.common.close }]);
+  }
+
+  function startRealAnalysis(method: MealPhotoCaptureMethod, imageUri: string, capturedAt: Date) {
+    // TODO: Replace fake demo nutrition estimate with a real AI image analysis API call.
+    // Media acquisition (camera/photo-library) is real as of MI-E-B4; only the downstream
+    // nutrition estimate remains a fixed demo result. A new photo means a new AI Analysis
+    // session: clear any previously completed analysis, and record how this photo was
+    // obtained (camera vs. photo_library) plus its real local URI so analysis.tsx knows
+    // whether to show the current/post-hoc confirmation (camera: never; photo_library: always).
+    beginAnalysisCapture(method, imageUri, capturedAt);
+    setSource(method);
     setIsSheetOpen(false);
     setIsAnalyzing(true);
   }
@@ -181,7 +232,7 @@ export default function MealPhotoScreen() {
         <Card tone="mint">
           <Text style={styles.sourceBadge}>{source === "camera" ? zhTW.mobile.refinedLogic.aiEntry.cameraTodo : zhTW.mobile.refinedLogic.aiEntry.uploadTodo}</Text>
           <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.loadingTitle} subtitle={zhTW.mobile.refinedLogic.aiEntry.loadingBody} />
-          {source === "gallery" ? (
+          {source === "photo_library" ? (
             <View style={styles.multiPhotoPanel}>
               <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.multiUploadTitle} subtitle={zhTW.mobile.refinedLogic.aiEntry.multiUploadBody} />
               <Text style={styles.photoCount}>{zhTW.mobile.refinedLogic.aiEntry.photoCountLabel}</Text>
@@ -193,7 +244,7 @@ export default function MealPhotoScreen() {
         </Card>
       ) : null}
 
-      <ImageSourceSheet visible={isSheetOpen} onClose={() => setIsSheetOpen(false)} onCamera={openCamera} onUpload={uploadFromGallery} />
+      <ImageSourceSheet visible={isSheetOpen} disabled={isRequestingMedia} onClose={() => setIsSheetOpen(false)} onCamera={openCamera} onUpload={uploadFromGallery} />
     </PlaceholderScreen>
   );
 }
@@ -402,20 +453,42 @@ function getLunchGuidance(type: string) {
   return helperCopy.lunchGuidanceDefault;
 }
 
-function ImageSourceSheet({ visible, onClose, onCamera, onUpload }: { visible: boolean; onClose: () => void; onCamera: () => void; onUpload: () => void }) {
+function ImageSourceSheet({
+  visible,
+  disabled,
+  onClose,
+  onCamera,
+  onUpload
+}: {
+  visible: boolean;
+  disabled: boolean;
+  onClose: () => void;
+  onCamera: () => void;
+  onUpload: () => void;
+}) {
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={disabled ? undefined : onClose}>
       <View style={styles.sheetBackdrop}>
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.sheetTitle} subtitle={zhTW.mobile.refinedLogic.aiEntry.sheetBody} />
-          <Pressable style={styles.sheetButton} onPress={onCamera}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled }}
+            style={[styles.sheetButton, disabled && styles.disabledButton]}
+            onPress={disabled ? undefined : onCamera}
+          >
             <Text style={styles.sheetButtonText}>{zhTW.mobile.refinedLogic.aiEntry.cameraOption}</Text>
           </Pressable>
-          <Pressable style={[styles.sheetButton, styles.uploadButton]} onPress={onUpload}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled }}
+            style={[styles.sheetButton, styles.uploadButton, disabled && styles.disabledButton]}
+            onPress={disabled ? undefined : onUpload}
+          >
             <Text style={styles.sheetButtonText}>{zhTW.mobile.refinedLogic.aiEntry.uploadOption}</Text>
           </Pressable>
-          <Pressable style={styles.closeButton} onPress={onClose}>
+          <Pressable style={styles.closeButton} onPress={disabled ? undefined : onClose}>
             <Text style={styles.closeButtonText}>{zhTW.common.close}</Text>
           </Pressable>
         </View>
@@ -450,6 +523,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     paddingHorizontal: 18,
     paddingVertical: 13
+  },
+  disabledButton: {
+    opacity: 0.6
   },
   closeButtonText: {
     color: colors.ink,

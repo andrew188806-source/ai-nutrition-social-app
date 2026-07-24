@@ -115,6 +115,18 @@ export const zhTW = {
         }
       }
     },
+    mediaCapture: {
+      cameraPermissionDeniedTitle: "無法使用相機",
+      cameraPermissionDeniedBody: "好廚需要相機權限才能拍攝餐點照片，請在系統設定中開啟權限。",
+      cameraPermissionAskAgainBody: "好廚需要相機權限才能拍攝餐點照片，請允許權限後再試一次。",
+      galleryPermissionDeniedTitle: "無法開啟相簿",
+      galleryPermissionDeniedBody: "好廚需要相簿權限才能選擇餐點照片，請在系統設定中開啟權限。",
+      galleryPermissionAskAgainBody: "好廚需要相簿權限才能選擇餐點照片，請允許權限後再試一次。",
+      captureUnavailableTitle: "目前無法取得照片",
+      captureUnavailableBody: "請稍後再試一次。",
+      openSettingsCta: "前往設定",
+      tryAgainCta: "再試一次"
+    },
     mealRecordTiming: {
       confirmTitle: "這是現在的餐點，還是之前吃的？",
       confirmBody: "從相簿選擇的照片，需要先確認這是現在的餐點，還是之前吃的補登紀錄。",

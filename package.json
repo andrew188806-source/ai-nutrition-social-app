@@ -23,6 +23,8 @@
     "test:meal-identification-mi-e-b1-smoke": "node scripts/meal-identification-mi-e-b1-contract-smoke.mjs",
     "test:meal-identification-mi-e-b2": "node scripts/meal-identification-mi-e-b2-guard.mjs",
     "test:meal-identification-mi-e-b2-smoke": "node scripts/meal-identification-mi-e-b2-contract-smoke.mjs",
+    "test:meal-identification-mi-e-b4": "node scripts/meal-identification-mi-e-b4-guard.mjs",
+    "test:meal-identification-mi-e-b4-smoke": "node scripts/meal-identification-mi-e-b4-contract-smoke.mjs",
     "test:consumer-phase1a": "node scripts/consumer-auth-phase-1a-guard.mjs",
     "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs",
     "test:consumer-phase1c": "node scripts/consumer-auth-phase-1c-guard.mjs",

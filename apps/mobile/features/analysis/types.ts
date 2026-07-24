@@ -6,8 +6,8 @@ export type MatchState = "pending" | "confirmed" | "editing";
 
 // How this AI Analysis session's photo entered the app. Mobile-flow-only: never persisted
 // to the database, only used to decide whether the current/post-hoc confirmation is shown
-// (camera implies "current" with no confirmation; gallery requires an explicit choice).
-export type MealPhotoCaptureMethod = "camera" | "gallery";
+// (camera implies "current" with no confirmation; photo_library requires an explicit choice).
+export type MealPhotoCaptureMethod = "camera" | "photo_library";
 
 // Mirrors MI-E-B1's canonical MealRecordTiming ("current" | "post_hoc") so the Mobile UI
 // layer uses the exact same typed values the finalization contract expects.

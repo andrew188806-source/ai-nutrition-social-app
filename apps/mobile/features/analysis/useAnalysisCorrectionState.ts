@@ -7,12 +7,7 @@ import {
 } from "../meal-identification";
 import { buildCorrectionSections, buildNutritionSummary } from "./analysisCorrectionData";
 import { getAnalysisSession } from "./analysisSessionStore";
-import {
-  isMealOccurrenceTooFarInFuture,
-  isValidDateKey,
-  isValidTimeKey,
-  zonedWallClockToIsoInstant
-} from "./mealOccurrenceTime";
+import { isMealOccurrenceTooFarInFuture } from "./mealOccurrenceTime";
 import type {
   CorrectionSectionKey,
   MatchState,
@@ -42,11 +37,10 @@ export function useAnalysisCorrectionState() {
   );
   const [correctedRows, setCorrectedRows] = useState<Record<string, boolean>>(session.correctedRows);
   const [captureMethod] = useState<MealPhotoCaptureMethod | null>(session.captureMethod);
+  const [capturedImageUri] = useState<string | null>(session.capturedImageUri);
   const [recordTiming, setRecordTiming] = useState<MealRecordTimingChoice>(session.recordTiming);
   const [recordTimingConfirmed, setRecordTimingConfirmed] = useState(session.recordTimingConfirmed);
   const [occurredAt, setOccurredAt] = useState<string | null>(session.occurredAt);
-  const [postHocDateKey, setPostHocDateKey] = useState<string | null>(session.postHocDateKey);
-  const [postHocTimeKey, setPostHocTimeKey] = useState<string | null>(session.postHocTimeKey);
 
   // Keep the session store in sync so a remount (navigating away and back) restores
   // this exact state instead of starting the correction flow over.
@@ -68,8 +62,6 @@ export function useAnalysisCorrectionState() {
     session.recordTiming = recordTiming;
     session.recordTimingConfirmed = recordTimingConfirmed;
     session.occurredAt = occurredAt;
-    session.postHocDateKey = postHocDateKey;
-    session.postHocTimeKey = postHocTimeKey;
   });
 
   const isSelfCooked = mode === "selfCooked";
@@ -187,8 +179,6 @@ export function useAnalysisCorrectionState() {
     setRecordTiming("current");
     setRecordTimingConfirmed(true);
     setOccurredAt(new Date().toISOString());
-    setPostHocDateKey(null);
-    setPostHocTimeKey(null);
   }
 
   // Photo-library "這是之前吃的，現在補登": switches to post_hoc but stays unconfirmed
@@ -201,16 +191,28 @@ export function useAnalysisCorrectionState() {
     setOccurredAt(null);
   }
 
-  // Validates and commits an explicit post-hoc date+time selection. Rejects invalid shapes
-  // and meal times that are meaningfully in the future. Returns false (no state change) on
-  // any rejection so the picker UI can keep prompting instead of silently accepting bad input.
-  function setPostHocMealTime(dateKey: string, timeKey: string, timezone: string): boolean {
+  // Canceling/dismissing the native date-time picker mid-edit: never leaves a half-completed
+  // post_hoc intent and never silently forces "current" on the user's behalf. Returns to the
+  // not-yet-completed confirmation prompt (recordTiming reset to "current" but still
+  // unconfirmed) so the next render shows the current/post-hoc choice again.
+  function cancelRecordTimingPostHoc() {
+    if (captureMethod === "camera") return;
+    setRecordTiming("current");
+    setRecordTimingConfirmed(false);
+    setOccurredAt(null);
+  }
+
+  // Validates and commits an explicit post-hoc date+time selection produced by the native
+  // date/time picker. A Date returned by that picker already represents an unambiguous
+  // absolute instant, so toISOString() is the correct occurredAt with no further timezone
+  // arithmetic. Rejects meal times that are meaningfully in the future. Returns false (no
+  // state change) on any rejection so the picker UI can keep prompting instead of silently
+  // accepting bad input.
+  function setPostHocMealTime(occurredAtValue: Date): boolean {
     if (captureMethod === "camera") return false;
-    if (!isValidDateKey(dateKey) || !isValidTimeKey(timeKey)) return false;
-    const iso = zonedWallClockToIsoInstant(dateKey, timeKey, timezone);
-    if (!iso || isMealOccurrenceTooFarInFuture(iso)) return false;
-    setPostHocDateKey(dateKey);
-    setPostHocTimeKey(timeKey);
+    if (!(occurredAtValue instanceof Date) || Number.isNaN(occurredAtValue.getTime())) return false;
+    const iso = occurredAtValue.toISOString();
+    if (isMealOccurrenceTooFarInFuture(iso)) return false;
     setOccurredAt(iso);
     setRecordTiming("post_hoc");
     setRecordTimingConfirmed(true);
@@ -307,15 +309,15 @@ export function useAnalysisCorrectionState() {
     toggleCorrectionRow,
     toggleExternalBreakdown,
     captureMethod,
+    capturedImageUri,
     recordTiming,
     recordTimingConfirmed,
     occurredAt,
-    postHocDateKey,
-    postHocTimeKey,
     mealSource,
     setMealSource,
     confirmRecordTimingCurrent,
     beginRecordTimingPostHoc,
+    cancelRecordTimingPostHoc,
     setPostHocMealTime
   };
 }

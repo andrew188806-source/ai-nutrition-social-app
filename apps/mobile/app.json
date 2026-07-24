@@ -3,7 +3,17 @@
     "name": "好廚 AI 營養社交",
     "slug": "haocu-ai-nutrition-social",
     "scheme": "haocu",
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "好廚需要存取你的相簿，才能選擇餐點照片進行分析。",
+          "cameraPermission": "好廚需要使用相機，才能拍攝餐點照片進行分析。",
+          "microphonePermission": false
+        }
+      ]
+    ],
     "web": {
       "bundler": "metro"
     },

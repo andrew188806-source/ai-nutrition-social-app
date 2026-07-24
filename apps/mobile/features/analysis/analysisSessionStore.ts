@@ -31,15 +31,17 @@ export type AnalysisSessionState = {
   mealId: string;
   preMealPhotoIds: string[];
   guiltSharingResult: { peopleCount: number; sharedCaloriesPerPerson: number } | null;
-  // MI-E-B2: capture provenance and actual-meal-time intent. Mobile-flow-only fields —
-  // captureMethod is never sent to the finalization contract; recordTiming/occurredAt
-  // map directly onto the frozen MI-E-B1 v2 fields of the same name.
+  // MI-E-B2/MI-E-B4: capture provenance and actual-meal-time intent. Mobile-flow-only
+  // fields — captureMethod and capturedImageUri are never sent to the finalization
+  // contract; recordTiming/occurredAt map directly onto the frozen MI-E-B1 v2 fields of
+  // the same name. capturedImageUri is a transient local file URI only (not a database
+  // media contract) — it exists purely so the analysis screen can keep referencing the
+  // real photo the user just took or picked.
   captureMethod: MealPhotoCaptureMethod | null;
+  capturedImageUri: string | null;
   recordTiming: MealRecordTimingChoice;
   recordTimingConfirmed: boolean;
   occurredAt: string | null;
-  postHocDateKey: string | null;
-  postHocTimeKey: string | null;
 };
 
 function createDefaultSession(): AnalysisSessionState {
@@ -64,11 +66,10 @@ function createDefaultSession(): AnalysisSessionState {
     preMealPhotoIds: [],
     guiltSharingResult: null,
     captureMethod: null,
+    capturedImageUri: null,
     recordTiming: "current",
     recordTimingConfirmed: false,
-    occurredAt: null,
-    postHocDateKey: null,
-    postHocTimeKey: null
+    occurredAt: null
   };
 }
 
@@ -86,14 +87,21 @@ export function resetAnalysisSession() {
   session = createDefaultSession();
 }
 
-// Called once per new photo, from the meal-photo capture/upload entry point, before
-// navigating to /analysis. Starts a fresh session (same guarantee as resetAnalysisSession)
-// and records how this session's photo was obtained. Camera sessions are "current" and
-// already confirmed (occurredAt = the moment of capture/entry, no further choice needed);
-// gallery sessions start unconfirmed so analysis.tsx must show the current/post-hoc prompt.
-export function beginAnalysisCapture(method: MealPhotoCaptureMethod, capturedAt: Date = new Date()) {
+// Called once per new photo, from the meal-photo capture/upload entry point, after a
+// real photo has actually been captured or picked (never on cancellation or permission
+// denial), before navigating to /analysis. Starts a fresh session (same guarantee as
+// resetAnalysisSession) and records how this session's photo was obtained. Camera
+// sessions are "current" and already confirmed (occurredAt = the moment the photo was
+// accepted, no further choice needed); photo_library sessions start unconfirmed so
+// analysis.tsx must show the current/post-hoc prompt.
+export function beginAnalysisCapture(
+  method: MealPhotoCaptureMethod,
+  imageUri: string,
+  capturedAt: Date = new Date()
+) {
   session = createDefaultSession();
   session.captureMethod = method;
+  session.capturedImageUri = imageUri;
   if (method === "camera") {
     session.recordTiming = "current";
     session.recordTimingConfirmed = true;

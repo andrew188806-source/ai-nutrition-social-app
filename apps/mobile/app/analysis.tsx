@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import RNDateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
@@ -12,11 +13,7 @@ import {
   buildAnalysisMealIdentificationFinalizationDraft,
   mapMealIdentificationFinalizationUiError
 } from "../features/analysis/mealIdentificationFinalizationAdapter";
-import {
-  MEAL_OCCURRENCE_TIME_OPTIONS,
-  buildRecentMealDateOptions,
-  filterMealOccurrenceTimeOptions
-} from "../features/analysis/mealOccurrenceTime";
+import { maximumMealOccurrenceInstant } from "../features/analysis/mealOccurrenceTime";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getNextMealCandidateCount } from "../features/next-meal-prototype";
@@ -624,7 +621,7 @@ function RecordTimingSection({
   }
 
   if (analysis.recordTiming === "post_hoc" && !analysis.recordTimingConfirmed) {
-    return <PostHocPicker analysis={analysis} timezone={timezone} />;
+    return <PostHocPicker analysis={analysis} />;
   }
 
   if (!analysis.recordTimingConfirmed) {
@@ -661,74 +658,114 @@ function RecordTimingSection({
   );
 }
 
+// Full native date-time picker replacing MI-E-B2's preset-chip picker. Android's native
+// pickers are always modal dialogs and only pick one of date/time per dialog, so on
+// Android this component opens a date dialog then chains into a time dialog, merging
+// both into one single draft Date — the "consistent single draft state" the two
+// platforms share despite their different interaction patterns. iOS's combined
+// "datetime" mode picks both in one inline control, confirmed/canceled by our own
+// buttons. Either way, a Date returned by the native picker already represents an
+// unambiguous absolute instant, so no manual timezone conversion is needed here.
 function PostHocPicker({
-  analysis,
-  timezone
+  analysis
 }: {
   analysis: ReturnType<typeof useAnalysisCorrectionState>;
-  timezone: string;
 }) {
   const copy = zhTW.mobile.mealRecordTiming;
-  // Stable for the lifetime of this picker mount so the chip lists don't shift under the
-  // user's finger while they're mid-selection.
   const [referenceNow] = useState(() => new Date());
-  const dateOptions = useMemo(() => buildRecentMealDateOptions(referenceNow, timezone), [referenceNow, timezone]);
-  const [selectedDate, setSelectedDate] = useState(analysis.postHocDateKey ?? dateOptions[0]?.key ?? "");
-  const timeOptions = useMemo(
-    () => filterMealOccurrenceTimeOptions(selectedDate, MEAL_OCCURRENCE_TIME_OPTIONS, referenceNow, timezone),
-    [selectedDate, referenceNow, timezone]
-  );
-  const [selectedTime, setSelectedTime] = useState(analysis.postHocTimeKey ?? "");
+  const maximumDate = useMemo(() => maximumMealOccurrenceInstant(referenceNow), [referenceNow]);
+  const initialDraft = useMemo(() => {
+    const fromExisting = analysis.occurredAt ? new Date(analysis.occurredAt) : null;
+    if (fromExisting && !Number.isNaN(fromExisting.getTime()) && fromExisting.getTime() <= maximumDate.getTime()) {
+      return fromExisting;
+    }
+    return referenceNow;
+  }, [analysis.occurredAt, maximumDate, referenceNow]);
+  const [draft, setDraft] = useState(initialDraft);
   const [error, setError] = useState<string | null>(null);
+  const [androidStage, setAndroidStage] = useState<"date" | "time" | "done">("date");
 
-  function confirm() {
-    if (!selectedDate || !selectedTime) {
-      setError(copy.missingSelectionHint);
+  function confirm(value: Date): boolean {
+    const ok = analysis.setPostHocMealTime(value);
+    setError(ok ? null : copy.futureTimeHint);
+    return ok;
+  }
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    if (androidStage === "date") {
+      DateTimePickerAndroid.open({
+        value: draft,
+        mode: "date",
+        maximumDate,
+        onChange: (event, selectedDate) => {
+          if (event.type !== "set" || !selectedDate) {
+            analysis.cancelRecordTimingPostHoc();
+            return;
+          }
+          const merged = new Date(draft);
+          merged.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+          setDraft(merged);
+          setAndroidStage("time");
+        }
+      });
       return;
     }
-    const ok = analysis.setPostHocMealTime(selectedDate, selectedTime, timezone);
-    if (!ok) {
-      setError(copy.futureTimeHint);
-      return;
+    if (androidStage === "time") {
+      DateTimePickerAndroid.open({
+        value: draft,
+        mode: "time",
+        is24Hour: true,
+        onChange: (event, selectedTime) => {
+          if (event.type !== "set" || !selectedTime) {
+            analysis.cancelRecordTimingPostHoc();
+            return;
+          }
+          const merged = new Date(draft);
+          merged.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+          setDraft(merged);
+          // A rejected (future) time leaves androidStage="done" without an open dialog —
+          // the retry button below restarts the date→time flow rather than leaving the
+          // user stuck on a dead card.
+          setAndroidStage(confirm(merged) ? "done" : "date");
+        }
+      });
     }
-    setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [androidStage]);
+
+  if (Platform.OS === "android") {
+    return (
+      <SnowCard tone="ai">
+        <SnowSectionHeader title={copy.actualMealTimeTitle} subtitle={copy.actualMealTimeBody} />
+        {error ? (
+          <>
+            <Text style={styles.disclaimer}>{error}</Text>
+            <View style={styles.ctaColumn}>
+              <PrimaryButton icon="clock" label={copy.confirmPostHocCta} onPress={() => setAndroidStage("date")} />
+              <SecondaryButton icon="clock" label={copy.cancelPostHocLabel} onPress={analysis.cancelRecordTimingPostHoc} />
+            </View>
+          </>
+        ) : null}
+      </SnowCard>
+    );
   }
 
   return (
     <SnowCard tone="ai">
       <SnowSectionHeader title={copy.actualMealTimeTitle} subtitle={copy.actualMealTimeBody} />
-      <Text style={styles.formLabel}>{copy.dateLabel}</Text>
-      <View style={styles.chipRow}>
-        {dateOptions.map((option) => (
-          <Chip
-            key={option.key}
-            label={option.label}
-            active={selectedDate === option.key}
-            onPress={() => {
-              setSelectedDate(option.key);
-              setSelectedTime("");
-              setError(null);
-            }}
-          />
-        ))}
-      </View>
-      <Text style={styles.formLabel}>{copy.timeLabel}</Text>
-      <View style={styles.chipRow}>
-        {timeOptions.map((option) => (
-          <Chip
-            key={option.key}
-            label={option.label}
-            active={selectedTime === option.key}
-            onPress={() => {
-              setSelectedTime(option.key);
-              setError(null);
-            }}
-          />
-        ))}
-      </View>
+      <RNDateTimePicker
+        value={draft}
+        mode="datetime"
+        maximumDate={maximumDate}
+        display="spinner"
+        onChange={(_event, selectedValue) => {
+          if (selectedValue) setDraft(selectedValue);
+        }}
+      />
       {error ? <Text style={styles.disclaimer}>{error}</Text> : null}
       <View style={styles.ctaColumn}>
-        <PrimaryButton icon="check" label={copy.confirmPostHocCta} onPress={confirm} />
+        <PrimaryButton icon="check" label={copy.confirmPostHocCta} onPress={() => confirm(draft)} />
         <SecondaryButton icon="clock" label={copy.cancelPostHocLabel} onPress={analysis.confirmRecordTimingCurrent} />
       </View>
     </SnowCard>
