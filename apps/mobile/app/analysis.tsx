@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import RNDateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
@@ -281,17 +281,22 @@ export default function AnalysisScreen() {
           <SnowCard tone="primary">
             <SnowSectionHeader title={zhTW.mobile.correctedFlow.mealResultTitle} subtitle={zhTW.mobile.correctedFlow.mealResultBody} />
             <View style={[styles.photoArea, isAnalysisConfirmed && styles.photoAreaConfirmed]}>
+              {analysis.capturedImageUri ? (
+                <Image source={{ uri: analysis.capturedImageUri }} style={styles.photoImage} resizeMode="cover" />
+              ) : null}
               {isAnalysisConfirmed ? (
                 <>
-                  <LinearGradient colors={[snow.heroFrom, snow.heroTo]} style={styles.photoGradient} />
+                  {!analysis.capturedImageUri ? <LinearGradient colors={[snow.heroFrom, snow.heroTo]} style={styles.photoGradient} /> : null}
                   <View style={styles.photoConfidenceBadge}>
                     <Icon name="spark" size={12} color={snow.primaryDeep} />
                     <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.confidenceLevels[1]}</Text>
                   </View>
-                  <View style={styles.photoIconLarge}>
-                    <Icon name="plate" size={26} color={snow.primaryDeep} />
-                  </View>
-                  <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text>
+                  {!analysis.capturedImageUri ? (
+                    <View style={styles.photoIconLarge}>
+                      <Icon name="plate" size={26} color={snow.primaryDeep} />
+                    </View>
+                  ) : null}
+                  {!analysis.capturedImageUri ? <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text> : null}
                   <View style={styles.photoCaptionBadge}>
                     <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.imageLabel}</Text>
                   </View>
@@ -302,10 +307,14 @@ export default function AnalysisScreen() {
                     <Icon name="spark" size={12} color={snow.primaryDeep} />
                     <Text style={styles.photoBadgeText}>{zhTW.mobile.nav.analysis}</Text>
                   </View>
-                  <View style={styles.photoIcon}>
-                    <Icon name="camera" size={22} color={snow.primaryDeep} />
-                  </View>
-                  <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text>
+                  {!analysis.capturedImageUri ? (
+                    <>
+                      <View style={styles.photoIcon}>
+                        <Icon name="camera" size={22} color={snow.primaryDeep} />
+                      </View>
+                      <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text>
+                    </>
+                  ) : null}
                 </>
               )}
               <SecondaryButton icon="camera" label={zhTW.mobile.refinedLogic.homeFocus.photoAnalysis} onPress={() => router.push("/meal-photo")} />
@@ -1976,6 +1985,13 @@ const styles = StyleSheet.create({
     borderColor: hexA(snow.primary, 0.12)
   },
   photoGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
+  },
+  photoImage: {
     position: "absolute",
     top: 0,
     left: 0,
