@@ -1,11 +1,14 @@
 import type { RestaurantCatalogSource } from "../restaurants/catalog";
 
-export type MealSourceContext =
-  | "dine_in"
-  | "takeout"
-  | "delivery"
-  | "self_cooked"
-  | "unknown";
+// MI-E-C1-R1: MealSourceContext's canonical definition now lives in @haocu/shared (packages/
+// shared/src/domain/meal-photo-analysis/types.ts), since it must be usable by both Mobile and a
+// future server-side Edge Function — a Mobile-only feature folder cannot serve that role. This is
+// a type re-export, not a second definition: the value set, names, and runtime behavior are
+// completely unchanged, and every existing import of MealSourceContext from this file/module
+// keeps working exactly as before.
+import type { MealSourceContext } from "@haocu/shared";
+
+export type { MealSourceContext };
 
 export type LegacyMealSourceContext = MealSourceContext | "post_hoc";
 

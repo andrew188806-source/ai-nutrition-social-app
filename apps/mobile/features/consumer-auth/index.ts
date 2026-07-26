@@ -1,5 +1,21 @@
 export * from "./errors";
 export * from "./types";
+// MI-E-C1-R2: AI training consent authority (type, policy-bundle manifest, and the
+// production-readiness assertion) now lives in @haocu/shared, since it must eventually be shared
+// by Mobile, a future server-side registration flow, a future Edge Function, and a future offline
+// dataset-eligibility pipeline. This is a re-export of the shared package's public API — Mobile
+// holds no second constant, manifest, or type definition for any of it.
+export {
+  CONSUMER_AI_TRAINING_CONSENT_TYPE,
+  CONSUMER_POLICY_BUNDLE_MANIFEST,
+  findConsumerPolicyBundleManifestEntry,
+  findActiveConsumerPolicyBundleManifestEntry,
+  assertConsumerPolicyBundleIsProductionReady,
+  type ConsumerAiTrainingConsentType,
+  type ConsumerPolicyBundleVersion,
+  type ConsumerPolicyBundleStatus,
+  type ConsumerPolicyBundleManifestEntry
+} from "@haocu/shared";
 export * from "./ports";
 export * from "./featureFlags";
 export * from "./storage";

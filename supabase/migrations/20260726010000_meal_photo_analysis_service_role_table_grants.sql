@@ -1,0 +1,48 @@
+-- MI-E-C2-R1: minimal, targeted service_role table grants for meal_analyses/meal_corrections.
+-- Forward-only, additive. Grants nothing to anon or authenticated (their existing behavior is
+-- untouched); does not touch any other table; does not use ALTER DEFAULT PRIVILEGES; does not
+-- disable or weaken RLS; does not grant ALL ON ALL TABLES.
+--
+-- Root cause investigated and confirmed (read-only, no guessing) before writing this migration:
+--   1. meal_analyses/meal_corrections were created in
+--      20260712130500_consumer_schema_phase_1_3_meal_analysis_and_corrections.sql with NO grant
+--      statement of any kind for any role.
+--   2. A later migration (20260724020000_consumer_meal_identification_atomic_finalization.sql)
+--      added GRANT SELECT ON TABLE public.meal_analyses/meal_corrections TO authenticated — the
+--      only grant either table has ever received.
+--   3. Zero migrations in this repository's entire history reference "service_role" — confirmed
+--      via a repository-wide search. No REVOKE was ever issued against it.
+--   4. Empirical proof (Development, read-only queries, no credential ever printed/persisted):
+--      the anon key and the service_role key receive the IDENTICAL Postgres error
+--      (permission denied for table meal_analyses, SQLSTATE 42501) on this table — the same
+--      SQLSTATE a role with genuinely zero GRANT gets, not an RLS-policy denial (which would
+--      surface differently) and not an authentication/JWT-validity error (which would surface as
+--      a 401/invalid-JWT response, not a clean Postgres SQLSTATE). This confirms the request
+--      genuinely reached Postgres and was evaluated as a real role with no privileges on this
+--      table — i.e. a plain missing GRANT, not a revoke, not an RLS issue, and not evidence of
+--      key misconfiguration.
+--   5. Separately, the same legacy service_role key successfully performed
+--      auth.admin.createUser/deleteUser (GoTrue Admin API operations that strictly require
+--      service_role-level authority and reject anon/authenticated keys outright) earlier this
+--      session — confirming the key does correctly carry service_role authority; it was simply
+--      never granted anything on these two specific tables.
+--   6. This repository's own established convention (visible throughout its migration history)
+--      is that every role/table pairing requires an explicit GRANT — there is no blanket default
+--      privilege for any role, including service_role. This migration follows that exact
+--      convention rather than introducing a new one.
+--
+-- RLS remains fully enabled and unchanged on both tables (see
+-- 20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql, untouched by this
+-- migration); service_role's standard BYPASSRLS semantics mean these policies do not apply to it,
+-- but that is orthogonal to — and was never the cause of — the permission-denied error this
+-- migration fixes, which was purely a missing table-level GRANT.
+
+grant select, insert, update, delete on table public.meal_analyses to service_role;
+grant select, insert, update, delete on table public.meal_corrections to service_role;
+
+-- Explicitly NOT touched by this migration (left exactly as-is):
+--   - the existing GRANT SELECT ... TO authenticated on both tables
+--   - anon (receives nothing here, as it always has)
+--   - RLS policies on either table
+--   - any other table
+--   - ALTER DEFAULT PRIVILEGES (schema-wide), which this migration deliberately does not use

@@ -1,4 +1,5 @@
 import type { MealSource } from "../self-made-dishes/types";
+import type { MealPhotoCaptureMethod } from "@haocu/shared";
 
 export type MealAnalysisMode = "restaurant" | "selfCooked";
 
@@ -7,7 +8,13 @@ export type MatchState = "pending" | "confirmed" | "editing";
 // How this AI Analysis session's photo entered the app. Mobile-flow-only: never persisted
 // to the database, only used to decide whether the current/post-hoc confirmation is shown
 // (camera implies "current" with no confirmation; photo_library requires an explicit choice).
-export type MealPhotoCaptureMethod = "camera" | "photo_library";
+//
+// MI-E-C1-R1: canonical definition moved to @haocu/shared (packages/shared/src/domain/
+// meal-photo-analysis/types.ts) since it must be usable by both Mobile and a future server-side
+// Edge Function. This is a type re-export, not a second definition — the value set, name, and
+// runtime behavior are completely unchanged, and every existing import of MealPhotoCaptureMethod
+// from this file/module keeps working exactly as before.
+export type { MealPhotoCaptureMethod };
 
 // Mirrors MI-E-B1's canonical MealRecordTiming ("current" | "post_hoc") so the Mobile UI
 // layer uses the exact same typed values the finalization contract expects.
