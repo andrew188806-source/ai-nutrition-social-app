@@ -69,7 +69,7 @@ export default function MealPhotoScreen() {
 
   function handleMediaOutcome(method: MealPhotoCaptureMethod, outcome: MediaCaptureOutcome) {
     if (outcome.status === "captured") {
-      startRealAnalysis(method, outcome.uri, new Date(outcome.capturedAt));
+      startRealAnalysis(method, outcome.uri, new Date(outcome.capturedAt), outcome.mimeType, outcome.fileName);
       return;
     }
     if (outcome.status === "canceled") {
@@ -103,14 +103,23 @@ export default function MealPhotoScreen() {
     Alert.alert(copy.captureUnavailableTitle, copy.captureUnavailableBody, [{ text: zhTW.common.close }]);
   }
 
-  function startRealAnalysis(method: MealPhotoCaptureMethod, imageUri: string, capturedAt: Date) {
+  function startRealAnalysis(
+    method: MealPhotoCaptureMethod,
+    imageUri: string,
+    capturedAt: Date,
+    mimeType: string | null,
+    fileName: string | null
+  ) {
     // TODO: Replace fake demo nutrition estimate with a real AI image analysis API call.
     // Media acquisition (camera/photo-library) is real as of MI-E-B4; only the downstream
     // nutrition estimate remains a fixed demo result. A new photo means a new AI Analysis
     // session: clear any previously completed analysis, and record how this photo was
     // obtained (camera vs. photo_library) plus its real local URI so analysis.tsx knows
     // whether to show the current/post-hoc confirmation (camera: never; photo_library: always).
-    beginAnalysisCapture(method, imageUri, capturedAt);
+    // MI-E-C3: also starts the private Storage upload of this same photo (see analysis.tsx /
+    // useMealPhotoUpload) — mimeType/fileName are only ever used to resolve a trusted upload
+    // MIME type, never for the (still-fake) nutrition estimate above.
+    beginAnalysisCapture(method, imageUri, capturedAt, mimeType, fileName);
     setSource(method);
     setIsSheetOpen(false);
     setIsAnalyzing(true);

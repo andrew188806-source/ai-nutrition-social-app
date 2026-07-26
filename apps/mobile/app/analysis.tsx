@@ -6,7 +6,7 @@ import RNDateTimePicker, { DateTimePickerAndroid } from "@react-native-community
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, getAnalysisSession, useAnalysisCorrectionState } from "../features/analysis";
+import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, getAnalysisSession, useAnalysisCorrectionState, useMealPhotoUpload } from "../features/analysis";
 import { getTodayMealRecords, saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
 import { getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import {
@@ -78,6 +78,7 @@ export default function AnalysisScreen() {
   const params = useLocalSearchParams<{ mealSlot?: string }>();
   const analysis = useAnalysisCorrectionState();
   const consumerRuntime = useConsumerRuntime();
+  const mealPhotoUpload = useMealPhotoUpload();
   const restaurantCatalog = useRestaurantCatalog();
   const [demoMode] = useDemoUserPlan();
   const session = getAnalysisSession();
@@ -269,6 +270,18 @@ export default function AnalysisScreen() {
     router.push({ pathname: "/recommendation", params: { prototypeId: meal.menuItemId } });
   }
 
+  // Explicit "retake/replace photo" gesture (MI-E-C3 §九): best-effort delete the current
+  // photo's already-uploaded staging object before navigating away to capture a new one. This
+  // never blocks navigation — cleanup failure is silently ignored, matching the "cleanup failure
+  // must not block the user" requirement. Only fires when there's actually an uploaded object to
+  // clean up; a plain route unmount (back button, tab switch) never triggers this.
+  function retakeMealPhoto() {
+    if (mealPhotoUpload.uploadStatus === "uploaded" && mealPhotoUpload.imageObjectRef) {
+      void consumerRuntime.deleteMealPhotoObject(mealPhotoUpload.imageObjectRef);
+    }
+    router.push("/meal-photo");
+  }
+
   return (
     <PlaceholderScreen
       title={zhTW.mobile.analysisTitle}
@@ -317,9 +330,11 @@ export default function AnalysisScreen() {
                   ) : null}
                 </>
               )}
-              <SecondaryButton icon="camera" label={zhTW.mobile.refinedLogic.homeFocus.photoAnalysis} onPress={() => router.push("/meal-photo")} />
+              <SecondaryButton icon="camera" label={zhTW.mobile.refinedLogic.homeFocus.photoAnalysis} onPress={() => retakeMealPhoto()} />
             </View>
           </SnowCard>
+
+          {analysis.capturedImageUri ? <MealPhotoUploadStatusCard uploadStatus={mealPhotoUpload.uploadStatus} onRetry={mealPhotoUpload.retryUpload} /> : null}
 
           <SnowCard>
             <SnowSectionHeader title={zhTW.mobile.analysis.modeTitle} subtitle="這是第幾餐？" />
@@ -398,7 +413,7 @@ export default function AnalysisScreen() {
 
           {!isAnalysisConfirmed ? (
             <SnowCard>
-              <SnowSectionHeader title={zhTW.mobile.analysis.summary} />
+              <SnowSectionHeader title={zhTW.mobile.analysis.summary} subtitle={zhTW.mobile.analysis.summaryDemoDisclosure} />
               <View style={styles.statGrid}>
                 <StatCard icon="flame" label={zhTW.mobile.analysis.calories} value={`${analysis.nutritionSummary.calories} kcal`} tone="primary" />
                 <StatCard icon="leaf" label={zhTW.mobile.analysis.protein} value={`${analysis.nutritionSummary.protein}g`} />
@@ -477,6 +492,35 @@ export default function AnalysisScreen() {
         </>
       )}
     </PlaceholderScreen>
+  );
+}
+
+// MI-E-C3/R1: photo upload status only — deliberately never claims AI analysis is running or
+// done. meal-photo.tsx's demo-timer card (zhTW.mobile.refinedLogic.aiEntry.loading*) was
+// corrected in MI-E-C3-R1 to stop claiming "AI 分析中"; this card only ever speaks to whether the
+// photo itself has safely reached private Storage yet.
+function MealPhotoUploadStatusCard({
+  uploadStatus,
+  onRetry
+}: {
+  uploadStatus: ReturnType<typeof useMealPhotoUpload>["uploadStatus"];
+  onRetry: () => void;
+}) {
+  const copy = zhTW.mobile.mealPhotoUpload;
+  if (uploadStatus === "not_started") return null;
+  return (
+    <SnowCard>
+      <SnowSectionHeader title={copy.title} />
+      <Text style={styles.stateText}>
+        {uploadStatus === "uploading" ? copy.uploadingLabel : uploadStatus === "uploaded" ? copy.uploadedLabel : copy.failedLabel}
+      </Text>
+      {uploadStatus === "uploaded" ? <Text style={styles.disclaimer}>{copy.pendingNote}</Text> : null}
+      {uploadStatus === "failed" ? (
+        <View style={styles.ctaColumn}>
+          <SecondaryButton icon="camera" label={copy.retryCta} onPress={onRetry} />
+        </View>
+      ) : null}
+    </SnowCard>
   );
 }
 

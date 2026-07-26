@@ -145,6 +145,15 @@ export const zhTW = {
       futureTimeHint: "用餐時間不能晚於現在，請重新選擇。",
       currentTimeLabel: "現在"
     },
+    // MI-E-C3: photo upload status only — never claims AI analysis is happening or complete.
+    mealPhotoUpload: {
+      title: "照片安全上傳",
+      uploadingLabel: "正在安全上傳照片…",
+      uploadedLabel: "照片已安全上傳",
+      failedLabel: "照片上傳失敗",
+      retryCta: "重新上傳",
+      pendingNote: "AI 分析尚未接通，這裡僅代表照片已安全存放。"
+    },
     mealPhotoTitle: "拍攝或上傳餐點照片",
     mealPhotoSubtitle: "先選擇外食或自己煮，再用餐點照片開始分析。外食會先找附近餐廳菜單；自煮會直接估算食材與份量。",
     analysisTitle: "AI 餐點分析",
@@ -685,6 +694,9 @@ export const zhTW = {
         { restaurant: "山線蛋白餐盒", meal: "瘦蛋白便當", confidence: "需要確認", tags: ["高蛋白菜單", "適合減脂", "找午餐夥伴"] }
       ],
       summary: "營養摘要",
+      // MI-E-C3-R1: explicit demo-data disclosure — these values are fixed demo data, not
+      // computed from the captured/uploaded photo. Real AI image analysis is not connected yet.
+      summaryDemoDisclosure: "以下為示範資料，尚未依這張照片進行 AI 計算。",
       calories: "熱量",
       protein: "蛋白質",
       carbs: "碳水",
@@ -1453,9 +1465,12 @@ export const zhTW = {
         uploadOption: "上傳圖片",
         sheetTitle: "選擇餐點照片來源",
         sheetBody: "目前 Demo 會使用同一組假資料結果，未來會分別接上相機與相簿流程。",
-        loadingTitle: "AI 正在分析餐點中",
-        loadingBody: "正在辨識營養與食材，幫你看看這餐的營養平衡。",
-        loadingHint: "Demo 模式會帶你進入預設分析結果。",
+        // MI-E-C3-R1: truthful wording — a fixed-delay demo timer is not an AI analysis in
+        // progress. This card is shown while the photo is being safely uploaded and before the
+        // demo result screen loads; it must never claim the photo is being analyzed.
+        loadingTitle: "正在準備照片與分析頁",
+        loadingBody: "照片正在安全上傳；下一頁的營養數值目前為示範資料，尚未依這張照片進行 AI 計算。",
+        loadingHint: "Demo 模式會帶你進入示範分析結果，AI 影像分析尚未接通。",
         cameraTodo: "相機流程",
         uploadTodo: "相簿流程",
         multiUploadTitle: "可一次上傳多張餐點照片",
@@ -1641,8 +1656,10 @@ export const zhTW = {
         ]
       },
       analysisFlow: {
-        bridgeTitle: "分析完成，接著看看下一餐適合吃什麼。",
-        bridgeBody: "這餐已完成分析，接著幫你安排下一餐，並推薦也想吃類似下一餐的人。",
+        // MI-E-C3-R1: removed "分析完成"/"已完成分析" — real AI photo analysis is not connected
+        // yet, and the nutrition values shown alongside this copy are still fixed demo data.
+        bridgeTitle: "餐點資訊已確認（以下為示範營養資料）",
+        bridgeBody: "以下營養數值為示範資料，尚未依這張照片實際進行 AI 計算；接著幫你安排下一餐，並推薦也想吃類似餐點的人。",
         goMealPartners: "看看下一餐飯友",
         goMyGatherings: "查看我的飯局",
         saveMealRecord: "加入今日飲食",

@@ -3,6 +3,8 @@ import type {
   MealIdentificationCandidate,
   MealSourceContext
 } from "../meal-identification";
+import { generateMealPhotoAnalysisRequestId } from "../meal-photo-upload/requestId";
+import type { MealPhotoUploadErrorCode } from "../meal-photo-upload/types";
 import type {
   CorrectionSectionKey,
   MatchState,
@@ -10,6 +12,8 @@ import type {
   MealPhotoCaptureMethod,
   MealRecordTimingChoice
 } from "./types";
+
+export type MealPhotoUploadStatus = "not_started" | "uploading" | "uploaded" | "failed";
 
 export type AnalysisSessionState = {
   matchState: MatchState;
@@ -39,9 +43,27 @@ export type AnalysisSessionState = {
   // real photo the user just took or picked.
   captureMethod: MealPhotoCaptureMethod | null;
   capturedImageUri: string | null;
+  // Whatever expo-image-picker's ImagePickerAsset reported for this capture (MI-E-C3) — the
+  // upload coordinator's only source of a trusted MIME type; never guessed or defaulted.
+  capturedImageMimeType: string | null;
+  capturedImageFileName: string | null;
   recordTiming: MealRecordTimingChoice;
   recordTimingConfirmed: boolean;
   occurredAt: string | null;
+  // MI-E-C3: private Storage upload state for capturedImageUri. analysisRequestId is generated
+  // once per new photo (stable across upload retries, changes on every new capture/retake) and
+  // doubles as the Storage object path's second path segment (see @haocu/shared's
+  // buildMealPhotoAnalysisObjectPath). captureGeneration is a monotonically increasing counter,
+  // bumped only by beginAnalysisCapture — mirrors consumer-runtime's actorGeneration pattern so a
+  // stale upload completion from a superseded photo can be detected and discarded the same way a
+  // stale actor-switch completion is, without inventing a second competing state model.
+  analysisRequestId: string | null;
+  captureGeneration: number;
+  uploadStatus: MealPhotoUploadStatus;
+  imageObjectRef: string | null;
+  uploadErrorCode: MealPhotoUploadErrorCode | null;
+  uploadAttemptCount: number;
+  uploadedAt: string | null;
 };
 
 function createDefaultSession(): AnalysisSessionState {
@@ -67,13 +89,25 @@ function createDefaultSession(): AnalysisSessionState {
     guiltSharingResult: null,
     captureMethod: null,
     capturedImageUri: null,
+    capturedImageMimeType: null,
+    capturedImageFileName: null,
     recordTiming: "current",
     recordTimingConfirmed: false,
-    occurredAt: null
+    occurredAt: null,
+    analysisRequestId: null,
+    captureGeneration: 0,
+    uploadStatus: "not_started",
+    imageObjectRef: null,
+    uploadErrorCode: null,
+    uploadAttemptCount: 0,
+    uploadedAt: null
   };
 }
 
 let session: AnalysisSessionState = createDefaultSession();
+// Lives outside the resettable session object (like consumer-runtime's actorGeneration) so a
+// plain resetAnalysisSession() — which happens before any new photo exists — never regresses it.
+let captureGenerationCounter = 0;
 
 // AI Analysis behaves like a session: the in-progress/completed state must survive
 // visiting other screens (Today Intake, Restaurant, Meal Buddy, Chat, Profile) and
@@ -97,14 +131,41 @@ export function resetAnalysisSession() {
 export function beginAnalysisCapture(
   method: MealPhotoCaptureMethod,
   imageUri: string,
-  capturedAt: Date = new Date()
+  capturedAt: Date = new Date(),
+  mimeType: string | null = null,
+  fileName: string | null = null
 ) {
+  captureGenerationCounter += 1;
   session = createDefaultSession();
   session.captureMethod = method;
   session.capturedImageUri = imageUri;
+  session.capturedImageMimeType = mimeType;
+  session.capturedImageFileName = fileName;
+  session.analysisRequestId = generateMealPhotoAnalysisRequestId();
+  session.captureGeneration = captureGenerationCounter;
   if (method === "camera") {
     session.recordTiming = "current";
     session.recordTimingConfirmed = true;
     session.occurredAt = capturedAt.toISOString();
   }
+}
+
+// Called only by the upload coordinator (useMealPhotoUpload). Writes are gated on the caller
+// still holding the current analysisRequestId + captureGeneration — see that hook for the actual
+// stale-result / actor-switch discard checks; this setter trusts the caller already did them.
+export function setMealPhotoUploadState(patch: {
+  uploadStatus: MealPhotoUploadStatus;
+  imageObjectRef?: string | null;
+  uploadErrorCode?: MealPhotoUploadErrorCode | null;
+  uploadedAt?: string | null;
+  uploadAttemptCount?: number;
+}) {
+  session = {
+    ...session,
+    uploadStatus: patch.uploadStatus,
+    imageObjectRef: patch.imageObjectRef !== undefined ? patch.imageObjectRef : session.imageObjectRef,
+    uploadErrorCode: patch.uploadErrorCode !== undefined ? patch.uploadErrorCode : session.uploadErrorCode,
+    uploadedAt: patch.uploadedAt !== undefined ? patch.uploadedAt : session.uploadedAt,
+    uploadAttemptCount: patch.uploadAttemptCount !== undefined ? patch.uploadAttemptCount : session.uploadAttemptCount
+  };
 }

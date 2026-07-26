@@ -28,6 +28,10 @@ import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseM
 import { getConsumerMealIdentificationFinalizationRuntimeFlags } from "../meal-identification-finalization/featureFlags";
 import type { ConsumerMealIdentificationFinalizationRuntimeFlags } from "../meal-identification-finalization/types";
 import type { SupabaseConsumerMealIdentificationFinalizationClientLike } from "../meal-identification-finalization/supabaseMealIdentificationFinalizationContracts";
+import { createMealPhotoUploadService } from "../meal-photo-upload/factories";
+import { getMealPhotoUploadRuntimeFlags, type MealPhotoUploadRuntimeFlags } from "../meal-photo-upload/featureFlags";
+import type { MealPhotoUploadService } from "../meal-photo-upload/mealPhotoUploadService";
+import type { SupabaseMealPhotoStorageClientLike } from "../meal-photo-upload/supabaseMealPhotoStorageContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
@@ -277,6 +281,7 @@ export type ConsumerRuntimeComposition = {
   mealIdentificationFinalizationRuntime: ConsumerMealIdentificationFinalizationRuntime;
   plannedMealRuntime: ConsumerPlannedMealRuntime;
   plannedMealService: Pick<ConsumerPlannedMealV2Service, "update" | "cancel">;
+  mealPhotoUploadService: MealPhotoUploadService;
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMealsReadResult>;
   createOverviewService(timezone: string): ConsumerTodayIntakeOverviewService;
 };
@@ -508,11 +513,26 @@ function createMealRuntimeParts(input: {
     service: plannedMealService,
     operationStore: new ConsumerPlannedMealOperationStore(input.storage)
   });
+  const mealPhotoUploadFlags = normalizeMealPhotoUploadFlags(
+    getMealPhotoUploadRuntimeFlags(input.authFlags.authSource, input.authFlags.supabaseAuthEnabled, input.authFlags.supabaseWritesEnabled),
+    input.authFlags.authSource
+  );
+  const mealPhotoUploadService = createMealPhotoUploadService(
+    input.authFlags.authSource,
+    input.authFlags.supabaseAuthEnabled,
+    input.authFlags.supabaseWritesEnabled,
+    {
+      authPort: input.authPort,
+      storageClient: input.mealClient as unknown as SupabaseMealPhotoStorageClientLike | undefined
+    },
+    mealPhotoUploadFlags
+  );
   return {
     mealWriteRuntime,
     mealIdentificationFinalizationRuntime,
     plannedMealRuntime,
     plannedMealService,
+    mealPhotoUploadService,
     getPlannedMeals: (plannedDate: string) => plannedMealsService.getCurrentUserPlannedMeals({ plannedDate }),
     createOverviewService: (timezone: string) => input.overviewService ?? createConsumerTodayIntakeOverviewService(
       overviewFlags,
@@ -571,6 +591,16 @@ function normalizePlannedMealWriteFlags(flags: ConsumerMealRuntimeFlags, authSou
     };
   }
   return { ...flags, issues: flags.issues.filter((issue) => !isApprovedB2ReadWriteTransitionIssue(issue)) };
+}
+
+function normalizeMealPhotoUploadFlags(
+  flags: MealPhotoUploadRuntimeFlags,
+  authSource: ConsumerRuntimeFlags["authSource"]
+): MealPhotoUploadRuntimeFlags {
+  if (authSource === "mock") {
+    return { uploadSource: "mock", issues: [] };
+  }
+  return flags;
 }
 
 function isApprovedB2ReadWriteTransitionIssue(issue: string) {

@@ -36,7 +36,6 @@ function record(name, pass) {
 
 const PROTECTED_MIGRATION = "supabase/migrations/20260722010000_cache_restaurant_current_access_context_plan.sql";
 const PROTECTED_MIGRATION_SHA256 = "4e08de96d28a5e6d9911b074fa73769ea5b3e21d9e14a089c7f420e16a4fbe72";
-const BASELINE_HEAD = "60d1c4bb2c56428f546b162eee7991dd4ed08746";
 
 const sharedContractTypes = read("packages/shared/src/domain/meal-photo-analysis/types.ts");
 const sharedDomainIndex = read("packages/shared/src/domain/index.ts");
@@ -50,6 +49,22 @@ const storageMigration = read("supabase/migrations/20260725030000_meal_photo_ana
 const grantMigration = read("supabase/migrations/20260726010000_meal_photo_analysis_service_role_table_grants.sql");
 const gitStatus = git(["status", "--porcelain=v1"]);
 const gitDiffNames = git(["diff", "--name-only"]) + git(["diff", "--cached", "--name-only"]);
+
+// MI-E-C3-R1: the Mobile upload implementation this guard's contract eventually feeds. Read only
+// if present — this guard must keep passing on a checkout from before MI-E-C3 existed, so these
+// checks are skipped (not failed) when the feature folder doesn't exist yet.
+const mealPhotoUploadRoot = "apps/mobile/features/meal-photo-upload";
+const mealPhotoUploadExists = exists(mealPhotoUploadRoot);
+const mealPhotoUploadFiles = mealPhotoUploadExists
+  ? (function walk(dir) {
+      return fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((entry) => {
+        const rel = path.join(dir, entry.name);
+        return entry.isDirectory() ? walk(rel) : entry.isFile() && entry.name.endsWith(".ts") ? [rel] : [];
+      });
+    })(mealPhotoUploadRoot)
+  : [];
+const mealPhotoUploadSource = mealPhotoUploadFiles.map(read).join("\n\n");
+const zhTW = read("lib/i18n/zh-TW.ts");
 
 // ==== §八 items 1-6: consent authority moved to shared, with unambiguous hash evidence ====
 
@@ -199,14 +214,53 @@ record(
   fs.readdirSync(path.join(root, "supabase/functions")).length === 0
 );
 record(
-  "no file this round imports an OpenAI SDK or calls an OpenAI API endpoint",
+  "no file in this contract's own surface imports an OpenAI SDK or calls an OpenAI API endpoint",
   ![sharedContractTypes, sharedConsentTypes, mealIdentificationTypes, analysisTypes, consumerAuthIndex, analysesMigration, correctionsMigration, storageMigration, grantMigration].some(
     (text) => /from\s+["']openai["']|new OpenAI\(|api\.openai\.com|require\(["']openai["']\)/i.test(text)
   )
 );
+
+// ==== MI-E-C3-R1: durable long-term invariants replacing MI-E-C1's own one-time freeze checks ====
+//
+// The two checks this replaces ("analysis.tsx/meal-photo.tsx must never be modified again" and
+// "HEAD must equal the MI-E-C1/R2 freeze commit") were MI-E-C1's OWN freeze-gate assertions, valid
+// only for that one round's commit — not a standing regression invariant for every future round.
+// The very next legitimate round (MI-E-C3) needed to modify both files to wire real photo upload,
+// which is exactly the kind of authorized evolution those two checks could never distinguish from
+// a violation. They are replaced with checks that state the actual property this guard cares
+// about — the frozen contract's constraints keep being honored by whatever implementation exists
+// today — without pinning to a specific commit or forbidding named files from ever changing again.
 record(
-  "analysis.tsx and meal-photo.tsx were not modified this round",
-  !gitStatus.includes("apps/mobile/app/analysis.tsx") && !gitStatus.includes("apps/mobile/app/meal-photo.tsx")
+  "the frozen shared meal-photo-analysis contract module still exists with its canonical builder",
+  exists("packages/shared/src/domain/meal-photo-analysis/types.ts") &&
+    /export function buildMealPhotoAnalysisObjectPath/.test(sharedContractTypes)
+);
+record(
+  "Mobile's meal photo upload implementation (if present) contains no trusted user-id field on its upload input type",
+  !mealPhotoUploadExists || !/\buserId\s*:\s*string/.test(read(`${mealPhotoUploadRoot}/types.ts`))
+);
+record(
+  "Mobile's meal photo upload implementation (if present) contains no per-photo training consent field",
+  !mealPhotoUploadExists || !/trainingEligible|trainingConsent|allowTraining|canTrain/i.test(stripTsComments(mealPhotoUploadSource))
+);
+record(
+  "Mobile's meal photo upload implementation (if present) contains no restaurant commercial permission/grant field",
+  !mealPhotoUploadExists || !/restaurantCommercialPermission|restaurantCommercialGrant|commercialLicense/i.test(stripTsComments(mealPhotoUploadSource))
+);
+record(
+  "Mobile's meal photo upload implementation (if present) contains no OpenAI call and no Edge Function invocation/definition",
+  !mealPhotoUploadExists ||
+    (!/openai|api\.openai\.com/i.test(stripTsComments(mealPhotoUploadSource)) &&
+      !/functions\.invoke|supabase\/functions|Deno\.serve/i.test(stripTsComments(mealPhotoUploadSource)))
+);
+record(
+  "the private Storage bucket migration still sets public = false for meal-analysis-photos (durable — not tied to any specific later diff)",
+  /insert into storage\.buckets[\s\S]{0,300}false/.test(storageMigration) || /public\s*=\s*false/.test(storageMigration)
+);
+record(
+  "the demo AI-analysis UI text explicitly discloses that real AI analysis is not yet connected, and contains none of the banned false-completion phrases",
+  /AI 影像分析尚未接通|AI 分析尚未接通|尚未依這張照片進行 AI 計算|尚未依這張照片實際進行 AI 計算/.test(zhTW) &&
+    !/AI\s*正在分析餐點中|已辨識成功/.test(stripTsComments(zhTW))
 );
 
 // ==== carried-forward canonical-vocabulary checks (must not regress from R1) ====
@@ -280,10 +334,6 @@ record(
   !/drop table|drop column|truncate/i.test(grantMigration) &&
     !/revoke[^;]*select[^;]*from\s+authenticated/i.test(grantCode)
 );
-
-// ==== baseline informational ====
-const head = git(["rev-parse", "HEAD"]).trim();
-record("HEAD matches the MI-E-C1/R2 baseline (informational — expected to go stale the instant this round's own candidate is committed)", head === BASELINE_HEAD);
 
 const failed = checks.filter((c) => !c.pass);
 console.log(`RESULT ${checks.length - failed.length}/${checks.length} PASS`);

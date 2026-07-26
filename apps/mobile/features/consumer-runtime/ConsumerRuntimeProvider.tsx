@@ -20,6 +20,7 @@ import type {
 import type { ConsumerPlannedMeal, ConsumerUpdatePlannedMealV2Input } from "../consumer-meals/types";
 import type { ConsumerPlannedMealDraft } from "./consumerPlannedMealMapper";
 import type { ConsumerPlannedMealRuntimeState } from "./consumerPlannedMealRuntime";
+import { errUpload, MealPhotoUploadError, type MealPhotoUploadInput, type MealPhotoUploadOutcome } from "../meal-photo-upload/types";
 
 export type ConsumerPlannedMealMutationState = {
   status: "idle" | "submitting" | "succeeded" | "error";
@@ -47,6 +48,8 @@ export type ConsumerRuntimeContextValue = {
   cancelPlannedMeal(input: { plannedMealId: string; expectedUpdatedAt: string }): Promise<ConsumerPlannedMealMutationState>;
   convertPlannedMeal(input: { plannedMealId: string; expectedUpdatedAt: string }): Promise<ConsumerPlannedMealRuntimeState>;
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMeal[]>;
+  uploadMealPhoto(input: MealPhotoUploadInput): Promise<MealPhotoUploadOutcome>;
+  deleteMealPhotoObject(imageObjectRef: string): Promise<boolean>;
   mealWriteState: ConsumerMealWriteRuntimeState;
   mealIdentificationFinalizationState: ConsumerMealIdentificationFinalizationRuntimeState;
   plannedMealState: ConsumerPlannedMealRuntimeState;
@@ -264,6 +267,16 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
         if (actor !== runtimeStateRef.current.actorKey || generation !== runtimeStateRef.current.actorGeneration) return [];
         return result.status === "available" ? result.meals : [];
       } catch { return []; }
+    },
+    uploadMealPhoto: (input) => {
+      if (!composition.ok) {
+        return Promise.resolve(errUpload(new MealPhotoUploadError("meal_photo_upload_disabled", "Meal photo upload is disabled in this runtime.")));
+      }
+      return composition.value.mealPhotoUploadService.uploadMealPhoto(input);
+    },
+    deleteMealPhotoObject: (imageObjectRef) => {
+      if (!composition.ok) return Promise.resolve(false);
+      return composition.value.mealPhotoUploadService.deleteMealPhotoObject(imageObjectRef);
     },
     mealWriteState,
     mealIdentificationFinalizationState,

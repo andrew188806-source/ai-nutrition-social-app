@@ -5,7 +5,10 @@ import * as ImagePicker from "expo-image-picker";
 // denied, user cancellation, unexpected native error) is a typed outcome so callers
 // never need a try/catch around a native call.
 export type MediaCaptureOutcome =
-  | Readonly<{ status: "captured"; uri: string; capturedAt: string }>
+  // mimeType/fileName are whatever expo-image-picker's ImagePickerAsset actually reported for
+  // this capture (MI-E-C3) — used downstream to resolve a trusted upload MIME type/extension.
+  // Either can be null/undefined; nothing here guesses or defaults a type.
+  | Readonly<{ status: "captured"; uri: string; capturedAt: string; mimeType: string | null; fileName: string | null }>
   | Readonly<{ status: "canceled" }>
   | Readonly<{ status: "permission_denied"; canAskAgain: boolean }>
   | Readonly<{ status: "unavailable" }>;
@@ -20,7 +23,13 @@ function fromResult(result: ImagePicker.ImagePickerResult): MediaCaptureOutcome 
   if (result.canceled) return { status: "canceled" };
   const asset = result.assets?.[0];
   if (!asset?.uri) return { status: "unavailable" };
-  return { status: "captured", uri: asset.uri, capturedAt: new Date().toISOString() };
+  return {
+    status: "captured",
+    uri: asset.uri,
+    capturedAt: new Date().toISOString(),
+    mimeType: asset.mimeType ?? null,
+    fileName: asset.fileName ?? null
+  };
 }
 
 export async function captureMealPhotoFromCamera(): Promise<MediaCaptureOutcome> {
