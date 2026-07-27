@@ -1,0 +1,8 @@
+# MI-E-C4: minimal, additive Supabase config — only what this round's Edge Function needs.
+# Does not touch or set any unrelated project setting.
+project_id = "msbgnnoorsoefuiwluye"
+
+[functions.meal-photo-analysis]
+# Must stay true — this function is an authenticated-user endpoint only, never public/anonymous.
+# See MI-E-C4's guard (checks this literal value) and report §8 for why.
+verify_jwt = true

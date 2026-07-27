@@ -192,9 +192,14 @@ record(
 );
 
 // 13. 10MB limit explicit
+// MI-E-C4: the literal now lives in @haocu/shared (promoted alongside binary-signature detection
+// — see check "single canonical binary-signature implementation" below); Mobile's types.ts
+// re-exports it rather than redefining it, so this checks the canonical value plus the re-export.
 record(
-  "10,485,760-byte limit is defined once and enforced by both real adapters",
-  /MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE\s*=\s*10_485_760/.test(typesSrc) &&
+  "10,485,760-byte limit is defined once (in @haocu/shared) and enforced by both real adapters",
+  /MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE\s*=\s*10_485_760/.test(read("packages/shared/src/domain/meal-photo-analysis/types.ts")) &&
+    typesSrc.includes("MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE") &&
+    !/MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE\s*=\s*10_485_760/.test(typesSrc) &&
     supabaseAdapterSrc.includes("rawBytes.byteSize > MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE") &&
     mockAdapterSrc.includes("rawBytes.byteSize > MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE")
 );
@@ -317,12 +322,21 @@ record(
 );
 
 // R1-6. arbitrary bytes cannot pass as an image merely by being labeled image/jpeg
+// MI-E-C4: detectImageSignature itself now lives in @haocu/shared (single canonical
+// implementation reused by the Edge Function's server-side revalidation); Mobile's
+// binarySignature.ts is a re-export, not a redefinition — see the dedicated single-implementation
+// check further below.
 record(
   "detectImageSignature only recognizes real magic-byte headers (JPEG/PNG/WebP/HEIC-HEIF) — it takes no MIME/filename parameter at all, so a caller-supplied label cannot influence its result",
   (() => {
-    const signature = binarySignatureSrc.match(/export function detectImageSignature\(([^)]*)\)/);
+    const canonicalSrc = read("packages/shared/src/domain/meal-photo-analysis/binarySignature.ts");
+    const signature = canonicalSrc.match(/export function detectImageSignature\(([^)]*)\)/);
     return Boolean(signature) && signature[1].replace(/\s/g, "") === "bytes:Uint8Array";
   })()
+);
+record(
+  "Mobile's binarySignature.ts is a re-export from @haocu/shared, not a second definition",
+  binarySignatureSrc.includes('from "@haocu/shared"') && !binarySignatureSrc.includes("export function detectImageSignature")
 );
 
 // R1-7. demo nutrition values carry an explicit disclosure
@@ -356,12 +370,24 @@ record(
       // --untracked so this also sees this round's own not-yet-staged new files, not just
       // previously committed ones. scripts/ is excluded from the offender filter because guard
       // files legitimately quote "meal-analysis-photos" in their own check descriptions/regexes —
-      // that is not an application code path that could ever call bucket.upload().
+      // that is not an application code path that could ever call bucket.upload(). MI-E-C4:
+      // supabase/functions/ is also excluded — the meal-photo-analysis Edge Function is a second,
+      // legitimate first-class consumer of this same bucket (server-side read, never upload), not
+      // a duplicate upload implementation. packages/shared/ is excluded because the bucket
+      // name/size-limit constant is now documented there as the canonical source (comment only —
+      // packages/shared never calls bucket.upload() itself).
       const grep = execFileSync("git", ["grep", "--untracked", "-l", "meal-analysis-photos"], { cwd: root, encoding: "utf8" });
       const files = grep
         .split("\n")
         .filter(Boolean)
-        .filter((f) => !f.startsWith("apps/mobile/features/meal-photo-upload/") && !f.startsWith("supabase/migrations/") && !f.startsWith("scripts/"));
+        .filter(
+          (f) =>
+            !f.startsWith("apps/mobile/features/meal-photo-upload/") &&
+            !f.startsWith("supabase/migrations/") &&
+            !f.startsWith("scripts/") &&
+            !f.startsWith("supabase/functions/") &&
+            !f.startsWith("packages/shared/")
+        );
       return files.length === 0;
     } catch {
       return true;

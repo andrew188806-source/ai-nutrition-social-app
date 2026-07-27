@@ -46,7 +46,12 @@ function compile(rootNames, outDir, rootDir) {
   const program = ts.createProgram(rootNames, {
     module: ts.ModuleKind.CommonJS,
     target: ts.ScriptTarget.ES2022,
-    lib: ["lib.es2022.d.ts"],
+    // MI-E-C4: widened from ["lib.es2022.d.ts"] to also include DOM — packages/shared now also
+    // contains imageHash.ts (promoted for the meal-photo-analysis Edge Function), which uses the
+    // ambient Web Crypto `crypto.subtle` global. This matches what every other tsconfig in this
+    // repo already gets implicitly (TS defaults to including DOM when `lib` is left unset, which
+    // is how the root/apps-mobile tsconfig's own typecheck of the same file already passes).
+    lib: ["lib.es2022.d.ts", "lib.dom.d.ts"],
     strict: true,
     esModuleInterop: true,
     skipLibCheck: true,

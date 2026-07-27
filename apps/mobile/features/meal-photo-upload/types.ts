@@ -1,16 +1,20 @@
-import type { MealPhotoCaptureMethod } from "@haocu/shared";
+import {
+  MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE,
+  type MealPhotoCaptureMethod,
+  type SupportedMealPhotoExtension,
+  type SupportedMealPhotoMimeType
+} from "@haocu/shared";
 
 // MI-E-C3: local photo -> private Supabase Storage upload contract. This is a Mobile-only
 // feature boundary (unlike packages/shared/src/domain/meal-photo-analysis, which is the
 // future server-facing AI analysis contract) since only Mobile ever performs this upload.
 export type { MealPhotoCaptureMethod };
 
-export type SupportedMealPhotoMimeType = "image/jpeg" | "image/png" | "image/heic" | "image/webp";
-export type SupportedMealPhotoExtension = "jpg" | "png" | "heic" | "webp";
-
-// Matches the meal-analysis-photos Storage bucket's file_size_limit exactly
-// (supabase/migrations/20260725030000_meal_photo_analysis_private_storage_bucket.sql).
-export const MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE = 10_485_760;
+// MI-E-C4: canonical definitions promoted to @haocu/shared so the Edge Function's server-side
+// binary revalidation uses the exact same accepted-format vocabulary and byte-size limit.
+// Re-exported (not redefined) here — every existing Mobile import path keeps working unchanged.
+export type { SupportedMealPhotoExtension, SupportedMealPhotoMimeType };
+export { MEAL_PHOTO_UPLOAD_MAX_BYTE_SIZE };
 
 export type MealPhotoUploadInput = {
   analysisRequestId: string;

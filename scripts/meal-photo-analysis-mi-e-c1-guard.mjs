@@ -209,9 +209,90 @@ record(
   "no frozen meal-identification-finalization file was modified this round",
   !gitDiffNames.includes("meal-identification-finalization/") && !gitStatus.includes("meal-identification-finalization/")
 );
+// ==== MI-E-C4-R1: durable meal-photo-analysis Edge Function invariants replacing the MI-E-C1
+// freeze-only "supabase/functions/ remains empty" check. That check was MI-E-C1's own one-time
+// freeze-gate assertion (valid only until the next round that legitimately created a Function) —
+// not a standing regression invariant, exactly like the analysis.tsx/HEAD-pinned checks MI-E-C3-R1
+// already replaced above. These checks instead state the actual properties this guard cares about
+// (auth stays on, no public mode, frozen RPC untouched, AI-observation-only scope, no premature
+// writes, no training/licensing pipeline) directly against the Function's own current source —
+// they do not depend on the Function never existing, a fixed historical HEAD, "this round" framing,
+// or any machine-local external file, so they hold for every future round the same way.
+const mealPhotoAnalysisFnRoot = "supabase/functions/meal-photo-analysis";
+const mealPhotoAnalysisFnExists = exists(mealPhotoAnalysisFnRoot) && exists(`${mealPhotoAnalysisFnRoot}/index.ts`);
+const mealPhotoAnalysisFnFiles = mealPhotoAnalysisFnExists
+  ? fs.readdirSync(path.join(root, mealPhotoAnalysisFnRoot)).filter((f) => f.endsWith(".ts"))
+  : [];
+const mealPhotoAnalysisFnSource = mealPhotoAnalysisFnFiles.map((f) => read(`${mealPhotoAnalysisFnRoot}/${f}`)).join("\n\n");
+const mealPhotoAnalysisFnSourceNoComments = stripTsComments(mealPhotoAnalysisFnSource);
+const configTomlSrc = exists("supabase/config.toml") ? read("supabase/config.toml") : "";
+
+record("the meal-photo-analysis Edge Function exists (supabase/functions/meal-photo-analysis/index.ts)", mealPhotoAnalysisFnExists);
+
 record(
-  "supabase/functions/ remains empty — no Edge Function was created this round",
-  fs.readdirSync(path.join(root, "supabase/functions")).length === 0
+  "config.toml keeps verify_jwt = true for meal-photo-analysis — never false, never absent",
+  mealPhotoAnalysisFnExists &&
+    /\[functions\.meal-photo-analysis\][\s\S]{0,400}verify_jwt\s*=\s*true/.test(configTomlSrc) &&
+    !/\[functions\.meal-photo-analysis\][\s\S]{0,400}verify_jwt\s*=\s*false/.test(configTomlSrc)
+);
+
+record(
+  "the Function contains no --no-verify-jwt flag reference and no public/anonymous mode marker",
+  !mealPhotoAnalysisFnExists || !/no-verify-jwt|verify_jwt\s*=\s*false/i.test(mealPhotoAnalysisFnSourceNoComments)
+);
+
+record(
+  "the Function source never references a Mobile-only EXPO_PUBLIC_* secret, and Mobile never references the service-role key or the Function's admin persistence key",
+  (!mealPhotoAnalysisFnExists || !/EXPO_PUBLIC_[A-Z_]*(OPENAI|SERVICE_ROLE|ADMIN_KEY)/i.test(mealPhotoAnalysisFnSourceNoComments)) &&
+    (() => {
+      try {
+        const grep = git(["grep", "--untracked", "-lE", "SUPABASE_SERVICE_ROLE_KEY|MEAL_PHOTO_ANALYSIS_ADMIN_KEY", "--", "apps/mobile"]);
+        return grep.trim().length === 0;
+      } catch {
+        return true;
+      }
+    })()
+);
+
+record(
+  "the Function never modifies or calls the frozen finalize_current_user_meal_identification_v1 RPC",
+  !mealPhotoAnalysisFnExists || !/finalize_current_user_meal_identification_v1/.test(mealPhotoAnalysisFnSourceNoComments)
+);
+
+record(
+  "the Function stays AI-visual-observation-only: no restaurant/menu catalog auto-resolution and no verified-nutrition claim",
+  !mealPhotoAnalysisFnExists ||
+    (!/resolveCatalogMealCandidates|restaurant_catalog|menu_items/i.test(mealPhotoAnalysisFnSourceNoComments) &&
+      !/verified nutrition|verifiedNutrition|已驗證的營養/i.test(mealPhotoAnalysisFnSourceNoComments))
+);
+
+record(
+  "the Function never writes a meal_records, meal_record_items, or meal_corrections row",
+  !mealPhotoAnalysisFnExists ||
+    !/from\(\s*["']meal_records["']\s*\)|from\(\s*["']meal_record_items["']\s*\)|from\(\s*["']meal_corrections["']\s*\)/.test(mealPhotoAnalysisFnSourceNoComments)
+);
+
+record(
+  "the Function establishes no training pipeline (no trainingEligible/trainingConsent/allowTraining/canTrain field or training-dataset/model-artifact reference)",
+  !mealPhotoAnalysisFnExists ||
+    !/trainingEligible|trainingConsent|allowTraining|canTrain|training-dataset|model-artifact|dataset-export/i.test(mealPhotoAnalysisFnSourceNoComments)
+);
+
+record(
+  "the Function establishes no restaurant commercial permission/grant",
+  !mealPhotoAnalysisFnExists || !/restaurantCommercialPermission|restaurantCommercialGrant|commercialLicense/i.test(mealPhotoAnalysisFnSourceNoComments)
+);
+
+record(
+  "Mobile makes no direct OpenAI call (no vendor SDK import, no api.openai.com reference, no OPENAI_API_KEY reference)",
+  (() => {
+    try {
+      const grep = git(["grep", "--untracked", "-lE", "openai|api\\.openai\\.com|OPENAI_API_KEY", "--", "apps/mobile"]);
+      return grep.trim().length === 0;
+    } catch {
+      return true;
+    }
+  })()
 );
 record(
   "no file in this contract's own surface imports an OpenAI SDK or calls an OpenAI API endpoint",

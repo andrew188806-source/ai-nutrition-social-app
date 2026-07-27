@@ -1,3 +1,10 @@
+// GENERATED FILE — do not hand-edit. Mechanically derived from
+// packages/shared/src/domain/meal-photo-analysis/types.ts by
+// scripts/generate-meal-photo-analysis-edge-shared.mjs (MI-E-C4). Only relative import
+// specifiers were rewritten to include explicit .ts extensions for Deno's module
+// resolution; all other content is byte-identical to the canonical source. Regenerate
+// with: node scripts/generate-meal-photo-analysis-edge-shared.mjs
+
 // MI-E-C1: provider-neutral request/response contract for real (non-placeholder) meal-photo AI
 // analysis. No provider call exists yet anywhere in this repository — this file only defines the
 // shape a future server-side integration (a Supabase Edge Function) will accept and return.
