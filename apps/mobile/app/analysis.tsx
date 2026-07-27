@@ -6,7 +6,7 @@ import RNDateTimePicker, { DateTimePickerAndroid } from "@react-native-community
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
-import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, getAnalysisSession, useAnalysisCorrectionState, useMealPhotoUpload } from "../features/analysis";
+import { CorrectionSuccessActions, EstimatePreview, ExternalCorrectionPanel, SelfCookedCorrectionPanel, getAnalysisSession, useAnalysisCorrectionState, useMealPhotoAnalysis, useMealPhotoUpload } from "../features/analysis";
 import { getTodayMealRecords, saveCorrectedMealRecord, updateMealRecordByMealId } from "../features/analysis/analysisMealRecordStore";
 import { getEffectiveCalories } from "../features/analysis/nutritionSummary";
 import {
@@ -79,6 +79,7 @@ export default function AnalysisScreen() {
   const analysis = useAnalysisCorrectionState();
   const consumerRuntime = useConsumerRuntime();
   const mealPhotoUpload = useMealPhotoUpload();
+  const mealPhotoAnalysis = useMealPhotoAnalysis(mealPhotoUpload.uploadStatus, mealPhotoUpload.imageObjectRef);
   const restaurantCatalog = useRestaurantCatalog();
   const [demoMode] = useDemoUserPlan();
   const session = getAnalysisSession();
@@ -336,6 +337,18 @@ export default function AnalysisScreen() {
 
           {analysis.capturedImageUri ? <MealPhotoUploadStatusCard uploadStatus={mealPhotoUpload.uploadStatus} onRetry={mealPhotoUpload.retryUpload} /> : null}
 
+          {analysis.capturedImageUri ? (
+            <MealPhotoAnalysisResultCard
+              invocationStatus={mealPhotoAnalysis.analysisInvocationStatus}
+              candidates={mealPhotoAnalysis.analysisCandidates}
+              selectedCandidateId={mealPhotoAnalysis.selectedCandidateId}
+              safeErrorCode={mealPhotoAnalysis.safeAnalysisErrorCode}
+              consumerRuntimeMode={consumerRuntime.mode}
+              onRetry={mealPhotoAnalysis.retryAnalysis}
+              onSelectCandidate={mealPhotoAnalysis.selectCandidate}
+            />
+          ) : null}
+
           <SnowCard>
             <SnowSectionHeader title={zhTW.mobile.analysis.modeTitle} subtitle="這是第幾餐？" />
             <View style={styles.chipRow}>
@@ -521,6 +534,117 @@ function MealPhotoUploadStatusCard({
         </View>
       ) : null}
     </SnowCard>
+  );
+}
+
+// MI-E-C5-A: real AI-observation candidate presentation only — never a confirmed/final result.
+// requiresUserConfirmation is enforced server-side and by the shared response validator (see
+// meal-photo-analysis/adapters/supabaseMealPhotoAnalysisRepository.ts); this card's copy always
+// reinforces that regardless, since a user should never read "AI 已產生候選" as "meal saved."
+function MealPhotoAnalysisResultCard({
+  invocationStatus,
+  candidates,
+  selectedCandidateId,
+  safeErrorCode,
+  consumerRuntimeMode,
+  onRetry,
+  onSelectCandidate
+}: {
+  invocationStatus: ReturnType<typeof useMealPhotoAnalysis>["analysisInvocationStatus"];
+  candidates: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"];
+  selectedCandidateId: string | null;
+  safeErrorCode: ReturnType<typeof useMealPhotoAnalysis>["safeAnalysisErrorCode"];
+  consumerRuntimeMode: ReturnType<typeof useConsumerRuntime>["mode"];
+  onRetry: () => void;
+  onSelectCandidate: (candidateId: string | null) => void;
+}) {
+  const copy = zhTW.mobile.mealPhotoAnalysis;
+  if (invocationStatus === "not_started") return null;
+
+  if (invocationStatus === "waiting_for_upload") {
+    return (
+      <SnowCard>
+        <SnowSectionHeader title={copy.title} />
+        <Text style={styles.stateText}>{copy.waitingForUploadLabel}</Text>
+      </SnowCard>
+    );
+  }
+
+  if (invocationStatus === "invoking") {
+    return (
+      <SnowCard>
+        <SnowSectionHeader title={copy.title} />
+        <Text style={styles.stateText}>{copy.invokingLabel}</Text>
+      </SnowCard>
+    );
+  }
+
+  if (invocationStatus === "failed") {
+    // analysis_disabled is included in this same table, so a disabled runtime explicitly says
+    // "not enabled" here rather than falling through to a generic failure message.
+    const errorLabel = (safeErrorCode ? copy.errorCodeLabels[safeErrorCode] : null) ?? copy.errorCodeLabels.internal_error;
+    return (
+      <SnowCard>
+        <SnowSectionHeader title={copy.title} />
+        <Text style={styles.stateText}>{copy.failedLabel}</Text>
+        <Text style={styles.disclaimer}>{errorLabel}</Text>
+        {safeErrorCode !== "analysis_disabled" ? (
+          <View style={styles.ctaColumn}>
+            <SecondaryButton icon="camera" label={copy.retryCta} onPress={onRetry} />
+          </View>
+        ) : null}
+      </SnowCard>
+    );
+  }
+
+  return (
+    <SnowCard>
+      <SnowSectionHeader title={copy.title} subtitle={invocationStatus === "low_confidence" ? copy.lowConfidenceLabel : copy.completedLabel} />
+      {consumerRuntimeMode === "mock" ? <Text style={styles.disclaimer}>{copy.mockBadge}</Text> : null}
+      {invocationStatus === "low_confidence" ? <Text style={styles.disclaimer}>{copy.lowConfidenceNote}</Text> : null}
+      {candidates.map((candidate) => (
+        <MealPhotoAnalysisCandidateRow
+          key={candidate.candidateId}
+          candidate={candidate}
+          selected={candidate.candidateId === selectedCandidateId}
+          onSelect={() => onSelectCandidate(candidate.candidateId === selectedCandidateId ? null : candidate.candidateId)}
+        />
+      ))}
+      <Text style={styles.disclaimer}>
+        {copy.disclaimerEstimate}　·　{copy.disclaimerNutrition}
+      </Text>
+      <Text style={styles.disclaimer}>{copy.disclaimerAction}</Text>
+    </SnowCard>
+  );
+}
+
+function MealPhotoAnalysisCandidateRow({
+  candidate,
+  selected,
+  onSelect
+}: {
+  candidate: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number];
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const copy = zhTW.mobile.mealPhotoAnalysis;
+  return (
+    <Pressable onPress={onSelect} style={styles.candidateRow}>
+      <Text style={styles.stateText}>{candidate.observedName}</Text>
+      <Text style={styles.disclaimer}>
+        {copy.confidenceLabel}: {Math.round(candidate.confidence * 100)}%
+      </Text>
+      {candidate.components.length > 0 ? (
+        <Text style={styles.disclaimer}>
+          {copy.componentsLabel}: {candidate.components.map((component) => `${component.name}（${component.estimatedPortion}）`).join("、")}
+        </Text>
+      ) : null}
+      <Text style={styles.disclaimer}>
+        {candidate.estimatedNutrition.calories} kcal · {zhTW.mobile.analysis.protein} {candidate.estimatedNutrition.proteinGrams}g ·{" "}
+        {zhTW.mobile.analysis.carbs} {candidate.estimatedNutrition.carbsGrams}g · {zhTW.mobile.analysis.fat} {candidate.estimatedNutrition.fatGrams}g
+      </Text>
+      <Text style={[styles.disclaimer, selected ? styles.candidateSelectedLabel : null]}>{selected ? copy.selectedBadge : copy.selectCta}</Text>
+    </Pressable>
   );
 }
 
@@ -2214,6 +2338,16 @@ const styles = StyleSheet.create({
   ctaColumn: {
     gap: 10,
     marginTop: 16
+  },
+  candidateRow: {
+    borderColor: snow.line,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 12,
+    padding: 14
+  },
+  candidateSelectedLabel: {
+    color: snow.primaryDeep
   },
   ctaRow2: {
     flexDirection: "row",

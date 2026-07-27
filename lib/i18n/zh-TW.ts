@@ -146,13 +146,58 @@ export const zhTW = {
       currentTimeLabel: "現在"
     },
     // MI-E-C3: photo upload status only — never claims AI analysis is happening or complete.
+    // MI-E-C5-A: pendingNote deliberately no longer makes any AI-analysis claim at all (positive
+    // or negative) — real analysis status now has its own dedicated card (mealPhotoAnalysis
+    // below), so this card's job is only ever "is the photo itself safely stored," regardless of
+    // which analysis runtime mode is active.
     mealPhotoUpload: {
       title: "照片安全上傳",
       uploadingLabel: "正在安全上傳照片…",
       uploadedLabel: "照片已安全上傳",
       failedLabel: "照片上傳失敗",
       retryCta: "重新上傳",
-      pendingNote: "AI 分析尚未接通，這裡僅代表照片已安全存放。"
+      pendingNote: "照片已安全存放，準備進行後續步驟。"
+    },
+    // MI-E-C5-A: real AI-observation candidate presentation. Every candidate is an unconfirmed AI
+    // estimate — copy must never claim a verified/final result.
+    mealPhotoAnalysis: {
+      title: "AI 餐點觀察（尚未確認）",
+      disabledNote: "AI 影像分析尚未接通，這裡僅代表照片已安全存放。",
+      waitingForUploadLabel: "等待照片上傳完成後才會開始分析…",
+      invokingLabel: "正在進行 AI 分析中…",
+      completedLabel: "AI 已產生初步觀察候選，請確認或修正",
+      lowConfidenceLabel: "AI 對這張照片不太確定，候選僅供參考",
+      lowConfidenceNote: "光線、角度或包裝可能影響辨識準確度；下一階段才會提供完整修正／搜尋流程。",
+      failedLabel: "AI 分析失敗",
+      retryCta: "重新分析",
+      disclaimerEstimate: "AI 估算，尚未確認",
+      disclaimerNutrition: "營養數值尚未驗證",
+      disclaimerAction: "請選擇或修正後再保存",
+      confidenceLabel: "可信度",
+      componentsLabel: "可見組成",
+      portionLabel: "估計份量",
+      mockBadge: "示範模式（非真實 AI 結果）",
+      selectCta: "選擇這個候選",
+      selectedBadge: "已選擇",
+      errorCodeLabels: {
+        authentication_required: "請重新登入後再試一次。",
+        invalid_request: "分析請求格式有誤，請重新拍照或上傳。",
+        invalid_image_object_ref: "照片參照無效，請重新拍照或上傳。",
+        image_object_not_found: "找不到已上傳的照片，請重新上傳。",
+        image_object_access_denied: "沒有權限存取這張照片。",
+        unsupported_image_type: "這張照片格式不受支援。",
+        image_too_large: "照片檔案過大。",
+        analysis_disabled: "AI 分析目前尚未啟用。",
+        provider_rate_limited: "AI 服務忙碌中，請稍後再試。",
+        provider_timeout: "AI 服務回應逾時，請稍後再試。",
+        provider_unavailable: "AI 服務暫時無法使用，請稍後再試。",
+        provider_invalid_response: "AI 服務回傳了無法辨識的結果。",
+        persistence_failed: "分析結果儲存失敗，請稍後再試。",
+        analysis_conflict: "這張照片的分析請求發生衝突，請重新拍照。",
+        internal_error: "系統發生未預期的錯誤，請稍後再試。",
+        invalid_server_response: "AI 服務回傳了無法辨識的結果。",
+        network_error: "無法連線到 AI 分析服務，請檢查網路後再試。"
+      }
     },
     mealPhotoTitle: "拍攝或上傳餐點照片",
     mealPhotoSubtitle: "先選擇外食或自己煮，再用餐點照片開始分析。外食會先找附近餐廳菜單；自煮會直接估算食材與份量。",

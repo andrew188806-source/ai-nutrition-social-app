@@ -21,6 +21,7 @@ import type { ConsumerPlannedMeal, ConsumerUpdatePlannedMealV2Input } from "../c
 import type { ConsumerPlannedMealDraft } from "./consumerPlannedMealMapper";
 import type { ConsumerPlannedMealRuntimeState } from "./consumerPlannedMealRuntime";
 import { errUpload, MealPhotoUploadError, type MealPhotoUploadInput, type MealPhotoUploadOutcome } from "../meal-photo-upload/types";
+import { errAnalysis, MealPhotoAnalysisClientError, type MealPhotoAnalysisClientInput, type MealPhotoAnalysisOutcome } from "../meal-photo-analysis/types";
 
 export type ConsumerPlannedMealMutationState = {
   status: "idle" | "submitting" | "succeeded" | "error";
@@ -50,6 +51,7 @@ export type ConsumerRuntimeContextValue = {
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMeal[]>;
   uploadMealPhoto(input: MealPhotoUploadInput): Promise<MealPhotoUploadOutcome>;
   deleteMealPhotoObject(imageObjectRef: string): Promise<boolean>;
+  analyzeMealPhoto(input: MealPhotoAnalysisClientInput): Promise<MealPhotoAnalysisOutcome>;
   mealWriteState: ConsumerMealWriteRuntimeState;
   mealIdentificationFinalizationState: ConsumerMealIdentificationFinalizationRuntimeState;
   plannedMealState: ConsumerPlannedMealRuntimeState;
@@ -277,6 +279,12 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
     deleteMealPhotoObject: (imageObjectRef) => {
       if (!composition.ok) return Promise.resolve(false);
       return composition.value.mealPhotoUploadService.deleteMealPhotoObject(imageObjectRef);
+    },
+    analyzeMealPhoto: (input) => {
+      if (!composition.ok) {
+        return Promise.resolve(errAnalysis(new MealPhotoAnalysisClientError("analysis_disabled", "Meal photo analysis is disabled in this runtime.")));
+      }
+      return composition.value.mealPhotoAnalysisService.analyzeMealPhoto(input);
     },
     mealWriteState,
     mealIdentificationFinalizationState,

@@ -32,6 +32,10 @@ import { createMealPhotoUploadService } from "../meal-photo-upload/factories";
 import { getMealPhotoUploadRuntimeFlags, type MealPhotoUploadRuntimeFlags } from "../meal-photo-upload/featureFlags";
 import type { MealPhotoUploadService } from "../meal-photo-upload/mealPhotoUploadService";
 import type { SupabaseMealPhotoStorageClientLike } from "../meal-photo-upload/supabaseMealPhotoStorageContracts";
+import { createMealPhotoAnalysisService } from "../meal-photo-analysis/factories";
+import { getMealPhotoAnalysisRuntimeFlags, type MealPhotoAnalysisRuntimeFlags } from "../meal-photo-analysis/featureFlags";
+import type { MealPhotoAnalysisService } from "../meal-photo-analysis/mealPhotoAnalysisService";
+import type { SupabaseMealPhotoAnalysisClientLike } from "../meal-photo-analysis/supabaseMealPhotoAnalysisContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
@@ -282,6 +286,7 @@ export type ConsumerRuntimeComposition = {
   plannedMealRuntime: ConsumerPlannedMealRuntime;
   plannedMealService: Pick<ConsumerPlannedMealV2Service, "update" | "cancel">;
   mealPhotoUploadService: MealPhotoUploadService;
+  mealPhotoAnalysisService: MealPhotoAnalysisService;
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMealsReadResult>;
   createOverviewService(timezone: string): ConsumerTodayIntakeOverviewService;
 };
@@ -527,12 +532,33 @@ function createMealRuntimeParts(input: {
     },
     mealPhotoUploadFlags
   );
+  const mealPhotoAnalysisFlags = normalizeMealPhotoAnalysisFlags(
+    getMealPhotoAnalysisRuntimeFlags(
+      input.authFlags.authSource,
+      input.authFlags.supabaseAuthEnabled,
+      input.authFlags.supabaseWritesEnabled,
+      mealPhotoUploadFlags.uploadSource
+    ),
+    input.authFlags.authSource
+  );
+  const mealPhotoAnalysisService = createMealPhotoAnalysisService(
+    input.authFlags.authSource,
+    input.authFlags.supabaseAuthEnabled,
+    input.authFlags.supabaseWritesEnabled,
+    mealPhotoUploadFlags.uploadSource,
+    {
+      authPort: input.authPort,
+      analysisClient: input.mealClient as unknown as SupabaseMealPhotoAnalysisClientLike | undefined
+    },
+    mealPhotoAnalysisFlags
+  );
   return {
     mealWriteRuntime,
     mealIdentificationFinalizationRuntime,
     plannedMealRuntime,
     plannedMealService,
     mealPhotoUploadService,
+    mealPhotoAnalysisService,
     getPlannedMeals: (plannedDate: string) => plannedMealsService.getCurrentUserPlannedMeals({ plannedDate }),
     createOverviewService: (timezone: string) => input.overviewService ?? createConsumerTodayIntakeOverviewService(
       overviewFlags,
@@ -599,6 +625,16 @@ function normalizeMealPhotoUploadFlags(
 ): MealPhotoUploadRuntimeFlags {
   if (authSource === "mock") {
     return { uploadSource: "mock", issues: [] };
+  }
+  return flags;
+}
+
+function normalizeMealPhotoAnalysisFlags(
+  flags: MealPhotoAnalysisRuntimeFlags,
+  authSource: ConsumerRuntimeFlags["authSource"]
+): MealPhotoAnalysisRuntimeFlags {
+  if (authSource === "mock") {
+    return { analysisSource: "mock", issues: [] };
   }
   return flags;
 }

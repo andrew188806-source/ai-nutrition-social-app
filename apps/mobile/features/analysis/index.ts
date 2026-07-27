@@ -4,4 +4,5 @@ export * from "./nutritionSummary";
 export * from "./types";
 export { useAnalysisCorrectionState } from "./useAnalysisCorrectionState";
 export { useMealPhotoUpload, type MealPhotoUploadUiState } from "./useMealPhotoUpload";
+export { useMealPhotoAnalysis, type MealPhotoAnalysisUiState } from "./useMealPhotoAnalysis";
 export { isMealPhotoUploadResultStillCurrent, type MealPhotoUploadExpectedContext } from "./mealPhotoUploadStaleGuard";
