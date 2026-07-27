@@ -350,25 +350,33 @@ record(
     (envExampleSrc.match(/EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_PHOTO_ANALYSIS_SOURCE=/g) || []).length === 1
 );
 
-// 34. MI-E-C5-A-R1: the diff that introduced the var added nothing else (no smuggled secret)
+// 34. MI-E-C5-A Post-Freeze Guard Correction: pure current-content check for a smuggled secret
+// VALUE in .env.example. Deliberately reads only the committed file content via envExampleSrc
+// (fs.readFileSync) — never git diff/--cached/HEAD/dirty-working-tree state — so the result is
+// identical on a dirty pre-commit candidate, a clean post-commit worktree, and any future clean
+// checkout. The original version of this check compared `git diff -- .env.example`, which is
+// naturally empty on a clean checkout and produced a false negative right after this feature's own
+// freeze commit; it never indicated a real content defect.
+// OPENAI_API_KEY is a legitimate pre-existing empty template placeholder elsewhere in this file
+// (used by unrelated features) — this checks its VALUE is empty, not its absence.
+// SUPABASE_SERVICE_ROLE_KEY is likewise checked for an empty-or-absent value.
+// MEAL_PHOTO_ANALYSIS_ADMIN_KEY and MI_E_C5_A_TEST_ADMIN_KEY have no legitimate reason to appear in
+// a committed template file at all, so those two must be absent entirely, not merely empty.
 record(
-  "the .env.example diff for this round adds only the disabled-default analysis source var and its comment — no OpenAI/admin/service secret introduced",
+  ".env.example never carries a real secret value for OPENAI_API_KEY or SUPABASE_SERVICE_ROLE_KEY (empty-or-absent only), and never references MEAL_PHOTO_ANALYSIS_ADMIN_KEY or MI_E_C5_A_TEST_ADMIN_KEY at all",
   (() => {
-    try {
-      const diff = git(["diff", "--", ".env.example"]);
-      const addedLines = diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++"));
-      if (addedLines.length === 0) return false;
-      const allowed = addedLines.every(
-        (l) =>
-          l.includes("MI-E-C5-A: disabled | mock | supabase-live") ||
-          l.includes("EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_PHOTO_ANALYSIS_SOURCE=disabled")
-      );
-      const noSecret = !addedLines.some((l) => /OPENAI|ADMIN_KEY|SERVICE_ROLE|SECRET/i.test(l));
-      return allowed && noSecret;
-    } catch {
-      // No staged/working diff (e.g. already committed) — fall back to a pure content check.
-      return true;
+    function declaredValue(varName) {
+      const match = envExampleSrc.match(new RegExp(`^${varName}=(.*)$`, "m"));
+      return match ? match[1] : undefined;
     }
+    function emptyOrAbsent(value) {
+      return value === undefined || value.trim() === "";
+    }
+    const openaiEmptyOrAbsent = emptyOrAbsent(declaredValue("OPENAI_API_KEY"));
+    const serviceRoleEmptyOrAbsent = emptyOrAbsent(declaredValue("SUPABASE_SERVICE_ROLE_KEY"));
+    const adminKeyAbsent = !/^MEAL_PHOTO_ANALYSIS_ADMIN_KEY=/m.test(envExampleSrc);
+    const testAdminKeyAbsent = !/^MI_E_C5_A_TEST_ADMIN_KEY=/m.test(envExampleSrc);
+    return openaiEmptyOrAbsent && serviceRoleEmptyOrAbsent && adminKeyAbsent && testAdminKeyAbsent;
   })()
 );
 
