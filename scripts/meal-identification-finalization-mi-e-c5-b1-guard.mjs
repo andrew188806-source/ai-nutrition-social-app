@@ -34,6 +34,16 @@ function git(args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" });
 }
 
+function gitSucceeds(args) {
+  try {
+    execFileSync("git", args, { cwd: root, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const C5_B1_FREEZE_COMMIT = "e8141a3c0ec8df428813e25b290dd3365991b590";
 const migrationPath = "supabase/migrations/20260727010000_extend_meal_identification_finalization_for_existing_analysis.sql";
 const migrationSrc = read(migrationPath);
 const correctiveMigrationPath = "supabase/migrations/20260728010000_correct_existing_analysis_finalization_v3.sql";
@@ -42,6 +52,8 @@ const acceptedConfirmationMigrationPath =
 const IMMUTABLE_SHA256 = "e01a2ae044503fdb69008e9b2fe228d6299400bf56b03441083d0f0402e91cf2";
 const R1_CORRECTIVE_IMMUTABLE_SHA256 =
   "5efddeb83653ec6508dc69d4a6496ec42f6083ea895b6c53b953f9f1a90b439a";
+const R3_ACCEPTED_CONFIRMATION_IMMUTABLE_SHA256 =
+  "0a7655a8dbd63d656720a7eea4734786dc13ac82ab5faa5a9a1861322d9b17b8";
 
 // Isolate exactly the v3 IF block's own body (from its own IF header to its own END IF;), never
 // the whole function — v1/v2 legitimately still insert a fresh meal_analyses row, and a guard
@@ -418,17 +430,58 @@ record(
   )
 );
 
-// 25. no Mobile UI changes (analysis.tsx untouched by this round)
+// 25. Successor-compatible Mobile handoff authority. C5-B2 and later stages may legitimately
+// change analysis.tsx, so protect the frozen B1 semantics instead of the old workspace topology.
+const analysisScreenSrc = read("apps/mobile/app/analysis.tsx");
+const analysisAdapterSrc = read("apps/mobile/features/analysis/mealIdentificationFinalizationAdapter.ts");
+const finalizationRuntimeSrc = read(
+  "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts"
+);
+const authorityRelevantMobileSrc = [
+  analysisScreenSrc,
+  analysisAdapterSrc,
+  finalizationRuntimeSrc,
+  v3ContractSrc
+]
+  .join("\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
 record(
-  "apps/mobile/app/analysis.tsx has no diff in this round's git status",
-  (() => {
-    try {
-      const status = git(["status", "--porcelain", "--", "apps/mobile/app/analysis.tsx"]);
-      return status.trim().length === 0;
-    } catch {
-      return true;
-    }
-  })()
+  "the C5-B1 freeze commit remains an ancestor authority of the current candidate",
+  gitSucceeds(["merge-base", "--is-ancestor", C5_B1_FREEZE_COMMIT, "HEAD"])
+);
+record(
+  "analysis preserves the C5-B1 adapter-to-runtime finalization handoff while allowing successor UI edits",
+  analysisScreenSrc.includes("buildAnalysisMealIdentificationFinalizationDraft({") &&
+    analysisScreenSrc.includes("await consumerRuntime.finalizeMealIdentification(adapted.value)") &&
+    analysisAdapterSrc.includes("buildMealIdentificationFinalization({") &&
+    finalizationRuntimeSrc.includes(
+      "this.options.service.finalizeCurrentUserMealIdentification(operation.input)"
+    )
+);
+record(
+  "the runtime preserves stable request identity and persists the atomic operation before service execution/replay",
+  /const clientRequestId =\s*draft\.clientRequestId \?\?/.test(finalizationRuntimeSrc) &&
+    finalizationRuntimeSrc.indexOf("await this.options.operationStore.save(actorKey, operation)") !== -1 &&
+    finalizationRuntimeSrc.indexOf("this.options.service.finalizeCurrentUserMealIdentification(operation.input)") !==
+      -1 &&
+    finalizationRuntimeSrc.indexOf("await this.options.operationStore.save(actorKey, operation)") <
+      finalizationRuntimeSrc.indexOf(
+        "this.options.service.finalizeCurrentUserMealIdentification(operation.input)"
+      ) &&
+    /const operation = this\.pending;[\s\S]{0,300}this\.execute\(context\.actorKey, context\.actorGeneration, operation\)/.test(
+      finalizationRuntimeSrc
+    )
+);
+record(
+  "Mobile request construction does not send server-owned confirmation, verification, nutrition, training, licensing, or provider authority",
+  !/\b(?:confirmationMode|verificationStatus|nutritionSource|userConfirmed|userCorrected|trainingEligible|trainingConsent|restaurantCommercialPermission|restaurantCommercialGrant|providerAuthority)\s*:/.test(
+    authorityRelevantMobileSrc
+  ) &&
+    !/OPENAI_API_KEY|MEAL_PHOTO_ANALYSIS_ADMIN_KEY|SUPABASE_SERVICE_ROLE_KEY/.test(
+      authorityRelevantMobileSrc
+    )
 );
 
 // 26. no Edge Function changes
@@ -501,23 +554,44 @@ record(
   !fs.readdirSync(path.join(root, "supabase", "migrations")).some((name) => name.includes("20260722010000"))
 );
 
-// 32. exactly the three migration files across MI-E-C5-B1/R1/R3 are untracked
+// 32. Post-freeze migration authority: the three files are tracked immutable evidence, not
+// pre-freeze workspace additions. Preserve paths, exact bytes, and the absence of migration drift.
+const frozenMigrationPaths = [
+  migrationPath,
+  correctiveMigrationPath,
+  acceptedConfirmationMigrationPath
+];
+
 record(
-  "exactly the frozen migration and its two corrective follow-ups are untracked in supabase/migrations/ (no unrelated migration)",
-  (() => {
-    try {
-      const untracked = git(["ls-files", "--others", "--exclude-standard", "--", "supabase/migrations"]);
-      const files = untracked.split("\n").filter(Boolean).sort();
-      return (
-        files.length === 3 &&
-        files.includes(migrationPath) &&
-        files.includes(correctiveMigrationPath) &&
-        files.includes(acceptedConfirmationMigrationPath)
-      );
-    } catch {
-      return false;
-    }
-  })()
+  "the three frozen C5-B1 migration authorities exist at their expected paths and are Git tracked",
+  frozenMigrationPaths.every((migration) => exists(migration)) &&
+    frozenMigrationPaths.every((migration) =>
+      gitSucceeds(["ls-files", "--error-unmatch", "--", migration])
+    )
+);
+record(
+  "all three frozen C5-B1 migration SHA-256 values are exactly unchanged",
+  crypto.createHash("sha256").update(migrationSrc, "utf8").digest("hex") === IMMUTABLE_SHA256 &&
+    crypto.createHash("sha256").update(correctiveSrc, "utf8").digest("hex") ===
+      R1_CORRECTIVE_IMMUTABLE_SHA256 &&
+    crypto.createHash("sha256").update(acceptedConfirmationSrc, "utf8").digest("hex") ===
+      R3_ACCEPTED_CONFIRMATION_IMMUTABLE_SHA256
+);
+record(
+  "current HEAD preserves all three migration blobs from the C5-B1 freeze commit",
+  gitSucceeds(["diff", "--quiet", C5_B1_FREEZE_COMMIT, "HEAD", "--", ...frozenMigrationPaths])
+);
+record(
+  "the working tree content of all three migrations matches the C5-B1 freeze commit",
+  gitSucceeds(["diff", "--quiet", C5_B1_FREEZE_COMMIT, "--", ...frozenMigrationPaths])
+);
+record(
+  "the index contains no staged modification of the three frozen migrations",
+  gitSucceeds(["diff", "--cached", "--quiet", "--", ...frozenMigrationPaths])
+);
+record(
+  "the working tree contains no unstaged modification of the three frozen migrations",
+  gitSucceeds(["diff", "--quiet", "--", ...frozenMigrationPaths])
 );
 
 // 33. no anon/authenticated direct table grant widened

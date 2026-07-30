@@ -14,6 +14,7 @@ import type {
   MealPhotoCaptureMethod,
   MealRecordTimingChoice
 } from "./types";
+import type { MealPhotoFinalizationDraftState } from "./mealPhotoFinalizationDraft";
 
 export type MealPhotoUploadStatus = "not_started" | "uploading" | "uploaded" | "failed";
 
@@ -98,6 +99,10 @@ export type AnalysisSessionState = {
   analysisAttemptCount: number;
   analysisStartedAt: string | null;
   analysisCompletedAt: string | null;
+  // MI-E-C5-B2: the one authoritative user-confirmation/finalization draft. It lives in
+  // the same resettable photo-analysis session, so a new photo/session cannot inherit a
+  // candidate, request ID, submission result, or edits from the previous analysis.
+  mealPhotoFinalizationDraft: MealPhotoFinalizationDraftState | null;
 };
 
 function createDefaultSession(): AnalysisSessionState {
@@ -146,7 +151,8 @@ function createDefaultSession(): AnalysisSessionState {
     safeAnalysisErrorCode: null,
     analysisAttemptCount: 0,
     analysisStartedAt: null,
-    analysisCompletedAt: null
+    analysisCompletedAt: null,
+    mealPhotoFinalizationDraft: null
   };
 }
 
@@ -270,4 +276,8 @@ export function setMealPhotoAnalysisState(patch: {
 export function setSelectedMealPhotoAnalysisCandidateId(candidateId: string | null) {
   if (candidateId !== null && !session.analysisCandidates.some((candidate) => candidate.candidateId === candidateId)) return;
   session = { ...session, selectedCandidateId: candidateId };
+}
+
+export function setMealPhotoFinalizationDraft(draft: MealPhotoFinalizationDraftState | null) {
+  session = { ...session, mealPhotoFinalizationDraft: draft };
 }

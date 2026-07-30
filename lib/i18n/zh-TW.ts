@@ -109,6 +109,26 @@ export const zhTW = {
           title: "目前無法保存這筆餐點",
           body: "登入權限無法完成這次保存，這筆餐點尚未建立。"
         },
+        analysis: {
+          title: "目前無法使用這份分析",
+          body: "分析可能尚未完成、已失效或不屬於目前帳號，這筆餐點尚未建立。"
+        },
+        candidate: {
+          title: "請重新選擇餐點候選",
+          body: "選取的候選已不在目前分析結果中，請重新確認。"
+        },
+        manual: {
+          title: "請完成手動餐點內容",
+          body: "餐點名稱為必填，營養數值若填寫必須是零或正數。"
+        },
+        alreadyFinalized: {
+          title: "這份分析已建立餐點",
+          body: "為避免重複建立，請前往今日飲食查看既有餐點。"
+        },
+        persistence: {
+          title: "餐點尚未完整保存",
+          body: "系統未能確認完整資料已建立；請勿重複送出，先前往今日飲食確認。"
+        },
         generic: {
           title: "餐點分析暫時無法保存",
           body: "這筆餐點尚未確認完成，請稍後再試或先前往今日飲食查看。"
@@ -198,6 +218,29 @@ export const zhTW = {
         invalid_server_response: "AI 服務回傳了無法辨識的結果。",
         network_error: "無法連線到 AI 分析服務，請檢查網路後再試。"
       }
+    },
+    mealPhotoFinalization: {
+      editorTitle: "確認並保存這份餐點",
+      candidateMode: "正在確認 AI 候選",
+      manualMode: "都不是，改用手動輸入",
+      noneOfAboveCta: "都不是／手動輸入",
+      mealNameLabel: "餐點名稱",
+      componentsLabel: "內容／成分（以頓號或逗號分隔）",
+      portionLabel: "整份餐點份量（選填）",
+      caloriesLabel: "熱量（kcal，選填）",
+      proteinLabel: "蛋白質（g，選填）",
+      carbsLabel: "碳水化合物（g，選填）",
+      fatLabel: "脂肪（g，選填）",
+      changedBadge: "內容已修改；系統會依實際差異判定",
+      unchangedBadge: "候選內容未修改",
+      requiredError: "請填寫餐點名稱。",
+      numberError: "請輸入有效的零或正數。",
+      limitError: "輸入內容超過允許範圍。",
+      submitCta: "確認並加入今日飲食",
+      retryCta: "使用同一筆請求重試",
+      submittingLabel: "正在安全保存…",
+      incompleteContext: "請先確認餐點來源與實際用餐時間。",
+      serverAuthorityNote: "AI 內容尚未驗證；確認方式與營養來源由系統保存時判定。"
     },
     mealPhotoTitle: "拍攝或上傳餐點照片",
     mealPhotoSubtitle: "先選擇外食或自己煮，再用餐點照片開始分析。外食會先找附近餐廳菜單；自煮會直接估算食材與份量。",
@@ -682,9 +725,11 @@ export const zhTW = {
       mealSourceDineInSubtitle: "在餐廳現場用餐",
       mealSourceTakeout: "外帶",
       mealSourceTakeoutSubtitle: "外帶餐點回家或到其他地點享用",
+      mealSourceDelivery: "外送",
+      mealSourceDeliverySubtitle: "由外送服務送達的餐點",
       mealSourceSelfCooked: "自煮",
       mealSourceSelfCookedSubtitle: "自己料理，AI 估算食材與份量",
-      mealSourceRequiredHint: "完成保存前，請先選擇內用、外帶或自煮。",
+      mealSourceRequiredHint: "完成保存前，請先選擇內用、外帶、外送或自煮。",
       selfCookedTitle: "自煮餐點估算",
       selfCookedBody: "自煮模式會估算食材、份量、烹調方式與營養，再由你確認後保存到個人餐點紀錄。",
       nutritionDisclaimer: "此功能為生活化營養估算，非醫療診斷建議。",

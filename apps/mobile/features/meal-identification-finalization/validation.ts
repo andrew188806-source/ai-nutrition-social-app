@@ -1,5 +1,9 @@
-import { validateMealIdentificationFinalizationCommand } from "../meal-identification";
+import { validateMealIdentificationFinalizationCommand } from "../meal-identification/finalizationContract";
 import type { FinalizeCurrentUserMealIdentificationInput } from "./types";
+import {
+  buildMealIdentificationFinalizationV3,
+  MEAL_IDENTIFICATION_FINALIZATION_V3_VERSION
+} from "./v3Contract";
 
 const mealTypes = new Set(["breakfast", "lunch", "dinner", "snack", "late_night", "other"]);
 // UUID v4: version nibble (13th hex digit) is "4"; variant nibble is 8/9/a/b.
@@ -32,9 +36,12 @@ export function validateFinalizeCurrentUserMealIdentificationInput(
   if (!isNonEmptyTrimmedString(input.timezone) || input.timezone.length > 64) {
     return failure("Meal identification finalization timezone is invalid.");
   }
-  // Re-validate the finalization command through the frozen MI-C-A contract rather than
-  // trusting a caller-supplied "already validated" shape.
-  const revalidated = validateMealIdentificationFinalizationCommand(input.finalization);
+  // Re-validate through the matching frozen command builder. Both branches return a
+  // normalized allow-listed shape, so caller-added authority fields are never forwarded.
+  const revalidated =
+    input.finalization.version === MEAL_IDENTIFICATION_FINALIZATION_V3_VERSION
+      ? buildMealIdentificationFinalizationV3(input.finalization)
+      : validateMealIdentificationFinalizationCommand(input.finalization);
   if (!revalidated.ok) {
     return failure(`Meal identification finalization command is invalid: ${revalidated.error.code}.`);
   }

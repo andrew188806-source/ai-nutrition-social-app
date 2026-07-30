@@ -16,7 +16,7 @@ import type {
   MealRecordTimingChoice
 } from "./types";
 
-export type ExplicitMealSourceChoice = "dine_in" | "takeout" | "self_cooked";
+export type ExplicitMealSourceChoice = "dine_in" | "takeout" | "delivery" | "self_cooked";
 
 export function useAnalysisCorrectionState() {
   const session = getAnalysisSession();
@@ -270,7 +270,10 @@ export function useAnalysisCorrectionState() {
   }
 
   const mealSource: ExplicitMealSourceChoice | null =
-    sourceContext === "dine_in" || sourceContext === "takeout" || sourceContext === "self_cooked"
+    sourceContext === "dine_in" ||
+    sourceContext === "takeout" ||
+    sourceContext === "delivery" ||
+    sourceContext === "self_cooked"
       ? sourceContext
       : null;
 

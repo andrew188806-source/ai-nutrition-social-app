@@ -42,6 +42,11 @@ export type MealIdentificationFinalizationUiErrorKind =
   | "invariant"
   | "conflict"
   | "authorization"
+  | "analysis"
+  | "candidate"
+  | "manual"
+  | "alreadyFinalized"
+  | "persistence"
   | "generic";
 
 export function buildAnalysisMealIdentificationFinalizationDraft(
@@ -142,6 +147,17 @@ export function mapMealIdentificationFinalizationUiError(
   }
   if (errorCode === "finalization_catalog_identity_rejected") return "catalog";
   if (errorCode === "finalization_idempotency_conflict") return "conflict";
+  if (
+    errorCode === "finalization_analysis_not_found" ||
+    errorCode === "finalization_analysis_access_denied" ||
+    errorCode === "finalization_analysis_not_ready"
+  ) {
+    return "analysis";
+  }
+  if (errorCode === "finalization_analysis_already_finalized") return "alreadyFinalized";
+  if (errorCode === "finalization_invalid_candidate") return "candidate";
+  if (errorCode === "finalization_invalid_manual_draft") return "manual";
+  if (errorCode === "finalization_correction_validation_failed") return "invalid";
   if (errorCode === "finalization_ownership_or_authorization_rejected") {
     return "authorization";
   }
@@ -158,7 +174,7 @@ export function mapMealIdentificationFinalizationUiError(
     errorCode === "finalization_correction_invariant_violation" ||
     errorCode === "finalization_durable_state_inconsistency"
   ) {
-    return "invariant";
+    return errorCode === "finalization_durable_state_inconsistency" ? "persistence" : "invariant";
   }
   return "generic";
 }

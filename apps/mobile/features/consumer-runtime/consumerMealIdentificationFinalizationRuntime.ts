@@ -6,6 +6,7 @@ import type {
   FinalizeCurrentUserMealIdentificationInput
 } from "../meal-identification-finalization/types";
 import type { MealIdentificationFinalizationCommand } from "../meal-identification";
+import type { MealIdentificationFinalizationV3Command } from "../meal-identification-finalization/v3Contract";
 import {
   ConsumerMealIdentificationFinalizationOperationStore,
   createConsumerMealIdentificationFinalizationPendingOperation,
@@ -30,8 +31,12 @@ export type ConsumerMealIdentificationFinalizationRuntimeState = {
 };
 
 export type ConsumerMealIdentificationFinalizationDraft = {
+  // B2 may allocate this from the same runtime UUID authority before submit so the UI's
+  // single draft can preserve it across safe retries and rotate it after payload edits.
+  // Legacy callers omit it and retain the exact pre-B2 runtime-generated behavior.
+  clientRequestId?: string;
   mealType: ConsumerMealIdentificationMealType;
-  finalization: MealIdentificationFinalizationCommand;
+  finalization: MealIdentificationFinalizationCommand | MealIdentificationFinalizationV3Command;
 };
 
 export type ConsumerMealIdentificationFinalizationActorContext = {
@@ -157,7 +162,9 @@ export class ConsumerMealIdentificationFinalizationRuntime {
   ) {
     try {
       const submittedAt = this.options.clock?.now() ?? new Date();
-      const clientRequestId = (this.options.uuidFactory ?? secureUuidV4)();
+      const clientRequestId =
+        draft.clientRequestId ??
+        (this.options.uuidFactory ?? generateConsumerMealIdentificationFinalizationClientRequestId)();
       const occurredAt = new Date(draft.finalization.occurredAt);
       if (Number.isNaN(occurredAt.getTime())) {
         throw new Error("Actual meal time is invalid.");
@@ -284,7 +291,7 @@ function validTimezone(timezone: string) {
   }
 }
 
-function secureUuidV4(): string {
+export function generateConsumerMealIdentificationFinalizationClientRequestId(): string {
   const cryptoApi = globalThis.crypto;
   if (typeof cryptoApi?.randomUUID === "function") return cryptoApi.randomUUID();
   if (typeof cryptoApi?.getRandomValues !== "function") throw new Error("Secure UUID generation unavailable.");
