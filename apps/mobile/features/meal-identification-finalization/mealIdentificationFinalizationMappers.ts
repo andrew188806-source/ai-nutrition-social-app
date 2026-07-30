@@ -1,12 +1,18 @@
 import {
+  ConsumerMealIdentificationFinalizationAnalysisAccessDeniedError,
+  ConsumerMealIdentificationFinalizationAnalysisAlreadyFinalizedError,
   ConsumerMealIdentificationFinalizationAnalysisInvariantViolationError,
+  ConsumerMealIdentificationFinalizationAnalysisNotFoundError,
+  ConsumerMealIdentificationFinalizationAnalysisNotReadyError,
   ConsumerMealIdentificationFinalizationAuthenticationRequiredError,
   ConsumerMealIdentificationFinalizationCatalogIdentityRejectedError,
   ConsumerMealIdentificationFinalizationCorrectionInvariantViolationError,
+  ConsumerMealIdentificationFinalizationCorrectionValidationFailedError,
   ConsumerMealIdentificationFinalizationDurableStateInconsistencyError,
   ConsumerMealIdentificationFinalizationForbiddenFieldError,
   ConsumerMealIdentificationFinalizationIdempotencyConflictError,
   ConsumerMealIdentificationFinalizationIdentityInvariantViolationError,
+  ConsumerMealIdentificationFinalizationInvalidCandidateError,
   ConsumerMealIdentificationFinalizationInvalidInputError,
   ConsumerMealIdentificationFinalizationOwnershipRejectedError,
   ConsumerMealIdentificationFinalizationResponseMalformedError,
@@ -70,6 +76,29 @@ export function mapMealIdentificationFinalizationRpcError(
 ): ConsumerMealIdentificationFinalizationRuntimeError {
   const token = (error.message ?? "").trim().toUpperCase();
   const effectiveStatus = status ?? error.status ?? undefined;
+
+  // MI-E-C5-B1: v3 token-specific checks come first — several v3 codes share a SQLSTATE with an
+  // existing v1/v2 code (ANALYSIS_ALREADY_FINALIZED and ANALYSIS_ACCESS_DENIED both use 23505/
+  // 42501, the same SQLSTATEs as IDEMPOTENCY_KEY_CONFLICT/OWNERSHIP_OR_AUTHORIZATION_REJECTED), so
+  // the exact token must be checked before any generic error.code fallback below.
+  if (token === "ANALYSIS_NOT_FOUND") {
+    return new ConsumerMealIdentificationFinalizationAnalysisNotFoundError();
+  }
+  if (token === "ANALYSIS_ACCESS_DENIED") {
+    return new ConsumerMealIdentificationFinalizationAnalysisAccessDeniedError();
+  }
+  if (token === "ANALYSIS_NOT_READY") {
+    return new ConsumerMealIdentificationFinalizationAnalysisNotReadyError();
+  }
+  if (token === "ANALYSIS_ALREADY_FINALIZED") {
+    return new ConsumerMealIdentificationFinalizationAnalysisAlreadyFinalizedError();
+  }
+  if (token === "INVALID_CANDIDATE") {
+    return new ConsumerMealIdentificationFinalizationInvalidCandidateError();
+  }
+  if (token === "CORRECTION_VALIDATION_FAILED") {
+    return new ConsumerMealIdentificationFinalizationCorrectionValidationFailedError();
+  }
 
   if (effectiveStatus === 401 || error.code === "28000" || token === "AUTHENTICATION_REQUIRED") {
     return new ConsumerMealIdentificationFinalizationAuthenticationRequiredError();

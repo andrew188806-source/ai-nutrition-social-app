@@ -14,7 +14,15 @@ export type ConsumerMealIdentificationFinalizationErrorCode =
   | "finalization_idempotency_conflict"
   | "finalization_ownership_or_authorization_rejected"
   | "finalization_response_malformed"
-  | "finalization_transport_failed";
+  | "finalization_transport_failed"
+  // MI-E-C5-B1: v3 (real-AI candidate) contract error codes.
+  | "finalization_analysis_not_found"
+  | "finalization_analysis_access_denied"
+  | "finalization_analysis_not_ready"
+  | "finalization_analysis_already_finalized"
+  | "finalization_invalid_candidate"
+  | "finalization_invalid_manual_draft"
+  | "finalization_correction_validation_failed";
 
 export class ConsumerMealIdentificationFinalizationRuntimeError extends Error {
   constructor(
@@ -120,5 +128,53 @@ export class ConsumerMealIdentificationFinalizationResponseMalformedError extend
 export class ConsumerMealIdentificationFinalizationTransportFailedError extends ConsumerMealIdentificationFinalizationRuntimeError {
   constructor(message = "Meal identification finalization RPC transport failed.") {
     super("finalization_transport_failed", message, true);
+  }
+}
+
+// MI-E-C5-B1: v3 (real-AI candidate) contract error classes.
+
+export class ConsumerMealIdentificationFinalizationAnalysisNotFoundError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "The referenced analysis could not be found.") {
+    super("finalization_analysis_not_found", message);
+  }
+}
+
+export class ConsumerMealIdentificationFinalizationAnalysisAccessDeniedError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "Access to the referenced analysis was denied.") {
+    super("finalization_analysis_access_denied", message);
+  }
+}
+
+export class ConsumerMealIdentificationFinalizationAnalysisNotReadyError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "The referenced analysis is not ready to be finalized.") {
+    super("finalization_analysis_not_ready", message);
+  }
+}
+
+export class ConsumerMealIdentificationFinalizationAnalysisAlreadyFinalizedError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "The referenced analysis has already been finalized into a meal record.") {
+    super("finalization_analysis_already_finalized", message);
+  }
+}
+
+export class ConsumerMealIdentificationFinalizationInvalidCandidateError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "The selected candidate is invalid or not present in the analysis result.") {
+    super("finalization_invalid_candidate", message);
+  }
+}
+
+// Client-side only: raised before the RPC is ever called when a manual-fallback draft is
+// incomplete (e.g. no meal name). The RPC itself has no distinct code for this — an incomplete
+// manual draft that somehow reached the RPC would surface as
+// finalization_correction_validation_failed instead.
+export class ConsumerMealIdentificationFinalizationInvalidManualDraftError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "The manual meal draft is incomplete.") {
+    super("finalization_invalid_manual_draft", message);
+  }
+}
+
+export class ConsumerMealIdentificationFinalizationCorrectionValidationFailedError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "The confirmed meal values failed validation.") {
+    super("finalization_correction_validation_failed", message);
   }
 }

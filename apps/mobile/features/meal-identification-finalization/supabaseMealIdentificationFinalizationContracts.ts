@@ -1,4 +1,5 @@
 import type { MealIdentificationFinalizationCommand } from "../meal-identification";
+import type { MealIdentificationFinalizationV3Command } from "./v3Contract";
 
 export const SUPABASE_FINALIZE_CURRENT_USER_MEAL_IDENTIFICATION_FUNCTION =
   "finalize_current_user_meal_identification_v1" as const;
@@ -9,7 +10,7 @@ export type SupabaseFinalizeMealIdentificationRpcArgs = {
   p_occurred_at: string;
   p_meal_date: string;
   p_timezone: string;
-  p_finalization: MealIdentificationFinalizationCommand;
+  p_finalization: MealIdentificationFinalizationCommand | MealIdentificationFinalizationV3Command;
 };
 
 export type SupabaseFinalizeMealIdentificationRpcResultLike = {

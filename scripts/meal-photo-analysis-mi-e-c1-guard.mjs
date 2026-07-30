@@ -205,9 +205,36 @@ record(
   "the deferred P2V-PERF migration is NOT present in the active supabase/migrations/ queue (quarantined out, per MI-E-C2 §2) and is not tracked/staged/committed",
   !exists(PROTECTED_MIGRATION) && !gitStatus.includes(PROTECTED_MIGRATION) && !gitDiffNames.includes(PROTECTED_MIGRATION)
 );
+// MI-E-C5-B1: this check was originally a one-time freeze gate ("no file in this feature was
+// touched this round"), valid only until a round with explicit authority to extend the
+// finalization RPC existed. MI-E-C5-B1 has exactly that authority (a backward-compatible v3
+// branch on the same RPC). Replaced, per the same pattern as the MI-E-C4-R1 Edge Function
+// invariants below, with the durable property that actually matters and holds for every future
+// round regardless of whether it touches these files: the finalization feature still calls
+// exactly one RPC (never a direct table write, never a second RPC name).
 record(
-  "no frozen meal-identification-finalization file was modified this round",
-  !gitDiffNames.includes("meal-identification-finalization/") && !gitStatus.includes("meal-identification-finalization/")
+  "apps/mobile/features/meal-identification-finalization/ still performs no direct Supabase table write — every write path is a single .rpc( call to finalize_current_user_meal_identification_v1",
+  (() => {
+    const dir = path.join(root, "apps/mobile/features/meal-identification-finalization");
+    if (!exists("apps/mobile/features/meal-identification-finalization")) return true;
+    function collectTsFiles(d) {
+      return fs.readdirSync(d, { withFileTypes: true }).flatMap((entry) => {
+        const full = path.join(d, entry.name);
+        if (entry.isDirectory()) return collectTsFiles(full);
+        return entry.isFile() && entry.name.endsWith(".ts") ? [full] : [];
+      });
+    }
+    const src = collectTsFiles(dir)
+      .map((f) => fs.readFileSync(f, "utf8"))
+      .join("\n\n");
+    const hasDirectWrite =
+      /\.from\(\s*["'](meal_records|meal_record_items|meal_analyses|meal_corrections|meal_identification_finalizations)["']\s*\)\s*\.(insert|update|delete|upsert)\(/.test(
+        src
+      );
+    const finalizeNameLiterals = src.match(/"finalize_[a-zA-Z0-9_]*"/g) ?? [];
+    const onlyExpectedRpc = finalizeNameLiterals.every((n) => n === '"finalize_current_user_meal_identification_v1"');
+    return !hasDirectWrite && onlyExpectedRpc;
+  })()
 );
 // ==== MI-E-C4-R1: durable meal-photo-analysis Edge Function invariants replacing the MI-E-C1
 // freeze-only "supabase/functions/ remains empty" check. That check was MI-E-C1's own one-time

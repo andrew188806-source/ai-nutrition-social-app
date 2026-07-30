@@ -11,3 +11,4 @@ export * from "./adapters/disabledConsumerMealIdentificationFinalizationReposito
 export * from "./adapters/mockConsumerMealIdentificationFinalizationRepository";
 export * from "./adapters/supabaseConsumerMealIdentificationFinalizationRepository";
 export * from "./supabaseMealIdentificationFinalizationContracts";
+export * from "./v3Contract";
