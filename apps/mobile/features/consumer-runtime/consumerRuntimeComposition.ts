@@ -317,12 +317,14 @@ export function getOrCreateConsumerRuntimeComposition() {
 }
 
 export function createConsumerRuntimeComposition(options: ConsumerRuntimeCompositionOptions = {}): ConsumerRuntimeCompositionResult {
-  const flags = normalizeAuthFlagsForMealWrite(options.flags ?? getConsumerRuntimeFlags());
-  if (flags.issues.length) return { ok: false, errorCode: "configuration_error" };
-  if (flags.authSource === "supabase-live" && flags.profileSource !== "supabase-live") {
+  const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
+  const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
+  const authFlags = deriveAuthCompositionFlags(capabilityFlags);
+  if (capabilityFlags.issues.length) return { ok: false, errorCode: "configuration_error" };
+  if (capabilityFlags.authSource === "supabase-live" && capabilityFlags.profileSource !== "supabase-live") {
     return { ok: false, errorCode: "configuration_error" };
   }
-  if (flags.authSource === "mock" && flags.profileSource !== "mock") {
+  if (capabilityFlags.authSource === "mock" && capabilityFlags.profileSource !== "mock") {
     return { ok: false, errorCode: "configuration_error" };
   }
 
@@ -330,7 +332,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
     if (options.authPort && options.profileService) {
       const storage = options.operationStorage ?? new MemoryConsumerAuthStorage();
       const runtimeParts = createMealRuntimeParts({
-        authFlags: flags,
+        authFlags: capabilityFlags,
         authPort: options.authPort,
         storage,
         mealFlags: options.mealFlags,
@@ -344,7 +346,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
       return {
         ok: true,
         value: {
-          flags,
+          flags: capabilityFlags,
           controller: new ConsumerAuthProfileRuntime({
             authPort: options.authPort,
             profileService: options.profileService,
@@ -355,20 +357,24 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
       };
     }
 
-    if (flags.authSource === "supabase-live") {
+    if (capabilityFlags.authSource === "supabase-live") {
       const storage = options.operationStorage ?? createAsyncStorageConsumerAuthStorage();
       const clientFactory = new SupabaseConsumerClientFactory({
         env: getSupabaseConsumerEnvironment(),
-        flags,
+        flags: authFlags,
         storage,
         sdkLoader: createOfficialSupabaseConsumerSdkLoader()
       });
       const { client } = clientFactory.getOrCreateClient();
       const authPort = new SupabaseConsumerAuthAdapter({ authClient: client.auth, transportEnabled: true });
-      const scaffold = createConsumerAuthScaffold({ flags, authPort, profileClient: client as unknown as SupabaseConsumerProfileClientLike });
+      const scaffold = createConsumerAuthScaffold({
+        flags: authFlags,
+        authPort,
+        profileClient: client as unknown as SupabaseConsumerProfileClientLike
+      });
       const refreshLifecycle = new ConsumerAuthRefreshLifecycle(client.auth, createReactNativeConsumerAppStateSource());
       const runtimeParts = createMealRuntimeParts({
-        authFlags: flags,
+        authFlags: capabilityFlags,
         authPort,
         storage,
         mealClient: client as unknown as SupabaseConsumerMealClientLike,
@@ -383,7 +389,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
       return {
         ok: true,
         value: {
-          flags,
+          flags: capabilityFlags,
           controller: new ConsumerAuthProfileRuntime({ authPort, profileService: scaffold.profileService, refreshLifecycle }),
           ...runtimeParts
         }
@@ -391,9 +397,9 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
     }
 
     const storage = options.operationStorage ?? createAsyncStorageConsumerAuthStorage();
-    const scaffold = createConsumerAuthScaffold({ flags, storage });
+    const scaffold = createConsumerAuthScaffold({ flags: authFlags, storage });
     const runtimeParts = createMealRuntimeParts({
-      authFlags: flags,
+      authFlags: capabilityFlags,
       authPort: scaffold.authPort,
       storage,
       mealFlags: options.mealFlags,
@@ -406,7 +412,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
     return {
       ok: true,
       value: {
-        flags,
+        flags: capabilityFlags,
         controller: new ConsumerAuthProfileRuntime({ authPort: scaffold.authPort, profileService: scaffold.profileService }),
         ...runtimeParts
       }
@@ -577,13 +583,17 @@ function normalizeMealIdentificationFinalizationFlags(
   return flags;
 }
 
-function normalizeAuthFlagsForMealWrite(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {
+function normalizeConsumerCapabilityFlags(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {
   if (!flags.supabaseWritesEnabled) return flags;
   return {
     ...flags,
-    supabaseWritesEnabled: false,
     issues: flags.issues.filter((issue) => issue !== "Consumer Supabase writes are not enabled in Consumer Runtime Phase 1D.")
   };
+}
+
+function deriveAuthCompositionFlags(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {
+  if (!flags.supabaseWritesEnabled) return flags;
+  return { ...flags, supabaseWritesEnabled: false };
 }
 
 function normalizeMealWriteFlags(flags: ConsumerMealRuntimeFlags, authSource: ConsumerRuntimeFlags["authSource"]): ConsumerMealRuntimeFlags {
