@@ -25,6 +25,11 @@ import {
   buildAnalysisMealIdentificationFinalizationDraft,
   mapMealIdentificationFinalizationUiError
 } from "../features/analysis/mealIdentificationFinalizationAdapter";
+import {
+  getCompactMealPhotoFinalizationCandidates,
+  getMealPhotoFinalizationContextBlockReason,
+  type MealPhotoFinalizationContextBlockReason
+} from "../features/analysis/mealPhotoFinalizationReadiness";
 import { maximumMealOccurrenceInstant } from "../features/analysis/mealOccurrenceTime";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
@@ -451,78 +456,84 @@ export default function AnalysisScreen() {
           ) : null}
 
           {hasAiFinalizationFlow && mealPhotoFinalization.draft ? (
-            <MealPhotoFinalizationEditor
-              draft={mealPhotoFinalization.draft}
-              contextReady={
-                mealPhotoFinalization.payloadLocked
-                  ? Boolean(mealPhotoFinalization.draft.context.occurredAt) &&
-                    mealPhotoFinalization.draft.context.sourceContext !== "unknown"
-                  : Boolean(analysis.occurredAt) &&
-                    analysis.recordTimingConfirmed &&
-                    Boolean(analysis.mealSource)
-              }
-              payloadLocked={mealPhotoFinalization.payloadLocked}
-              onChange={mealPhotoFinalization.updateField}
-              onSubmit={() => void mealPhotoFinalization.submit()}
-            />
-          ) : null}
-
-          <SnowCard>
-            <SnowSectionHeader title={zhTW.mobile.analysis.modeTitle} subtitle="這是第幾餐？" />
-            <View style={styles.chipRow}>
-              {zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions.map((period) => (
-                <Chip
-                  key={period}
-                  label={period}
-                  active={
-                    (frozenFinalizationContext?.selectedMealPeriod ?? selectedMealPeriod) ===
-                    period
-                  }
-                  onPress={
-                    mealPhotoFinalization.payloadLocked
-                      ? undefined
-                      : () => setSelectedMealPeriod(period)
-                  }
-                />
-              ))}
-            </View>
-          </SnowCard>
-
-          <SnowCard>
-            <SnowSectionHeader title={zhTW.mobile.analysis.mealSourceTitle} subtitle={zhTW.mobile.analysis.mealSourceSubtitle} />
-            <View style={styles.chipRow}>
-              <Chip
-                label={zhTW.mobile.analysis.mealSourceDineIn}
-                active={(frozenFinalizationContext?.sourceContext ?? analysis.mealSource) === "dine_in"}
-                onPress={mealPhotoFinalization.payloadLocked ? undefined : () => analysis.setMealSource("dine_in")}
+            <SnowCard tone="ai">
+              <SnowSectionHeader
+                title={zhTW.mobile.mealPhotoFinalization.editorTitle}
+                subtitle={
+                  mealPhotoFinalization.draft.mode === "manual"
+                    ? zhTW.mobile.mealPhotoFinalization.manualMode
+                    : zhTW.mobile.mealPhotoFinalization.candidateMode
+                }
               />
-              <Chip
-                label={zhTW.mobile.analysis.mealSourceTakeout}
-                active={(frozenFinalizationContext?.sourceContext ?? analysis.mealSource) === "takeout"}
-                onPress={mealPhotoFinalization.payloadLocked ? undefined : () => analysis.setMealSource("takeout")}
+              <MealPeriodSection
+                embedded
+                selectedMealPeriod={
+                  frozenFinalizationContext?.selectedMealPeriod ??
+                  selectedMealPeriod
+                }
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                onSelect={setSelectedMealPeriod}
               />
-              <Chip
-                label={zhTW.mobile.analysis.mealSourceDelivery}
-                active={(frozenFinalizationContext?.sourceContext ?? analysis.mealSource) === "delivery"}
-                onPress={mealPhotoFinalization.payloadLocked ? undefined : () => analysis.setMealSource("delivery")}
+              <MealSourceSection
+                embedded
+                analysis={analysis}
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                frozenContext={frozenFinalizationContext}
               />
-              <Chip
-                label={zhTW.mobile.analysis.mealSourceSelfCooked}
-                active={(frozenFinalizationContext?.sourceContext ?? analysis.mealSource) === "self_cooked"}
-                onPress={mealPhotoFinalization.payloadLocked ? undefined : () => analysis.setMealSource("self_cooked")}
+              <RecordTimingSection
+                embedded
+                analysis={analysis}
+                timezone={profileTimezone}
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                frozenContext={frozenFinalizationContext}
               />
-            </View>
-            {!(frozenFinalizationContext?.sourceContext ?? analysis.mealSource) ? (
-              <Text style={styles.stateText}>{zhTW.mobile.analysis.mealSourceRequiredHint}</Text>
-            ) : null}
-          </SnowCard>
-
-          <RecordTimingSection
-            analysis={analysis}
-            timezone={profileTimezone}
-            payloadLocked={mealPhotoFinalization.payloadLocked}
-            frozenContext={frozenFinalizationContext}
-          />
+              <MealPhotoFinalizationEditor
+                embedded
+                draft={mealPhotoFinalization.draft}
+                contextBlockReason={getMealPhotoFinalizationContextBlockReason({
+                  occurredAt:
+                    frozenFinalizationContext?.occurredAt ??
+                    analysis.occurredAt ??
+                    "",
+                  recordTimingConfirmed:
+                    frozenFinalizationContext !== null ||
+                    analysis.recordTimingConfirmed,
+                  sourceContext:
+                    frozenFinalizationContext?.sourceContext ??
+                    analysis.mealSource ??
+                    analysis.sourceContext,
+                  selectedMealPeriod:
+                    frozenFinalizationContext?.selectedMealPeriod ??
+                    selectedMealPeriod
+                })}
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                onChange={mealPhotoFinalization.updateField}
+                onSubmit={() => void mealPhotoFinalization.submit()}
+              />
+            </SnowCard>
+          ) : (
+            <>
+              <MealPeriodSection
+                selectedMealPeriod={
+                  frozenFinalizationContext?.selectedMealPeriod ??
+                  selectedMealPeriod
+                }
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                onSelect={setSelectedMealPeriod}
+              />
+              <MealSourceSection
+                analysis={analysis}
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                frozenContext={frozenFinalizationContext}
+              />
+              <RecordTimingSection
+                analysis={analysis}
+                timezone={profileTimezone}
+                payloadLocked={mealPhotoFinalization.payloadLocked}
+                frozenContext={frozenFinalizationContext}
+              />
+            </>
+          )}
 
           {!hasAiFinalizationFlow && analysis.isSelfCooked ? (
             <SelfCookedIntro nutritionSummary={analysis.nutritionSummary} />
@@ -730,6 +741,7 @@ function MealPhotoAnalysisResultCard({
   onChooseManual: () => void;
 }) {
   const copy = zhTW.mobile.mealPhotoAnalysis;
+  const visibleCandidates = getCompactMealPhotoFinalizationCandidates(candidates);
   if (invocationStatus === "not_started") return null;
 
   if (invocationStatus === "waiting_for_upload") {
@@ -773,7 +785,7 @@ function MealPhotoAnalysisResultCard({
       <SnowSectionHeader title={copy.title} subtitle={invocationStatus === "low_confidence" ? copy.lowConfidenceLabel : copy.completedLabel} />
       {consumerRuntimeMode === "mock" ? <Text style={styles.disclaimer}>{copy.mockBadge}</Text> : null}
       {invocationStatus === "low_confidence" ? <Text style={styles.disclaimer}>{copy.lowConfidenceNote}</Text> : null}
-      {candidates.map((candidate) => (
+      {visibleCandidates.map((candidate) => (
         <MealPhotoAnalysisCandidateRow
           key={candidate.candidateId}
           candidate={candidate}
@@ -782,6 +794,10 @@ function MealPhotoAnalysisResultCard({
           onSelect={payloadLocked ? undefined : () => onSelectCandidate(candidate)}
         />
       ))}
+      <Text style={styles.disclaimer}>
+        {copy.disclaimerEstimate}　·　{copy.disclaimerNutrition}
+      </Text>
+      <Text style={styles.disclaimer}>{copy.disclaimerAction}</Text>
       <View style={styles.ctaColumn}>
         <SecondaryButton
           icon="edit"
@@ -789,26 +805,115 @@ function MealPhotoAnalysisResultCard({
           onPress={payloadLocked ? undefined : onChooseManual}
         />
       </View>
-      <Text style={styles.disclaimer}>
-        {copy.disclaimerEstimate}　·　{copy.disclaimerNutrition}
-      </Text>
-      <Text style={styles.disclaimer}>{copy.disclaimerAction}</Text>
     </SnowCard>
+  );
+}
+
+function MealPhotoFinalizationSubsection({
+  children,
+  embedded = false,
+  tone = "default"
+}: {
+  children: ReactNode;
+  embedded?: boolean;
+  tone?: "default" | "ai";
+}) {
+  return embedded ? (
+    <View style={styles.finalizationPanelSection}>{children}</View>
+  ) : (
+    <SnowCard tone={tone}>{children}</SnowCard>
+  );
+}
+
+function MealPeriodSection({
+  selectedMealPeriod,
+  payloadLocked,
+  onSelect,
+  embedded = false
+}: {
+  selectedMealPeriod: string;
+  payloadLocked: boolean;
+  onSelect: (period: string) => void;
+  embedded?: boolean;
+}) {
+  return (
+    <MealPhotoFinalizationSubsection embedded={embedded}>
+      <SnowSectionHeader title={zhTW.mobile.analysis.modeTitle} subtitle="這是第幾餐？" />
+      <View style={styles.chipRow}>
+        {zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions.map((period) => (
+          <Chip
+            key={period}
+            label={period}
+            active={selectedMealPeriod === period}
+            onPress={payloadLocked ? undefined : () => onSelect(period)}
+          />
+        ))}
+      </View>
+    </MealPhotoFinalizationSubsection>
+  );
+}
+
+function MealSourceSection({
+  analysis,
+  payloadLocked,
+  frozenContext,
+  embedded = false
+}: {
+  analysis: ReturnType<typeof useAnalysisCorrectionState>;
+  payloadLocked: boolean;
+  frozenContext: MealPhotoFinalizationDraftState["context"] | null;
+  embedded?: boolean;
+}) {
+  const selectedSource = frozenContext?.sourceContext ?? analysis.mealSource;
+  return (
+    <MealPhotoFinalizationSubsection embedded={embedded}>
+      <SnowSectionHeader
+        title={zhTW.mobile.analysis.mealSourceTitle}
+        subtitle={zhTW.mobile.analysis.mealSourceSubtitle}
+      />
+      <View style={styles.chipRow}>
+        <Chip
+          label={zhTW.mobile.analysis.mealSourceDineIn}
+          active={selectedSource === "dine_in"}
+          onPress={payloadLocked ? undefined : () => analysis.setMealSource("dine_in")}
+        />
+        <Chip
+          label={zhTW.mobile.analysis.mealSourceTakeout}
+          active={selectedSource === "takeout"}
+          onPress={payloadLocked ? undefined : () => analysis.setMealSource("takeout")}
+        />
+        <Chip
+          label={zhTW.mobile.analysis.mealSourceDelivery}
+          active={selectedSource === "delivery"}
+          onPress={payloadLocked ? undefined : () => analysis.setMealSource("delivery")}
+        />
+        <Chip
+          label={zhTW.mobile.analysis.mealSourceSelfCooked}
+          active={selectedSource === "self_cooked"}
+          onPress={payloadLocked ? undefined : () => analysis.setMealSource("self_cooked")}
+        />
+      </View>
+      {!selectedSource ? (
+        <Text style={styles.stateText}>{zhTW.mobile.analysis.mealSourceRequiredHint}</Text>
+      ) : null}
+    </MealPhotoFinalizationSubsection>
   );
 }
 
 function MealPhotoFinalizationEditor({
   draft,
-  contextReady,
+  contextBlockReason,
   payloadLocked,
   onChange,
-  onSubmit
+  onSubmit,
+  embedded = false
 }: {
   draft: MealPhotoFinalizationDraftState;
-  contextReady: boolean;
+  contextBlockReason: MealPhotoFinalizationContextBlockReason | null;
   payloadLocked: boolean;
   onChange: (field: MealPhotoFinalizationField, value: string) => void;
   onSubmit: () => void;
+  embedded?: boolean;
 }) {
   const copy = zhTW.mobile.mealPhotoFinalization;
   const submitting = draft.submissionStatus === "submitting";
@@ -831,14 +936,41 @@ function MealPhotoFinalizationEditor({
     { key: "fatGrams", label: copy.fatLabel, numeric: true }
   ];
   const hasValidation = Object.keys(draft.validation).length > 0;
+  const submitDisabled =
+    payloadLocked ||
+    submitting ||
+    succeeded ||
+    hardFailure ||
+    contextBlockReason !== null ||
+    hasValidation;
+  const submitUnavailableReason =
+    contextBlockReason === "missing_meal_source"
+      ? copy.missingMealSource
+      : contextBlockReason === "missing_occurred_at"
+        ? copy.missingOccurredAt
+        : contextBlockReason === "missing_record_timing"
+          ? copy.missingRecordTiming
+          : contextBlockReason === "missing_meal_period"
+            ? copy.missingMealPeriod
+            : hasValidation
+              ? copy.resolveValidation
+              : hardFailure
+                ? copy.hardFailure
+                : payloadLocked
+                  ? copy.payloadLocked
+                  : succeeded
+                    ? copy.succeeded
+                    : null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <SnowCard tone="ai">
-        <SnowSectionHeader
-          title={copy.editorTitle}
-          subtitle={draft.mode === "manual" ? copy.manualMode : copy.candidateMode}
-        />
+      <MealPhotoFinalizationSubsection embedded={embedded} tone="ai">
+        {!embedded ? (
+          <SnowSectionHeader
+            title={copy.editorTitle}
+            subtitle={draft.mode === "manual" ? copy.manualMode : copy.candidateMode}
+          />
+        ) : null}
         {fields.map((field) => {
           const error = draft.validation[field.key];
           return (
@@ -869,8 +1001,13 @@ function MealPhotoFinalizationEditor({
           {draft.mode === "candidate" && !draft.dirty ? copy.unchangedBadge : copy.changedBadge}
         </Text>
         <Text style={styles.disclaimer}>{copy.serverAuthorityNote}</Text>
-        {!contextReady ? <Text style={styles.validationText}>{copy.incompleteContext}</Text> : null}
+        {submitUnavailableReason ? (
+          <Text accessibilityLiveRegion="polite" style={styles.validationText}>
+            {submitUnavailableReason}
+          </Text>
+        ) : null}
         <PrimaryButton
+          disabled={submitDisabled}
           icon="check"
           label={
             submitting
@@ -879,13 +1016,9 @@ function MealPhotoFinalizationEditor({
                 ? copy.retryCta
                 : copy.submitCta
           }
-          onPress={
-            payloadLocked || submitting || succeeded || hardFailure || !contextReady || hasValidation
-              ? undefined
-              : onSubmit
-          }
+          onPress={submitDisabled ? undefined : onSubmit}
         />
-      </SnowCard>
+      </MealPhotoFinalizationSubsection>
     </KeyboardAvoidingView>
   );
 }
@@ -901,23 +1034,20 @@ function MealPhotoAnalysisCandidateRow({
   disabled: boolean;
   onSelect?: () => void;
 }) {
-  const copy = zhTW.mobile.mealPhotoAnalysis;
   return (
-    <Pressable disabled={disabled} onPress={onSelect} style={styles.candidateRow}>
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ disabled, selected }}
+      disabled={disabled}
+      onPress={onSelect}
+      style={[styles.candidateRow, selected && styles.candidateRowSelected]}
+    >
       <Text style={styles.stateText}>{candidate.observedName}</Text>
-      <Text style={styles.disclaimer}>
-        {copy.confidenceLabel}: {Math.round(candidate.confidence * 100)}%
+      <Text style={[styles.disclaimer, selected ? styles.candidateSelectedLabel : null]}>
+        {selected
+          ? zhTW.mobile.mealPhotoAnalysis.selectedBadge
+          : zhTW.mobile.mealPhotoAnalysis.selectCta}
       </Text>
-      {candidate.components.length > 0 ? (
-        <Text style={styles.disclaimer}>
-          {copy.componentsLabel}: {candidate.components.map((component) => `${component.name}（${component.estimatedPortion}）`).join("、")}
-        </Text>
-      ) : null}
-      <Text style={styles.disclaimer}>
-        {candidate.estimatedNutrition.calories} kcal · {zhTW.mobile.analysis.protein} {candidate.estimatedNutrition.proteinGrams}g ·{" "}
-        {zhTW.mobile.analysis.carbs} {candidate.estimatedNutrition.carbsGrams}g · {zhTW.mobile.analysis.fat} {candidate.estimatedNutrition.fatGrams}g
-      </Text>
-      <Text style={[styles.disclaimer, selected ? styles.candidateSelectedLabel : null]}>{selected ? copy.selectedBadge : copy.selectCta}</Text>
     </Pressable>
   );
 }
@@ -1061,18 +1191,20 @@ function RecordTimingSection({
   analysis,
   timezone,
   payloadLocked,
-  frozenContext
+  frozenContext,
+  embedded = false
 }: {
   analysis: ReturnType<typeof useAnalysisCorrectionState>;
   timezone: string;
   payloadLocked: boolean;
   frozenContext: MealPhotoFinalizationDraftState["context"] | null;
+  embedded?: boolean;
 }) {
   const copy = zhTW.mobile.mealRecordTiming;
 
   if (payloadLocked && frozenContext) {
     return (
-      <SnowCard>
+      <MealPhotoFinalizationSubsection embedded={embedded}>
         <SnowSectionHeader title={copy.actualMealTimeTitle} />
         <Text style={styles.stateText}>
           {frozenContext.recordTiming === "current"
@@ -1082,37 +1214,37 @@ function RecordTimingSection({
                 timezone
               )}`}
         </Text>
-      </SnowCard>
+      </MealPhotoFinalizationSubsection>
     );
   }
 
   if (analysis.captureMethod === "camera") {
     return (
-      <SnowCard>
+      <MealPhotoFinalizationSubsection embedded={embedded}>
         <SnowSectionHeader title={copy.actualMealTimeTitle} />
         <Text style={styles.stateText}>{copy.currentSummaryLabel}</Text>
-      </SnowCard>
+      </MealPhotoFinalizationSubsection>
     );
   }
 
   if (analysis.recordTiming === "post_hoc" && !analysis.recordTimingConfirmed) {
-    return <PostHocPicker analysis={analysis} />;
+    return <PostHocPicker analysis={analysis} embedded={embedded} />;
   }
 
   if (!analysis.recordTimingConfirmed) {
     return (
-      <SnowCard tone="ai">
+      <MealPhotoFinalizationSubsection embedded={embedded} tone="ai">
         <SnowSectionHeader title={copy.confirmTitle} subtitle={copy.confirmBody} />
         <View style={styles.ctaColumn}>
           <PrimaryButton icon="check" label={copy.currentOption} onPress={analysis.confirmRecordTimingCurrent} />
           <SecondaryButton icon="clock" label={copy.postHocOption} onPress={analysis.beginRecordTimingPostHoc} />
         </View>
-      </SnowCard>
+      </MealPhotoFinalizationSubsection>
     );
   }
 
   return (
-    <SnowCard>
+    <MealPhotoFinalizationSubsection embedded={embedded}>
       <SnowSectionHeader title={copy.actualMealTimeTitle} />
       <Text style={styles.stateText}>
         {analysis.recordTiming === "current"
@@ -1129,7 +1261,7 @@ function RecordTimingSection({
           </View>
         ) : null}
       </View>
-    </SnowCard>
+    </MealPhotoFinalizationSubsection>
   );
 }
 
@@ -1142,9 +1274,11 @@ function RecordTimingSection({
 // buttons. Either way, a Date returned by the native picker already represents an
 // unambiguous absolute instant, so no manual timezone conversion is needed here.
 function PostHocPicker({
-  analysis
+  analysis,
+  embedded = false
 }: {
   analysis: ReturnType<typeof useAnalysisCorrectionState>;
+  embedded?: boolean;
 }) {
   const copy = zhTW.mobile.mealRecordTiming;
   const [referenceNow] = useState(() => new Date());
@@ -1211,7 +1345,7 @@ function PostHocPicker({
 
   if (Platform.OS === "android") {
     return (
-      <SnowCard tone="ai">
+      <MealPhotoFinalizationSubsection embedded={embedded} tone="ai">
         <SnowSectionHeader title={copy.actualMealTimeTitle} subtitle={copy.actualMealTimeBody} />
         {error ? (
           <>
@@ -1222,12 +1356,12 @@ function PostHocPicker({
             </View>
           </>
         ) : null}
-      </SnowCard>
+      </MealPhotoFinalizationSubsection>
     );
   }
 
   return (
-    <SnowCard tone="ai">
+    <MealPhotoFinalizationSubsection embedded={embedded} tone="ai">
       <SnowSectionHeader title={copy.actualMealTimeTitle} subtitle={copy.actualMealTimeBody} />
       <RNDateTimePicker
         value={draft}
@@ -1243,7 +1377,7 @@ function PostHocPicker({
         <PrimaryButton icon="check" label={copy.confirmPostHocCta} onPress={() => confirm(draft)} />
         <SecondaryButton icon="clock" label={copy.cancelPostHocLabel} onPress={analysis.confirmRecordTimingCurrent} />
       </View>
-    </SnowCard>
+    </MealPhotoFinalizationSubsection>
   );
 }
 
@@ -2045,6 +2179,12 @@ const styles = StyleSheet.create({
     minHeight: 76,
     textAlignVertical: "top"
   },
+  finalizationPanelSection: {
+    borderTopColor: snow.line,
+    borderTopWidth: 1,
+    marginTop: 16,
+    paddingTop: 16
+  },
   location: {
     alignSelf: "flex-start",
     borderRadius: 999,
@@ -2673,6 +2813,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 12,
     padding: 14
+  },
+  candidateRowSelected: {
+    borderColor: snow.primary,
+    backgroundColor: snow.primarySoft
   },
   candidateSelectedLabel: {
     color: snow.primaryDeep

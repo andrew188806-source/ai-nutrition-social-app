@@ -94,6 +94,16 @@ const updateFieldBody =
   updateFieldStart !== -1 && applyResultStart !== -1
     ? hook.slice(updateFieldStart, applyResultStart)
     : "";
+const mealPeriodStart = screen.indexOf("function MealPeriodSection");
+const mealSourceStart = screen.indexOf("function MealSourceSection", mealPeriodStart);
+const editorStart = screen.indexOf("function MealPhotoFinalizationEditor", mealSourceStart);
+const candidateRowStart = screen.indexOf("function MealPhotoAnalysisCandidateRow", editorStart);
+const recordTimingStart = screen.indexOf("function RecordTimingSection", candidateRowStart);
+const postHocStart = screen.indexOf("function PostHocPicker", recordTimingStart);
+const mealPeriodBody = screen.slice(mealPeriodStart, mealSourceStart);
+const mealSourceBody = screen.slice(mealSourceStart, editorStart);
+const editorBody = screen.slice(editorStart, candidateRowStart);
+const recordTimingBody = screen.slice(recordTimingStart, postHocStart);
 record(
   "candidate selection, manual switch, and field editing each use the programmatic payload-mutation gate",
   /applyMealPhotoFinalizationPayloadMutation\(/.test(selectCandidateBody) &&
@@ -118,12 +128,12 @@ record(
 );
 record(
   "UI candidate, manual, editor, meal-period, source, timing, and retake controls share hook payloadLocked",
-  /payloadLocked=\{mealPhotoFinalization\.payloadLocked\}/.test(screen) &&
+  (screen.match(/payloadLocked=\{mealPhotoFinalization\.payloadLocked\}/g) ?? []).length >= 4 &&
     /payloadLocked \? undefined : onChooseManual/.test(screen) &&
-    /editable=\{!submitting && !succeeded && !payloadLocked\}/.test(screen) &&
-    /mealPhotoFinalization\.payloadLocked[\s\S]*setSelectedMealPeriod/.test(screen) &&
-    (screen.match(/mealPhotoFinalization\.payloadLocked \? undefined : \(\) => analysis\.setMealSource/g) ?? []).length === 4 &&
-    /<RecordTimingSection[\s\S]*payloadLocked=\{mealPhotoFinalization\.payloadLocked\}/.test(screen) &&
+    /editable=\{!submitting && !succeeded && !payloadLocked\}/.test(editorBody) &&
+    /onPress=\{payloadLocked \? undefined : \(\) => onSelect\(period\)\}/.test(mealPeriodBody) &&
+    (mealSourceBody.match(/onPress=\{payloadLocked \? undefined : \(\) => analysis\.setMealSource/g) ?? []).length === 4 &&
+    /if \(payloadLocked && frozenContext\)/.test(recordTimingBody) &&
     /onPress=\{mealPhotoFinalization\.payloadLocked \? undefined : \(\) => retakeMealPhoto\(\)\}/.test(screen)
 );
 record(
@@ -164,7 +174,10 @@ record("prepared draft carries its stable clientRequestId", /draft: Object\.free
 record("payload edits after attempt rotate request ID", /clientRequestId: state\.attempted \? uuidFactory\(\) : state\.clientRequestId/.test(draft));
 record("submitting and succeeded drafts reject edits", /submissionStatus === "submitting" \|\| state\.submissionStatus === "succeeded"/.test(draft));
 record("programmatic single-flight guard is used", /MealPhotoFinalizationSubmissionGate/.test(hook) && /tryStart\(\)/.test(hook));
-record("submit button is disabled while submitting/succeeded", /submitting \|\| succeeded[\s\S]*onPress/.test(screen));
+record(
+  "submit button is disabled while submitting/succeeded",
+  /const submitDisabled =[\s\S]*submitting[\s\S]*succeeded[\s\S]*<PrimaryButton[\s\S]*disabled=\{submitDisabled\}[\s\S]*onPress=\{submitDisabled \? undefined : onSubmit\}/.test(screen)
+);
 record("success navigation is gated once", /tryNavigate\(\)/.test(hook) && /router\.push\("\/today-intake"\)/.test(screen));
 record("actor generation participates in stale identity", /actorGeneration/.test(hook));
 record("analysisRequestId and captureGeneration participate in stale identity", /analysisRequestId[\s\S]*captureGeneration/.test(hook));

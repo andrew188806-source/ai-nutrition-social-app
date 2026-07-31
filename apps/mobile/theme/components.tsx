@@ -124,9 +124,25 @@ export function PersonAvatar({ type = "real", initial = "?", size = 44, mascotId
   );
 }
 
-export function PrimaryButton({ label, onPress, icon }: { label: string; onPress?: () => void; icon?: IconName }) {
+export function PrimaryButton({
+  label,
+  onPress,
+  icon,
+  disabled = false
+}: {
+  label: string;
+  onPress?: () => void;
+  icon?: IconName;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable style={styles.primaryButton} onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      style={[styles.primaryButton, disabled && styles.primaryButtonDisabled]}
+      onPress={onPress}
+    >
       {icon ? <Icon name={icon} size={18} color="#FFFFFF" /> : null}
       <Text style={styles.primaryButtonText}>{label}</Text>
     </Pressable>
@@ -671,6 +687,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: 18,
     paddingVertical: 14
+  },
+  primaryButtonDisabled: {
+    opacity: 0.45
   },
   primaryButtonText: {
     color: "#FFFFFF",
