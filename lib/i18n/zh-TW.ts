@@ -146,6 +146,28 @@ export const zhTW = {
       galleryPermissionDeniedTitle: "無法開啟相簿",
       galleryPermissionDeniedBody: "好廚需要相簿權限才能選擇餐點照片，請在系統設定中開啟權限。",
       galleryPermissionAskAgainBody: "好廚需要相簿權限才能選擇餐點照片，請允許權限後再試一次。",
+      galleryAssetErrors: {
+        gallery_asset_unavailable: {
+          title: "無法使用這張照片",
+          body: "照片資訊不完整，請重新選擇其他照片。"
+        },
+        gallery_asset_unsupported: {
+          title: "不支援這張照片",
+          body: "請選擇 JPEG、PNG、WEBP、HEIC 或 HEIF 格式的照片。"
+        },
+        gallery_asset_materialization_failed: {
+          title: "無法讀取這張照片",
+          body: "請確認照片已下載至裝置後再試一次。"
+        },
+        gallery_asset_normalization_failed: {
+          title: "照片處理失敗",
+          body: "目前無法安全處理這張照片，請重新選擇或改用相機拍攝。"
+        },
+        gallery_asset_too_large: {
+          title: "照片檔案過大",
+          body: "請選擇檔案較小的照片後再試一次。"
+        }
+      },
       captureUnavailableTitle: "目前無法取得照片",
       captureUnavailableBody: "請稍後再試一次。",
       openSettingsCta: "前往設定",

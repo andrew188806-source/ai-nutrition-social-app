@@ -133,11 +133,12 @@ check(
   /restaurantNameLabel: "餐廳名稱"/.test(zhTW) && /restaurantNameUnknown: "未知"/.test(zhTW)
 );
 
-// --- B: no unverified/undeclared transcode dependency was silently added ---
+// --- B: successor-compatible transcode authority ---
 check(
-  "no image-manipulation/transcode dependency was added without an explicit stop-and-report decision",
-  !/"expo-image-manipulator"/.test(mobilePackageJson) &&
-    !/"react-native-image-resizer"/.test(mobilePackageJson)
+  "the R4 successor uses only the reviewed SDK-compatible Expo image transcode authority",
+  /"expo-image-manipulator":\s*"~14\.0\.8"/.test(mobilePackageJson) &&
+    !/"react-native-image-resizer"/.test(mobilePackageJson) &&
+    !/"react-native-image-crop-picker"/.test(mobilePackageJson)
 );
 
 // --- Scope guard: forbidden paths untouched ---

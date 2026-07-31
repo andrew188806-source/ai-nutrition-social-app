@@ -30,6 +30,7 @@ import {
   getMealPhotoFinalizationContextBlockReason,
   type MealPhotoFinalizationContextBlockReason
 } from "../features/analysis/mealPhotoFinalizationReadiness";
+import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryMealPhotoAssetNormalization";
 import { maximumMealOccurrenceInstant } from "../features/analysis/mealOccurrenceTime";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
@@ -166,6 +167,7 @@ export default function AnalysisScreen() {
         );
       }
       setMealSaved(true);
+      void releaseOwnedGalleryMealPhotoAsset();
       router.push("/today-intake");
     },
     [consumerRuntime.mode, profileTimezone, router]
@@ -341,6 +343,7 @@ export default function AnalysisScreen() {
       );
     }
     setMealSaved(true);
+    void releaseOwnedGalleryMealPhotoAsset();
     router.push("/today-intake");
   }
 
@@ -364,6 +367,7 @@ export default function AnalysisScreen() {
     if (mealPhotoUpload.uploadStatus === "uploaded" && mealPhotoUpload.imageObjectRef) {
       void consumerRuntime.deleteMealPhotoObject(mealPhotoUpload.imageObjectRef);
     }
+    void releaseOwnedGalleryMealPhotoAsset();
     router.push("/meal-photo");
   }
 

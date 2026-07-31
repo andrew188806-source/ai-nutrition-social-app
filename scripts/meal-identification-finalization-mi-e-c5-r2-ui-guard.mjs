@@ -188,17 +188,76 @@ check(
   )
 );
 
-const changed = [
+// Successor scope-fence predicate. A screen allowlist replaces the R2-only "analysis.tsx alone"
+// rule: R4 legitimately needs apps/mobile/app/meal-photo.tsx too (gallery error alerts + cache
+// release call sites), but any OTHER apps/mobile/app/* path stays forbidden, exactly like the
+// original R2-era rule did for every screen but analysis.tsx. This is the same predicate used
+// both by the fixture proof below and by the real live-diff enforcement further down — the
+// fixture is not a parallel/duplicated rule that could drift from what actually gets enforced.
+const FORBIDDEN_SUCCESSOR_PREFIXES = Object.freeze([
+  "supabase",
+  "apps/mobile/features/meal-photo-upload",
+  "apps/mobile/features/meal-identification-finalization",
+  "packages/shared/src/domain/meal-identification-finalization"
+]);
+const ALLOWED_APP_SCREENS = new Set([
+  "apps/mobile/app/analysis.tsx",
+  "apps/mobile/app/meal-photo.tsx"
+]);
+function isForbiddenSuccessorPath(entry) {
+  if (FORBIDDEN_SUCCESSOR_PREFIXES.some((prefix) => entry.startsWith(prefix))) return true;
+  if (entry.startsWith("apps/mobile/app/") && !ALLOWED_APP_SCREENS.has(entry)) return true;
+  return false;
+}
+
+// Behavioral fixture proof of the predicate itself (not a static string match on this guard's own
+// source) — every case below exercises isForbiddenSuccessorPath with a concrete path and asserts
+// its actual return value, using the identical function the real enforcement check calls.
+check("scope predicate: analysis.tsx is allowed", !isForbiddenSuccessorPath("apps/mobile/app/analysis.tsx"));
+check("scope predicate: meal-photo.tsx is allowed", !isForbiddenSuccessorPath("apps/mobile/app/meal-photo.tsx"));
+check(
+  "scope predicate: an unrelated third app screen is rejected",
+  isForbiddenSuccessorPath("apps/mobile/app/example-unrelated-screen.tsx")
+);
+check(
+  "scope predicate: a Supabase path is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/20260101000000_example.sql")
+);
+check(
+  "scope predicate: a meal-photo-upload contract path is rejected",
+  isForbiddenSuccessorPath("apps/mobile/features/meal-photo-upload/factories.ts")
+);
+check(
+  "scope predicate: a meal-identification-finalization contract path is rejected",
+  isForbiddenSuccessorPath("apps/mobile/features/meal-identification-finalization/v3Contract.ts")
+);
+check(
+  "scope predicate: the shared finalization domain path is rejected",
+  isForbiddenSuccessorPath("packages/shared/src/domain/meal-identification-finalization/types.ts")
+);
+check(
+  "scope predicate: an unrelated in-scope feature path stays allowed",
+  !isForbiddenSuccessorPath("apps/mobile/features/analysis/mediaCapture.ts")
+);
+
+const r2FreezeIsAncestor = (() => {
+  try {
+    git(["merge-base", "--is-ancestor", "3319c45ecd64f4bcdd2f953f85faf0e22faf7dfb", "HEAD"]);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+check("R2 frozen commit (3319c45) remains ancestor authority of HEAD", r2FreezeIsAncestor);
+
+const changedEntries = [
   ...git(["diff", "--name-only"]).split("\n"),
   ...git(["ls-files", "--others", "--exclude-standard"]).split("\n")
 ].filter(Boolean);
+const forbiddenLiveEntries = changedEntries.filter(isForbiddenSuccessorPath);
 check(
-  "R2 has no migration, RPC, Edge Function, Storage, or unrelated screen change",
-  !changed.some((entry) =>
-    entry.startsWith("supabase/") ||
-    entry.startsWith("apps/mobile/features/meal-photo-upload/") ||
-    (entry.startsWith("apps/mobile/app/") && entry !== "apps/mobile/app/analysis.tsx")
-  )
+  "successor work touches no forbidden backend/upload/finalization path and no app screen outside the allowed set",
+  forbiddenLiveEntries.length === 0
 );
 
 const failed = checks.filter((entry) => !entry.pass);

@@ -7,6 +7,7 @@ import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getPlannedDinnerEstimateOptions, type DinnerEstimate } from "../features/analysis/analysisMealRecordStore";
 import { beginAnalysisCapture, resetAnalysisSession, type MealPhotoCaptureMethod } from "../features/analysis";
 import { captureMealPhotoFromCamera, pickMealPhotoFromLibrary, type MediaCaptureOutcome } from "../features/analysis/mediaCapture";
+import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryMealPhotoAssetNormalization";
 import { type PlannedMeal } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 
@@ -41,6 +42,7 @@ export default function MealPhotoScreen() {
 
   function startAiAnalysis() {
     // Tapping "開始 AI 分析" is itself a new-session trigger, even before a source is chosen.
+    void releaseOwnedGalleryMealPhotoAsset();
     resetAnalysisSession();
     setIsSheetOpen(true);
   }
@@ -80,7 +82,16 @@ export default function MealPhotoScreen() {
       showPermissionDeniedAlert(method, outcome.canAskAgain);
       return;
     }
+    if (outcome.status === "gallery_error") {
+      showGalleryAssetErrorAlert(outcome.errorCode);
+      return;
+    }
     showCaptureUnavailableAlert();
+  }
+
+  function showGalleryAssetErrorAlert(errorCode: Extract<MediaCaptureOutcome, { status: "gallery_error" }>["errorCode"]) {
+    const copy = zhTW.mobile.mediaCapture.galleryAssetErrors[errorCode];
+    Alert.alert(copy.title, copy.body, [{ text: zhTW.common.close }]);
   }
 
   function showPermissionDeniedAlert(method: MealPhotoCaptureMethod, canAskAgain: boolean) {
@@ -172,6 +183,7 @@ export default function MealPhotoScreen() {
     // Home's "拍照分析" shortcut opens the sheet directly (autoOpen=true), which is the
     // same "start a new analysis" intent as tapping 開始 AI 分析 manually.
     if (autoOpen === "true") {
+      void releaseOwnedGalleryMealPhotoAsset();
       resetAnalysisSession();
     }
   }, [autoOpen]);
