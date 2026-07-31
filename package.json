@@ -29,6 +29,8 @@
     "test:consumer-mi-e-c5-r1-smoke": "node scripts/consumer-runtime-mi-e-c5-r1-capability-flags-smoke.mjs",
     "test:consumer-mi-e-c5-r2": "node scripts/meal-identification-finalization-mi-e-c5-r2-ui-guard.mjs",
     "test:consumer-mi-e-c5-r2-smoke": "node scripts/meal-identification-finalization-mi-e-c5-r2-smoke.mjs",
+    "test:consumer-mi-e-c5-r3": "node scripts/consumer-runtime-mi-e-c5-r3-guard.mjs",
+    "test:consumer-mi-e-c5-r3-smoke": "node scripts/consumer-runtime-mi-e-c5-r3-secure-uuid-smoke.mjs",
     "test:consumer-phase1a": "node scripts/consumer-auth-phase-1a-guard.mjs",
     "test:consumer-phase1b": "node scripts/consumer-auth-phase-1b-guard.mjs",
     "test:consumer-phase1c": "node scripts/consumer-auth-phase-1c-guard.mjs",

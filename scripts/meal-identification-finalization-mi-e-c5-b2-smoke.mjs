@@ -42,6 +42,7 @@ const productionModules = [
   "apps/mobile/features/meal-identification/finalizationContract.ts",
   "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts",
   "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationOperationStore.ts",
+  "apps/mobile/features/consumer-runtime/secureUuidProvider.ts",
   "apps/mobile/features/consumer-meals/mealDateTime.ts"
 ];
 

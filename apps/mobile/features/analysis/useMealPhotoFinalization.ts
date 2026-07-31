@@ -262,10 +262,33 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     const current = draftRef.current;
     if (!current || !gateRef.current.tryStart()) return;
     const expectedIdentity = identityRef.current;
-    const prepared = prepareMealPhotoFinalization(
-      current,
-      generateConsumerMealIdentificationFinalizationClientRequestId
-    );
+
+    // prepareMealPhotoFinalization calls the secure UUID provider, which can throw on a runtime
+    // with no available secure-random source (MI-E-C5-R3: Hermes/Expo Go with no global.crypto and
+    // no expo-crypto fallback). That throw must never escape as an uncaught rejection, must never
+    // be mistaken for a network/transport failure, and must always release the single-flight gate
+    // — no runtime call is ever reached on this path, so no pending operation is ever created.
+    let prepared: ReturnType<typeof prepareMealPhotoFinalization> | null;
+    try {
+      prepared = prepareMealPhotoFinalization(
+        current,
+        generateConsumerMealIdentificationFinalizationClientRequestId
+      );
+    } catch {
+      prepared = null;
+    }
+    if (!prepared) {
+      setDraft(
+        Object.freeze({
+          ...current,
+          submissionStatus: "failed" as const,
+          lastSafeError: "finalization_client_error",
+          attempted: true
+        })
+      );
+      gateRef.current.finish();
+      return;
+    }
     setDraft(prepared.state);
     if (!prepared.ok) {
       gateRef.current.finish();

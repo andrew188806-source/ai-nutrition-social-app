@@ -971,6 +971,16 @@ function MealPhotoFinalizationEditor({
             subtitle={draft.mode === "manual" ? copy.manualMode : copy.candidateMode}
           />
         ) : null}
+        {/* MI-E-C5-R3: read-only presentation only — no authoritative restaurant source exists
+            anywhere in the AI candidate contract yet, so this always shows the 未知 fallback. Not
+            part of MealPhotoFinalizationDraftState: nothing here needs to be tracked, retried, or
+            sent in the finalization payload, so it stays out of the draft/fingerprint entirely. */}
+        <View style={styles.finalizationField}>
+          <Text style={styles.finalizationFieldLabel}>{copy.restaurantNameLabel}</Text>
+          <Text accessibilityLabel={copy.restaurantNameLabel} accessibilityRole="text" style={styles.stateText}>
+            {copy.restaurantNameUnknown}
+          </Text>
+        </View>
         {fields.map((field) => {
           const error = draft.validation[field.key];
           return (

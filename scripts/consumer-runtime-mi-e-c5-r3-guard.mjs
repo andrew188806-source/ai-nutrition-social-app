@@ -1,0 +1,173 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+
+const root = process.cwd();
+const checks = [];
+
+function check(name, condition) {
+  checks.push({ name, pass: Boolean(condition) });
+}
+
+function read(file) {
+  return fs.readFileSync(path.join(root, file), "utf8");
+}
+
+function git(args) {
+  return spawnSync("git", args, { cwd: root, encoding: "utf8" });
+}
+
+const secureUuidProvider = read("apps/mobile/features/consumer-runtime/secureUuidProvider.ts");
+const finalizationRuntime = read("apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts");
+const mealWriteRuntime = read("apps/mobile/features/consumer-runtime/consumerMealWriteRuntime.ts");
+const plannedMealRuntime = read("apps/mobile/features/consumer-runtime/consumerPlannedMealRuntime.ts");
+const useMealPhotoFinalization = read("apps/mobile/features/analysis/useMealPhotoFinalization.ts");
+const finalizationAdapter = read("apps/mobile/features/analysis/mealIdentificationFinalizationAdapter.ts");
+const analysisTsx = read("apps/mobile/app/analysis.tsx");
+const zhTW = read("lib/i18n/zh-TW.ts");
+const mobilePackageJson = read("apps/mobile/package.json");
+
+// --- A1/A2: single canonical secure UUID authority, no per-runtime drift ---
+check(
+  "canonical provider tries native Web Crypto before any Expo/native fallback",
+  /const webCrypto = globalThis\.crypto;/.test(secureUuidProvider) &&
+    secureUuidProvider.indexOf("globalThis.crypto") < secureUuidProvider.indexOf("expo-crypto")
+);
+check(
+  "canonical provider defers the expo-crypto require (never a static top-level import)",
+  !/^import .*expo-crypto/m.test(secureUuidProvider) &&
+    /function loadExpoCrypto[\s\S]*require\(\s*"expo-crypto"\s*\)/.test(secureUuidProvider) &&
+    /catch\s*\{\s*return null;\s*\}/.test(secureUuidProvider)
+);
+check(
+  "canonical provider fails closed with the exact original error when no provider is available",
+  /throw new Error\("Secure UUID generation unavailable\."\);/.test(secureUuidProvider)
+);
+check(
+  "canonical provider never falls back to Math.random or Date.now",
+  !/Math\.random\(/.test(secureUuidProvider) && !/Date\.now\(\)\.toString/.test(secureUuidProvider)
+);
+check(
+  "all three former per-runtime generators now delegate to the single canonical provider",
+  /import \{ generateSecureUuidV4 \} from "\.\/secureUuidProvider";/.test(finalizationRuntime) &&
+    /return generateSecureUuidV4\(\);/.test(finalizationRuntime) &&
+    /import \{ generateSecureUuidV4 \} from "\.\/secureUuidProvider";/.test(mealWriteRuntime) &&
+    /return generateSecureUuidV4\(\);/.test(mealWriteRuntime) &&
+    /import \{ generateSecureUuidV4 \} from "\.\/secureUuidProvider";/.test(plannedMealRuntime) &&
+    /return generateSecureUuidV4\(\);/.test(plannedMealRuntime)
+);
+check(
+  "no runtime file still carries its own duplicated getRandomValues/randomUUID v4-construction logic",
+  !/bytes\[6\] = \(bytes\[6\] & 0x0f\) \| 0x40;/.test(finalizationRuntime) &&
+    !/bytes\[6\] = \(bytes\[6\] & 0x0f\) \| 0x40;/.test(mealWriteRuntime) &&
+    !/bytes\[6\] = \(bytes\[6\] & 0x0f\) \| 0x40;/.test(plannedMealRuntime)
+);
+check(
+  "expo-crypto is declared as a real dependency with a pinned SDK-compatible version",
+  /"expo-crypto":\s*"[\d.^~]+"/.test(mobilePackageJson)
+);
+check(
+  "react-native-get-random-values was not also introduced (no two competing crypto authorities)",
+  !/react-native-get-random-values/.test(mobilePackageJson)
+);
+
+// --- A3: submit error boundary ---
+check(
+  "submit wraps prepareMealPhotoFinalization in try/catch rather than letting it throw uncaught",
+  /let prepared: ReturnType<typeof prepareMealPhotoFinalization> \| null;\s*\n\s*try \{\s*\n\s*prepared = prepareMealPhotoFinalization\(/.test(useMealPhotoFinalization) &&
+    /\} catch \{\s*\n\s*prepared = null;\s*\n\s*\}/.test(useMealPhotoFinalization)
+);
+check(
+  "prepare-time failure produces a distinct, non-network-labeled safe error code",
+  /lastSafeError: "finalization_client_error"/.test(useMealPhotoFinalization) &&
+    !/lastSafeError: "finalization_transport_failed"[\s\S]{0,80}catch/.test(useMealPhotoFinalization)
+);
+check(
+  "prepare-time failure releases the single-flight gate on the same path",
+  /if \(!prepared\) \{[\s\S]{0,220}gateRef\.current\.finish\(\);\s*\n\s*return;\s*\n\s*\}/.test(useMealPhotoFinalization)
+);
+check(
+  "prepare-time failure never touches frozenSubmissionRef (no pending operation is ever created)",
+  !/if \(!prepared\) \{[\s\S]{0,400}frozenSubmissionRef\.current = /.test(useMealPhotoFinalization)
+);
+check(
+  "finalization_client_error maps to its own dedicated UI kind, not folded into an existing network/transport kind",
+  /if \(errorCode === "finalization_client_error"\) return "client";/.test(finalizationAdapter) &&
+    /"client"/.test(finalizationAdapter.match(/export type MealIdentificationFinalizationUiErrorKind =[\s\S]*?;/)?.[0] ?? "")
+);
+check(
+  "dedicated client-error copy exists and is distinct from the generic/network copy",
+  /client:\s*\{\s*\n\s*title:\s*"[^"]+",\s*\n\s*body:\s*"[^"]+"\s*\n\s*\}/.test(zhTW)
+);
+
+// --- C: restaurant display fallback ---
+check(
+  "restaurant display row is rendered above the mealName field inside the shared finalization panel",
+  (() => {
+    const restaurantIdx = analysisTsx.indexOf("copy.restaurantNameLabel");
+    const mealNameFieldIdx = analysisTsx.indexOf('{ key: "mealName", label: copy.mealNameLabel }');
+    return restaurantIdx !== -1 && mealNameFieldIdx !== -1 && restaurantIdx < analysisTsx.indexOf("{fields.map((field) => {");
+  })()
+);
+check(
+  "restaurant display always renders the 未知 fallback (no guessing, no legacy mock authority)",
+  (() => {
+    const start = analysisTsx.indexOf("function MealPhotoFinalizationEditor");
+    const end = analysisTsx.indexOf("function MealPhotoAnalysisCandidateRow");
+    if (start === -1 || end === -1 || end <= start) return false;
+    const body = analysisTsx.slice(start, end);
+    return /\{copy\.restaurantNameUnknown\}/.test(body) && !/analysis\.restaurantName/.test(body);
+  })()
+);
+check(
+  "restaurant field is presentation-only: not added to MealPhotoFinalizationDraftState or the fingerprint",
+  !/restaurantName/i.test(read("apps/mobile/features/analysis/mealPhotoFinalizationDraft.ts"))
+);
+check(
+  "restaurant field is not part of the v3 finalization payload contract",
+  !/restaurantName/i.test(read("apps/mobile/features/meal-identification-finalization/v3Contract.ts"))
+);
+check(
+  "restaurant label/fallback i18n keys exist",
+  /restaurantNameLabel: "餐廳名稱"/.test(zhTW) && /restaurantNameUnknown: "未知"/.test(zhTW)
+);
+
+// --- B: no unverified/undeclared transcode dependency was silently added ---
+check(
+  "no image-manipulation/transcode dependency was added without an explicit stop-and-report decision",
+  !/"expo-image-manipulator"/.test(mobilePackageJson) &&
+    !/"react-native-image-resizer"/.test(mobilePackageJson)
+);
+
+// --- Scope guard: forbidden paths untouched ---
+const forbiddenDiff = git([
+  "diff",
+  "--name-only",
+  "--",
+  "supabase/migrations",
+  "supabase/functions",
+  "apps/mobile/features/meal-identification-finalization"
+]);
+check(
+  "repair does not modify migrations, Edge Functions, or the frozen B1/B2 finalization contract",
+  forbiddenDiff.status === 0 && forbiddenDiff.stdout.trim() === ""
+);
+
+const stagedDiff = git(["diff", "--cached", "--name-only"]);
+check("nothing is staged", stagedDiff.status === 0 && stagedDiff.stdout.trim() === "");
+
+const failed = checks.filter((entry) => !entry.pass);
+console.log(JSON.stringify({
+  phase: "MI-E-C5-R3 UUID Safety / Restaurant Fallback / Gallery Blocker Guard",
+  status: failed.length ? "failed" : "passed",
+  totalChecks: checks.length,
+  passed: checks.length - failed.length,
+  failed: failed.length,
+  checks,
+  networkUsed: false,
+  databaseUsed: false,
+  credentialsUsed: false
+}, null, 2));
+
+if (failed.length) process.exitCode = 1;

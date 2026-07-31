@@ -129,6 +129,10 @@ export const zhTW = {
           title: "餐點尚未完整保存",
           body: "系統未能確認完整資料已建立；請勿重複送出，先前往今日飲食確認。"
         },
+        client: {
+          title: "暫時無法安全建立這筆請求",
+          body: "這筆請求尚未送出，未建立任何餐點紀錄。請再試一次；若持續發生，請稍後再試。"
+        },
         generic: {
           title: "餐點分析暫時無法保存",
           body: "這筆餐點尚未確認完成，請稍後再試或先前往今日飲食查看。"
@@ -224,6 +228,8 @@ export const zhTW = {
       candidateMode: "正在確認 AI 候選",
       manualMode: "都不是，改用手動輸入",
       noneOfAboveCta: "都不是／手動輸入",
+      restaurantNameLabel: "餐廳名稱",
+      restaurantNameUnknown: "未知",
       mealNameLabel: "餐點名稱",
       componentsLabel: "內容／成分（以頓號或逗號分隔）",
       portionLabel: "整份餐點份量（選填）",

@@ -47,6 +47,7 @@ export type MealIdentificationFinalizationUiErrorKind =
   | "manual"
   | "alreadyFinalized"
   | "persistence"
+  | "client"
   | "generic";
 
 export function buildAnalysisMealIdentificationFinalizationDraft(
@@ -155,6 +156,7 @@ export function mapMealIdentificationFinalizationUiError(
     return "analysis";
   }
   if (errorCode === "finalization_analysis_already_finalized") return "alreadyFinalized";
+  if (errorCode === "finalization_client_error") return "client";
   if (errorCode === "finalization_invalid_candidate") return "candidate";
   if (errorCode === "finalization_invalid_manual_draft") return "manual";
   if (errorCode === "finalization_correction_validation_failed") return "invalid";

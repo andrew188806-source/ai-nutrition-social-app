@@ -2,6 +2,7 @@ import type { ConsumerPlannedMealV2Service } from "../consumer-meals/consumerPla
 import type { ConsumerConvertPlannedMealV2Input } from "../consumer-meals/types";
 import { mapConsumerPlannedMealDraft, type ConsumerPlannedMealDraft } from "./consumerPlannedMealMapper";
 import { ConsumerPlannedMealOperationStore, createPendingPlannedMealOperation, type ConsumerPlannedMealPendingOperation } from "./consumerPlannedMealOperationStore";
+import { generateSecureUuidV4 } from "./secureUuidProvider";
 
 export type ConsumerPlannedMealRuntimeError = "authentication_required" | "timezone_required" | "invalid_input" | "disabled" | "configuration_error" | "conflict" | "provider_rejected" | "result_uncertain";
 export type ConsumerPlannedMealRuntimeState = {
@@ -109,4 +110,4 @@ function mapError(code: string, message: string): ConsumerPlannedMealRuntimeErro
   if (code.includes("invalid")) return "invalid_input"; return "provider_rejected";
 }
 function validTimezone(value: string) { try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date(0)); return Boolean(value.trim()); } catch { return false; } }
-function secureUuidV4() { if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID(); throw new Error("Secure UUID generation unavailable."); }
+function secureUuidV4() { return generateSecureUuidV4(); }
