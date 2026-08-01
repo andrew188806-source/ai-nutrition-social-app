@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MealPhotoAnalysisCandidate } from "@haocu/shared";
 import { useConsumerRuntime } from "../consumer-runtime";
-import { buildMealPhotoAnalysisActorIdentity } from "./mealPhotoAnalysisFlowState";
+import {
+  buildMealPhotoAnalysisActorIdentity,
+  buildMealPhotoFinalizationOperationIdentity
+} from "./mealPhotoAnalysisFlowState";
 import {
   generateConsumerMealIdentificationFinalizationClientRequestId,
   type ConsumerMealIdentificationFinalizationRuntimeState
@@ -18,6 +21,7 @@ import {
   applyMealPhotoFinalizationResult,
   createCandidateMealPhotoFinalizationDraft,
   createManualMealPhotoFinalizationDraft,
+  deriveMealPhotoFinalizationOperationSafeState,
   getMealPhotoFinalizationPayloadFingerprint,
   isMealPhotoFinalizationPayloadLocked,
   MealPhotoFinalizationSubmissionGate,
@@ -84,6 +88,38 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
   });
   const draftOwnerIdentityRef = useRef(actorIdentity);
   const isCurrentActorState = draftOwnerIdentityRef.current === actorIdentity;
+  // MI-E-C5-R5-R6-A §三: which ANALYSIS OPERATION the shared finalization runtime is currently bound
+  // to is owned by the RUNTIME, not by this hook. R6 kept it in a null-seeded ref, which made a
+  // same-operation remount report a succeeded operation as idle/unlocked on its first render and —
+  // because a same-operation rebind is a no-op that emits nothing — never corrected itself.
+  //
+  // The binding is now a PURE runtime-owned query evaluated during render. A freshly mounted hook
+  // therefore computes the correct value immediately, with no ref, no effect and no rerender.
+  const operationIdentity = buildMealPhotoFinalizationOperationIdentity({
+    analysisRequestId: initialSession.analysisRequestId,
+    captureGeneration: initialSession.captureGeneration
+  });
+  const isRuntimeBoundToCurrentOperation =
+    runtime.isMealIdentificationFinalizationBoundToOperation(operationIdentity);
+  const runtimeStatus = runtime.mealIdentificationFinalizationState.status;
+  // Single production authority for the operation-scoped public surface (see
+  // deriveMealPhotoFinalizationOperationSafeState). The smoke executes this same function.
+  // Memoised on its two primitive inputs only, so the public object keeps a stable identity across
+  // unrelated rerenders. The derivation itself stays pure and is re-run whenever either input moves.
+  const operationSafeState = useMemo(
+    () =>
+      deriveMealPhotoFinalizationOperationSafeState({
+        runtimeStatus,
+        boundToCurrentOperation: isRuntimeBoundToCurrentOperation
+      }),
+    [isRuntimeBoundToCurrentOperation, runtimeStatus]
+  );
+  // MI-E-C5-R5-R6-A §五: handlers re-ask the runtime at INVOCATION time rather than trusting a
+  // render-time boolean captured in a closure, so a stale render can never authorise a submission.
+  const ownsCurrentOperationState = useCallback(
+    () => runtime.isMealIdentificationFinalizationBoundToOperation(operationIdentity),
+    [operationIdentity, runtime]
+  );
   // Every server-mutating and draft-mutating handler calls this FIRST, before the single-flight
   // gate, before any secure-UUID mint, before payload preparation and before any runtime call.
   const ownsCurrentActorState = useCallback(
@@ -127,8 +163,23 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     draftOwnerIdentityRef.current = actorIdentity;
     gateRef.current.reset();
     frozenSubmissionRef.current = null;
+    // MI-E-C5-R5-R6-A: no hook-local binding state to clear — the runtime drops its own operation
+    // binding in setActor, and the pure query reflects that on the very next render.
     setDraft(null);
   }, [actorIdentity, setDraft]);
+
+  // MI-E-C5-R5-R6 §五/§七: bind the shared finalization runtime to THIS analysis operation, in the
+  // commit phase. Running here rather than in render means an abandoned or speculative render can
+  // never reset a live operation, and the binding still lands before paint — so the user never sees
+  // a frame in which the previous meal's succeeded state disables acceptance for a new analysis.
+  //
+  // The ref only advances when the runtime confirms the binding. If it refuses (signed out, another
+  // actor, or an unresolved submitting/uncertain payload) the ref stays stale, every mutating
+  // handler below keeps failing closed, and the existing uncertain retry UI stays authoritative.
+  useLayoutEffect(() => {
+    if (isRuntimeBoundToCurrentOperation) return;
+    runtime.beginMealIdentificationFinalizationOperation(operationIdentity);
+  }, [isRuntimeBoundToCurrentOperation, operationIdentity, runtime]);
 
   // Context fields are fingerprint-bearing. If the user changes source/time/meal period
   // after an attempt, the pure state transition rotates the UUID before another submit.
@@ -305,6 +356,10 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
       await retryPending();
       return;
     }
+    // MI-E-C5-R5-R6 §五: a NEW submission may only start once the shared runtime is bound to THIS
+    // analysis operation. Placed after the uncertain branch so resolving a previous operation's
+    // pending payload through retry is never blocked by this gate.
+    if (!ownsCurrentOperationState()) return;
     if (
       isMealPhotoFinalizationPayloadLocked(
         runtime.mealIdentificationFinalizationState.status
@@ -377,6 +432,9 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
         await retryPending();
         return;
       }
+      // MI-E-C5-R5-R6 §五: same gate as submit() — one-step acceptance is a finalization start, so
+      // it may only run once the shared runtime is bound to THIS analysis operation.
+      if (!ownsCurrentOperationState()) return;
       if (isMealPhotoFinalizationPayloadLocked(runtime.mealIdentificationFinalizationState.status)) return;
       const analysisRequestId = getAnalysisSession().analysisRequestId;
       if (!analysisRequestId) return;
@@ -458,20 +516,23 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
       submit,
       retryPending,
       submitting: isCurrentActorState ? draft?.submissionStatus === "submitting" : false,
-      uncertain: isCurrentActorState
-        ? runtime.mealIdentificationFinalizationState.status === "uncertain"
-        : false,
-      payloadLocked: isCurrentActorState
-        ? isMealPhotoFinalizationPayloadLocked(runtime.mealIdentificationFinalizationState.status)
-        : false
+      // MI-E-C5-R5-R6 §四/§十: every runtime-derived flag is now scoped to the CURRENT analysis
+      // operation as well as the current actor. `operationSafeRuntimeStatus` keeps a live
+      // submitting/uncertain payload locked no matter which operation it belongs to, but reports a
+      // previous operation's terminal succeeded/error as plain idle — so a newly analysed meal is
+      // accept-ready without a sign-out, while the finished meal itself stays permanently locked
+      // against a second write.
+      uncertain: isCurrentActorState ? operationSafeState.uncertain : false,
+      payloadLocked: isCurrentActorState ? operationSafeState.payloadLocked : false,
+      runtimeStatus: isCurrentActorState ? operationSafeState.runtimeStatus : "idle"
     }),
     [
       acceptCandidate,
       chooseManual,
       draft,
       isCurrentActorState,
+      operationSafeState,
       retryPending,
-      runtime.mealIdentificationFinalizationState.status,
       selectCandidate,
       submit,
       updateField

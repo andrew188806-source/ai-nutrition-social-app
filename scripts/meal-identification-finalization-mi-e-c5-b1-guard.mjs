@@ -470,9 +470,18 @@ record(
       finalizationRuntimeSrc.indexOf(
         "this.options.service.finalizeCurrentUserMealIdentification(operation.input)"
       ) &&
-    /const operation = this\.pending;[\s\S]{0,300}this\.execute\(context\.actorKey, context\.actorGeneration, operation\)/.test(
+    (/const operation = this\.pending;[\s\S]{0,300}this\.execute\(context\.actorKey, context\.actorGeneration, operation\)/.test(
       finalizationRuntimeSrc
-    )
+    ) ||
+      // MI-E-C5-R5-R6 successor-compatible locator. The B1 invariant is unchanged: the PERSISTED
+      // pending operation is still what gets replayed, still through execute(), still under the
+      // same actor context. R6 additionally freezes the analysis operation id at replay time and
+      // threads it through so a response that returns after the screen moved on cannot commit. The
+      // extended spelling is accepted ONLY when that id is proven to be read from the runtime
+      // immediately before the replay, so a replay that lost its actor context still fails here.
+      /const operation = this\.pending;\s*\r?\n?\s*const operationId = this\.operationId;[\s\S]{0,300}this\.execute\(context\.actorKey, context\.actorGeneration, operationId, operation\)/.test(
+        finalizationRuntimeSrc
+      ))
 );
 record(
   "Mobile request construction does not send server-owned confirmation, verification, nutrition, training, licensing, or provider authority",

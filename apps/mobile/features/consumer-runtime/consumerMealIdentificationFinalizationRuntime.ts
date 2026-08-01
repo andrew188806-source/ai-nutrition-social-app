@@ -69,6 +69,11 @@ export class ConsumerMealIdentificationFinalizationRuntime {
   private readonly listeners = new Set<(state: ConsumerMealIdentificationFinalizationRuntimeState) => void>();
   private actorKey: string | null = null;
   private actorGeneration = 0;
+  // MI-E-C5-R5-R6 §三: the runtime is bounded by actor AND by the current analysis operation.
+  // Without this second axis a terminal `succeeded` from one meal stayed applied to every later
+  // analysis of the same signed-in actor, keeping payloadLocked true and permanently disabling
+  // acceptance until sign-out. null means "not yet bound to any operation" and fails closed.
+  private operationId: string | null = null;
   private actorReady = false;
   private pending: ConsumerMealIdentificationFinalizationPendingOperation | null = null;
   private inFlight: Promise<ConsumerMealIdentificationFinalizationRuntimeState> | null = null;
@@ -93,6 +98,9 @@ export class ConsumerMealIdentificationFinalizationRuntime {
     const previousActor = this.actorKey;
     this.actorKey = actorKey;
     this.actorGeneration = actorGeneration;
+    // An actor change invalidates the previous actor's operation binding as well, so the next
+    // analysis screen must re-bind explicitly before it can submit.
+    this.operationId = null;
     this.actorReady = false;
     this.pending = null;
     this.inFlight = null;
@@ -124,6 +132,45 @@ export class ConsumerMealIdentificationFinalizationRuntime {
     );
   }
 
+  // MI-E-C5-R5-R6-A §二: PURE runtime-owned binding query — the single authority for "is the shared
+  // finalization runtime currently serving THIS analysis operation for THIS actor". Mutates nothing,
+  // emits nothing, mints nothing, so it is safe to call during render. Because the answer comes from
+  // the runtime itself rather than hook-local state, a freshly mounted hook gets the correct answer
+  // on its FIRST render — no effect and no rerender are needed to correct it.
+  isBoundToOperation(context: { actorKey: string; actorGeneration: number }, operationId: string): boolean {
+    if (!operationId) return false;
+    if (!this.matchesActor(context)) return false;
+    return this.operationId === operationId;
+  }
+
+  // MI-E-C5-R5-R6 §五: bind the runtime to the analysis operation that is currently on screen.
+  //
+  //  * same operation            → no-op, returns true (an ordinary rerender, a token refresh and
+  //                                navigation back to the same analysis all land here)
+  //  * signed out / other actor  → fails closed, returns false, touches nothing
+  //  * unresolved submission     → refuses, returns false. An in-flight or persisted-pending
+  //                                payload still owns the runtime; adopting a new operation would
+  //                                silently discard it, so `uncertain` stays locked until the user
+  //                                resolves it through the existing retry path.
+  //  * otherwise                 → adopts the new operation and resets to idle, dropping the
+  //                                previous operation's succeeded/failed result, durable IDs and
+  //                                error so the new analysis starts unlocked.
+  //
+  // Never called during render — analysis.tsx/useMealPhotoFinalization drive it from a layout
+  // effect, so an abandoned render can never reset a live operation.
+  beginAnalysisOperation(
+    context: { actorKey: string; actorGeneration: number },
+    operationId: string
+  ): boolean {
+    if (!operationId) return false;
+    if (!this.matchesActor(context)) return false;
+    if (this.operationId === operationId) return true;
+    if (this.inFlight || this.pending) return false;
+    this.operationId = operationId;
+    this.update(idleState(this.state.finalizationDataRevision));
+    return true;
+  }
+
   submit(context: ConsumerMealIdentificationFinalizationActorContext, draft: ConsumerMealIdentificationFinalizationDraft) {
     if (this.inFlight) return this.inFlight;
     if (!this.matchesActor(context)) return Promise.resolve(this.fail("finalization_authentication_required"));
@@ -133,7 +180,10 @@ export class ConsumerMealIdentificationFinalizationRuntime {
 
     const generation = context.actorGeneration;
     const actorKey = context.actorKey;
-    this.inFlight = this.startOperation(actorKey, generation, context.timezone, draft).finally(() => {
+    // MI-E-C5-R5-R6 §八: the operation this submission belongs to is frozen here. Every later state
+    // transition re-checks it, so a slow response from this operation can never land on a newer one.
+    const operationId = this.operationId;
+    this.inFlight = this.startOperation(actorKey, generation, operationId, context.timezone, draft).finally(() => {
       if (actorKey === this.actorKey && generation === this.actorGeneration) this.inFlight = null;
     });
     return this.inFlight;
@@ -145,7 +195,8 @@ export class ConsumerMealIdentificationFinalizationRuntime {
       return Promise.resolve(this.fail("finalization_authentication_required"));
     }
     const operation = this.pending;
-    this.inFlight = this.execute(context.actorKey, context.actorGeneration, operation).finally(() => {
+    const operationId = this.operationId;
+    this.inFlight = this.execute(context.actorKey, context.actorGeneration, operationId, operation).finally(() => {
       if (context.actorKey === this.actorKey && context.actorGeneration === this.actorGeneration) this.inFlight = null;
     });
     return this.inFlight;
@@ -158,6 +209,7 @@ export class ConsumerMealIdentificationFinalizationRuntime {
   private async startOperation(
     actorKey: string,
     generation: number,
+    operationId: string | null,
     timezone: string,
     draft: ConsumerMealIdentificationFinalizationDraft
   ) {
@@ -180,20 +232,23 @@ export class ConsumerMealIdentificationFinalizationRuntime {
       };
       const operation = createConsumerMealIdentificationFinalizationPendingOperation(input, submittedAt);
       await this.options.operationStore.save(actorKey, operation);
-      if (!this.isCurrent(actorKey, generation)) return this.state;
+      if (!this.isCurrentOperation(actorKey, generation, operationId)) return this.state;
       this.pending = operation;
-      return this.execute(actorKey, generation, operation);
+      return this.execute(actorKey, generation, operationId, operation);
     } catch {
-      return this.isCurrent(actorKey, generation) ? this.fail("finalization_invalid_input") : this.state;
+      return this.isCurrentOperation(actorKey, generation, operationId)
+        ? this.fail("finalization_invalid_input")
+        : this.state;
     }
   }
 
   private async execute(
     actorKey: string,
     generation: number,
+    operationId: string | null,
     operation: ConsumerMealIdentificationFinalizationPendingOperation
   ) {
-    if (!this.isCurrent(actorKey, generation)) return this.state;
+    if (!this.isCurrentOperation(actorKey, generation, operationId)) return this.state;
     this.update({
       status: "submitting",
       errorCode: null,
@@ -206,7 +261,9 @@ export class ConsumerMealIdentificationFinalizationRuntime {
       finalizationDataRevision: this.state.finalizationDataRevision
     });
     const result = await this.options.service.finalizeCurrentUserMealIdentification(operation.input);
-    if (!this.isCurrent(actorKey, generation)) return this.state;
+    // MI-E-C5-R5-R6 §八: a response that returns after the screen moved on to another analysis is
+    // dropped here — it cannot mark the newer operation succeeded, re-lock it, or overwrite it.
+    if (!this.isCurrentOperation(actorKey, generation, operationId)) return this.state;
     if (result.ok) return this.complete(actorKey, result.value);
 
     if (result.error.code === "finalization_transport_failed") {
@@ -275,6 +332,12 @@ export class ConsumerMealIdentificationFinalizationRuntime {
 
   private isCurrent(actorKey: string, generation: number) {
     return actorKey === this.actorKey && generation === this.actorGeneration;
+  }
+
+  // Actor identity AND analysis operation must both still match before any state transition from an
+  // awaited call is applied.
+  private isCurrentOperation(actorKey: string, generation: number, operationId: string | null) {
+    return this.isCurrent(actorKey, generation) && operationId === this.operationId;
   }
 
   private update(next: ConsumerMealIdentificationFinalizationRuntimeState) {

@@ -105,6 +105,21 @@ export function buildMealPhotoAnalysisActorIdentity(
   return `${input.actorKey ?? ""}:${input.actorGeneration}`;
 }
 
+// MI-E-C5-R5-R6 §三: the canonical per-analysis OPERATION identity. Built from the two values the
+// capture/analysis flow already owns — the analysis request the candidates belong to, and the
+// capture generation that a new photo advances — so this is a projection of existing authority, not
+// a second random session id. Actor identity stays a separate, unchanged axis
+// (buildMealPhotoAnalysisActorIdentity): one identity source, two scopes.
+//
+// A new capture or a new analysis request changes this string; an ordinary rerender, a
+// background → foreground return, a token refresh and navigation back to the same analysis all
+// leave it identical.
+export function buildMealPhotoFinalizationOperationIdentity(
+  input: Readonly<{ analysisRequestId: string | null | undefined; captureGeneration: number }>
+): string {
+  return `${input.analysisRequestId ?? ""}:${input.captureGeneration}`;
+}
+
 // True only when the actor genuinely changed. A same-actor rerender, a Fast Refresh reload, a
 // background → foreground return and a silent token refresh all leave actorKey and actorGeneration
 // identical, so every one of them returns false and preserves the in-progress session.

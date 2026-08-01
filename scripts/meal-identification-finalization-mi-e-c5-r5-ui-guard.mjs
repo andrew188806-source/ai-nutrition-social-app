@@ -1047,9 +1047,189 @@ check(
     !/physical[^\n]{0,40}PASS/i.test(correctionStateHook)
 );
 
+// ---------------------------------------------------------------------------
+// MI-E-C5-R5-R6 — per-analysis finalization runtime lifecycle.
+// Physical regression: after one successful finalization the shared runtime kept
+// status "succeeded" for the whole signed-in session, so payloadLocked stayed true and
+// 「分析正確」 was permanently disabled for every later analysis. These checks pin the
+// operation-scoped lifecycle that fixes it WITHOUT weakening same-operation locking.
+// ---------------------------------------------------------------------------
+const finalizationRuntime = read("apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts");
+const runtimeProvider = read("apps/mobile/features/consumer-runtime/ConsumerRuntimeProvider.tsx");
+const finalizationDraft = read("apps/mobile/features/analysis/mealPhotoFinalizationDraft.ts");
+
+check(
+  "140. R6 runtime carries a per-analysis operation identity alongside actor identity",
+  /private operationId: string \| null = null;/.test(finalizationRuntime) &&
+    /private actorKey: string \| null = null;/.test(finalizationRuntime)
+);
+check(
+  "141. R6 canonical operation identity is derived from existing analysisRequestId + captureGeneration, not a new random id",
+  /export function buildMealPhotoFinalizationOperationIdentity\(/.test(flowState) &&
+    /analysisRequestId: string \| null \| undefined; captureGeneration: number/.test(flowState) &&
+    /return `\$\{input\.analysisRequestId \?\? ""\}:\$\{input\.captureGeneration\}`;/.test(flowState) &&
+    !/generateSecureUuidV4|Math\.random/.test(flowState)
+);
+check(
+  "142. R6 beginAnalysisOperation is a no-op for the SAME operation and fails closed for a mismatched actor",
+  /beginAnalysisOperation\(\s*\r?\n?\s*context: \{ actorKey: string; actorGeneration: number \},\s*\r?\n?\s*operationId: string\s*\r?\n?\s*\): boolean \{/.test(finalizationRuntime) &&
+    /if \(!operationId\) return false;/.test(finalizationRuntime) &&
+    /if \(!this\.matchesActor\(context\)\) return false;/.test(finalizationRuntime) &&
+    /if \(this\.operationId === operationId\) return true;/.test(finalizationRuntime)
+);
+check(
+  "143. R6 an unresolved submitting/pending payload is never silently discarded by a new operation",
+  /if \(this\.inFlight \|\| this\.pending\) return false;/.test(finalizationRuntime)
+);
+check(
+  "144. R6 a genuinely new operation resets the runtime to idle",
+  /this\.operationId = operationId;\s*\r?\n?\s*this\.update\(idleState\(this\.state\.finalizationDataRevision\)\);\s*\r?\n?\s*return true;/.test(finalizationRuntime)
+);
+check(
+  "145. R6 succeeded is still a payload lock — the lock predicate is unchanged",
+  /return status === "submitting" \|\| status === "uncertain" \|\| status === "succeeded";/.test(finalizationDraft)
+);
+check(
+  "146. R6 late responses are re-checked against actor AND operation before any state transition",
+  /private isCurrentOperation\(actorKey: string, generation: number, operationId: string \| null\) \{\s*\r?\n?\s*return this\.isCurrent\(actorKey, generation\) && operationId === this\.operationId;/.test(finalizationRuntime) &&
+    /const result = await this\.options\.service\.finalizeCurrentUserMealIdentification\(operation\.input\);[\s\S]{0,400}?if \(!this\.isCurrentOperation\(actorKey, generation, operationId\)\) return this\.state;/.test(finalizationRuntime)
+);
+check(
+  "147. R6 the submitting operation id is frozen at submit time and threaded through execute",
+  /const operationId = this\.operationId;\s*\r?\n?\s*this\.inFlight = this\.startOperation\(actorKey, generation, operationId, context\.timezone, draft\)/.test(finalizationRuntime) &&
+    /private async execute\(\s*\r?\n?\s*actorKey: string,\s*\r?\n?\s*generation: number,\s*\r?\n?\s*operationId: string \| null,/.test(finalizationRuntime)
+);
+check(
+  "148. R6-A an actor change drops the runtime's own binding, and the hook keeps NO local binding state to clear",
+  /this\.operationId = null;/.test(finalizationRuntime) &&
+    !/runtimeOperationIdentityRef/.test(finalizationHook)
+);
+check(
+  "149. R6-A the hook binds the runtime in a LAYOUT effect, never during render",
+  /useLayoutEffect\(\(\) => \{\s*\r?\n?\s*if \(isRuntimeBoundToCurrentOperation\) return;\s*\r?\n?\s*runtime\.beginMealIdentificationFinalizationOperation\(operationIdentity\);\s*\r?\n?\s*\}, \[isRuntimeBoundToCurrentOperation, operationIdentity, runtime\]\);/.test(finalizationHook) &&
+    !/beginMealIdentificationFinalizationOperation\(/.test(
+      finalizationHook.slice(0, finalizationHook.indexOf("useLayoutEffect"))
+    )
+);
+check(
+  "150. R6-A the layout effect is gated by the RUNTIME-OWNED pure query, not by a hook-local ref",
+  /const isRuntimeBoundToCurrentOperation =\s*\r?\n?\s*runtime\.isMealIdentificationFinalizationBoundToOperation\(operationIdentity\);/.test(finalizationHook) &&
+    !/useRef<string \| null>\(null\)/.test(finalizationHook)
+);
+check(
+  "151. R6-A a previous operation's TERMINAL status reads as idle, while a LIVE one still locks — in ONE production helper",
+  /const liveElsewhere = input\.runtimeStatus === "submitting" \|\| input\.runtimeStatus === "uncertain";/.test(finalizationDraft) &&
+    /const runtimeStatus: MealPhotoFinalizationRuntimeStatus =\s*\r?\n?\s*input\.boundToCurrentOperation \|\| liveElsewhere \? input\.runtimeStatus : "idle";/.test(finalizationDraft) &&
+    /payloadLocked: isMealPhotoFinalizationPayloadLocked\(runtimeStatus\)/.test(finalizationDraft)
+);
+check(
+  "152. R6-A every public runtime-derived flag comes from that production helper, not from raw runtime status",
+  /const operationSafeState = useMemo\(/.test(finalizationHook) &&
+    /deriveMealPhotoFinalizationOperationSafeState\(\{\s*\r?\n?\s*runtimeStatus,\s*\r?\n?\s*boundToCurrentOperation: isRuntimeBoundToCurrentOperation\s*\r?\n?\s*\}\)/.test(finalizationHook) &&
+    /uncertain: isCurrentActorState \? operationSafeState\.uncertain : false,/.test(finalizationHook) &&
+    /payloadLocked: isCurrentActorState \? operationSafeState\.payloadLocked : false,/.test(finalizationHook) &&
+    /runtimeStatus: isCurrentActorState \? operationSafeState\.runtimeStatus : "idle"/.test(finalizationHook)
+);
+check(
+  "153. R6 both finalization START paths require the runtime to be bound to THIS operation, after the uncertain retry branch",
+  /await retryPending\(\);\s*\r?\n?\s*return;\s*\r?\n?\s*\}[\s\S]{0,400}?if \(!ownsCurrentOperationState\(\)\) return;[\s\S]{0,300}?isMealPhotoFinalizationPayloadLocked\(\s*\r?\n?\s*runtime\.mealIdentificationFinalizationState\.status\s*\r?\n?\s*\)/.test(finalizationHook) &&
+    /if \(!ownsCurrentOperationState\(\)\) return;\s*\r?\n?\s*if \(isMealPhotoFinalizationPayloadLocked\(runtime\.mealIdentificationFinalizationState\.status\)\) return;/.test(finalizationHook)
+);
+check(
+  "154. R6 the screen's flow state consumes the operation-scoped status, not the raw shared runtime status",
+  /finalizationRuntimeStatus: mealPhotoFinalization\.runtimeStatus,/.test(screen) &&
+    !/finalizationRuntimeStatus: consumerRuntime\.mealIdentificationFinalizationState\.status/.test(screen)
+);
+check(
+  "155. R6 the provider exposes the binding and fails closed when signed out, with no backend/shared diff and no physical PASS claim",
+  /beginMealIdentificationFinalizationOperation\(operationId: string\): boolean;/.test(runtimeProvider) &&
+    /if \(!mealIdentificationFinalizationRuntime \|\| !state\.actorKey \|\| state\.authState\.status !== "signedIn"\) \{\s*\r?\n?\s*return false;/.test(runtimeProvider) &&
+    git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+    Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
+    !/physical[^\n]{0,40}PASS/i.test(finalizationRuntime) &&
+    !/physical[^\n]{0,40}PASS/i.test(finalizationHook)
+);
+
+// ---------------------------------------------------------------------------
+// MI-E-C5-R5-R6-A — runtime-owned operation binding and remount safety.
+// The R6 audit proved a null-seeded hook ref made a same-operation succeeded remount
+// report idle/unlocked on its first render, with no rerender to correct it. These checks
+// pin the runtime-owned pure query that replaced it.
+// ---------------------------------------------------------------------------
+check(
+  "156. R6-A hook public state does not depend on any null-seeded binding ref",
+  !/runtimeOperationIdentityRef/.test(finalizationHook) &&
+    !/useRef<string \| null>\(null\)/.test(finalizationHook)
+);
+check(
+  "157. R6-A the runtime exposes a PURE binding query that mutates nothing and emits nothing",
+  /isBoundToOperation\(context: \{ actorKey: string; actorGeneration: number \}, operationId: string\): boolean \{/.test(finalizationRuntime) &&
+    /isBoundToOperation\([\s\S]{0,400}?return this\.operationId === operationId;\s*\r?\n?\s*\}/.test(finalizationRuntime) &&
+    !/isBoundToOperation\([\s\S]{0,400}?this\.update\(/.test(finalizationRuntime)
+);
+check(
+  "158. R6-A the pure query validates operation id AND actor identity (actorKey + generation)",
+  /isBoundToOperation\([\s\S]{0,300}?if \(!operationId\) return false;\s*\r?\n?\s*if \(!this\.matchesActor\(context\)\) return false;/.test(finalizationRuntime) &&
+    /private matchesActor\(context: \{ actorKey: string; actorGeneration: number \}\) \{\s*\r?\n?\s*return Boolean\(context\.actorKey\) && this\.isCurrent\(context\.actorKey, context\.actorGeneration\);/.test(finalizationRuntime)
+);
+check(
+  "159. R6-A the provider exposes the query actor-safely and fails closed when signed out",
+  /isMealIdentificationFinalizationBoundToOperation\(operationId: string\): boolean;/.test(runtimeProvider) &&
+    /isMealIdentificationFinalizationBoundToOperation: \(operationId\) => \{\s*\r?\n?\s*if \(!mealIdentificationFinalizationRuntime \|\| !state\.actorKey \|\| state\.authState\.status !== "signedIn"\) \{\s*\r?\n?\s*return false;/.test(runtimeProvider) &&
+    /return mealIdentificationFinalizationRuntime\.isBoundToOperation\(\s*\r?\n?\s*\{ actorKey: state\.actorKey, actorGeneration: state\.actorGeneration \},\s*\r?\n?\s*operationId\s*\r?\n?\s*\);/.test(runtimeProvider)
+);
+check(
+  "160. R6-A the provider never hands the raw runtime or the bound operation id to the screen",
+  !/mealIdentificationFinalizationRuntime;/.test(
+    runtimeProvider.slice(0, runtimeProvider.indexOf("export function ConsumerRuntimeProvider"))
+  ) && !/getBoundOperationId|operationId:\s*string;/.test(runtimeProvider)
+);
+check(
+  "161. R6-A the hook evaluates the binding during RENDER via the pure query",
+  /const isRuntimeBoundToCurrentOperation =\s*\r?\n?\s*runtime\.isMealIdentificationFinalizationBoundToOperation\(operationIdentity\);/.test(finalizationHook)
+);
+check(
+  "162. R6-A the hook uses the production public-view helper rather than an inline rule",
+  /import \{[\s\S]{0,600}?deriveMealPhotoFinalizationOperationSafeState,/.test(finalizationHook) &&
+    /export function deriveMealPhotoFinalizationOperationSafeState\(/.test(finalizationDraft)
+);
+check(
+  "163. R6-A same-operation succeeded remount stays LOCKED: bound=true passes the raw status through",
+  /input\.boundToCurrentOperation \|\| liveElsewhere \? input\.runtimeStatus : "idle"/.test(finalizationDraft) &&
+    /return status === "submitting" \|\| status === "uncertain" \|\| status === "succeeded";/.test(finalizationDraft)
+);
+check(
+  "164. R6-A correctness never depends on an emission or a rerender — the helper is a pure function of (status, bound)",
+  /export function deriveMealPhotoFinalizationOperationSafeState\(\s*\r?\n?\s*input: Readonly<\{\s*\r?\n?\s*runtimeStatus: MealPhotoFinalizationRuntimeStatus;\s*\r?\n?\s*boundToCurrentOperation: boolean;\s*\r?\n?\s*\}>\s*\r?\n?\s*\): MealPhotoFinalizationOperationSafeState \{/.test(finalizationDraft) &&
+    !/useState|useRef|useEffect/.test(
+      finalizationDraft.slice(finalizationDraft.indexOf("export function deriveMealPhotoFinalizationOperationSafeState"))
+    )
+);
+check(
+  "165. R6-A the new-operation reset still happens in the commit phase, never in render",
+  /useLayoutEffect\(\(\) => \{\s*\r?\n?\s*if \(isRuntimeBoundToCurrentOperation\) return;\s*\r?\n?\s*runtime\.beginMealIdentificationFinalizationOperation\(operationIdentity\);/.test(finalizationHook)
+);
+check(
+  "166. R6-A both finalization START handlers re-ask the RUNTIME at invocation time, not a render-time boolean",
+  /const ownsCurrentOperationState = useCallback\(\s*\r?\n?\s*\(\) => runtime\.isMealIdentificationFinalizationBoundToOperation\(operationIdentity\),\s*\r?\n?\s*\[operationIdentity, runtime\]\s*\r?\n?\s*\);/.test(finalizationHook) &&
+    (finalizationHook.match(/if \(!ownsCurrentOperationState\(\)\) return;/g) ?? []).length >= 2
+);
+check(
+  "167. R6-A a DIFFERENT operation's uncertain/submitting is never masked to an operable idle",
+  /const liveElsewhere = input\.runtimeStatus === "submitting" \|\| input\.runtimeStatus === "uncertain";/.test(finalizationDraft) &&
+    /uncertain: runtimeStatus === "uncertain"/.test(finalizationDraft)
+);
+check(
+  "168. R6-A adds no backend/shared diff, no dependency and no physical-device PASS claim",
+  git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+    Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
+    !/physical[^\n]{0,40}PASS/i.test(finalizationDraft) &&
+    !/physical[^\n]{0,40}PASS/i.test(runtimeProvider)
+);
+
 const failed = checks.filter((entry) => !entry.pass);
 console.log(JSON.stringify({
-  phase: "MI-E-C5-R5-R5 Render-Safe Actor Ownership, Complete Hook-State Isolation and One-Step Confirmation UI Guard",
+  phase: "MI-E-C5-R5-R6 Per-Analysis Finalization Runtime Lifecycle Reset Guard",
   status: failed.length ? "failed" : "passed",
   totalChecks: checks.length,
   passed: checks.length - failed.length,

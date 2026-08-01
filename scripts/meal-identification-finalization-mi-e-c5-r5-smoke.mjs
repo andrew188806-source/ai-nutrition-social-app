@@ -1546,8 +1546,324 @@ const BASELINE = correctionPublicView(
     "S84: derived masking never mutates the hook's own internal state");
 }
 
+// =====================================================================================
+// S85 — MI-E-C5-R5-R6 physical regression reproduction, against the REAL runtime class.
+//
+// Reproduces the exact iPhone sequence: one successful finalization, then a second analysis
+// by the SAME signed-in actor with no sign-out and no reload. Before R6 the runtime stayed
+// "succeeded", payloadLocked stayed true and acceptance was permanently disabled.
+// =====================================================================================
+{
+  const runtimeModule = loadTsModule(
+    "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts"
+  );
+  const { ConsumerMealIdentificationFinalizationRuntime } = runtimeModule;
+  const { isMealPhotoFinalizationPayloadLocked } = draftModule;
+  expect(typeof ConsumerMealIdentificationFinalizationRuntime === "function",
+    "S85: the real finalization runtime class loads");
+
+  const ACTOR = { actorKey: "actor-a", actorGeneration: 1, timezone: "Asia/Taipei" };
+  const draftFor = (name) => ({
+    mealType: "dinner",
+    finalization: { occurredAt: "2026-08-01T12:00:00.000Z", mealName: name }
+  });
+
+  const makeRuntime = (finalize) => {
+    const stored = new Map();
+    let uuid = 0;
+    return new ConsumerMealIdentificationFinalizationRuntime({
+      service: { finalizeCurrentUserMealIdentification: finalize },
+      operationStore: {
+        save: async (actorKey, operation) => { stored.set(actorKey, operation); },
+        load: async (actorKey) => stored.get(actorKey) ?? null,
+        clear: async (actorKey) => { stored.delete(actorKey); }
+      },
+      clock: { now: () => new Date("2026-08-01T12:00:00.000Z") },
+      uuidFactory: () => `client-request-${++uuid}`
+    });
+  };
+  const okResult = (n) => ({
+    ok: true,
+    value: {
+      mealRecordId: `meal-record-${n}`,
+      mealRecordItemId: `meal-record-item-${n}`,
+      mealAnalysisId: `meal-analysis-${n}`,
+      mealIdentificationFinalizationId: `finalization-${n}`,
+      mealCorrectionIds: [`correction-${n}`]
+    }
+  });
+
+  // ---- operations 1 and 2, same actor, no sign-out ----
+  const seen = [];
+  const runtime = makeRuntime(async (input) => {
+    seen.push(input.clientRequestId);
+    return okResult(seen.length);
+  });
+  await runtime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+
+  expect(runtime.beginAnalysisOperation(ACTOR, "op-1") === true, "S85: operation 1 binds to the runtime");
+  const afterOp1 = await runtime.submit(ACTOR, draftFor("meal one"));
+  expect(afterOp1.status === "succeeded", "S85: operation 1 finalizes successfully");
+  expect(afterOp1.mealRecordId === "meal-record-1", "S85: operation 1 returns its durable meal record id");
+  expect(isMealPhotoFinalizationPayloadLocked(afterOp1.status) === true,
+    "S85: operation 1 stays payload-locked after success — no second write for the SAME meal");
+
+  expect(runtime.beginAnalysisOperation(ACTOR, "op-1") === true,
+    "S85: re-binding the SAME operation is a no-op and returns true");
+  expect(runtime.getState().status === "succeeded",
+    "S85: a same-operation rebind (rerender / token refresh / navigation back) never clears the result");
+
+  // The exact physical regression: a NEW analysis by the same signed-in actor.
+  expect(runtime.beginAnalysisOperation(ACTOR, "op-2") === true, "S85: operation 2 binds without any sign-out");
+  const op2Idle = runtime.getState();
+  expect(op2Idle.status === "idle", "S85: operation 2 starts idle — it does NOT inherit operation 1's succeeded");
+  expect(isMealPhotoFinalizationPayloadLocked(op2Idle.status) === false,
+    "S85: operation 2 is NOT payload-locked — 「分析正確」 is usable again (the physical blocker is fixed)");
+  expect(
+    op2Idle.mealRecordId === null &&
+      op2Idle.mealRecordItemId === null &&
+      op2Idle.mealAnalysisId === null &&
+      op2Idle.mealIdentificationFinalizationId === null &&
+      op2Idle.mealCorrectionIds === null &&
+      op2Idle.errorCode === null &&
+      op2Idle.pending === false,
+    "S85: operation 1's durable IDs, error and pending flag are all cleared for operation 2"
+  );
+
+  const afterOp2 = await runtime.submit(ACTOR, draftFor("meal two"));
+  expect(afterOp2.status === "succeeded", "S85: operation 2 finalizes successfully");
+  expect(seen.length === 2, "S85: exactly two finalizations for two operations — no duplicate write");
+  expect(seen[0] !== seen[1], "S85: operation 2 submits under its OWN clientRequestId");
+
+  // ---- an unresolved (uncertain) payload is never silently discarded ----
+  const uncertainRuntime = makeRuntime(async () => ({
+    ok: false,
+    error: { code: "finalization_transport_failed" }
+  }));
+  await uncertainRuntime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+  expect(uncertainRuntime.beginAnalysisOperation(ACTOR, "op-a") === true, "S85: uncertain-case operation binds");
+  const uncertainState = await uncertainRuntime.submit(ACTOR, draftFor("uncertain meal"));
+  expect(uncertainState.status === "uncertain" && uncertainState.pending === true,
+    "S85: a transport failure leaves the operation uncertain with a pending payload");
+  expect(uncertainRuntime.beginAnalysisOperation(ACTOR, "op-b") === false,
+    "S85: a new operation is REFUSED while an uncertain payload is unresolved — it is never silently lost");
+  expect(uncertainRuntime.getState().status === "uncertain",
+    "S85: the uncertain state survives the refused transition");
+  expect(isMealPhotoFinalizationPayloadLocked(uncertainRuntime.getState().status) === true,
+    "S85: uncertain remains payload-locked");
+
+  // ---- fail closed: other actor and signed out ----
+  expect(runtime.beginAnalysisOperation({ actorKey: "actor-b", actorGeneration: 1 }, "op-x") === false,
+    "S85: another actor can never rebind this actor's runtime");
+  expect(runtime.beginAnalysisOperation({ actorKey: "actor-a", actorGeneration: 99 }, "op-x") === false,
+    "S85: a stale actor generation can never rebind the runtime");
+  expect(runtime.beginAnalysisOperation(ACTOR, "") === false, "S85: an empty operation id is refused");
+  await runtime.setActor(null, 0);
+  expect(runtime.beginAnalysisOperation(ACTOR, "op-y") === false,
+    "S85: signed out fails closed — no operation can bind");
+
+  // ---- an actor change mid-flight suppresses the late response ----
+  let release;
+  const slow = new Promise((resolve) => { release = resolve; });
+  const raceRuntime = makeRuntime(async () => { await slow; return okResult(9); });
+  await raceRuntime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+  expect(raceRuntime.beginAnalysisOperation(ACTOR, "op-race") === true, "S85: racing operation binds");
+  const inFlight = raceRuntime.submit(ACTOR, draftFor("racing meal"));
+  await raceRuntime.setActor("actor-a", 2);
+  release();
+  await inFlight;
+  expect(raceRuntime.getState().status !== "succeeded",
+    "S85: a response returning after the identity moved on can never mark the newer state succeeded");
+  expect(raceRuntime.getState().mealRecordId === null,
+    "S85: a late response never publishes its durable IDs onto the newer identity");
+}
+
+// =====================================================================================
+// S86 — MI-E-C5-R5-R6-A remount safety, against the REAL runtime AND the REAL production
+// public-view helper. The R6 audit proved that testing beginAnalysisOperation alone cannot
+// establish hook remount safety, so every assertion below goes through
+// deriveMealPhotoFinalizationOperationSafeState — the same function the hook uses — driven by
+// the runtime-owned binding query, with NO hook-local ref and NO pre-bound assumption.
+// =====================================================================================
+{
+  const runtimeModule = loadTsModule(
+    "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts"
+  );
+  const { ConsumerMealIdentificationFinalizationRuntime } = runtimeModule;
+  const { deriveMealPhotoFinalizationOperationSafeState } = draftModule;
+  expect(typeof deriveMealPhotoFinalizationOperationSafeState === "function",
+    "S86: the production operation-safe public-view helper loads");
+
+  const ACTOR = { actorKey: "actor-a", actorGeneration: 1, timezone: "Asia/Taipei" };
+  const draftFor = (name) => ({
+    mealType: "dinner",
+    finalization: { occurredAt: "2026-08-01T12:00:00.000Z", mealName: name }
+  });
+  const build = (finalize) => {
+    const stored = new Map();
+    let uuid = 0;
+    const calls = [];
+    const runtime = new ConsumerMealIdentificationFinalizationRuntime({
+      service: {
+        finalizeCurrentUserMealIdentification: async (input) => {
+          calls.push(input.clientRequestId);
+          return finalize(calls.length);
+        }
+      },
+      operationStore: {
+        save: async (k, o) => { stored.set(k, o); },
+        load: async (k) => stored.get(k) ?? null,
+        clear: async (k) => { stored.delete(k); }
+      },
+      clock: { now: () => new Date("2026-08-01T12:00:00.000Z") },
+      uuidFactory: () => `crid-${++uuid}`
+    });
+    // Provider-equivalent actor-safe pure query: exactly the signed-in + actor checks the real
+    // ConsumerRuntimeProvider applies before delegating to the runtime.
+    const boundQuery = (signedIn, actor, operationId) =>
+      signedIn && actor.actorKey ? runtime.isBoundToOperation(actor, operationId) : false;
+    // A brand-new hook instance's FIRST render: no ref, no carried state — only the pure query.
+    const firstRender = (operationId, signedIn = true, actor = ACTOR) =>
+      deriveMealPhotoFinalizationOperationSafeState({
+        runtimeStatus: runtime.getState().status,
+        boundToCurrentOperation: boundQuery(signedIn, actor, operationId)
+      });
+    return { runtime, calls, boundQuery, firstRender };
+  };
+  const ok = (n) => ({
+    ok: true,
+    value: {
+      mealRecordId: `mr-${n}`, mealRecordItemId: `mri-${n}`, mealAnalysisId: `ma-${n}`,
+      mealIdentificationFinalizationId: `fin-${n}`, mealCorrectionIds: [`corr-${n}`]
+    }
+  });
+
+  // ---------- Scenario 1: same-operation SUCCEEDED remount ----------
+  {
+    const { runtime, calls, boundQuery, firstRender } = build(ok);
+    await runtime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+    runtime.beginAnalysisOperation(ACTOR, "op-1");
+    await runtime.submit(ACTOR, draftFor("meal one"));
+    expect(runtime.getState().status === "succeeded", "S86-1: operation 1 succeeded");
+    expect(calls.length === 1, "S86-1: exactly one service call so far");
+
+    let notifications = 0;
+    runtime.subscribe(() => { notifications += 1; });
+    const baseline = notifications;
+
+    // Hook unmounts and a BRAND NEW instance mounts. Runtime, actor and capture are untouched.
+    const remount = firstRender("op-1");
+    expect(boundQuery(true, ACTOR, "op-1") === true,
+      "S86-1: a freshly mounted hook's FIRST render sees bound=true from the runtime-owned query");
+    expect(remount.runtimeStatus === "succeeded",
+      "S86-1: FIRST render already reports succeeded — not idle");
+    expect(remount.payloadLocked === true,
+      "S86-1: FIRST render is payload-LOCKED (the R6 defect reported false here)");
+    expect(remount.uncertain === false, "S86-1: remount is not reported as uncertain");
+
+    // The layout-effect equivalent: a same-operation begin is a no-op that need not emit.
+    const rebound = runtime.beginAnalysisOperation(ACTOR, "op-1");
+    expect(rebound === true, "S86-1: same-operation rebind is a no-op returning true");
+    expect(notifications - baseline === 0, "S86-1: no notification is emitted (and none is needed)");
+    const afterRebind = firstRender("op-1");
+    expect(afterRebind.payloadLocked === true && afterRebind.runtimeStatus === "succeeded",
+      "S86-1: still succeeded/locked WITHOUT any emission or rerender");
+
+    // Programmatic submit attempt on the already-completed operation.
+    const before = calls.length;
+    await runtime.submit(ACTOR, draftFor("meal one duplicate"));
+    expect(calls.length === before + 1,
+      "S86-1: the runtime itself is not the lock — the hook's payloadLocked gate is, and it reads true");
+    expect(firstRender("op-1").payloadLocked === true,
+      "S86-1: the public gate that blocks acceptCandidate/submit remains locked for this operation");
+  }
+
+  // ---------- Scenario 2: new-operation first render ----------
+  {
+    const { runtime, calls, boundQuery, firstRender } = build(ok);
+    await runtime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+    runtime.beginAnalysisOperation(ACTOR, "op-1");
+    await runtime.submit(ACTOR, draftFor("meal one"));
+    expect(runtime.getState().status === "succeeded", "S86-2: operation 1 succeeded");
+
+    let notifications = 0;
+    runtime.subscribe(() => { notifications += 1; });
+    const baseline = notifications;
+
+    const opTwoFirst = firstRender("op-2");
+    expect(boundQuery(true, ACTOR, "op-2") === false, "S86-2: first render of operation 2 is NOT bound");
+    expect(opTwoFirst.runtimeStatus === "idle",
+      "S86-2: operation 1's terminal succeeded is masked to safe idle for operation 2");
+    expect(opTwoFirst.payloadLocked === false, "S86-2: operation 2 is not locked by operation 1");
+    expect(runtime.getState().mealRecordId === "mr-1",
+      "S86-2: operation 1's durable IDs still exist on the runtime but are not operation 2's public state");
+
+    // Handlers fail closed until the binding transition has committed.
+    expect(boundQuery(true, ACTOR, "op-2") === false,
+      "S86-2: the invocation-time handler query refuses operation 2 before the transition");
+
+    const adopted = runtime.beginAnalysisOperation(ACTOR, "op-2");
+    expect(adopted === true, "S86-2: the layout-effect equivalent adopts operation 2");
+    expect(notifications - baseline === 1, "S86-2: the reset emits exactly one notification (a rerender)");
+    const opTwoAfter = firstRender("op-2");
+    expect(boundQuery(true, ACTOR, "op-2") === true, "S86-2: after the transition the query reports bound");
+    expect(opTwoAfter.runtimeStatus === "idle" && opTwoAfter.payloadLocked === false,
+      "S86-2: operation 2 is idle and unlocked — the CTA is usable");
+    expect(runtime.getState().mealRecordId === null,
+      "S86-2: operation 1's durable IDs are cleared from the runtime for operation 2");
+
+    await runtime.submit(ACTOR, draftFor("meal two"));
+    expect(calls.length === 2, "S86-2: exactly two service calls across the two operations");
+    expect(calls[0] !== calls[1], "S86-2: operation 2 used a different clientRequestId");
+    expect(firstRender("op-2").payloadLocked === true, "S86-2: operation 2 is locked once it succeeds");
+  }
+
+  // ---------- Scenario 3: different-operation uncertain ----------
+  {
+    const { runtime, calls, boundQuery, firstRender } = build(() => ({
+      ok: false,
+      error: { code: "finalization_transport_failed" }
+    }));
+    await runtime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+    runtime.beginAnalysisOperation(ACTOR, "op-1");
+    await runtime.submit(ACTOR, draftFor("uncertain meal"));
+    expect(runtime.getState().status === "uncertain" && runtime.getState().pending === true,
+      "S86-3: operation 1 is uncertain with a pending frozen payload");
+    const frozenRequestId = calls[0];
+
+    expect(boundQuery(true, ACTOR, "op-2") === false, "S86-3: operation 2 is not bound");
+    const opTwo = firstRender("op-2");
+    expect(opTwo.runtimeStatus === "uncertain",
+      "S86-3: another operation's uncertain is NEVER masked to idle");
+    expect(opTwo.payloadLocked === true, "S86-3: it keeps a global payload lock");
+    expect(opTwo.uncertain === true, "S86-3: the uncertain flag stays visible so the retry path is reachable");
+    expect(runtime.beginAnalysisOperation(ACTOR, "op-2") === false,
+      "S86-3: operation 2 cannot take over while the pending payload is unresolved");
+
+    const retried = await runtime.retry({ actorKey: ACTOR.actorKey, actorGeneration: ACTOR.actorGeneration });
+    expect(retried.status === "uncertain", "S86-3: operation 1's retry remains reachable");
+    expect(calls.length === 2 && calls[1] === frozenRequestId,
+      "S86-3: the retry reused the SAME frozen clientRequestId — the payload was never lost");
+  }
+
+  // ---------- signed-out fails closed through the provider-equivalent query ----------
+  {
+    const { runtime, boundQuery, firstRender } = build(ok);
+    await runtime.setActor(ACTOR.actorKey, ACTOR.actorGeneration);
+    runtime.beginAnalysisOperation(ACTOR, "op-1");
+    await runtime.submit(ACTOR, draftFor("meal one"));
+    expect(boundQuery(false, ACTOR, "op-1") === false, "S86-4: signed out reports not-bound");
+    expect(boundQuery(true, { actorKey: "actor-b", actorGeneration: 1 }, "op-1") === false,
+      "S86-4: another actor reports not-bound");
+    expect(boundQuery(true, { actorKey: "actor-a", actorGeneration: 9 }, "op-1") === false,
+      "S86-4: a stale generation reports not-bound");
+    expect(firstRender("op-1", false).payloadLocked === false,
+      "S86-4: a signed-out view exposes no other actor's lock");
+  }
+}
+
 console.log(JSON.stringify({
-  phase: "MI-E-C5-R5-R5 Render-Safe Actor-Owned Session and Complete Hook-State Isolation Smoke",
+  phase: "MI-E-C5-R5-R6-A Runtime-Owned Operation Binding and Remount Safety Smoke",
   status: "passed",
   totalChecks: checks.length,
   passed: checks.length,

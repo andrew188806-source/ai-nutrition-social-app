@@ -322,7 +322,9 @@ export default function AnalysisScreen() {
   // so legacy and new UI can never render together and no pre-durable state can look completed.
   const flowState = deriveMealPhotoAnalysisFlowState({
     hasCompletionSnapshot: completionSnapshot !== null,
-    finalizationRuntimeStatus: consumerRuntime.mealIdentificationFinalizationState.status,
+    // MI-E-C5-R5-R6 §七: the OPERATION-scoped status, not the raw shared runtime status. A previous
+    // meal's terminal result can no longer drive this screen's state machine for a new analysis.
+    finalizationRuntimeStatus: mealPhotoFinalization.runtimeStatus,
     draftSubmissionStatus: mealPhotoFinalization.draft?.submissionStatus ?? null,
     draftMode: mealPhotoFinalization.draft?.mode ?? null,
     fallbackRevealed,

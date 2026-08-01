@@ -43,6 +43,12 @@ export type ConsumerRuntimeContextValue = {
     draft: ConsumerMealIdentificationFinalizationDraft
   ): Promise<ConsumerMealIdentificationFinalizationRuntimeState>;
   retryPendingMealIdentificationFinalization(): Promise<ConsumerMealIdentificationFinalizationRuntimeState>;
+  // MI-E-C5-R5-R6 §五: bind the finalization runtime to the analysis operation currently on screen.
+  // Returns true when the runtime is bound to `operationId` (adopted now, or already current).
+  beginMealIdentificationFinalizationOperation(operationId: string): boolean;
+  // MI-E-C5-R5-R6-A §二: actor-safe PURE query. Never mutates, never emits, safe during render.
+  // The screen never receives the raw runtime or the bound operation id — only this boolean.
+  isMealIdentificationFinalizationBoundToOperation(operationId: string): boolean;
   createPlannedMeal(draft: ConsumerPlannedMealDraft): Promise<ConsumerPlannedMealRuntimeState>;
   retryPendingPlannedMeal(): Promise<ConsumerPlannedMealRuntimeState>;
   updatePlannedMeal(input: ConsumerUpdatePlannedMealV2Input): Promise<ConsumerPlannedMealMutationState>;
@@ -186,6 +192,24 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
         return Promise.resolve(mealWriteRuntime?.reject("authentication_required") ?? unavailableMealWriteState);
       }
       return mealWriteRuntime.retry({ actorKey: state.actorKey, actorGeneration: state.actorGeneration });
+    },
+    isMealIdentificationFinalizationBoundToOperation: (operationId) => {
+      if (!mealIdentificationFinalizationRuntime || !state.actorKey || state.authState.status !== "signedIn") {
+        return false;
+      }
+      return mealIdentificationFinalizationRuntime.isBoundToOperation(
+        { actorKey: state.actorKey, actorGeneration: state.actorGeneration },
+        operationId
+      );
+    },
+    beginMealIdentificationFinalizationOperation: (operationId) => {
+      if (!mealIdentificationFinalizationRuntime || !state.actorKey || state.authState.status !== "signedIn") {
+        return false;
+      }
+      return mealIdentificationFinalizationRuntime.beginAnalysisOperation(
+        { actorKey: state.actorKey, actorGeneration: state.actorGeneration },
+        operationId
+      );
     },
     finalizeMealIdentification: (draft) => {
       if (!mealIdentificationFinalizationRuntime || !state.actorKey || state.authState.status !== "signedIn") {

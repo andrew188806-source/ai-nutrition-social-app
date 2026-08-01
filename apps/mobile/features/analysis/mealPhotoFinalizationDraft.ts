@@ -91,6 +91,43 @@ export function isMealPhotoFinalizationPayloadLocked(
   return status === "submitting" || status === "uncertain" || status === "succeeded";
 }
 
+// MI-E-C5-R5-R6-A §七: the SINGLE production authority for the operation-scoped public finalization
+// state. useMealPhotoFinalization derives its entire public runtime surface from this function, and
+// the smoke executes this exact function — no parallel copy of the rule lives in a test.
+//
+// `boundToCurrentOperation` is a PURE runtime-owned query result (see the runtime's
+// isBoundToOperation / the provider's actor-safe wrapper). It is never a hook-local ref, so a freshly
+// mounted hook computes the correct value on its FIRST render with no effect and no rerender.
+//
+//  * bound            → the operation's own status, unchanged (succeeded stays locked, so the
+//                       finished meal can never be written twice).
+//  * not bound, LIVE  → submitting/uncertain are preserved, never masked to idle: another
+//                       operation's in-flight or pending payload keeps a global lock so it cannot be
+//                       silently abandoned, and its existing retry path stays reachable.
+//  * not bound, TERMINAL → reported as idle, so a previous operation's succeeded/error can no longer
+//                       lock a newly analysed meal.
+export type MealPhotoFinalizationOperationSafeState = Readonly<{
+  runtimeStatus: MealPhotoFinalizationRuntimeStatus;
+  payloadLocked: boolean;
+  uncertain: boolean;
+}>;
+
+export function deriveMealPhotoFinalizationOperationSafeState(
+  input: Readonly<{
+    runtimeStatus: MealPhotoFinalizationRuntimeStatus;
+    boundToCurrentOperation: boolean;
+  }>
+): MealPhotoFinalizationOperationSafeState {
+  const liveElsewhere = input.runtimeStatus === "submitting" || input.runtimeStatus === "uncertain";
+  const runtimeStatus: MealPhotoFinalizationRuntimeStatus =
+    input.boundToCurrentOperation || liveElsewhere ? input.runtimeStatus : "idle";
+  return Object.freeze({
+    runtimeStatus,
+    payloadLocked: isMealPhotoFinalizationPayloadLocked(runtimeStatus),
+    uncertain: runtimeStatus === "uncertain"
+  });
+}
+
 export function applyMealPhotoFinalizationPayloadMutation<T>(
   current: T,
   status: MealPhotoFinalizationRuntimeStatus,
