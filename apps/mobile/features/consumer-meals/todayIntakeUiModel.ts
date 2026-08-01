@@ -251,7 +251,15 @@ function mapConsumerMealToUiMeal(meal: ConsumerMealRecord): TodayIntakeUiMealRec
     date: meal.mealDate,
     mealPeriod: mapMealTypeToPeriod(meal.mealType),
     mealName,
-    restaurantName: firstItem?.restaurantId ?? "",
+    // MI-E-C5-R7-A: this used to be `firstItem?.restaurantId ?? ""`, which assigned a canonical
+    // IDENTITY to a display field. It stayed invisible only because restaurantId is currently always
+    // null for the photo-analysis path — the moment R7-C starts persisting real ids, every row would
+    // have rendered a raw UUID where the user expects a restaurant name.
+    //
+    // The canonical id keeps its own field below. A name is a catalog lookup, not an id, so until
+    // R7-C adds that catalog composition to the Today Intake overview this reports "no resolvable
+    // name" rather than inventing one. Historical rows with no restaurant context behave identically.
+    restaurantName: "",
     ingredients,
     portion: firstItem?.portion ?? "",
     calories: nutrition.calories,

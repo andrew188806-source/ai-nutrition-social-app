@@ -60,9 +60,17 @@ record(
 );
 
 // ---- 6: leak prevention — a new capture still fully resets the session before assigning the new URI ----
+// MI-E-C5-R7-A successor-compatible locator. The B5 invariant — beginAnalysisCapture performs a
+// FULL session reset before it assigns the new photo, so nothing from the previous meal can leak —
+// is unchanged and still asserted by the same ordered sequence below. R7-A only widened the
+// signature (a documented optional restaurantContext parameter), which pushed the old 300-character
+// window past `session = createDefaultSession()`. The window is widened to cover the signature, and
+// the check is STRENGTHENED: the new restaurant context must be applied AFTER the reset, so a
+// known-entry context can neither survive a reset nor be dropped by one.
 record(
   "beginAnalysisCapture resets the full session before assigning the new photo URI (no leakage from the previous meal)",
-  /export function beginAnalysisCapture[\s\S]{0,300}?session = createDefaultSession\(\);[\s\S]{0,120}?session\.captureMethod = method;[\s\S]{0,120}?session\.capturedImageUri = imageUri;/.test(sessionStore)
+  /export function beginAnalysisCapture[\s\S]{0,900}?session = createDefaultSession\(\);[\s\S]{0,120}?session\.captureMethod = method;[\s\S]{0,120}?session\.capturedImageUri = imageUri;/.test(sessionStore) &&
+    /session = createDefaultSession\(\);[\s\S]{0,1400}?const restaurant = normalizeAnalysisRestaurantContext\(\{/.test(sessionStore)
 );
 
 // ---- 7-8: scope discipline — no unauthorized AI architecture was built this round ----

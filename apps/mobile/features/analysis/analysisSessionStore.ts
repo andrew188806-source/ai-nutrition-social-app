@@ -65,9 +65,31 @@ export type AnalysisSessionState = {
   correctionCompleted: boolean;
   showExternalBreakdown: boolean;
   externalBreakdownTriggered: boolean;
+  /**
+   * @deprecated Legacy non-AI-finalization analysis flow only.
+   *
+   * Free-text field owned by the pre-C5 correction UI. It is NOT canonical restaurant authority and
+   * must never become one: it is not written by any restaurant-context mutator, not written by the
+   * catalog resolver, never enters the C5 v3 finalization draft/command/fingerprint, and every
+   * remaining product read sits behind a `!hasAiFinalizationFlow` legacy branch in analysis.tsx.
+   * Removal is scheduled with the legacy flow's retirement, to be re-inventoried once R7-C lands the
+   * canonical restaurant UI.
+   */
   restaurantName: string;
   mealName: string;
   sourceContext: MealSourceContext;
+  // MI-E-C5-R7-A-R1 canonical restaurant context — IDs ONLY.
+  //
+  // R7-A originally also carried a `restaurantDisplayName` presentation snapshot. The final audit
+  // rejected it: there was no trusted writer for it yet, and the resolver could not tell a
+  // session-owned snapshot from an arbitrary caller string, so a route- or candidate-supplied name
+  // could have been rendered as if it were resolved. A display name is therefore NOT stored here at
+  // all. Names come from the live catalog, keyed by these ids, and from nowhere else.
+  //
+  // If an offline snapshot is ever genuinely needed, R7-C must introduce it as a provenance-carrying
+  // trusted type with its own write authority — never as a bare string field reopened here.
+  restaurantId: string | null;
+  branchId: string | null;
   selectedCandidate: MealIdentificationCandidate | null;
   correctedRows: Record<string, boolean>;
   selectedMealPeriod: string;
@@ -146,9 +168,15 @@ function createDefaultSession(): AnalysisSessionState {
     correctionCompleted: false,
     showExternalBreakdown: false,
     externalBreakdownTriggered: false,
-    restaurantName: zhTW.mobile.analysis.candidates[0].restaurant,
+    // MI-E-C5-R7-A: this used to seed zhTW.mobile.analysis.candidates[0].restaurant, which meant
+    // every fresh session started already carrying a fictional restaurant name. A demo fixture must
+    // never be a runtime default for a field that names a real place, so the default is now empty.
+    // The i18n fixture itself is untouched — other demo screens still render it deliberately.
+    restaurantName: "",
     mealName: zhTW.mobile.analysis.candidates[0].meal,
     sourceContext: "unknown",
+    restaurantId: null,
+    branchId: null,
     selectedCandidate: null,
     correctedRows: {},
     selectedMealPeriod: zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.mealSlotOptions[1],
@@ -236,7 +264,11 @@ export function isAnalysisSessionPristine(state: AnalysisSessionState): boolean 
     state.analysisCompletedAt === null &&
     state.mealPhotoFinalizationDraft === null &&
     state.mealPhotoFallbackRevealed === false &&
-    state.mealPhotoCompletion === null;
+    state.mealPhotoCompletion === null &&
+    // MI-E-C5-R7-A: a restaurant context names a real venue the previous actor chose, so a session
+    // still carrying one is NOT pristine and must never be handed to a different actor.
+    state.restaurantId === null &&
+    state.branchId === null;
   if (!pristineDefaults) return false;
   // Legacy/demo correction-flow values are just as actor-sensitive: they name a meal, a restaurant
   // and a saved record id.
@@ -249,6 +281,84 @@ export function isAnalysisSessionPristine(state: AnalysisSessionState): boolean 
     state.matchState === "pending" &&
     state.correctionCompleted === false
   );
+}
+
+// ---------------------------------------------------------------------------
+// MI-E-C5-R7-A canonical restaurant context authority.
+//
+// This is a FOUNDATION only: no user-facing selector, no route handoff, nothing in the finalization
+// command, fingerprint, RPC or database this round. R7-B/R7-C build on exactly these rules.
+// ---------------------------------------------------------------------------
+export type AnalysisRestaurantContext = Readonly<{
+  restaurantId: string | null;
+  branchId: string | null;
+}>;
+
+export const EMPTY_ANALYSIS_RESTAURANT_CONTEXT: AnalysisRestaurantContext = Object.freeze({
+  restaurantId: null,
+  branchId: null
+});
+
+const blankToNull = (value: string | null | undefined): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+// PURE. The single place the canonical invariants are enforced:
+//
+//  * self_cooked cannot have a restaurant — a home-cooked meal has no venue, so both ids are
+//    dropped. Switching away from self_cooked later does NOT restore them; the user must pick again
+//    (there is nothing left to restore from).
+//  * branchId can never outlive restaurantId — a branch without its restaurant is not addressable.
+//  * takeout / delivery / dine_in / unknown all keep a valid restaurant context.
+//
+// IDs only. There is deliberately no display-name input or output: a name is never identity, so it
+// cannot enter the canonical context through this function.
+export function normalizeAnalysisRestaurantContext(
+  input: Readonly<{
+    restaurantId?: string | null;
+    branchId?: string | null;
+    sourceContext: MealSourceContext;
+  }>
+): AnalysisRestaurantContext {
+  if (input.sourceContext === "self_cooked") return EMPTY_ANALYSIS_RESTAURANT_CONTEXT;
+  const restaurantId = blankToNull(input.restaurantId);
+  if (!restaurantId) return EMPTY_ANALYSIS_RESTAURANT_CONTEXT;
+  return Object.freeze({
+    restaurantId,
+    branchId: blankToNull(input.branchId)
+  });
+}
+
+export function getAnalysisRestaurantContext(
+  state: AnalysisSessionState = session
+): AnalysisRestaurantContext {
+  return Object.freeze({
+    restaurantId: state.restaurantId,
+    branchId: state.branchId
+  });
+}
+
+// MUTATING — event handler / commit phase only, exactly like the rest of this store's setters.
+// Always routed through the normalizer, so an invalid combination can never reach the session.
+export function setAnalysisRestaurantContext(
+  input: Readonly<{
+    restaurantId?: string | null;
+    branchId?: string | null;
+  }>,
+  sourceContext: MealSourceContext = session.sourceContext
+) {
+  const next = normalizeAnalysisRestaurantContext({ ...input, sourceContext });
+  session.restaurantId = next.restaurantId;
+  session.branchId = next.branchId;
+  return next;
+}
+
+// Re-applies the invariants after a meal-source change — the caller that switches the session to
+// self_cooked uses this so the previous venue cannot survive the switch.
+export function reconcileAnalysisRestaurantContextForSourceContext(sourceContext: MealSourceContext) {
+  return setAnalysisRestaurantContext(getAnalysisRestaurantContext(), sourceContext);
 }
 
 export function isAnalysisSessionOwnedBy(
@@ -539,7 +649,14 @@ export function beginAnalysisCapture(
   capturedAt: Date = new Date(),
   mimeType: string | null = null,
   fileName: string | null = null,
-  owner: AnalysisSessionActorOwner | null = null
+  owner: AnalysisSessionActorOwner | null = null,
+  // MI-E-C5-R7-A: a known-entry restaurant context is applied ATOMICALLY inside this same reset, so
+  // there is no window in which the new operation exists without it and no effect can race the
+  // reset and drop it. Omitted (the generic camera/gallery entry) means no restaurant context.
+  restaurantContext: Readonly<{
+    restaurantId?: string | null;
+    branchId?: string | null;
+  }> = EMPTY_ANALYSIS_RESTAURANT_CONTEXT
 ) {
   captureGenerationCounter += 1;
   session = createDefaultSession();
@@ -550,6 +667,16 @@ export function beginAnalysisCapture(
   session.analysisRequestId = generateMealPhotoAnalysisRequestId();
   session.captureGeneration = captureGenerationCounter;
   session.actorOwner = owner;
+  // Applied after the reset and before the session is observable, so a new capture never inherits
+  // the previous meal's restaurant and never loses a legitimately supplied one.
+  {
+    const restaurant = normalizeAnalysisRestaurantContext({
+      ...restaurantContext,
+      sourceContext: session.sourceContext
+    });
+    session.restaurantId = restaurant.restaurantId;
+    session.branchId = restaurant.branchId;
+  }
   if (method === "camera") {
     session.recordTiming = "current";
     session.recordTimingConfirmed = true;
