@@ -39,8 +39,21 @@ const candidateType = candidateTypeStart >= 0 && candidateTypeEnd > candidateTyp
   : "";
 const renderStart = screen.indexOf("return (", screen.indexOf("export default function AnalysisScreen"));
 const resultIndex = screen.indexOf("<MealPhotoAnalysisResultCard", renderStart);
-const panelStart = screen.indexOf("{hasAiFinalizationFlow && mealPhotoFinalization.draft ? (", resultIndex);
-const panelEnd = screen.indexOf(") : (", panelStart);
+// MI-E-C5-R5-R1 successor-compatible locator. The R2 invariant being protected is that WHEN the
+// shared panel renders it is ONE ordered card (period → source → timing → editor → submit), not
+// that it renders unconditionally. R5-R1 gates that same panel behind an explicit correction or
+// manual choice, so the guard follows the gating expression rather than the old condition. Both
+// spellings are accepted so this check keeps working against the frozen R2 layout too.
+const panelStart = [
+  "{showFinalizationEditor && mealPhotoFinalization.draft ? (",
+  "{hasAiFinalizationFlow && mealPhotoFinalization.draft ? ("
+]
+  .map((marker) => screen.indexOf(marker, resultIndex))
+  .find((index) => index >= 0) ?? -1;
+const panelEnd = [") : !hasAiFinalizationFlow ? (", ") : ("]
+  .map((marker) => screen.indexOf(marker, panelStart))
+  .filter((index) => index > panelStart)
+  .sort((a, b) => a - b)[0] ?? -1;
 const sharedPanel = panelStart >= 0 && panelEnd > panelStart
   ? screen.slice(panelStart, panelEnd)
   : "";
@@ -68,7 +81,12 @@ check(
   /MEAL_PHOTO_FINALIZATION_MAX_VISIBLE_CANDIDATES = 5/.test(readiness) &&
     /candidates\.slice\(0, MEAL_PHOTO_FINALIZATION_MAX_VISIBLE_CANDIDATES\)/.test(readiness) &&
     /Production meal-photo-analysis v1 is still validated end-to-end as 1-3 candidates/.test(readiness) &&
-    /getCompactMealPhotoFinalizationCandidates\(candidates\)/.test(resultCard)
+    // MI-E-C5-R5 successor: the compact ceiling is still applied to the real analysis response,
+    // but the call moved from inside the result card to the screen, where the response is now also
+    // split into one primary best match plus the fallbacks that actually exist. The R2 semantic —
+    // the whole response is bounded by the compact ceiling before anything is rendered — is
+    // unchanged; only the call site moved.
+    /getCompactMealPhotoFinalizationCandidates\(mealPhotoAnalysis\.analysisCandidates\)/.test(screen)
 );
 check(
   "candidate rows contain only the meal name and a short selection indicator",
@@ -88,9 +106,12 @@ check(
     /accessibilityState=\{\{ disabled, selected \}\}/.test(candidateRow)
 );
 check(
-  "manual fallback is rendered after the compact candidate rows",
-  resultCard.indexOf("visibleCandidates.map") >= 0 &&
-    resultCard.indexOf("noneOfAboveCta") > resultCard.indexOf("visibleCandidates.map")
+  // MI-E-C5-R5 successor: the alternative candidate rows are now the explicitly-revealed fallback
+  // list rather than a flat "all candidates" list. The R2 semantic — 都不是／手動輸入 is offered
+  // after the candidate rows, never before or instead of them — is unchanged.
+  "manual fallback is rendered after the alternative candidate rows",
+  resultCard.indexOf("fallbacks.map") >= 0 &&
+    resultCard.indexOf("noneOfAboveCta") > resultCard.indexOf("fallbacks.map")
 );
 check(
   "manual fallback still routes to the existing shared draft hook",

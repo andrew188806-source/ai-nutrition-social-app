@@ -245,6 +245,35 @@ export const zhTW = {
         network_error: "無法連線到 AI 分析服務，請檢查網路後再試。"
       }
     },
+    // MI-E-C5-R5: primary-first confirmation. The AI's single best match is shown alone; fallback
+    // candidates only appear after the user explicitly rejects it.
+    mealPhotoPrimaryResult: {
+      title: "AI 判斷這是這道餐點",
+      subtitle: "這是 AI 對這張照片最可能的判斷，確認後才會保存。",
+      lowConfidenceSubtitle: "AI 對這張照片不太確定，請仔細確認，或改看其他可能結果。",
+      fallbackTitle: "其他可能的餐點",
+      fallbackBody: "選一個比較接近的結果，或改用手動輸入。",
+      fallbackEmptyBody: "這張照片沒有其他候選結果，請直接修正內容或改用手動輸入。",
+      // MI-E-C5-R5-R1: acceptance is one step. 「分析正確」 and選一個 fallback 都會直接完成保存，
+      // 之後不會再出現第二次「加入今日飲食」，所以這些提示必須誠實說明按下去就會保存。
+      acceptPrimaryNote: "按「分析正確」會直接確認並保存這一餐。",
+      fallbackActionNote: "點選其中一個結果就會直接確認並保存這一餐。",
+      fallbackSelectCta: "選這個並保存",
+      correctCta: "修正內容",
+      contextRequiredTitle: "還需要補齊用餐資訊"
+    },
+    // MI-E-C5-R5: same-page completed state. This copy is only ever rendered from a durable
+    // finalization result whose values are the user-confirmed draft, so unlike the older demo
+    // bridge copy it can truthfully say the meal is analyzed and saved.
+    mealPhotoCompletion: {
+      title: "分析完成",
+      body: "這餐已完成分析並保存，以下為你確認後的內容。",
+      nutritionTitle: "本餐營養摘要",
+      savedNote: "這餐已保存，以下操作不會重複記錄。",
+      viewTodayIntake: "查看今日飲食",
+      viewFoodDiary: "美食日記",
+      analyzeAnother: "再分析一餐"
+    },
     mealPhotoFinalization: {
       editorTitle: "確認並保存這份餐點",
       candidateMode: "正在確認 AI 候選",

@@ -25,8 +25,15 @@ record(
   /import\s*\{[^}]*\bImage\b[^}]*\}\s*from\s*"react-native"/.test(analysis)
 );
 record(
+  // MI-E-C5-R5-R2 successor-compatible locator. The B5 invariant — analysis.tsx renders the REAL
+  // captured photo as an Image, sourced from the session's capturedImageUri rather than a
+  // placeholder — is unchanged. R5-R2 routes that same value through an actor-ownership gate
+  // (ownedCapturedImageUri) so a previous actor's photo cannot render after an actor change, so the
+  // gated identifier is accepted only when it is proven to be derived from analysis.capturedImageUri.
   "analysis.tsx renders an Image sourced from analysis.capturedImageUri",
-  /<Image\s+source=\{\{\s*uri:\s*analysis\.capturedImageUri\s*\}\}/.test(analysis)
+  /<Image\s+source=\{\{\s*uri:\s*analysis\.capturedImageUri\s*\}\}/.test(analysis) ||
+    (/<Image\s+source=\{\{\s*uri:\s*ownedCapturedImageUri\s*\}\}/.test(analysis) &&
+      /const ownedCapturedImageUri = analysisSessionOwned \? analysis\.capturedImageUri : null;/.test(analysis))
 );
 record(
   "photoImage style exists for the real-photo layer",
@@ -38,10 +45,18 @@ record(
   "session store still defines capturedImageUri on session state",
   /capturedImageUri:\s*string \| null;/.test(sessionStore)
 );
+// MI-E-C5-R5-R5 successor-compatible locator. The B5 invariant — the hook mirrors
+// session.capturedImageUri into local state and exposes it — is unchanged. R5-R5 routes the hook's
+// whole public surface through named actor-safe constants, so the return now reads
+// `capturedImageUri: publicCapturedImageUri`. That gated spelling is accepted ONLY when the named
+// constant is proven to derive from the very same mirrored state, so a hook that stopped exposing
+// the real captured photo entirely would still fail this check.
 record(
   "hook still mirrors session.capturedImageUri and returns it",
   /const \[capturedImageUri\] = useState<string \| null>\(session\.capturedImageUri\);/.test(hook) &&
-    /capturedImageUri,/.test(hook)
+    (/\n    capturedImageUri,/.test(hook) ||
+      (/capturedImageUri: publicCapturedImageUri,/.test(hook) &&
+        /const publicCapturedImageUri = isCurrentActorState \? capturedImageUri : session\.capturedImageUri;/.test(hook)))
 );
 
 // ---- 6: leak prevention — a new capture still fully resets the session before assigning the new URI ----

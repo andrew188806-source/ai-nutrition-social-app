@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MealPhotoAnalysisCandidate } from "@haocu/shared";
 import { useConsumerRuntime } from "../consumer-runtime";
+import { buildMealPhotoAnalysisActorIdentity } from "./mealPhotoAnalysisFlowState";
 import {
   generateConsumerMealIdentificationFinalizationClientRequestId,
   type ConsumerMealIdentificationFinalizationRuntimeState
 } from "../consumer-runtime/consumerMealIdentificationFinalizationRuntime";
 import {
   getAnalysisSession,
+  isAnalysisSessionOwnedBy,
   setMealPhotoFinalizationDraft,
-  setSelectedMealPhotoAnalysisCandidateId
+  setSelectedMealPhotoAnalysisCandidateId,
+  type AnalysisSessionState
 } from "./analysisSessionStore";
 import {
   applyMealPhotoFinalizationPayloadMutation,
@@ -30,23 +33,32 @@ export type UseMealPhotoFinalizationInput = Readonly<{
   candidates: readonly MealPhotoAnalysisCandidate[];
   context: MealPhotoFinalizationContext;
   onSuccess: (state: MealPhotoFinalizationDraftState) => void;
+  // MI-E-C5-R5-R3 §五: the ownership-SAFE session view from the pure render-time authority.
+  // Optional so legacy callers keep working; /analysis always supplies it.
+  ownershipSafeSession?: AnalysisSessionState;
 }>;
 
 export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
   const runtime = useConsumerRuntime();
-  const initialSession = getAnalysisSession();
-  const [draft, setDraftState] = useState<MealPhotoFinalizationDraftState | null>(
-    initialSession.mealPhotoFinalizationDraft
-  );
+  const initialSession = input.ownershipSafeSession ?? getAnalysisSession();
+  // MI-E-C5-R5-R2 §九: a stored draft may only be restored when the session is stamped with EXACTLY
+  // this actor. /analysis reconciles ownership synchronously before this hook runs, so an unowned
+  // session is normally already cleared — this is the independent second gate that keeps a previous
+  // actor's candidate, clientRequestId, frozen submission and durable result IDs out of the hook's
+  // initial state even if a caller ever mounts the hook without reconciling first.
+  const restorableDraft = isAnalysisSessionOwnedBy(initialSession, {
+    actorKey: runtime.state.actorKey,
+    actorGeneration: runtime.state.actorGeneration
+  })
+    ? initialSession.mealPhotoFinalizationDraft
+    : null;
+  const [draft, setDraftState] = useState<MealPhotoFinalizationDraftState | null>(restorableDraft);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const mountedRef = useRef(true);
   const gateRef = useRef(new MealPhotoFinalizationSubmissionGate());
   const initialFrozenState =
-    initialSession.mealPhotoFinalizationDraft?.attempted &&
-    initialSession.mealPhotoFinalizationDraft.clientRequestId
-      ? initialSession.mealPhotoFinalizationDraft
-      : null;
+    restorableDraft?.attempted && restorableDraft.clientRequestId ? restorableDraft : null;
   const frozenSubmissionRef = useRef<{
     state: MealPhotoFinalizationDraftState;
     fingerprint: string;
@@ -62,6 +74,22 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const previousIdentityRef = useRef(identity);
+  // MI-E-C5-R5-R4 §三/§六: which ACTOR the draft and frozen submission below belong to. Derived from
+  // the same frozen actorKey/actorGeneration pair as `identity` above (which additionally scopes to
+  // the analysis request/photo) — one identity source, two scopes, no second system. The comparison
+  // is PURE: it reads a ref and compares strings, mutating nothing.
+  const actorIdentity = buildMealPhotoAnalysisActorIdentity({
+    actorKey: runtime.state.actorKey,
+    actorGeneration: runtime.state.actorGeneration
+  });
+  const draftOwnerIdentityRef = useRef(actorIdentity);
+  const isCurrentActorState = draftOwnerIdentityRef.current === actorIdentity;
+  // Every server-mutating and draft-mutating handler calls this FIRST, before the single-flight
+  // gate, before any secure-UUID mint, before payload preparation and before any runtime call.
+  const ownsCurrentActorState = useCallback(
+    () => draftOwnerIdentityRef.current === actorIdentity && Boolean(runtime.state.actorKey),
+    [actorIdentity, runtime.state.actorKey]
+  );
 
   const setDraft = useCallback((next: MealPhotoFinalizationDraftState | null) => {
     draftRef.current = next;
@@ -78,7 +106,10 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
 
   // Actor/session/photo replacement is a hard boundary. Clear all B2 state instead of
   // allowing a response or request ID from the previous identity to cross it.
-  useEffect(() => {
+  // MI-E-C5-R5-R4 §五: promoted from a passive effect to a COMMIT-PHASE layout effect, so the
+  // internal draft cannot survive into a painted frame. The public view is masked synchronously
+  // regardless, so this is defence in depth rather than the only barrier.
+  useLayoutEffect(() => {
     if (previousIdentityRef.current === identity) return;
     previousIdentityRef.current = identity;
     gateRef.current.reset();
@@ -86,6 +117,18 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     setSelectedMealPhotoAnalysisCandidateId(null);
     setDraft(null);
   }, [identity, setDraft]);
+
+  // MI-E-C5-R5-R4 §五: actor-level internal clearing, also commit phase. A same-actor rerender, a
+  // background → foreground return and a silent token refresh all leave actorIdentity untouched and
+  // therefore preserve a legitimate manual or failed-recovery draft. A generation change, a
+  // different actor, a sign-out and a failed restore all change it and clear everything.
+  useLayoutEffect(() => {
+    if (draftOwnerIdentityRef.current === actorIdentity) return;
+    draftOwnerIdentityRef.current = actorIdentity;
+    gateRef.current.reset();
+    frozenSubmissionRef.current = null;
+    setDraft(null);
+  }, [actorIdentity, setDraft]);
 
   // Context fields are fingerprint-bearing. If the user changes source/time/meal period
   // after an attempt, the pure state transition rotates the UUID before another submit.
@@ -139,6 +182,7 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
 
   const selectCandidate = useCallback(
     (candidate: MealPhotoAnalysisCandidate) => {
+      if (!ownsCurrentActorState()) return;
       const status = runtime.mealIdentificationFinalizationState.status;
       const current = draftRef.current;
       const next = applyMealPhotoFinalizationPayloadMutation(current, status, () => {
@@ -156,6 +200,7 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
   );
 
   const chooseManual = useCallback(() => {
+    if (!ownsCurrentActorState()) return;
     const status = runtime.mealIdentificationFinalizationState.status;
     const current = draftRef.current;
     const next = applyMealPhotoFinalizationPayloadMutation(current, status, () => {
@@ -172,6 +217,7 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
 
   const updateField = useCallback(
     (field: MealPhotoFinalizationField, value: string) => {
+      if (!ownsCurrentActorState()) return;
       const current = draftRef.current;
       if (!current) return;
       const next = applyMealPhotoFinalizationPayloadMutation(
@@ -222,6 +268,8 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
   );
 
   const retryPending = useCallback(async () => {
+    // A previous actor's frozen payload must never be retried under the current actor.
+    if (!ownsCurrentActorState()) return;
     if (
       runtime.mealIdentificationFinalizationState.status !== "uncertain" ||
       !gateRef.current.tryStart()
@@ -248,6 +296,11 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
   }, [applyResultIfCurrent, runtime]);
 
   const submit = useCallback(async () => {
+    // MI-E-C5-R5-R4 §九: fail closed BEFORE the single-flight gate, any secure-UUID mint, any
+    // payload preparation and any runtime RPC. A stale manual/failed draft belonging to a previous
+    // actor can therefore never be submitted under the current actor's identity.
+    if (!ownsCurrentActorState()) return;
+    if (!mountedRef.current) return;
     if (runtime.mealIdentificationFinalizationState.status === "uncertain") {
       await retryPending();
       return;
@@ -308,23 +361,115 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     }
   }, [applyResultIfCurrent, retryPending, runtime, setDraft]);
 
+  // MI-E-C5-R5-R1 one-step acceptance. 「分析正確」 and tapping a fallback are FINAL acceptance
+  // actions, not selection actions — each must adopt the candidate and run the one atomic
+  // finalization in a single user gesture, with no second standalone 加入今日飲食 step.
+  //
+  // The draft is built and submitted from the SAME local value rather than "select, then re-read
+  // state and submit", so the flow can never depend on React state/ref update timing. Everything
+  // else is the frozen path: same single-flight gate, same stable clientRequestId (reused on
+  // retry of the same candidate), same fingerprint, same R3-A exception boundary.
+  const acceptCandidate = useCallback(
+    async (candidate: MealPhotoAnalysisCandidate) => {
+      if (!ownsCurrentActorState()) return;
+      if (!mountedRef.current) return;
+      if (runtime.mealIdentificationFinalizationState.status === "uncertain") {
+        await retryPending();
+        return;
+      }
+      if (isMealPhotoFinalizationPayloadLocked(runtime.mealIdentificationFinalizationState.status)) return;
+      const analysisRequestId = getAnalysisSession().analysisRequestId;
+      if (!analysisRequestId) return;
+      // Double tap: the second gesture finds the gate already held and returns without creating a
+      // second request id or a second finalization call.
+      if (!gateRef.current.tryStart()) return;
+      const expectedIdentity = identityRef.current;
+
+      const existing = draftRef.current;
+      const base =
+        existing &&
+        existing.mode === "candidate" &&
+        existing.selectedCandidateId === candidate.candidateId &&
+        existing.analysisRequestId === analysisRequestId
+          ? updateMealPhotoFinalizationContext(
+              existing,
+              input.context,
+              generateConsumerMealIdentificationFinalizationClientRequestId
+            )
+          : createCandidateMealPhotoFinalizationDraft(analysisRequestId, candidate, input.context);
+
+      setSelectedMealPhotoAnalysisCandidateId(candidate.candidateId);
+
+      let prepared: ReturnType<typeof prepareMealPhotoFinalization> | null;
+      try {
+        prepared = prepareMealPhotoFinalization(
+          base,
+          generateConsumerMealIdentificationFinalizationClientRequestId
+        );
+      } catch {
+        prepared = null;
+      }
+      if (!prepared) {
+        setDraft(
+          Object.freeze({
+            ...base,
+            submissionStatus: "failed" as const,
+            lastSafeError: "finalization_client_error",
+            attempted: true
+          })
+        );
+        gateRef.current.finish();
+        return;
+      }
+      setDraft(prepared.state);
+      if (!prepared.ok) {
+        gateRef.current.finish();
+        return;
+      }
+      const frozen = {
+        state: prepared.state,
+        fingerprint: getMealPhotoFinalizationPayloadFingerprint(prepared.state)
+      };
+      frozenSubmissionRef.current = frozen;
+
+      try {
+        const result = await runtime.finalizeMealIdentification(prepared.draft);
+        applyResultIfCurrent(frozen, result, expectedIdentity);
+      } finally {
+        gateRef.current.finish();
+      }
+    },
+    [applyResultIfCurrent, input.context, retryPending, runtime, setDraft]
+  );
+
+  // MI-E-C5-R5-R4 §四: SYNCHRONOUS actor-safe public view. While the internal draft still belongs to
+  // a previous actor the public draft reads as null and every derived flag reads as its safe
+  // initial value, so a stale manual or failed draft can never make the editor render, can never
+  // expose that actor's meal name/nutrition, and can never supply a clientRequestId, frozen payload
+  // or durable result IDs to the current actor.
   return useMemo(
     () => ({
-      draft,
+      isCurrentActorState,
+      draft: isCurrentActorState ? draft : null,
       selectCandidate,
+      acceptCandidate,
       chooseManual,
       updateField,
       submit,
       retryPending,
-      submitting: draft?.submissionStatus === "submitting",
-      uncertain: runtime.mealIdentificationFinalizationState.status === "uncertain",
-      payloadLocked: isMealPhotoFinalizationPayloadLocked(
-        runtime.mealIdentificationFinalizationState.status
-      )
+      submitting: isCurrentActorState ? draft?.submissionStatus === "submitting" : false,
+      uncertain: isCurrentActorState
+        ? runtime.mealIdentificationFinalizationState.status === "uncertain"
+        : false,
+      payloadLocked: isCurrentActorState
+        ? isMealPhotoFinalizationPayloadLocked(runtime.mealIdentificationFinalizationState.status)
+        : false
     }),
     [
+      acceptCandidate,
       chooseManual,
       draft,
+      isCurrentActorState,
       retryPending,
       runtime.mealIdentificationFinalizationState.status,
       selectCandidate,

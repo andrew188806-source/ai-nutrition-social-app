@@ -210,9 +210,17 @@ record(
     hookSrc.includes("current.imageObjectRef") &&
     !/generateMealPhotoAnalysisRequestId/.test(hookSrc)
 );
+// MI-E-C5-R5-R4 successor-compatible locator. The C5-A invariant is that retry reuses the SINGLE
+// startAnalysis request-construction path — there must be no second, retry-specific request build.
+// R5-R4 wraps it in an actor-ownership pre-check that returns early when the hook state belongs to
+// a previous actor and otherwise delegates to the very same startAnalysis. The wrapper is accepted
+// only when it is proven to construct no request of its own (exactly one startAnalysis definition).
 record(
   "retryAnalysis is the same startAnalysis function used for the first attempt — no separate retry-specific request construction",
-  hookSrc.includes("retryAnalysis: startAnalysis")
+  hookSrc.includes("retryAnalysis: startAnalysis") ||
+    (/const retryAnalysis = useCallback\(\(\) => \{\s*\r?\n?\s*if \(stateOwnerIdentityRef\.current !== actorIdentity\) return;\s*\r?\n?\s*startAnalysis\(\);\s*\r?\n?\s*\}, \[actorIdentity, startAnalysis\]\);/.test(hookSrc) &&
+      hookSrc.includes("retryAnalysis,") &&
+      (hookSrc.match(/const startAnalysis = useCallback\(/g) ?? []).length === 1)
 );
 
 // 16. a new photo clears the old AI response — createDefaultSession() resets every analysis field

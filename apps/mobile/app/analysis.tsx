@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Animated, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -11,7 +11,10 @@ import {
   EstimatePreview,
   ExternalCorrectionPanel,
   SelfCookedCorrectionPanel,
-  getAnalysisSession,
+  commitAnalysisSessionActorOwnerReconciliation,
+  getAnalysisSessionViewForActor,
+  setMealPhotoCompletion,
+  setMealPhotoFallbackRevealed,
   useAnalysisCorrectionState,
   useMealPhotoAnalysis,
   useMealPhotoFinalization,
@@ -31,6 +34,15 @@ import {
   type MealPhotoFinalizationContextBlockReason
 } from "../features/analysis/mealPhotoFinalizationReadiness";
 import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryMealPhotoAssetNormalization";
+import {
+  buildCompletedMealPhotoAnalysisSnapshot,
+  buildMealPhotoAnalysisActorIdentity,
+  CLEARED_MEAL_PHOTO_ANALYSIS_ACTOR_STATE,
+  deriveMealPhotoAnalysisFlowState,
+  shouldResetMealPhotoAnalysisStateForActor,
+  splitPrimaryAndFallbackCandidates,
+  type CompletedMealPhotoAnalysisSnapshot
+} from "../features/analysis/mealPhotoAnalysisFlowState";
 import { maximumMealOccurrenceInstant } from "../features/analysis/mealOccurrenceTime";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
@@ -64,6 +76,16 @@ type NextMealRecommendationCard = {
 
 let hasPlayedRecommendationCardCue = false;
 
+// MI-E-C5-R5-R2 §十一: the analysis session store deliberately does not import expo-file-system, so
+// the R4 owned-gallery-cache release is injected here. It only ever deletes the app-private
+// normalized JPEG this app created — never the user's original picker URI, never a camera URI, and
+// never the remote Storage object (that stays with the existing upload lifecycle).
+const ANALYSIS_SESSION_OWNER_DEPENDENCIES = Object.freeze({
+  releaseOwnedGalleryAsset: () => {
+    void releaseOwnedGalleryMealPhotoAsset();
+  }
+});
+
 // Short, demo-friendly explanation derived from existing fields only (protein content
 // and how close this dish's calories are to the user's current nutrition state) — not a
 // new recommendation algorithm, just picking one of a few canned sentences.
@@ -95,13 +117,34 @@ function buildNextMealRecommendationCards(limit: number, referenceCalories: numb
 export default function AnalysisScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mealSlot?: string }>();
-  const analysis = useAnalysisCorrectionState();
   const consumerRuntime = useConsumerRuntime();
-  const mealPhotoUpload = useMealPhotoUpload();
-  const mealPhotoAnalysis = useMealPhotoAnalysis(mealPhotoUpload.uploadStatus, mealPhotoUpload.imageObjectRef);
+  // MI-E-C5-R5-R3 §三/§四 LAYER 1 — PURE render-time ownership gate.
+  //
+  // getAnalysisSessionViewForActor only compares identities and derives a view. It never assigns
+  // to the store, never moves the epoch, never touches the gallery cache and never creates a
+  // Promise, so an abandoned, interrupted, retried or concurrently-rendered pass costs nothing and
+  // cannot damage the committed tree. Every session read below — this screen's own state
+  // initializers AND all four session-reading hooks — consumes `ownershipSafeSession`, which is a
+  // sanitized empty view for a different actor, a signed-out runtime, or an untrusted legacy
+  // session. That is what makes the FIRST COMMITTED RENDER fail closed on its own merit, with no
+  // external mutation involved. The mutating counterpart runs in the layout effect below.
+  //
+  // The ONE read of the frozen consumer-runtime identity pair in this screen. Both the session
+  // ownership authority and the R5-R1 actor-identity string are derived from this single value, so
+  // they can never disagree and no second identity source exists.
+  const currentAnalysisActor = {
+    actorKey: consumerRuntime.state.actorKey,
+    actorGeneration: consumerRuntime.state.actorGeneration
+  };
+  const sessionOwnership = getAnalysisSessionViewForActor(currentAnalysisActor);
+  const ownershipSafeSession = sessionOwnership.session;
+  const analysis = useAnalysisCorrectionState(ownershipSafeSession);
+  const mealPhotoUpload = useMealPhotoUpload(ownershipSafeSession);
+  const mealPhotoAnalysis = useMealPhotoAnalysis(mealPhotoUpload.uploadStatus, mealPhotoUpload.imageObjectRef, ownershipSafeSession);
   const restaurantCatalog = useRestaurantCatalog();
   const [demoMode] = useDemoUserPlan();
-  const session = getAnalysisSession();
+  // Every local initializer below reads the ownership-SAFE view, never the raw store.
+  const session = ownershipSafeSession;
   const [mealSaved, setMealSaved] = useState(session.mealSaved);
   const [analysisObservedAt] = useState(() => new Date().toISOString());
   const [localFinalizationErrorCode, setLocalFinalizationErrorCode] = useState<string | null>(null);
@@ -120,8 +163,13 @@ export default function AnalysisScreen() {
   const canFinalize = Boolean(analysis.mealSource) && analysis.recordTimingConfirmed && Boolean(analysis.occurredAt);
   // Stable id for this meal record so 罪惡分擔 results can be attached to it later via updateMealRecordByMealId.
   // Reused across remounts within the same AI Analysis session (see analysisSessionStore).
-  const [mealId] = useState(() => session.mealId || generateMealId());
-  const [preMealPhotoIds] = useState(() => (session.preMealPhotoIds.length ? session.preMealPhotoIds : [generatePhotoId("pre")]));
+  // MI-E-C5-R5-R3 §九: these now have setters. They are actor-sensitive local values — a mounted
+  // actor change must be able to replace them with fresh actor-scoped ones instead of letting the
+  // arriving actor inherit the previous actor's meal id and pre-meal photo ids.
+  const [mealId, setMealId] = useState(() => session.mealId || generateMealId());
+  const [preMealPhotoIds, setPreMealPhotoIds] = useState(() =>
+    session.preMealPhotoIds.length ? session.preMealPhotoIds : [generatePhotoId("pre")]
+  );
   const [guiltSharingResult, setGuiltSharingResult] = useState<{ peopleCount: number; sharedCaloriesPerPerson: number } | null>(session.guiltSharingResult);
   // Recalculated whenever guiltSharingResult changes, so completing Guilt Sharing
   // immediately replaces the recommendation list with one based on the updated calories.
@@ -141,6 +189,77 @@ export default function AnalysisScreen() {
   const hasAiFinalizationFlow =
     mealPhotoAnalysis.analysisInvocationStatus === "completed" ||
     mealPhotoAnalysis.analysisInvocationStatus === "low_confidence";
+  // MI-E-C5-R5 primary-first presentation. The compact ceiling from R2 still bounds the whole
+  // response; the split then exposes exactly one primary best match plus the fallbacks that
+  // actually exist. Production supplies at most 2 fallbacks today (1-3 total candidates).
+  const { primary: primaryCandidate, fallbacks: fallbackCandidates } = useMemo(
+    () => splitPrimaryAndFallbackCandidates(getCompactMealPhotoFinalizationCandidates(mealPhotoAnalysis.analysisCandidates)),
+    [mealPhotoAnalysis.analysisCandidates]
+  );
+  const [fallbackRevealedState, setFallbackRevealed] = useState(session.mealPhotoFallbackRevealed);
+  const [completionSnapshotState, setCompletionSnapshot] = useState<CompletedMealPhotoAnalysisSnapshot | null>(
+    session.mealPhotoCompletion
+  );
+  // MI-E-C5-R5-R1 §八: the shared editor is no longer part of the accept path, so it needs its own
+  // explicit trigger. Only 「修正內容」 and 「都不是／手動輸入」 set this.
+  const [correctionRequestedState, setCorrectionRequested] = useState(false);
+  // MI-E-C5-R5-R3 §七: PURE render-phase gate — no setState during render, no side effect at all.
+  //
+  // These three values are React state seeded at mount, so on an actor change while /analysis is
+  // already mounted they would still hold the previous actor's values. `analysisSessionOwned` is
+  // derived purely from the ownership decision, so the very first committed render after an actor
+  // change reads them as null/false/false regardless of what the underlying state still holds and
+  // regardless of whether commit-phase reconciliation has run yet. Signed-out, failed-restore,
+  // untrusted and different-actor all report status !== "owned", so all four fail closed here.
+  const analysisSessionOwned = sessionOwnership.status === "owned";
+  const completionSnapshot = analysisSessionOwned ? completionSnapshotState : null;
+  const fallbackRevealed = analysisSessionOwned ? fallbackRevealedState : false;
+  const correctionRequested = analysisSessionOwned ? correctionRequestedState : false;
+  // The captured photo is as actor-sensitive as the completion snapshot, and it lives in a hook
+  // that snapshots the session at mount, so it gets the same ownership gate.
+  const ownedCapturedImageUri = analysisSessionOwned ? analysis.capturedImageUri : null;
+  // MI-E-C5-R5-R1 §四: actor identity isolation for the R5 state, now performed in the COMMIT
+  // phase together with the store reconciliation. Same frozen actorKey/actorGeneration pair as
+  // useMealPhotoFinalization — no second identity system. A same-actor rerender, a Fast Refresh
+  // reload, a background → foreground return and a silent token refresh all leave the identity
+  // untouched, so none of them trip this and none of them lose a valid session.
+  const actorIdentity = buildMealPhotoAnalysisActorIdentity(currentAnalysisActor);
+  const previousActorIdentityRef = useRef(actorIdentity);
+  // MI-E-C5-R5-R3 §六 LAYER 2 — COMMIT-PHASE reconciliation.
+  //
+  // useLayoutEffect runs after React has committed and before the frame is presented, so it can
+  // never be executed by an abandoned, interrupted or concurrently-discarded render, and the user
+  // still never sees a pre-reconciliation frame. This is the ONLY place in this screen that mutates
+  // the external session store or touches the gallery cache.
+  const [reconciledActorIdentity, setReconciledActorIdentity] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    // Re-derive against the live store: the decision computed during render may be stale by now.
+    const decision = getAnalysisSessionViewForActor(currentAnalysisActor);
+    if (decision.reconciliationRequired) {
+      // Full reset + owner bind + owned-gallery-cache release, in that order, inside the store.
+      // A throwing release cannot abort the privacy reset (it runs in the store's `finally`).
+      commitAnalysisSessionActorOwnerReconciliation(currentAnalysisActor, ANALYSIS_SESSION_OWNER_DEPENDENCIES);
+    }
+    if (shouldResetMealPhotoAnalysisStateForActor(previousActorIdentityRef.current, actorIdentity) || decision.exposesSanitizedView) {
+      // Local actor-sensitive state is cleared from the one shared cleared value, together with the
+      // stored copies, so neither half can reinstate the previous actor's completion later.
+      const cleared = CLEARED_MEAL_PHOTO_ANALYSIS_ACTOR_STATE;
+      setCompletionSnapshot(cleared.completion);
+      setMealPhotoCompletion(cleared.completion);
+      setFallbackRevealed(cleared.fallbackRevealed);
+      setMealPhotoFallbackRevealed(cleared.fallbackRevealed);
+      setCorrectionRequested(cleared.correctionRequested);
+      // MI-E-C5-R5-R3 §九: the actor-scoped local residue is replaced with fresh values rather than
+      // inherited, so the arriving actor can never reuse the previous actor's meal id or photo ids.
+      setMealId(generateMealId());
+      setPreMealPhotoIds([generatePhotoId("pre")]);
+    }
+    previousActorIdentityRef.current = actorIdentity;
+    setReconciledActorIdentity(actorIdentity);
+  }, [actorIdentity, currentAnalysisActor.actorGeneration, currentAnalysisActor.actorKey]);
+  // MI-E-C5-R5-R3 §八: nothing that captures, uploads, analyses, accepts or finalizes may run
+  // before commit-phase reconciliation has bound this actor.
+  const sessionReconciled = reconciledActorIdentity === actorIdentity && analysisSessionOwned;
   const finalizationContext = useMemo(
     () => ({
       captureMethod: analysis.captureMethod,
@@ -157,30 +276,147 @@ export default function AnalysisScreen() {
       selectedMealPeriod
     ]
   );
+  // MI-E-C5-R5: durable finalization success now stays on /analysis. The confirmed draft is frozen
+  // into a completion snapshot (the single display authority for the completed screen) and the R4
+  // owned gallery cache is released. The previous router.push("/today-intake") is deliberately
+  // gone: it discarded the same-page completed state the moment it was set.
   const completeMealPhotoFinalization = useCallback(
     (draft: MealPhotoFinalizationDraftState) => {
-      if (!draft.resultIds) return;
+      const snapshot = buildCompletedMealPhotoAnalysisSnapshot(draft);
+      if (!snapshot) return;
       if (consumerRuntime.mode === "mock") {
         persistV3MealToExplicitDemoStore(
           draft,
           toDateKeyInTimeZone(new Date(draft.context.occurredAt), profileTimezone)
         );
       }
-      setMealSaved(true);
+      setCompletionSnapshot(snapshot);
+      setMealPhotoCompletion(snapshot);
+      // Cleanup stays best-effort and must never reverse a durable success.
       void releaseOwnedGalleryMealPhotoAsset();
-      router.push("/today-intake");
     },
-    [consumerRuntime.mode, profileTimezone, router]
+    [consumerRuntime.mode, profileTimezone]
   );
   const mealPhotoFinalization = useMealPhotoFinalization({
     candidates: mealPhotoAnalysis.analysisCandidates,
     context: finalizationContext,
-    onSuccess: completeMealPhotoFinalization
+    onSuccess: completeMealPhotoFinalization,
+    ownershipSafeSession
   });
   const frozenFinalizationContext =
     mealPhotoFinalization.payloadLocked && mealPhotoFinalization.draft
       ? mealPhotoFinalization.draft.context
       : null;
+  // MI-E-C5-R5-R1 §九: readiness is evaluated at screen level, because acceptance now happens on the
+  // result card and the user must be told what is missing right where the blocked action is — not
+  // only inside an editor they are no longer required to open. "unknown" is an accepted meal source
+  // (see mealPhotoFinalizationReadiness), so someone who genuinely does not know is never blocked.
+  const finalizationContextBlockReason = getMealPhotoFinalizationContextBlockReason({
+    occurredAt: frozenFinalizationContext?.occurredAt ?? analysis.occurredAt ?? "",
+    recordTimingConfirmed: frozenFinalizationContext !== null || analysis.recordTimingConfirmed,
+    sourceContext:
+      frozenFinalizationContext?.sourceContext ?? analysis.mealSource ?? analysis.sourceContext,
+    selectedMealPeriod: frozenFinalizationContext?.selectedMealPeriod ?? selectedMealPeriod
+  });
+  // MI-E-C5-R5: one ordered state derivation for the whole C5 screen. Exactly one state is active,
+  // so legacy and new UI can never render together and no pre-durable state can look completed.
+  const flowState = deriveMealPhotoAnalysisFlowState({
+    hasCompletionSnapshot: completionSnapshot !== null,
+    finalizationRuntimeStatus: consumerRuntime.mealIdentificationFinalizationState.status,
+    draftSubmissionStatus: mealPhotoFinalization.draft?.submissionStatus ?? null,
+    draftMode: mealPhotoFinalization.draft?.mode ?? null,
+    fallbackRevealed,
+    analysisInvocationStatus: mealPhotoAnalysis.analysisInvocationStatus,
+    uploadStatus: mealPhotoUpload.uploadStatus,
+    hasCapturedPhoto: Boolean(ownedCapturedImageUri)
+  });
+  const isDurableCompleted = flowState === "durable_completed";
+  // Legacy demo blocks and the legacy confirmed-match hero are suppressed for the entire real C5
+  // flow, including its completed state, so the two UI generations never stack.
+  const showLegacyAnalysisBlocks = !hasAiFinalizationFlow && !isDurableCompleted;
+
+  function revealFallbackCandidates() {
+    if (mealPhotoFinalization.payloadLocked) return;
+    setFallbackRevealed(true);
+    setMealPhotoFallbackRevealed(true);
+  }
+
+  // MI-E-C5-R5-R1 §六/§七: acceptance is ONE user action.
+  //
+  // 「分析正確」 and tapping a fallback both land here: a single gesture adopts the candidate AND
+  // runs the one atomic finalization. There is no second standalone 加入今日飲食 press anywhere on
+  // the accept path. The draft is built and submitted inside acceptCandidate from the same local
+  // value, so this never depends on React state having flushed between adoption and submission.
+  // Double taps are absorbed by the frozen single-flight gate inside acceptCandidate — the second
+  // gesture finds the gate held and returns without minting a second clientRequestId. Success
+  // resolves through completeMealPhotoFinalization into the same-page completed state; there is
+  // deliberately no router.push("/today-intake") on this path.
+  function acceptAnalysisCandidateInOneStep(
+    candidate: (typeof mealPhotoAnalysis.analysisCandidates)[number]
+  ) {
+    // MI-E-C5-R5-R3 §八: acceptance is a durable write, so it fails closed until this actor owns
+    // the session and commit-phase reconciliation has completed.
+    // MI-E-C5-R5-R4 §十: both hook states must also belong to the current actor.
+    if (!sessionReconciled) return;
+    if (!mealPhotoAnalysis.isCurrentActorState || !mealPhotoFinalization.isCurrentActorState) return;
+    if (mealPhotoFinalization.payloadLocked) return;
+    if (finalizationContextBlockReason !== null) return;
+    mealPhotoAnalysis.selectCandidate(candidate.candidateId);
+    void mealPhotoFinalization.acceptCandidate(candidate);
+  }
+
+  function acceptPrimaryCandidate() {
+    if (!primaryCandidate) return;
+    acceptAnalysisCandidateInOneStep(primaryCandidate);
+  }
+
+  // Correction is the explicit opt-in into the editor: the primary is adopted as an editable draft
+  // WITHOUT being submitted, so the user reviews and presses submit themselves.
+  function requestPrimaryCorrection() {
+    if (mealPhotoFinalization.payloadLocked || !primaryCandidate) return;
+    mealPhotoAnalysis.selectCandidate(primaryCandidate.candidateId);
+    mealPhotoFinalization.selectCandidate(primaryCandidate);
+    setCorrectionRequested(true);
+  }
+
+  function chooseManualMealInput() {
+    if (mealPhotoFinalization.payloadLocked) return;
+    mealPhotoAnalysis.selectCandidate(null);
+    mealPhotoFinalization.chooseManual();
+    setCorrectionRequested(true);
+  }
+
+  // The shared editor/detail panel renders only on an explicit correction or manual choice, or when
+  // a submission failed and fixing-and-retrying that same draft is the only way forward.
+  // MI-E-C5-R5-R4 §八: EVERY disjunct is now behind the actor-current gates, not just
+  // correctionRequested. A stale manual or failed draft belonging to a previous actor can no longer
+  // open this editor for even one frame, because both hooks mask their public state synchronously
+  // and both flags are required here alongside sessionReconciled.
+  const showFinalizationEditor =
+    sessionReconciled &&
+    mealPhotoAnalysis.isCurrentActorState &&
+    mealPhotoFinalization.isCurrentActorState &&
+    hasAiFinalizationFlow &&
+    mealPhotoFinalization.draft !== null &&
+    (correctionRequested ||
+      mealPhotoFinalization.draft.mode === "manual" ||
+      mealPhotoFinalization.draft.submissionStatus === "failed");
+  // MI-E-C5-R5-R4 §九: the editor never binds mealPhotoFinalization.submit directly. This screen-level
+  // handler re-checks reconciliation and both hook owners before delegating; the hook re-checks
+  // again before its gate, UUID mint, payload preparation and RPC.
+  const submitMealPhotoFinalizationEditor = useCallback(() => {
+    if (!sessionReconciled) return;
+    if (!mealPhotoAnalysis.isCurrentActorState) return;
+    if (!mealPhotoFinalization.isCurrentActorState) return;
+    void mealPhotoFinalization.submit();
+  }, [mealPhotoAnalysis.isCurrentActorState, mealPhotoFinalization, sessionReconciled]);
+
+  // A new capture, a new analysis request or an actor change clears the finalization draft through
+  // the frozen identity guard in useMealPhotoFinalization. The correction request belongs to that
+  // draft, so it must not outlive it and re-open the editor over a fresh session's primary result.
+  useEffect(() => {
+    if (mealPhotoFinalization.draft === null) setCorrectionRequested(false);
+  }, [mealPhotoFinalization.draft]);
 
   useEffect(() => {
     if (mealPhotoFinalization.payloadLocked) return;
@@ -191,7 +427,11 @@ export default function AnalysisScreen() {
 
   // Keep the session store in sync so visiting another screen and coming back
   // restores this exact state instead of starting a new AI Analysis session.
+  // MI-E-C5-R5-R2: only ever writes back into a session this actor owns — otherwise a mounted
+  // actor change would copy the previous actor's locally-held meal id, photo ids and guilt-sharing
+  // result straight back into the freshly reset session.
   useEffect(() => {
+    if (!analysisSessionOwned || !sessionReconciled) return;
     session.mealSaved = mealSaved;
     session.selectedMealPeriod = selectedMealPeriod;
     session.mealId = mealId;
@@ -241,6 +481,10 @@ export default function AnalysisScreen() {
   }
 
   function handleGuiltSharingConfirm(result: { peopleCount: number; sharedCaloriesPerPerson: number }) {
+    // MI-E-C5-R5-R3 §九/§十: the handler carries its own authority check rather than trusting the UI
+    // to be hidden — mealId is actor-scoped local state, so a mismatched or unreconciled actor must
+    // never be able to attach a split result to the previous actor's meal record.
+    if (!sessionReconciled) return;
     // 罪惡分擔 only attaches the split result to this meal record — it never asks
     // meal-completion questions (those live in the post-meal rating flow only).
     setGuiltSharingResult(result);
@@ -251,6 +495,10 @@ export default function AnalysisScreen() {
   }
 
   async function finalizeMealIdentificationFromExplicitGesture() {
+    // MI-E-C5-R5-R3 §十: preMealPhotoIds is actor-scoped local state that enters the finalization
+    // payload, so this legacy explicit-gesture path fails closed for a mismatched or unreconciled
+    // actor. UI hiding alone is not the authority.
+    if (!sessionReconciled) return;
     if (
       finalizationInvocationRef.current ||
       consumerRuntime.mealIdentificationFinalizationState.status === "submitting"
@@ -364,6 +612,9 @@ export default function AnalysisScreen() {
   // must not block the user" requirement. Only fires when there's actually an uploaded object to
   // clean up; a plain route unmount (back button, tab switch) never triggers this.
   function retakeMealPhoto() {
+    // MI-E-C5-R5-R4 §十三: retake deletes the uploaded staging object, so it fails closed unless this
+    // actor owns the reconciled session.
+    if (!sessionReconciled) return;
     if (mealPhotoUpload.uploadStatus === "uploaded" && mealPhotoUpload.imageObjectRef) {
       void consumerRuntime.deleteMealPhotoObject(mealPhotoUpload.imageObjectRef);
     }
@@ -376,29 +627,67 @@ export default function AnalysisScreen() {
       title={zhTW.mobile.analysisTitle}
       subtitle={zhTW.mobile.analysisSubtitle}
     >
-      {mealSaved ? (
+      {/* MI-E-C5-R5: the real C5 flow now completes in place. A durable finalization swaps this
+          screen to the restored completed hero (success visual, confirmed macro summary, next-meal
+          recommendation carousel) instead of pushing /today-intake. mealSaved remains the legacy
+          non-C5 path and is unchanged. */}
+      {isDurableCompleted && completionSnapshot ? (
+        <>
+          <SnowCard tone="primary">
+            <SnowSectionHeader title={zhTW.mobile.correctedFlow.mealResultTitle} subtitle={zhTW.mobile.mealPhotoCompletion.body} />
+            <View style={[styles.photoArea, styles.photoAreaConfirmed]}>
+              {ownedCapturedImageUri ? (
+                <Image source={{ uri: ownedCapturedImageUri }} style={styles.photoImage} resizeMode="cover" />
+              ) : null}
+              <View style={styles.photoCaptionBadge}>
+                <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.imageLabel}</Text>
+              </View>
+            </View>
+            <Text style={styles.finalizationFieldLabel}>{zhTW.mobile.mealPhotoFinalization.restaurantNameLabel}</Text>
+            <Text style={styles.stateText}>{zhTW.mobile.mealPhotoFinalization.restaurantNameUnknown}</Text>
+            <Text style={styles.finalizationFieldLabel}>{zhTW.mobile.mealPhotoFinalization.mealNameLabel}</Text>
+            <Text style={styles.stateText}>{completionSnapshot.mealName}</Text>
+          </SnowCard>
+          <CompletedAnalysisHero
+            completion={completionSnapshot}
+            nutritionSummary={completionSnapshot.nutrition}
+            mealName={completionSnapshot.mealName}
+            guiltSharingResult={guiltSharingResult}
+            finalizing={false}
+            onOpenMealLog={() => router.push("/meal-log")}
+            onOpenNutritionRecord={() => router.push("/meal-log")}
+            onViewTodayIntake={() => router.push("/today-intake")}
+            onAnalyzeAnother={() => router.push("/meal-photo")}
+            onGuiltShare={handleGuiltSharingConfirm}
+            nextMealRecommendations={nextMealRecommendations}
+            isPremium={demoMode === "premium"}
+            onSelectMeal={openNextMealRecommendation}
+            onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
+          />
+        </>
+      ) : mealSaved ? (
         <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
       ) : (
         <>
           <SnowCard tone="primary">
             <SnowSectionHeader title={zhTW.mobile.correctedFlow.mealResultTitle} subtitle={zhTW.mobile.correctedFlow.mealResultBody} />
             <View style={[styles.photoArea, isAnalysisConfirmed && styles.photoAreaConfirmed]}>
-              {analysis.capturedImageUri ? (
-                <Image source={{ uri: analysis.capturedImageUri }} style={styles.photoImage} resizeMode="cover" />
+              {ownedCapturedImageUri ? (
+                <Image source={{ uri: ownedCapturedImageUri }} style={styles.photoImage} resizeMode="cover" />
               ) : null}
               {isAnalysisConfirmed ? (
                 <>
-                  {!analysis.capturedImageUri ? <LinearGradient colors={[snow.heroFrom, snow.heroTo]} style={styles.photoGradient} /> : null}
+                  {!ownedCapturedImageUri ? <LinearGradient colors={[snow.heroFrom, snow.heroTo]} style={styles.photoGradient} /> : null}
                   <View style={styles.photoConfidenceBadge}>
                     <Icon name="spark" size={12} color={snow.primaryDeep} />
                     <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.confidenceLevels[1]}</Text>
                   </View>
-                  {!analysis.capturedImageUri ? (
+                  {!ownedCapturedImageUri ? (
                     <View style={styles.photoIconLarge}>
                       <Icon name="plate" size={26} color={snow.primaryDeep} />
                     </View>
                   ) : null}
-                  {!analysis.capturedImageUri ? <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text> : null}
+                  {!ownedCapturedImageUri ? <Text style={styles.photoAreaText}>{zhTW.mobile.refinedLogic.aiEntry.heroBody}</Text> : null}
                   <View style={styles.photoCaptionBadge}>
                     <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.imageLabel}</Text>
                   </View>
@@ -409,7 +698,7 @@ export default function AnalysisScreen() {
                     <Icon name="spark" size={12} color={snow.primaryDeep} />
                     <Text style={styles.photoBadgeText}>{zhTW.mobile.nav.analysis}</Text>
                   </View>
-                  {!analysis.capturedImageUri ? (
+                  {!ownedCapturedImageUri ? (
                     <>
                       <View style={styles.photoIcon}>
                         <Icon name="camera" size={22} color={snow.primaryDeep} />
@@ -427,12 +716,48 @@ export default function AnalysisScreen() {
             </View>
           </SnowCard>
 
-          {analysis.capturedImageUri ? <MealPhotoUploadStatusCard uploadStatus={mealPhotoUpload.uploadStatus} onRetry={mealPhotoUpload.retryUpload} /> : null}
+          {ownedCapturedImageUri ? <MealPhotoUploadStatusCard uploadStatus={mealPhotoUpload.uploadStatus} onRetry={mealPhotoUpload.retryUpload} /> : null}
 
-          {analysis.capturedImageUri ? (
+          {ownedCapturedImageUri ? (
             <MealPhotoAnalysisResultCard
               invocationStatus={mealPhotoAnalysis.analysisInvocationStatus}
-              candidates={mealPhotoAnalysis.analysisCandidates}
+              primary={primaryCandidate}
+              fallbacks={fallbackCandidates}
+              fallbackRevealed={fallbackRevealed}
+              onAcceptPrimary={acceptPrimaryCandidate}
+              onRejectPrimary={revealFallbackCandidates}
+              onRequestCorrection={requestPrimaryCorrection}
+              contextBlockReason={finalizationContextBlockReason}
+              // Compact inline controls, rendered inside the result card exactly where the blocked
+              // acceptance lives. Suppressed while the editor is open because that panel already
+              // carries the same three controls — they must never appear twice.
+              contextControls={
+                showFinalizationEditor ? null : (
+                  <>
+                    <MealSourceSection
+                      embedded
+                      analysis={analysis}
+                      payloadLocked={mealPhotoFinalization.payloadLocked}
+                      frozenContext={frozenFinalizationContext}
+                    />
+                    <RecordTimingSection
+                      embedded
+                      analysis={analysis}
+                      timezone={profileTimezone}
+                      payloadLocked={mealPhotoFinalization.payloadLocked}
+                      frozenContext={frozenFinalizationContext}
+                    />
+                    <MealPeriodSection
+                      embedded
+                      selectedMealPeriod={
+                        frozenFinalizationContext?.selectedMealPeriod ?? selectedMealPeriod
+                      }
+                      payloadLocked={mealPhotoFinalization.payloadLocked}
+                      onSelect={setSelectedMealPeriod}
+                    />
+                  </>
+                )
+              }
               selectedCandidateId={
                 mealPhotoFinalization.payloadLocked && mealPhotoFinalization.draft
                   ? mealPhotoFinalization.draft.selectedCandidateId
@@ -446,20 +771,12 @@ export default function AnalysisScreen() {
                   ? undefined
                   : mealPhotoAnalysis.retryAnalysis
               }
-              onSelectCandidate={(candidate) => {
-                if (mealPhotoFinalization.payloadLocked) return;
-                mealPhotoAnalysis.selectCandidate(candidate.candidateId);
-                mealPhotoFinalization.selectCandidate(candidate);
-              }}
-              onChooseManual={() => {
-                if (mealPhotoFinalization.payloadLocked) return;
-                mealPhotoAnalysis.selectCandidate(null);
-                mealPhotoFinalization.chooseManual();
-              }}
+              onAcceptFallback={acceptAnalysisCandidateInOneStep}
+              onChooseManual={chooseManualMealInput}
             />
           ) : null}
 
-          {hasAiFinalizationFlow && mealPhotoFinalization.draft ? (
+          {showFinalizationEditor && mealPhotoFinalization.draft ? (
             <SnowCard tone="ai">
               <SnowSectionHeader
                 title={zhTW.mobile.mealPhotoFinalization.editorTitle}
@@ -512,10 +829,13 @@ export default function AnalysisScreen() {
                 })}
                 payloadLocked={mealPhotoFinalization.payloadLocked}
                 onChange={mealPhotoFinalization.updateField}
-                onSubmit={() => void mealPhotoFinalization.submit()}
+                onSubmit={submitMealPhotoFinalizationEditor}
               />
             </SnowCard>
-          ) : (
+          ) : !hasAiFinalizationFlow ? (
+            /* MI-E-C5-R5-R1 §九: these standalone cards belong to the legacy non-C5 path only. In
+               the real C5 flow the same three controls are rendered compactly inside the result
+               card, next to the acceptance they are actually blocking. */
             <>
               <MealPeriodSection
                 selectedMealPeriod={
@@ -537,7 +857,7 @@ export default function AnalysisScreen() {
                 frozenContext={frozenFinalizationContext}
               />
             </>
-          )}
+          ) : null}
 
           {!hasAiFinalizationFlow && analysis.isSelfCooked ? (
             <SelfCookedIntro nutritionSummary={analysis.nutritionSummary} />
@@ -606,7 +926,7 @@ export default function AnalysisScreen() {
             />
           ) : null}
 
-          {!isAnalysisConfirmed ? (
+          {showLegacyAnalysisBlocks && !isAnalysisConfirmed ? (
             <SnowCard>
               <SnowSectionHeader title={zhTW.mobile.analysis.summary} subtitle={zhTW.mobile.analysis.summaryDemoDisclosure} />
               <View style={styles.statGrid}>
@@ -656,14 +976,14 @@ export default function AnalysisScreen() {
             </Card>
           ) : null}
 
-          {!isAnalysisConfirmed ? (
+          {showLegacyAnalysisBlocks && !isAnalysisConfirmed ? (
             <SnowCard tone="ai">
               <SnowSectionHeader title={zhTW.mobile.nextMealTitle} subtitle={zhTW.mobile.analysis.recommendation} />
               <Text style={styles.stateText}>{zhTW.mobile.refinedLogic.analysisFlow.bridgeBody}</Text>
             </SnowCard>
           ) : null}
 
-          {!isAnalysisConfirmed ? (
+          {showLegacyAnalysisBlocks && !isAnalysisConfirmed ? (
             <SnowCard>
               <SnowSectionHeader title={zhTW.mobile.analysis.mealTagsTitle} />
               <View style={styles.chipRow}>
@@ -674,7 +994,7 @@ export default function AnalysisScreen() {
             </SnowCard>
           ) : null}
 
-          {!isAnalysisConfirmed ? (
+          {showLegacyAnalysisBlocks && !isAnalysisConfirmed ? (
             <SnowCard>
               <SnowSectionHeader title={zhTW.mobile.analysis.goalTagsTitle} />
               <View style={styles.chipRow}>
@@ -725,27 +1045,41 @@ function MealPhotoUploadStatusCard({
 // reinforces that regardless, since a user should never read "AI 已產生候選" as "meal saved."
 function MealPhotoAnalysisResultCard({
   invocationStatus,
-  candidates,
+  primary,
+  fallbacks,
+  fallbackRevealed,
   selectedCandidateId,
+  onAcceptPrimary,
+  onRejectPrimary,
+  onRequestCorrection,
+  contextBlockReason,
+  contextControls,
   safeErrorCode,
   consumerRuntimeMode,
   payloadLocked,
   onRetry,
-  onSelectCandidate,
+  onAcceptFallback,
   onChooseManual
 }: {
   invocationStatus: ReturnType<typeof useMealPhotoAnalysis>["analysisInvocationStatus"];
-  candidates: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"];
+  primary: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number] | null;
+  fallbacks: readonly ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number][];
+  fallbackRevealed: boolean;
   selectedCandidateId: string | null;
   safeErrorCode: ReturnType<typeof useMealPhotoAnalysis>["safeAnalysisErrorCode"];
   consumerRuntimeMode: ReturnType<typeof useConsumerRuntime>["mode"];
   payloadLocked: boolean;
   onRetry?: () => void;
-  onSelectCandidate: (candidate: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number]) => void;
+  onAcceptPrimary: () => void;
+  onRejectPrimary: () => void;
+  onRequestCorrection: () => void;
+  contextBlockReason: MealPhotoFinalizationContextBlockReason | null;
+  contextControls: ReactNode;
+  onAcceptFallback: (candidate: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number]) => void;
   onChooseManual: () => void;
 }) {
   const copy = zhTW.mobile.mealPhotoAnalysis;
-  const visibleCandidates = getCompactMealPhotoFinalizationCandidates(candidates);
+  const primaryCopy = zhTW.mobile.mealPhotoPrimaryResult;
   if (invocationStatus === "not_started") return null;
 
   if (invocationStatus === "waiting_for_upload") {
@@ -784,31 +1118,104 @@ function MealPhotoAnalysisResultCard({
     );
   }
 
+  // MI-E-C5-R5 primary-first presentation: the AI's single best match is shown alone with an
+  // accept/reject pair. Fallback alternatives are not rendered at all until the user explicitly
+  // rejects the primary, and only the fallbacks the response actually contained are ever shown.
+  //
+  // MI-E-C5-R5-R1: both accept gestures are terminal — pressing them finalizes. So they are the
+  // actions that readiness must block, and the missing control is offered right here rather than
+  // behind an editor the accept path never opens.
+  const finalizationCopy = zhTW.mobile.mealPhotoFinalization;
+  const contextBlockLabel =
+    contextBlockReason === "missing_meal_source"
+      ? finalizationCopy.missingMealSource
+      : contextBlockReason === "missing_occurred_at"
+        ? finalizationCopy.missingOccurredAt
+        : contextBlockReason === "missing_record_timing"
+          ? finalizationCopy.missingRecordTiming
+          : contextBlockReason === "missing_meal_period"
+            ? finalizationCopy.missingMealPeriod
+            : null;
+  const acceptBlocked = payloadLocked || contextBlockReason !== null;
+
   return (
     <SnowCard>
-      <SnowSectionHeader title={copy.title} subtitle={invocationStatus === "low_confidence" ? copy.lowConfidenceLabel : copy.completedLabel} />
+      <SnowSectionHeader
+        title={primaryCopy.title}
+        subtitle={invocationStatus === "low_confidence" ? primaryCopy.lowConfidenceSubtitle : primaryCopy.subtitle}
+      />
       {consumerRuntimeMode === "mock" ? <Text style={styles.disclaimer}>{copy.mockBadge}</Text> : null}
-      {invocationStatus === "low_confidence" ? <Text style={styles.disclaimer}>{copy.lowConfidenceNote}</Text> : null}
-      {visibleCandidates.map((candidate) => (
+      {primary ? (
         <MealPhotoAnalysisCandidateRow
-          key={candidate.candidateId}
-          candidate={candidate}
-          selected={candidate.candidateId === selectedCandidateId}
+          candidate={primary}
+          selected={primary.candidateId === selectedCandidateId}
           disabled={payloadLocked}
-          onSelect={payloadLocked ? undefined : () => onSelectCandidate(candidate)}
+          onSelect={undefined}
         />
-      ))}
+      ) : null}
       <Text style={styles.disclaimer}>
         {copy.disclaimerEstimate}　·　{copy.disclaimerNutrition}
       </Text>
-      <Text style={styles.disclaimer}>{copy.disclaimerAction}</Text>
-      <View style={styles.ctaColumn}>
-        <SecondaryButton
-          icon="edit"
-          label={zhTW.mobile.mealPhotoFinalization.noneOfAboveCta}
-          onPress={payloadLocked ? undefined : onChooseManual}
-        />
-      </View>
+      {contextBlockLabel ? (
+        <View style={styles.finalizationPanelSection}>
+          <SnowSectionHeader title={primaryCopy.contextRequiredTitle} subtitle={contextBlockLabel} />
+          {contextControls}
+        </View>
+      ) : null}
+      {!fallbackRevealed ? (
+        <View style={styles.ctaColumn}>
+          <Text style={styles.disclaimer}>{primaryCopy.acceptPrimaryNote}</Text>
+          <View style={styles.ctaRow2}>
+            <View style={styles.ctaItem}>
+              <PrimaryButton
+                icon="check"
+                disabled={acceptBlocked || !primary}
+                label={zhTW.mobile.analysis.confirmMatch}
+                onPress={acceptBlocked || !primary ? undefined : onAcceptPrimary}
+              />
+            </View>
+            <View style={styles.ctaItem}>
+              <SecondaryButton
+                icon="edit"
+                label={zhTW.mobile.analysis.notThis}
+                onPress={payloadLocked ? undefined : onRejectPrimary}
+              />
+            </View>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.finalizationPanelSection}>
+          <SnowSectionHeader
+            title={primaryCopy.fallbackTitle}
+            subtitle={fallbacks.length > 0 ? primaryCopy.fallbackBody : primaryCopy.fallbackEmptyBody}
+          />
+          {fallbacks.map((candidate) => (
+            <MealPhotoAnalysisCandidateRow
+              key={candidate.candidateId}
+              candidate={candidate}
+              selected={candidate.candidateId === selectedCandidateId}
+              disabled={acceptBlocked}
+              actionLabel={primaryCopy.fallbackSelectCta}
+              onSelect={acceptBlocked ? undefined : () => onAcceptFallback(candidate)}
+            />
+          ))}
+          {fallbacks.length > 0 ? (
+            <Text style={styles.disclaimer}>{primaryCopy.fallbackActionNote}</Text>
+          ) : null}
+          <View style={styles.ctaColumn}>
+            <SecondaryButton
+              icon="edit"
+              label={primaryCopy.correctCta}
+              onPress={payloadLocked ? undefined : onRequestCorrection}
+            />
+            <SecondaryButton
+              icon="edit"
+              label={zhTW.mobile.mealPhotoFinalization.noneOfAboveCta}
+              onPress={payloadLocked ? undefined : onChooseManual}
+            />
+          </View>
+        </View>
+      )}
     </SnowCard>
   );
 }
@@ -1041,11 +1448,15 @@ function MealPhotoAnalysisCandidateRow({
   candidate,
   selected,
   disabled,
+  actionLabel,
   onSelect
 }: {
   candidate: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number];
   selected: boolean;
   disabled: boolean;
+  // MI-E-C5-R5-R1: a fallback row now finalizes on tap, so its caller can say so instead of the
+  // frozen 「選擇這個候選」 wording, which would understate what the gesture does.
+  actionLabel?: string;
   onSelect?: () => void;
 }) {
   return (
@@ -1060,13 +1471,19 @@ function MealPhotoAnalysisCandidateRow({
       <Text style={[styles.disclaimer, selected ? styles.candidateSelectedLabel : null]}>
         {selected
           ? zhTW.mobile.mealPhotoAnalysis.selectedBadge
-          : zhTW.mobile.mealPhotoAnalysis.selectCta}
+          : actionLabel ?? zhTW.mobile.mealPhotoAnalysis.selectCta}
       </Text>
     </Pressable>
   );
 }
 
-function MacroChipsRow({ nutritionSummary }: { nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"] }) {
+// Structural prop type: accepts both the legacy correction-state summary and the MI-E-C5-R5
+// confirmed completion snapshot's nutrition, without either having to know about the other.
+function MacroChipsRow({
+  nutritionSummary
+}: {
+  nutritionSummary: { calories: number; protein: number; carbohydrates: number; fat: number };
+}) {
   const items: { label: string; value: string; unit: string; chipStyle: object; valueStyle: object }[] = [
     { label: zhTW.mobile.analysis.calories, value: `${nutritionSummary.calories}`, unit: "kcal", chipStyle: styles.macroChipPrimary, valueStyle: styles.macroValuePrimary },
     { label: zhTW.mobile.analysis.protein, value: `${nutritionSummary.protein}`, unit: "g", chipStyle: styles.macroChipPrimary, valueStyle: styles.macroValuePrimary },
@@ -1120,9 +1537,12 @@ function CompletedAnalysisHero({
   nextMealRecommendations,
   isPremium,
   onSelectMeal,
-  onViewRestaurant
+  onViewRestaurant,
+  completion = null,
+  onViewTodayIntake,
+  onAnalyzeAnother
 }: {
-  nutritionSummary: ReturnType<typeof useAnalysisCorrectionState>["nutritionSummary"];
+  nutritionSummary: { calories: number; protein: number; carbohydrates: number; fat: number };
   mealName: string;
   finalizing: boolean;
   guiltSharingResult: { peopleCount: number; sharedCaloriesPerPerson: number } | null;
@@ -1133,7 +1553,11 @@ function CompletedAnalysisHero({
   isPremium: boolean;
   onSelectMeal: (item: NextMealRecommendationCard) => void;
   onViewRestaurant: (restaurantId: string) => void;
+  completion?: CompletedMealPhotoAnalysisSnapshot | null;
+  onViewTodayIntake?: () => void;
+  onAnalyzeAnother?: () => void;
 }) {
+  const completedCopy = zhTW.mobile.mealPhotoCompletion;
   return (
     <SnowCard tone="primary">
       <View style={styles.completedHeroVisual}>
@@ -1141,7 +1565,14 @@ function CompletedAnalysisHero({
           <Icon name="check" size={36} color="#FFFFFF" />
         </View>
       </View>
-      <SnowSectionHeader title={zhTW.mobile.refinedLogic.analysisFlow.bridgeTitle} subtitle={zhTW.mobile.refinedLogic.analysisFlow.bridgeBody} />
+      {/* MI-E-C5-R5: in the real C5 flow every value below is the user-confirmed draft plus a
+          durable finalization result, so this copy can truthfully say the meal is analyzed and
+          saved. The legacy demo path keeps the older "示範資料" disclosure. */}
+      {completion ? (
+        <SnowSectionHeader title={completedCopy.title} subtitle={completedCopy.body} />
+      ) : (
+        <SnowSectionHeader title={zhTW.mobile.refinedLogic.analysisFlow.bridgeTitle} subtitle={zhTW.mobile.refinedLogic.analysisFlow.bridgeBody} />
+      )}
       <MacroChipsRow nutritionSummary={nutritionSummary} />
       <NextMealRecommendationCarousel recommendations={nextMealRecommendations} isPremium={isPremium} onSelectMeal={onSelectMeal} onViewRestaurant={onViewRestaurant} />
       <SingleMealGuiltShare
@@ -1151,20 +1582,41 @@ function CompletedAnalysisHero({
         sharedCaloriesPerPerson={guiltSharingResult?.sharedCaloriesPerPerson}
         onShare={onGuiltShare}
       />
-      <View style={styles.ctaColumn}>
-        <View style={styles.ctaRow2}>
-          <View style={styles.ctaItem}>
-            <SecondaryButton
-              icon="check"
-              label={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord}
-              onPress={finalizing ? undefined : onOpenMealLog}
-            />
+      {/* MI-E-C5-R5: after a durable finalization the meal is already saved, so none of these
+          actions may call the finalization RPC again. They are read-only navigations plus a
+          "start a new analysis" entry, and the 加入今日飲食 wording is deliberately gone here so
+          it can never read as "this meal has not been stored yet". */}
+      {completion ? (
+        <>
+          <Text style={styles.disclaimer}>{completedCopy.savedNote}</Text>
+          <View style={styles.ctaColumn}>
+            <View style={styles.ctaRow2}>
+              <View style={styles.ctaItem}>
+                <SecondaryButton icon="chart" label={completedCopy.viewTodayIntake} onPress={onViewTodayIntake} />
+              </View>
+              <View style={styles.ctaItem}>
+                <SecondaryButton icon="bookmark" label={completedCopy.viewFoodDiary} onPress={onOpenNutritionRecord} />
+              </View>
+            </View>
+            <SecondaryButton icon="camera" label={completedCopy.analyzeAnother} onPress={onAnalyzeAnother} />
           </View>
-          <View style={styles.ctaItem}>
-            <SecondaryButton icon="chart" label={zhTW.mobile.refinedLogic.analysisFlow.viewNutritionRecord} onPress={onOpenNutritionRecord} />
+        </>
+      ) : (
+        <View style={styles.ctaColumn}>
+          <View style={styles.ctaRow2}>
+            <View style={styles.ctaItem}>
+              <SecondaryButton
+                icon="check"
+                label={zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord}
+                onPress={finalizing ? undefined : onOpenMealLog}
+              />
+            </View>
+            <View style={styles.ctaItem}>
+              <SecondaryButton icon="chart" label={zhTW.mobile.refinedLogic.analysisFlow.viewNutritionRecord} onPress={onOpenNutritionRecord} />
+            </View>
           </View>
         </View>
-      </View>
+      )}
     </SnowCard>
   );
 }

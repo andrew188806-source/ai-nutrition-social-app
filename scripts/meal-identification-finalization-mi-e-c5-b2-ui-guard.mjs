@@ -151,7 +151,11 @@ record("analysisRequestId is carried from session into the draft", /getAnalysisS
 record("selectedCandidateId is carried into the v3 command", /selectedCandidateId: state\.selectedCandidateId/.test(draft));
 record("manual mode uses a null selectedCandidateId", /selectedCandidateId: null,[\s\S]*mode: "manual"/.test(draft));
 record("manual UI entry exists", /noneOfAboveCta[\s\S]*onChooseManual/.test(screen));
-record("candidate UI remains single-select", /onSelectCandidate\(candidate\)/.test(screen) && /setSelectedMealPhotoAnalysisCandidateId\(candidate\.candidateId\)/.test(hook));
+// MI-E-C5-R5-R1 successor-compatible: the B2 invariant is that the candidate UI hands exactly ONE
+// candidate to the shared draft, which then records exactly that one id. R5-R1 renamed the callback
+// from onSelectCandidate to onAcceptFallback because the gesture now finalizes rather than only
+// selecting; the single-select property is unchanged, so both spellings are accepted.
+record("candidate UI remains single-select", /(onSelectCandidate|onAcceptFallback)\(candidate\)/.test(screen) && /setSelectedMealPhotoAnalysisCandidateId\(candidate\.candidateId\)/.test(hook));
 record("candidate switching rebuilds from a fresh candidate snapshot", /createCandidateMealPhotoFinalizationDraft\(analysisRequestId, candidate, input\.context\)/.test(hook));
 record("original candidate snapshot is retained", /originalCandidate: cloneCandidate\(candidate\)/.test(draft));
 record("editable meal name is wired", /key: "mealName"/.test(screen));

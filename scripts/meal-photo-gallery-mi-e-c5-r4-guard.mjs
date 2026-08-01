@@ -57,7 +57,33 @@ check("cleanup owns only generated output and never registers the picker source"
 check("normalization uses no weak temporary naming and emits no photo bytes paths or base64 diagnostics", !/Math\.random|console\.|base64/i.test(normalization));
 check("failed distinct outputs are best-effort deleted without ever deleting same-as-source output", /if \(rendered\.uri !== asset\.uri\) await bestEffortDelete\(rendered\.uri, dependencies\)/.test(normalization));
 check("replacement selection releases prior owned cache before acquiring another gallery asset", galleryBody?.includes("await releaseOwnedGalleryMealPhotoAsset()") && normalization.includes("await releaseOwnedGalleryMealPhotoAsset();"));
-check("new session retake and durable finalization all release owned cache without blocking navigation", /function startAiAnalysis\(\)[\s\S]{0,220}void releaseOwnedGalleryMealPhotoAsset\(\)/.test(mealPhoto) && (mealPhoto.match(/void releaseOwnedGalleryMealPhotoAsset\(\);/g) ?? []).length === 2 && /function retakeMealPhoto\(\)[\s\S]{0,350}void releaseOwnedGalleryMealPhotoAsset\(\)/.test(read("apps/mobile/app/analysis.tsx")) && (read("apps/mobile/app/analysis.tsx").match(/void releaseOwnedGalleryMealPhotoAsset\(\);/g) ?? []).length === 3);
+// MI-E-C5-R5-R2 successor-compatible locator. The R4 invariant is unchanged: EVERY new-session,
+// retake and durable-finalization path releases the owned gallery cache, and no release ever blocks
+// navigation (always `void`, never awaited on a UI path). What changed is that the new-session and
+// actor-reset paths now reach the release through the injected ANALYSIS_SESSION_OWNER_DEPENDENCIES
+// rather than calling it inline, because the session store must not import expo-file-system. Both
+// spellings are accepted, and the exact per-file counts are still asserted so a silently dropped or
+// duplicated release still fails this check.
+const analysisScreenSource = read("apps/mobile/app/analysis.tsx");
+const releasesInjectedViaOwnerDependencies = (source) =>
+  /const ANALYSIS_SESSION_OWNER_DEPENDENCIES = Object\.freeze\(\{\s*\r?\n?\s*releaseOwnedGalleryAsset: \(\) => \{\s*\r?\n?\s*void releaseOwnedGalleryMealPhotoAsset\(\);/.test(source);
+const newSessionPathReleasesOwnedCache =
+  // frozen R4 spelling: inline release inside startAiAnalysis
+  /function startAiAnalysis\(\)[\s\S]{0,220}void releaseOwnedGalleryMealPhotoAsset\(\)/.test(mealPhoto) ||
+  // R5-R2 spelling: startAiAnalysis resets through the owner authority, which releases first
+  (/function startAiAnalysis\(\)[\s\S]{0,400}resetAnalysisSessionForActor\(captureActor, ANALYSIS_SESSION_OWNER_DEPENDENCIES\)/.test(mealPhoto) &&
+    releasesInjectedViaOwnerDependencies(mealPhoto));
+check("new session retake and durable finalization all release owned cache without blocking navigation",
+  newSessionPathReleasesOwnedCache &&
+    (mealPhoto.match(/void releaseOwnedGalleryMealPhotoAsset\(\);/g) ?? []).length === 1 &&
+    // MI-E-C5-R5-R4: window widened only (350 -> 700) because retakeMealPhoto gained an actor
+    // ownership pre-check and its comment. The invariant — retake releases the owned cache and
+    // never awaits it — is unchanged and still asserted, as is the exact per-file release count.
+    /function retakeMealPhoto\(\)[\s\S]{0,700}void releaseOwnedGalleryMealPhotoAsset\(\)/.test(analysisScreenSource) &&
+    (analysisScreenSource.match(/void releaseOwnedGalleryMealPhotoAsset\(\);/g) ?? []).length === 4 &&
+    releasesInjectedViaOwnerDependencies(analysisScreenSource) &&
+    !/await releaseOwnedGalleryMealPhotoAsset\(\)/.test(mealPhoto) &&
+    !/await releaseOwnedGalleryMealPhotoAsset\(\)/.test(analysisScreenSource));
 
 check("camera function remains text-identical to the frozen R3-A authority", Boolean(cameraBody) && cameraBody === frozenCameraBody);
 check("camera function cannot call gallery normalization or cleanup", Boolean(cameraBody) && !/normalizeGallery|releaseOwnedGallery/.test(cameraBody));
@@ -66,7 +92,11 @@ check("picker remains single-image-only and excludes Live Photo paired-video aut
 check("gallery picker/native exceptions map to materialization failure without returning exception text", Boolean(galleryBody) && /errorCode: "gallery_asset_materialization_failed"/.test(galleryBody) && !/error\.message|String\(error/.test(galleryBody));
 check("meal-photo UI maps gallery errors through dedicated safe localized copy", /outcome\.status === "gallery_error"/.test(mealPhoto) && /galleryAssetErrors\[errorCode\]/.test(mealPhoto));
 check("all five safe gallery errors have title/body copy", ["gallery_asset_unavailable", "gallery_asset_unsupported", "gallery_asset_materialization_failed", "gallery_asset_normalization_failed", "gallery_asset_too_large"].every((code) => new RegExp(`${code}:\\s*\\{\\s*title:\\s*\"[^\"]+\",\\s*body:\\s*\"[^\"]+\"`).test(i18n)));
-check("normalized capture still enters the one existing session/finalization route", /startRealAnalysis\(method, outcome\.uri, new Date\(outcome\.capturedAt\), outcome\.mimeType, outcome\.fileName\)/.test(mealPhoto) && /beginAnalysisCapture\(method, imageUri, capturedAt, mimeType, fileName\)/.test(mealPhoto));
+// MI-E-C5-R5-R2 successor-compatible locator: beginAnalysisCapture now also carries the actor that
+// owns the new session. The R4 invariant — a normalized capture enters the ONE existing
+// session/finalization route with exactly the normalized uri/mimeType/fileName — is unchanged; the
+// optional trailing owner argument is additive.
+check("normalized capture still enters the one existing session/finalization route", /startRealAnalysis\(method, outcome\.uri, new Date\(outcome\.capturedAt\), outcome\.mimeType, outcome\.fileName\)/.test(mealPhoto) && /beginAnalysisCapture\(method, imageUri, capturedAt, mimeType, fileName(, captureSessionOwnership\.owner)?\)/.test(mealPhoto));
 check("R3-A secure UUID authority remains wired into its three frozen runtime consumers", ["consumerMealIdentificationFinalizationRuntime.ts", "consumerMealWriteRuntime.ts", "consumerPlannedMealRuntime.ts"].every((file) => /generateSecureUuidV4\(\)/.test(read(`apps/mobile/features/consumer-runtime/${file}`))));
 check("upload and analysis failures remain distinct downstream UI states", /setMealPhotoUploadState\(\{ uploadStatus: "failed"/.test(read("apps/mobile/features/analysis/useMealPhotoUpload.ts")) && /setMealPhotoAnalysisState\(\{ analysisInvocationStatus: "failed"/.test(read("apps/mobile/features/analysis/useMealPhotoAnalysis.ts")));
 check("R3 guard is successor-compatible but still forbids competing transcode libraries", /successor-compatible transcode authority/.test(read("scripts/consumer-runtime-mi-e-c5-r3-guard.mjs")) && /react-native-image-resizer/.test(read("scripts/consumer-runtime-mi-e-c5-r3-guard.mjs")));

@@ -1,11 +1,17 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, ScanningBar, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getPlannedDinnerEstimateOptions, type DinnerEstimate } from "../features/analysis/analysisMealRecordStore";
-import { beginAnalysisCapture, resetAnalysisSession, type MealPhotoCaptureMethod } from "../features/analysis";
+import {
+  beginAnalysisCapture,
+  commitAnalysisSessionActorOwnerReconciliation,
+  getAnalysisSessionViewForActor,
+  resetAnalysisSessionForActor,
+  type MealPhotoCaptureMethod
+} from "../features/analysis";
 import { captureMealPhotoFromCamera, pickMealPhotoFromLibrary, type MediaCaptureOutcome } from "../features/analysis/mediaCapture";
 import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryMealPhotoAssetNormalization";
 import { type PlannedMeal } from "../features/planned-meal";
@@ -16,11 +22,38 @@ type PlannedDinnerType = (typeof zhTW.mobile.plannedDinnerHelper.mealTypes)[numb
 const helperCopy = zhTW.mobile.plannedDinnerHelper;
 const plannedDinnerTypes: readonly PlannedDinnerType[] = helperCopy.mealTypes;
 
+// MI-E-C5-R5-R2 §十一: same injected R4 owned-gallery-cache release the analysis screen uses, so
+// the store never has to import expo-file-system. Deletes only this app's normalized cache file.
+const ANALYSIS_SESSION_OWNER_DEPENDENCIES = Object.freeze({
+  releaseOwnedGalleryAsset: () => {
+    void releaseOwnedGalleryMealPhotoAsset();
+  }
+});
 
 export default function MealPhotoScreen() {
   const router = useRouter();
   const { autoOpen } = useLocalSearchParams<{ autoOpen?: string }>();
   const runtime = useConsumerRuntime();
+  // MI-E-C5-R5-R3 §三 LAYER 1 — PURE render-time ownership derivation. No store mutation, no
+  // epoch move, no gallery cleanup, no Promise: safe for any speculative or abandoned render.
+  // captureSessionOwnership.owner is the actor a new capture will be stamped with.
+  const captureActor = {
+    actorKey: runtime.state.actorKey,
+    actorGeneration: runtime.state.actorGeneration
+  };
+  const captureSessionOwnership = getAnalysisSessionViewForActor(captureActor);
+  // MI-E-C5-R5-R3 §六 LAYER 2 — COMMIT-PHASE reconciliation. Runs after commit and before paint,
+  // so an abandoned render can never reset the session or delete the previous owner's cache file.
+  const [captureReconciledActor, setCaptureReconciledActor] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const decision = getAnalysisSessionViewForActor(captureActor);
+    if (decision.reconciliationRequired) {
+      commitAnalysisSessionActorOwnerReconciliation(captureActor, ANALYSIS_SESSION_OWNER_DEPENDENCIES);
+    }
+    setCaptureReconciledActor(`${captureActor.actorKey ?? ""}:${captureActor.actorGeneration}`);
+  }, [captureActor.actorGeneration, captureActor.actorKey]);
+  // MI-E-C5-R5-R3 §八: no capture gesture may run before reconciliation has committed.
+  const captureSessionReconciled = captureReconciledActor === `${captureActor.actorKey ?? ""}:${captureActor.actorGeneration}`;
   const actorTimezone = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile.timezone : runtime.mode === "mock" ? "Asia/Taipei" : "";
   const [isSheetOpen, setIsSheetOpen] = useState(() => autoOpen === "true");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -41,14 +74,17 @@ export default function MealPhotoScreen() {
   const hasSpecificMockData = plannedType !== "其他" || restaurantName.trim().length > 0;
 
   function startAiAnalysis() {
+    if (!captureSessionReconciled) return;
     // Tapping "開始 AI 分析" is itself a new-session trigger, even before a source is chosen.
-    void releaseOwnedGalleryMealPhotoAsset();
-    resetAnalysisSession();
+    // MI-E-C5-R5-R2: full sensitive reset (which releases the previous owned gallery cache file
+    // first) and an immediate rebind to the current actor, so the capture that follows is owned
+    // from its very first write.
+    resetAnalysisSessionForActor(captureActor, ANALYSIS_SESSION_OWNER_DEPENDENCIES);
     setIsSheetOpen(true);
   }
 
   async function openCamera() {
-    if (isRequestingMedia) return;
+    if (!captureSessionReconciled || isRequestingMedia) return;
     setIsRequestingMedia(true);
     try {
       const outcome = await captureMealPhotoFromCamera();
@@ -59,7 +95,7 @@ export default function MealPhotoScreen() {
   }
 
   async function uploadFromGallery() {
-    if (isRequestingMedia) return;
+    if (!captureSessionReconciled || isRequestingMedia) return;
     setIsRequestingMedia(true);
     try {
       const outcome = await pickMealPhotoFromLibrary();
@@ -130,7 +166,10 @@ export default function MealPhotoScreen() {
     // MI-E-C3: also starts the private Storage upload of this same photo (see analysis.tsx /
     // useMealPhotoUpload) — mimeType/fileName are only ever used to resolve a trusted upload
     // MIME type, never for the (still-fake) nutrition estimate above.
-    beginAnalysisCapture(method, imageUri, capturedAt, mimeType, fileName);
+    // MI-E-C5-R5-R2: the new session is stamped with the actor that took this photo. When signed
+    // out, `owner` is null, so the session is explicitly ownerless and /analysis will reset it
+    // rather than attributing the photo to whoever mounts next.
+    beginAnalysisCapture(method, imageUri, capturedAt, mimeType, fileName, captureSessionOwnership.owner);
     setSource(method);
     setIsSheetOpen(false);
     setIsAnalyzing(true);
@@ -182,11 +221,13 @@ export default function MealPhotoScreen() {
   useEffect(() => {
     // Home's "拍照分析" shortcut opens the sheet directly (autoOpen=true), which is the
     // same "start a new analysis" intent as tapping 開始 AI 分析 manually.
-    if (autoOpen === "true") {
-      void releaseOwnedGalleryMealPhotoAsset();
-      resetAnalysisSession();
+    if (autoOpen === "true" && captureSessionReconciled) {
+      resetAnalysisSessionForActor(
+        { actorKey: runtime.state.actorKey, actorGeneration: runtime.state.actorGeneration },
+        ANALYSIS_SESSION_OWNER_DEPENDENCIES
+      );
     }
-  }, [autoOpen]);
+  }, [autoOpen, captureSessionReconciled, runtime.state.actorGeneration, runtime.state.actorKey]);
 
   return (
     <PlaceholderScreen
@@ -265,7 +306,7 @@ export default function MealPhotoScreen() {
         </Card>
       ) : null}
 
-      <ImageSourceSheet visible={isSheetOpen} disabled={isRequestingMedia} onClose={() => setIsSheetOpen(false)} onCamera={openCamera} onUpload={uploadFromGallery} />
+      <ImageSourceSheet visible={isSheetOpen} disabled={isRequestingMedia || !captureSessionReconciled} onClose={() => setIsSheetOpen(false)} onCamera={openCamera} onUpload={uploadFromGallery} />
     </PlaceholderScreen>
   );
 }

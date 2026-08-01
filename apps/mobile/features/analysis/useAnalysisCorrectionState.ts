@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   createPersonalUnresolvedCandidate,
   type CatalogMealIdentificationCandidate,
@@ -6,7 +6,9 @@ import {
   type MealSourceContext
 } from "../meal-identification";
 import { buildCorrectionSections, buildNutritionSummary } from "./analysisCorrectionData";
-import { getAnalysisSession } from "./analysisSessionStore";
+import { getAnalysisSession, type AnalysisSessionState } from "./analysisSessionStore";
+import { buildMealPhotoAnalysisActorIdentity } from "./mealPhotoAnalysisFlowState";
+import { useConsumerRuntime } from "../consumer-runtime";
 import { isMealOccurrenceTooFarInFuture } from "./mealOccurrenceTime";
 import type {
   CorrectionSectionKey,
@@ -18,8 +20,22 @@ import type {
 
 export type ExplicitMealSourceChoice = "dine_in" | "takeout" | "delivery" | "self_cooked";
 
-export function useAnalysisCorrectionState() {
-  const session = getAnalysisSession();
+// MI-E-C5-R5-R3 §五: the caller passes the ownership-SAFE session view. Defaulting to
+// getAnalysisSession() keeps every legacy caller working, but /analysis always passes the view
+// derived by the pure render-time ownership authority, so a different actor, a signed-out runtime
+// or an untrusted legacy session can never seed this hook with the previous actor's values.
+export function useAnalysisCorrectionState(initialSession: AnalysisSessionState = getAnalysisSession()) {
+  const session = initialSession;
+  const consumerRuntimeForOwnership = useConsumerRuntime();
+  // MI-E-C5-R5-R4 §十二: this hook mirrors the meal name, restaurant name, match state, corrections,
+  // captured photo and meal timing — all actor-sensitive — into local state at mount, so it gets the
+  // same actor ownership. Same frozen pair, PURE comparison, no mutation during render.
+  const correctionActorIdentity = buildMealPhotoAnalysisActorIdentity({
+    actorKey: consumerRuntimeForOwnership.state.actorKey,
+    actorGeneration: consumerRuntimeForOwnership.state.actorGeneration
+  });
+  const stateOwnerIdentityRef = useRef(correctionActorIdentity);
+  const isCurrentActorState = stateOwnerIdentityRef.current === correctionActorIdentity;
   const [matchState, setMatchState] = useState<MatchState>(session.matchState);
   const [mode, setMode] = useState<MealAnalysisMode>(session.mode);
   const [expandedCorrection, setExpandedCorrection] = useState<string | null>(session.expandedCorrection);
@@ -64,11 +80,60 @@ export function useAnalysisCorrectionState() {
     session.occurredAt = occurredAt;
   });
 
-  const isSelfCooked = mode === "selfCooked";
-  const correctionSections = useMemo(() => buildCorrectionSections(addedSections), [addedSections]);
+  // ==========================================================================================
+  // MI-E-C5-R5-R5 §三: THE single actor-safe derivation authority for this hook.
+  //
+  // Every public field — primitive or derived — is computed from these values and from nothing
+  // else. When the internal state still belongs to a previous actor, each one falls back to the
+  // ownership-safe session view, which in exactly that case IS the sanitized empty session. That
+  // makes the whole public surface internally consistent: it is no longer possible for one field
+  // to report a sanitized value while a derived neighbour still reflects the previous actor.
+  //
+  // Purely synchronous: comparisons and reads only. No setState, no store mutation, no effect
+  // dependency, so the very first committed render after an actor change is already fail-closed.
+  // ==========================================================================================
+  const publicMode = isCurrentActorState ? mode : session.mode;
+  const publicMealName = isCurrentActorState ? mealName : session.mealName;
+  const publicRestaurantName = isCurrentActorState ? restaurantName : session.restaurantName;
+  const publicCorrectedRows = isCurrentActorState ? correctedRows : session.correctedRows;
+  const publicAddedSections = isCurrentActorState ? addedSections : session.addedSections;
+  const publicNutritionRefreshed = isCurrentActorState ? nutritionRefreshed : session.nutritionRefreshed;
+  const publicSourceContext = isCurrentActorState ? sourceContext : session.sourceContext;
+  const publicMatchState = isCurrentActorState ? matchState : session.matchState;
+  const publicCorrectionCompleted = isCurrentActorState ? correctionCompleted : session.correctionCompleted;
+  const publicSelectedCandidate = isCurrentActorState ? selectedCandidate : session.selectedCandidate;
+  const publicExpandedCorrection = isCurrentActorState ? expandedCorrection : session.expandedCorrection;
+  const publicAddSection = isCurrentActorState ? addSection : session.addSection;
+  const publicShowExternalBreakdown = isCurrentActorState ? showExternalBreakdown : session.showExternalBreakdown;
+  const publicExternalBreakdownTriggered = isCurrentActorState ? externalBreakdownTriggered : session.externalBreakdownTriggered;
+  const publicCaptureMethod = isCurrentActorState ? captureMethod : session.captureMethod;
+  const publicCapturedImageUri = isCurrentActorState ? capturedImageUri : session.capturedImageUri;
+  const publicRecordTiming = isCurrentActorState ? recordTiming : session.recordTiming;
+  const publicRecordTimingConfirmed = isCurrentActorState ? recordTimingConfirmed : session.recordTimingConfirmed;
+  const publicOccurredAt = isCurrentActorState ? occurredAt : session.occurredAt;
+
+  // MI-E-C5-R5-R5 §五: derived from the actor-safe mode, never the raw one. A previous actor's
+  // self-cooked mode therefore cannot route the current actor into SelfCookedIntro, and cannot
+  // flip the restaurant-context branch either.
+  const isSelfCooked = publicMode === "selfCooked";
+  // MI-E-C5-R5-R5 §六: derived from the actor-safe added sections, so a previous actor's added
+  // correction sections and their ingredient copy are empty for the current actor.
+  const correctionSections = useMemo(() => buildCorrectionSections(publicAddedSections), [publicAddedSections]);
+  // MI-E-C5-R5-R5 §四: every input is actor-safe. On a mismatch this is the canonical summary of a
+  // sanitized empty session — no previous-actor calories, macros, portion, balance score or
+  // ingredient text, and no correction- or name-derived adjustment. It is not static fake data:
+  // it is what buildNutritionSummary genuinely produces for an empty, unrefreshed session, and it
+  // never accompanies a completed/confirmed presentation because matchState is sanitized too.
   const nutritionSummary = useMemo(
-    () => buildNutritionSummary({ addedSections, correctedRows, mealName, nutritionRefreshed, restaurantName }),
-    [addedSections, correctedRows, mealName, nutritionRefreshed, restaurantName]
+    () =>
+      buildNutritionSummary({
+        addedSections: publicAddedSections,
+        correctedRows: publicCorrectedRows,
+        mealName: publicMealName,
+        nutritionRefreshed: publicNutritionRefreshed,
+        restaurantName: publicRestaurantName
+      }),
+    [publicAddedSections, publicCorrectedRows, publicMealName, publicNutritionRefreshed, publicRestaurantName]
   );
 
   function refreshNutrition() {
@@ -269,58 +334,107 @@ export function useAnalysisCorrectionState() {
     setCorrectionCompleted(true);
   }
 
+  // MI-E-C5-R5-R5 §七: derived from the actor-safe source context, not the raw one.
   const mealSource: ExplicitMealSourceChoice | null =
-    sourceContext === "dine_in" ||
-    sourceContext === "takeout" ||
-    sourceContext === "delivery" ||
-    sourceContext === "self_cooked"
-      ? sourceContext
+    publicSourceContext === "dine_in" ||
+    publicSourceContext === "takeout" ||
+    publicSourceContext === "delivery" ||
+    publicSourceContext === "self_cooked"
+      ? publicSourceContext
       : null;
 
+  // Commit-phase internal clearing back to the ownership-safe session values.
+  useLayoutEffect(() => {
+    if (stateOwnerIdentityRef.current === correctionActorIdentity) return;
+    stateOwnerIdentityRef.current = correctionActorIdentity;
+    setMatchState(session.matchState);
+    setMode(session.mode);
+    setExpandedCorrection(session.expandedCorrection);
+    setAddSection(session.addSection);
+    setAddedSections(session.addedSections);
+    setNutritionRefreshed(session.nutritionRefreshed);
+    setCorrectionCompleted(session.correctionCompleted);
+    setShowExternalBreakdown(session.showExternalBreakdown);
+    setExternalBreakdownTriggered(session.externalBreakdownTriggered);
+    setRestaurantName(session.restaurantName);
+    setMealName(session.mealName);
+    setSourceContext(session.sourceContext);
+    setSelectedCandidate(session.selectedCandidate);
+    setCorrectedRows(session.correctedRows);
+    setRecordTiming(session.recordTiming);
+    setRecordTimingConfirmed(session.recordTimingConfirmed);
+    setOccurredAt(session.occurredAt);
+  }, [correctionActorIdentity, session]);
+
+  // MI-E-C5-R5-R4 §四: synchronous actor-safe public view for every actor-sensitive field. When the
+  // internal state still belongs to a previous actor each value falls back to the ownership-safe
+  // session view (the sanitized empty session in exactly that case), so Actor A's meal name,
+  // restaurant, confirmed match state, corrections, photo and meal timing cannot render for Actor B
+  // — including through the legacy confirmed-match hero, which reads matchState and mealName.
+  // MI-E-C5-R5-R5 §十: every mutating handler fails closed on an actor mismatch, so a previous
+  // actor's stale internal state can never be promoted into the current actor's state, written
+  // back to the session, or turned into new derived nutrition. UI hiding is never the authority.
+  function actorOwnedHandler<Args extends unknown[], Result>(
+    handler: (...args: Args) => Result
+  ): (...args: Args) => Result | undefined {
+    return (...args: Args) => (isCurrentActorState ? handler(...args) : undefined);
+  }
+  // setPostHocMealTime reports whether the chosen time was accepted, and its caller renders an
+  // error when it is not. A mismatched actor must therefore get an explicit `false` ("not
+  // accepted") rather than `undefined`, so the fail-closed path stays type-correct and honest.
+  function actorOwnedBooleanHandler<Args extends unknown[]>(
+    handler: (...args: Args) => boolean
+  ): (...args: Args) => boolean {
+    return (...args: Args) => (isCurrentActorState ? handler(...args) : false);
+  }
+
+  // MI-E-C5-R5-R5 §七: the complete public surface. Every actor-sensitive field — primitive OR
+  // derived — reads from the actor-safe values above; every mutating handler is wrapped.
   return {
-    addSection,
-    confirmAddedSection,
-    confirmCorrectionRow,
-    completeCorrection,
-    correctedRows,
-    correctionCompleted,
+    isCurrentActorState,
+    addSection: publicAddSection,
+    confirmAddedSection: actorOwnedHandler(confirmAddedSection),
+    confirmCorrectionRow: actorOwnedHandler(confirmCorrectionRow),
+    completeCorrection: actorOwnedHandler(completeCorrection),
+    correctedRows: publicCorrectedRows,
+    correctionCompleted: publicCorrectionCompleted,
     correctionSections,
-    chooseNoneOfTheAbove,
-    confirmCatalogCandidate,
-    expandedCorrection,
-    externalBreakdownTriggered,
+    chooseNoneOfTheAbove: actorOwnedHandler(chooseNoneOfTheAbove),
+    confirmCatalogCandidate: actorOwnedHandler(confirmCatalogCandidate),
+    expandedCorrection: publicExpandedCorrection,
+    externalBreakdownTriggered: publicExternalBreakdownTriggered,
     hasRestaurantContext: !isSelfCooked,
     isSelfCooked,
-    matchState,
-    mealName,
-    mode,
+    matchState: publicMatchState,
+    mealName: publicMealName,
+    mode: publicMode,
     nutritionSummary,
-    nutritionRefreshed,
-    openCatalogUnavailableFallback,
-    openSupplementalData,
-    restaurantName,
-    selectedCandidate,
-    selectCatalogCandidate,
-    setMatchState,
-    setMealName: updateMealName,
-    setMode: updateMode,
-    setSourceContext,
-    setRestaurantName: updateRestaurantName,
-    showExternalBreakdown,
-    sourceContext,
-    toggleAddSection,
-    toggleCorrectionRow,
-    toggleExternalBreakdown,
-    captureMethod,
-    capturedImageUri,
-    recordTiming,
-    recordTimingConfirmed,
-    occurredAt,
+    nutritionRefreshed: publicNutritionRefreshed,
+    openCatalogUnavailableFallback: actorOwnedHandler(openCatalogUnavailableFallback),
+    openSupplementalData: actorOwnedHandler(openSupplementalData),
+    restaurantName: publicRestaurantName,
+    selectedCandidate: publicSelectedCandidate,
+    selectCatalogCandidate: actorOwnedHandler(selectCatalogCandidate),
+    setMatchState: actorOwnedHandler(setMatchState),
+    setMealName: actorOwnedHandler(updateMealName),
+    setMode: actorOwnedHandler(updateMode),
+    setSourceContext: actorOwnedHandler(setSourceContext),
+    setRestaurantName: actorOwnedHandler(updateRestaurantName),
+    showExternalBreakdown: publicShowExternalBreakdown,
+    sourceContext: publicSourceContext,
+    toggleAddSection: actorOwnedHandler(toggleAddSection),
+    toggleCorrectionRow: actorOwnedHandler(toggleCorrectionRow),
+    toggleExternalBreakdown: actorOwnedHandler(toggleExternalBreakdown),
+    captureMethod: publicCaptureMethod,
+    capturedImageUri: publicCapturedImageUri,
+    recordTiming: publicRecordTiming,
+    recordTimingConfirmed: publicRecordTimingConfirmed,
+    occurredAt: publicOccurredAt,
     mealSource,
-    setMealSource,
-    confirmRecordTimingCurrent,
-    beginRecordTimingPostHoc,
-    cancelRecordTimingPostHoc,
-    setPostHocMealTime
+    setMealSource: actorOwnedHandler(setMealSource),
+    confirmRecordTimingCurrent: actorOwnedHandler(confirmRecordTimingCurrent),
+    beginRecordTimingPostHoc: actorOwnedHandler(beginRecordTimingPostHoc),
+    cancelRecordTimingPostHoc: actorOwnedHandler(cancelRecordTimingPostHoc),
+    setPostHocMealTime: actorOwnedBooleanHandler(setPostHocMealTime)
   };
 }
