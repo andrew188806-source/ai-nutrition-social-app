@@ -680,6 +680,305 @@ const uuidFactory = () => `uuid-${++uuidCounter}`;
   );
 }
 
+// =============================================================================================
+// J. MI-E-C5-R7-B2-R1 — the selection constraint's decision table.
+//
+// The predicate below is COMPILED FROM the corrective migration's own CHECK text, not written by
+// hand here: each arm is extracted, translated to JavaScript by mechanical token substitution, and
+// evaluated against candidate rows. If the migration's arm text changes, this evaluator changes
+// with it, so the two cannot drift apart.
+//
+// Still a static proof: no SQL was executed and no database was contacted. It shows which rows the
+// deployed constraint would admit, which is exactly what Development acceptance blocked on.
+// =============================================================================================
+{
+  const constraintSql = fs.readFileSync(
+    path.join(root, "supabase/migrations/20260804010000_relax_ai_candidate_restaurant_identity_constraint.sql"),
+    "utf8"
+  );
+
+  // ---- extract the three arms from the real CHECK body ----
+  const at = constraintSql.indexOf("ADD CONSTRAINT meal_identification_finalizations_selection_check");
+  const open = constraintSql.indexOf("(", constraintSql.indexOf("CHECK (", at));
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < constraintSql.length; i++) {
+    if (constraintSql[i] === "(") depth++;
+    else if (constraintSql[i] === ")" && --depth === 0) { end = i; break; }
+  }
+  const body = constraintSql.slice(open + 1, end);
+  const arms = [];
+  let d = 0;
+  let cur = "";
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === "(") { d++; if (d === 1) { cur = ""; continue; } }
+    if (ch === ")") { d--; if (d === 0) { arms.push(cur); continue; } }
+    if (d >= 1) cur += ch;
+  }
+  expect(arms.length === 3, "S113 exactly three selection arms were extracted from the migration");
+
+  // ---- mechanically translate SQL arm text to a JS predicate ----
+  const COLUMNS = [
+    "selection_kind", "unresolved_reason", "identity_validation_status", "restaurant_id",
+    "branch_id", "menu_id", "menu_category_id", "menu_item_id", "branch_menu_item_id", "confirmation_mode"
+  ];
+  // ------------------------------------------------------------------------------------------
+  // MI-E-C5-R7-B2-R1-R1: SQL THREE-VALUED LOGIC.
+  //
+  // The previous version of this evaluator compiled the arms into ordinary JavaScript booleans
+  // and decided acceptance with `.some(...)`. That silently collapsed SQL's UNKNOWN into false
+  // and made this smoke assert two things the database does not do — see S125/S137 below.
+  //
+  // PostgreSQL: a CHECK constraint is VIOLATED only when the expression evaluates to FALSE.
+  // TRUE and UNKNOWN both satisfy it. Comparisons and IN against NULL yield UNKNOWN; IS NULL /
+  // IS NOT NULL never do.
+  // ------------------------------------------------------------------------------------------
+  const TRUE = "TRUE";
+  const FALSE = "FALSE";
+  const UNKNOWN = "UNKNOWN";
+  const sqlAnd = (a, b) => (a === FALSE || b === FALSE ? FALSE : a === UNKNOWN || b === UNKNOWN ? UNKNOWN : TRUE);
+  const sqlOr = (a, b) => (a === TRUE || b === TRUE ? TRUE : a === UNKNOWN || b === UNKNOWN ? UNKNOWN : FALSE);
+  // The single CHECK-verdict authority. No hand-rolled special cases anywhere else.
+  const sqlCheckPasses = (result) => result !== FALSE;
+
+  const isNullish = (v) => v === null || v === undefined;
+
+  // Compile ONE predicate token from the migration's own text into a 3VL evaluator.
+  function compilePredicate(text) {
+    const p = text.trim();
+    let m;
+    if ((m = p.match(/^\((.+)\)$/))) {
+      // A parenthesised disjunction, e.g. the pair rule (branch_id IS NULL OR restaurant_id IS NOT NULL).
+      const parts = m[1].split(/\s+OR\s+/).map(compilePredicate);
+      return (r) => parts.map((f) => f(r)).reduce(sqlOr, FALSE);
+    }
+    if ((m = p.match(/^(\w+) IS NOT NULL$/))) {
+      const col = m[1];
+      return (r) => (isNullish(r[col]) ? FALSE : TRUE); // never UNKNOWN
+    }
+    if ((m = p.match(/^(\w+) IS NULL$/))) {
+      const col = m[1];
+      return (r) => (isNullish(r[col]) ? TRUE : FALSE); // never UNKNOWN
+    }
+    if ((m = p.match(/^(\w+) = '(.*)'$/))) {
+      const [, col, value] = m;
+      return (r) => (isNullish(r[col]) ? UNKNOWN : r[col] === value ? TRUE : FALSE);
+    }
+    if ((m = p.match(/^(\w+) IN \((.*)\)$/))) {
+      const col = m[1];
+      const raw = m[2].split(",").map((x) => x.trim());
+      const listHasNull = raw.some((x) => x.toUpperCase() === "NULL");
+      const values = raw.filter((x) => x.toUpperCase() !== "NULL").map((x) => x.replace(/^'|'$/g, ""));
+      return (r) => {
+        if (isNullish(r[col])) return UNKNOWN; // NULL IN (...) is UNKNOWN
+        if (values.includes(r[col])) return TRUE;
+        return listHasNull ? UNKNOWN : FALSE; // a miss against a list containing NULL is UNKNOWN
+      };
+    }
+    throw new Error("unparsed predicate: " + p);
+  }
+
+  // Split an arm on TOP-LEVEL AND, respecting parentheses, then evaluate under 3VL.
+  function compile(armText) {
+    const s = armText
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("--"))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const parts = [];
+    let depth = 0;
+    let cur = "";
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "(") depth++;
+      if (ch === ")") depth--;
+      if (depth === 0 && s.startsWith(" AND ", i)) { parts.push(cur.trim()); cur = ""; i += 4; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    const predicates = parts.map(compilePredicate);
+    return (r) => predicates.map((f) => f(r)).reduce(sqlAnd, TRUE);
+  }
+  const compiled = arms.map(compile);
+  // Whole-expression value, then the single CHECK-verdict helper — never a boolean flattening.
+  const evaluate = (row) => compiled.map((fn) => fn(row)).reduce(sqlOr, FALSE);
+  const accepts = (row) => sqlCheckPasses(evaluate(row));
+
+  // ---- truth-table self-test, so a future regression to boolean logic fails here ----
+  const AND_TABLE = [
+    [TRUE, TRUE, TRUE], [TRUE, FALSE, FALSE], [TRUE, UNKNOWN, UNKNOWN],
+    [FALSE, TRUE, FALSE], [FALSE, FALSE, FALSE], [FALSE, UNKNOWN, FALSE],
+    [UNKNOWN, TRUE, UNKNOWN], [UNKNOWN, FALSE, FALSE], [UNKNOWN, UNKNOWN, UNKNOWN]
+  ];
+  const OR_TABLE = [
+    [TRUE, TRUE, TRUE], [TRUE, FALSE, TRUE], [TRUE, UNKNOWN, TRUE],
+    [FALSE, TRUE, TRUE], [FALSE, FALSE, FALSE], [FALSE, UNKNOWN, UNKNOWN],
+    [UNKNOWN, TRUE, TRUE], [UNKNOWN, FALSE, UNKNOWN], [UNKNOWN, UNKNOWN, UNKNOWN]
+  ];
+  expect(AND_TABLE.every(([a, b, r]) => sqlAnd(a, b) === r), "S113a SQL AND truth table is correct for all nine combinations");
+  expect(OR_TABLE.every(([a, b, r]) => sqlOr(a, b) === r), "S113b SQL OR truth table is correct for all nine combinations");
+  expect(
+    sqlCheckPasses(TRUE) === true && sqlCheckPasses(UNKNOWN) === true && sqlCheckPasses(FALSE) === false,
+    "S113c a CHECK is violated ONLY by FALSE — TRUE and UNKNOWN both pass"
+  );
+  expect(
+    compilePredicate("confirmation_mode IS NULL")({ confirmation_mode: null }) === TRUE &&
+      compilePredicate("confirmation_mode IS NOT NULL")({ confirmation_mode: null }) === FALSE,
+    "S113d IS NULL / IS NOT NULL never yield UNKNOWN"
+  );
+  expect(
+    compilePredicate("confirmation_mode IN ('accepted','corrected')")({ confirmation_mode: null }) === UNKNOWN &&
+      compilePredicate("confirmation_mode IN ('accepted','corrected')")({ confirmation_mode: "accepted" }) === TRUE &&
+      compilePredicate("confirmation_mode IN ('accepted','corrected')")({ confirmation_mode: "bogus" }) === FALSE,
+    "S113e IN yields UNKNOWN for NULL, TRUE for a hit, FALSE for a clean miss"
+  );
+  expect(
+    compilePredicate("selection_kind = 'ai_candidate'")({ selection_kind: null }) === UNKNOWN,
+    "S113f equality against NULL yields UNKNOWN"
+  );
+
+  const NULLS = {
+    unresolved_reason: null, identity_validation_status: null, restaurant_id: null, branch_id: null,
+    menu_id: null, menu_category_id: null, menu_item_id: null, branch_menu_item_id: null, confirmation_mode: null
+  };
+  const ai = (over = {}) => ({
+    ...NULLS, selection_kind: "ai_candidate", identity_validation_status: "not_applicable",
+    confirmation_mode: "accepted", ...over
+  });
+  const catalogItem = (over = {}) => ({
+    ...NULLS, selection_kind: "catalog_item", identity_validation_status: "server_validated",
+    restaurant_id: "R", branch_id: "B", menu_id: "M", menu_category_id: "MC",
+    menu_item_id: "MI", branch_menu_item_id: "BMI", confirmation_mode: null, ...over
+  });
+  const unresolved = (over = {}) => ({
+    ...NULLS, selection_kind: "personal_unresolved", unresolved_reason: "manual",
+    identity_validation_status: "not_applicable", ...over
+  });
+
+  const CASES = [
+    [ai(), true, "S114 ai_candidate NULL/NULL is accepted"],
+    [ai({ restaurant_id: "R" }), true, "S115 ai_candidate R/NULL is accepted"],
+    [ai({ restaurant_id: "R", branch_id: "B" }), true, "S116 ai_candidate R/B is accepted"],
+    [ai({ branch_id: "B" }), false, "S117 ai_candidate NULL/B (orphan branch) is REJECTED"],
+    [ai({ restaurant_id: "R", menu_id: "M" }), false, "S118 ai_candidate + menu_id is REJECTED"],
+    [ai({ restaurant_id: "R", menu_category_id: "MC" }), false, "S119 ai_candidate + menu_category_id is REJECTED"],
+    [ai({ restaurant_id: "R", menu_item_id: "MI" }), false, "S120 ai_candidate + menu_item_id is REJECTED"],
+    [ai({ restaurant_id: "R", branch_menu_item_id: "BMI" }), false, "S121 ai_candidate + branch_menu_item_id is REJECTED"],
+    [ai({ identity_validation_status: "server_validated" }), false, "S122 ai_candidate with wrong identity status is REJECTED"],
+    [ai({ unresolved_reason: "manual" }), false, "S123 ai_candidate with a non-null unresolved_reason is REJECTED"],
+    [ai({ confirmation_mode: "bogus" }), false, "S124 ai_candidate with an invalid confirmation_mode is REJECTED"],
+    // MI-E-C5-R7-B2-R1-R1 correction. `NULL IN (...)` is UNKNOWN, so the ai arm evaluates to
+    // UNKNOWN while the other two are FALSE; the whole expression is UNKNOWN and PostgreSQL
+    // ACCEPTS it. The previous "REJECTED" expectation here was simply wrong about the database.
+    // This shape is not producible by the product — see the RPC non-reachability proof below.
+    [ai({ confirmation_mode: null }), true, "S125 ai_candidate with a null confirmation_mode is ACCEPTED by the CHECK (UNKNOWN), and is not producible by the current product RPC"],
+    [ai({ confirmation_mode: "corrected", restaurant_id: "R", branch_id: "B" }), true, "S126 corrected + R/B is accepted"],
+    [ai({ confirmation_mode: "manual", restaurant_id: "R" }), true, "S127 manual + R/NULL is accepted"],
+    [catalogItem(), true, "S128 catalog_item full identity is still accepted"],
+    [catalogItem({ menu_item_id: null }), false, "S129 catalog_item missing menu_item_id is still REJECTED"],
+    [catalogItem({ branch_id: null }), false, "S130 catalog_item missing branch_id is still REJECTED"],
+    [catalogItem({ identity_validation_status: "not_applicable" }), false, "S131 catalog_item without server_validated is still REJECTED"],
+    [catalogItem({ confirmation_mode: "accepted" }), false, "S132 catalog_item with a confirmation_mode is still REJECTED"],
+    [unresolved(), true, "S133 personal_unresolved manual is still accepted"],
+    [unresolved({ unresolved_reason: "self_cooked" }), true, "S134 personal_unresolved self_cooked is still accepted"],
+    [unresolved({ restaurant_id: "R" }), false, "S135 personal_unresolved carrying a restaurant is still REJECTED"],
+    [unresolved({ unresolved_reason: "bogus" }), false, "S136 personal_unresolved with an invalid reason is still REJECTED"],
+    // MI-E-C5-R7-B2-R1-R1 correction, same root cause as S125: `NULL IN (...)` is UNKNOWN, so the
+    // whole expression is UNKNOWN and PostgreSQL ACCEPTS it. Not producible by the product either.
+    [unresolved({ unresolved_reason: null }), true, "S137 personal_unresolved with a null reason is ACCEPTED by the CHECK (UNKNOWN), and is not producible by the current product RPC"],
+    [{ ...NULLS, selection_kind: "unknown_kind" }, false, "S138 an unknown selection_kind is still REJECTED"]
+  ];
+  for (const [row, expected, name] of CASES) expect(accepts(row) === expected, name);
+
+  // The pre-correction constraint must have rejected exactly the rows this change unblocks.
+  const previous = fs.readFileSync(
+    path.join(root, "supabase/migrations/20260727010000_extend_meal_identification_finalization_for_existing_analysis.sql"),
+    "utf8"
+  );
+  expect(
+    /selection_kind = 'ai_candidate'[\s\S]{0,600}?restaurant_id IS NULL\s*\r?\n\s*AND branch_id IS NULL/.test(previous),
+    "S139 the previous constraint really did force ai_candidate restaurant/branch to be NULL"
+  );
+  expect(
+    /\(branch_id IS NULL OR restaurant_id IS NOT NULL\)/.test(constraintSql) &&
+      !/NOT VALID/i.test(constraintSql.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n")),
+    "S140 the corrective arm uses the pair rule and validates existing rows immediately"
+  );
+
+  // ---- the two UNKNOWN shapes really do evaluate to UNKNOWN, not TRUE and not FALSE ----
+  expect(
+    evaluate(ai({ confirmation_mode: null })) === UNKNOWN,
+    "S141 ai_candidate + null confirmation_mode evaluates to UNKNOWN (not TRUE, not FALSE)"
+  );
+  expect(
+    evaluate(unresolved({ unresolved_reason: null })) === UNKNOWN,
+    "S142 personal_unresolved + null reason evaluates to UNKNOWN (not TRUE, not FALSE)"
+  );
+  expect(
+    evaluate(ai({ branch_id: "B" })) === FALSE && evaluate(ai({ restaurant_id: "R", branch_id: "B" })) === TRUE,
+    "S143 the restaurant-identity cases this migration is FOR are decided by TRUE/FALSE, never UNKNOWN"
+  );
+
+  // ---- the inherited looseness is NOT introduced or worsened by this migration ----
+  const previousArms = (() => {
+    const a = previous.indexOf("ADD CONSTRAINT meal_identification_finalizations_selection_check");
+    const o = previous.indexOf("(", previous.indexOf("CHECK (", a));
+    let dd = 0;
+    let e = -1;
+    for (let i = o; i < previous.length; i++) {
+      if (previous[i] === "(") dd++;
+      else if (previous[i] === ")" && --dd === 0) { e = i; break; }
+    }
+    const b = previous.slice(o + 1, e);
+    const out = [];
+    let d2 = 0;
+    let c2 = "";
+    for (let i = 0; i < b.length; i++) {
+      const ch = b[i];
+      if (ch === "(") { d2++; if (d2 === 1) { c2 = ""; continue; } }
+      if (ch === ")") { d2--; if (d2 === 0) { out.push(c2); continue; } }
+      if (d2 >= 1) c2 += ch;
+    }
+    return out.map(compile);
+  })();
+  const evaluatePrevious = (row) => previousArms.map((fn) => fn(row)).reduce(sqlOr, FALSE);
+  expect(
+    evaluatePrevious(ai({ confirmation_mode: null })) === UNKNOWN &&
+      evaluatePrevious(unresolved({ unresolved_reason: null })) === UNKNOWN,
+    "S144 both UNKNOWN shapes were ALREADY accepted by the previous constraint — inherited, not introduced here"
+  );
+
+  // ---- product RPC non-reachability, proven from production source ----
+  const rpc = fs.readFileSync(
+    path.join(root, "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql"),
+    "utf8"
+  );
+  const v1v2 = fs.readFileSync(
+    path.join(root, "supabase/migrations/20260724020000_consumer_meal_identification_atomic_finalization.sql"),
+    "utf8"
+  );
+  expect(
+    /v3_confirmation_mode := 'accepted'/.test(rpc) &&
+      /v3_confirmation_mode := 'corrected'/.test(rpc) &&
+      /v3_confirmation_mode := 'manual'/.test(rpc),
+    "S145 the v3 RPC assigns confirmation_mode only from the three legal literals"
+  );
+  expect(
+    !/v3_confirmation_mode := NULL/i.test(rpc) && !/v3_confirmation_mode := p_finalization/.test(rpc),
+    "S146 the v3 RPC never assigns a NULL or caller-supplied confirmation_mode"
+  );
+  expect(
+    /confirmation_mode\s*\)?\s*[\s\S]{0,200}?v3_confirmation_mode/.test(rpc),
+    "S147 the v3 ledger INSERT writes that same local, so an ai_candidate row always has one of the three values"
+  );
+  expect(
+    /unresolved_reason/.test(v1v2) && /'none_of_the_above'|'manual'|'self_cooked'|'catalog_unavailable'/.test(v1v2),
+    "S148 the v1/v2 path supplies unresolved_reason from the established vocabulary, never NULL, for personal_unresolved"
+  );
+}
+
 const failed = checks.filter((entry) => !entry.pass);
 console.log(
   JSON.stringify(

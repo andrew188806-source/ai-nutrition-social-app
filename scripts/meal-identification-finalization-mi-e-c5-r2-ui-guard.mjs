@@ -243,7 +243,10 @@ const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set([
   // MI-E-C5-R7-B1-R2: the ledger-projection corrective successor. Added as a second EXACT entry,
   // never as a pattern — a third migration, a different timestamp or a different filename all
   // still fail.
-  "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql"
+  "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql",
+  // MI-E-C5-R7-B2-R1: the constraint-relaxation successor. Third EXACT entry, still never a
+  // pattern — a fourth migration, a different timestamp or a different filename all still fail.
+  "supabase/migrations/20260804010000_relax_ai_candidate_restaurant_identity_constraint.sql"
 ]);
 function isForbiddenSuccessorPath(entry, options = {}) {
   const isNewFile = Boolean(options.isNewFile);
@@ -330,10 +333,37 @@ check(
   "migration allowlist: the ledger successor's timestamp under a different name is rejected",
   isForbiddenSuccessorPath("supabase/migrations/20260803010000_something_else.sql", { isNewFile: true })
 );
+// MI-E-C5-R7-B2-R1 fixtures for the third authorized successor.
+const AUTHORIZED_CONSTRAINT_MIGRATION =
+  "supabase/migrations/20260804010000_relax_ai_candidate_restaurant_identity_constraint.sql";
 check(
-  "migration allowlist: exactly TWO successors are authorized — a third is rejected",
-  AUTHORIZED_SUCCESSOR_MIGRATIONS.size === 2 &&
-    isForbiddenSuccessorPath("supabase/migrations/20260804010000_third_successor.sql", { isNewFile: true })
+  "migration allowlist: exactly THREE successors are authorized — a fourth is rejected",
+  AUTHORIZED_SUCCESSOR_MIGRATIONS.size === 3 &&
+    isForbiddenSuccessorPath("supabase/migrations/20260805010000_fourth_successor.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: the constraint-relaxation successor is allowed as a new file",
+  !isForbiddenSuccessorPath(AUTHORIZED_CONSTRAINT_MIGRATION, { isNewFile: true })
+);
+check(
+  "migration allowlist: the constraint successor is rejected as a MODIFICATION",
+  isForbiddenSuccessorPath(AUTHORIZED_CONSTRAINT_MIGRATION, { isNewFile: false })
+);
+check(
+  "migration allowlist: the constraint successor's name under a different timestamp is rejected",
+  isForbiddenSuccessorPath(
+    "supabase/migrations/20260805010000_relax_ai_candidate_restaurant_identity_constraint.sql",
+    { isNewFile: true }
+  )
+);
+check(
+  "migration allowlist: the constraint successor's timestamp under a different name is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/20260804010000_something_else.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: both already-shipped successors are rejected as modifications",
+  isForbiddenSuccessorPath(AUTHORIZED_MIGRATION, { isNewFile: false }) &&
+    isForbiddenSuccessorPath(AUTHORIZED_LEDGER_MIGRATION, { isNewFile: false })
 );
 check(
   "migration allowlist: an Edge Function is rejected even as a new file",

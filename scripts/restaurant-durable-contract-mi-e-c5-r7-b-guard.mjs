@@ -36,6 +36,12 @@ const MIGRATION = "supabase/migrations/20260802010000_finalize_meal_identificati
 const LEDGER_MIGRATION =
   "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql";
 const PREDECESSOR = "supabase/migrations/20260729010000_persist_user_confirmed_for_accepted_analysis_finalization.sql";
+// MI-E-C5-R7-B2-R1: relaxes the ai_candidate arm of the finalization selection constraint.
+const CONSTRAINT_MIGRATION =
+  "supabase/migrations/20260804010000_relax_ai_candidate_restaurant_identity_constraint.sql";
+// The constraint's previous authority — the arms this correction must preserve verbatim.
+const CONSTRAINT_PREDECESSOR =
+  "supabase/migrations/20260727010000_extend_meal_identification_finalization_for_existing_analysis.sql";
 
 const v3 = read(V3_CONTRACT);
 const draft = read(DRAFT);
@@ -46,6 +52,50 @@ const session = read(SESSION);
 const runtime = read(RUNTIME);
 const migration = read(MIGRATION);
 const ledgerMigration = read(LEDGER_MIGRATION);
+const constraintMigration = read(CONSTRAINT_MIGRATION);
+const constraintPredecessor = read(CONSTRAINT_PREDECESSOR);
+
+// ============================================================================================
+// MI-E-C5-R7-B2-R1: parse the selection constraint into its three arms so the checks below test
+// the ACTUAL predicate text per arm, not a substring of the whole file.
+// ============================================================================================
+function selectionArms(sql) {
+  const at = sql.indexOf("ADD CONSTRAINT meal_identification_finalizations_selection_check");
+  if (at < 0) return null;
+  const open = sql.indexOf("CHECK (", at);
+  let depth = 0;
+  let end = -1;
+  for (let i = sql.indexOf("(", open); i < sql.length; i++) {
+    if (sql[i] === "(") depth++;
+    else if (sql[i] === ")" && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) return null;
+  const body = sql.slice(sql.indexOf("(", open) + 1, end);
+  // Split on top-level OR between the parenthesised arms.
+  const arms = [];
+  let d = 0;
+  let cur = "";
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === "(") { d++; if (d === 1) { cur = ""; continue; } }
+    if (ch === ")") { d--; if (d === 0) { arms.push(cur); continue; } }
+    if (d >= 1) cur += ch;
+  }
+  const named = {};
+  for (const arm of arms) {
+    const m = arm.match(/selection_kind = '([a-z_]+)'/);
+    if (m) named[m[1]] = arm.split("\n").filter((l) => !l.trim().startsWith("--")).join("\n").replace(/\s+/g, " ").trim();
+  }
+  return named;
+}
+const armsNew = selectionArms(constraintMigration);
+const armsOld = selectionArms(constraintPredecessor);
+// Executable SQL only. Prose that legitimately mentions "NOT VALID" or "grant" while explaining
+// why they are ABSENT must never satisfy or break a check about the code.
+const constraintSql = constraintMigration
+  .split("\n")
+  .filter((line) => !line.trim().startsWith("--"))
+  .join("\n");
 
 const trackedChanged = new Set(git(["diff", "--name-only"]).split("\n").filter(Boolean));
 const untracked = new Set(git(["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean));
@@ -352,6 +402,106 @@ check(
     /'not_applicable', v3_restaurant_id, v3_branch_id, p_finalization,/.test(ledgerMigration)
 );
 
+// ============================================================================================
+// MI-E-C5-R7-B2-R1: the selection-constraint relaxation (checks 38-1 .. 38-20)
+// ============================================================================================
+check("38-1. the corrective constraint migration exists at the exact authorized path", constraintMigration.length > 0);
+check(
+  "38-2. its timestamp is unique among migrations",
+  fs.readdirSync(path.join(root, "supabase/migrations")).filter((f) => f.startsWith("20260804010000")).length === 1
+);
+check(
+  "38-3. it replaces the constraint under its EXACT existing name",
+  /DROP CONSTRAINT meal_identification_finalizations_selection_check,\s*\r?\n\s*ADD CONSTRAINT meal_identification_finalizations_selection_check/.test(
+    constraintMigration
+  )
+);
+check(
+  "38-4. the DROP is unconditional — no IF EXISTS escape",
+  !/DROP CONSTRAINT IF EXISTS/i.test(constraintMigration)
+);
+check("38-5. an ADD ... CHECK is present", /ADD CONSTRAINT meal_identification_finalizations_selection_check\s*\r?\n?\s*CHECK \(/.test(constraintMigration));
+check("38-6. all three selection arms are parsed from the new constraint", Boolean(armsNew) && Object.keys(armsNew).sort().join(",") === "ai_candidate,catalog_item,personal_unresolved");
+check(
+  "38-7. the ai_candidate arm carries the pair rule that permits an optional restaurant",
+  Boolean(armsNew) && /\(branch_id IS NULL OR restaurant_id IS NOT NULL\)/.test(armsNew.ai_candidate)
+);
+check(
+  "38-8. the ai_candidate arm no longer forces restaurant_id/branch_id to be NULL",
+  Boolean(armsNew) &&
+    !/restaurant_id IS NULL/.test(armsNew.ai_candidate) &&
+    !/branch_id IS NULL AND/.test(armsNew.ai_candidate)
+);
+check(
+  "38-9. the ai_candidate arm still forbids EVERY menu identity column",
+  Boolean(armsNew) &&
+    /menu_id IS NULL/.test(armsNew.ai_candidate) &&
+    /menu_category_id IS NULL/.test(armsNew.ai_candidate) &&
+    /menu_item_id IS NULL/.test(armsNew.ai_candidate) &&
+    /branch_menu_item_id IS NULL/.test(armsNew.ai_candidate)
+);
+check(
+  "38-10. the ai_candidate arm keeps identity_validation_status = not_applicable",
+  Boolean(armsNew) && /identity_validation_status = 'not_applicable'/.test(armsNew.ai_candidate)
+);
+check(
+  "38-11. the ai_candidate arm keeps unresolved_reason IS NULL",
+  Boolean(armsNew) && /unresolved_reason IS NULL/.test(armsNew.ai_candidate)
+);
+check(
+  "38-12. the ai_candidate confirmation_mode vocabulary is unchanged",
+  Boolean(armsNew) && /confirmation_mode IN \('accepted', 'corrected', 'manual'\)/.test(armsNew.ai_candidate)
+);
+check(
+  "38-13. the catalog_item arm is EQUIVALENT to the previous constraint's arm",
+  Boolean(armsNew) && Boolean(armsOld) && armsNew.catalog_item === armsOld.catalog_item
+);
+check(
+  "38-14. the personal_unresolved arm is EQUIVALENT to the previous constraint's arm",
+  Boolean(armsNew) && Boolean(armsOld) && armsNew.personal_unresolved === armsOld.personal_unresolved
+);
+check(
+  "38-15. the ONLY arm that changed is ai_candidate",
+  Boolean(armsNew) && Boolean(armsOld) && armsNew.ai_candidate !== armsOld.ai_candidate
+);
+check(
+  "38-16. the corrective migration changes no function",
+  !/CREATE OR REPLACE FUNCTION/i.test(constraintSql) && !/DROP FUNCTION/i.test(constraintSql)
+);
+check(
+  "38-17. the corrective migration mutates no data",
+  !/\b(INSERT INTO|UPDATE |DELETE FROM|TRUNCATE)\b/i.test(constraintSql)
+);
+check(
+  "38-18. it adds no column, index, RLS policy or grant, and drops nothing but the constraint",
+  !/ADD COLUMN/i.test(constraintSql) &&
+    !/CREATE INDEX|CREATE UNIQUE INDEX/i.test(constraintSql) &&
+    !/CREATE POLICY|ALTER POLICY|ENABLE ROW LEVEL SECURITY/i.test(constraintSql) &&
+    !/GRANT |REVOKE /i.test(constraintSql) &&
+    (constraintSql.match(/DROP /gi) || []).length === 1
+);
+check(
+  "38-19. the constraint is validated against existing rows — no NOT VALID escape",
+  !/NOT VALID/i.test(constraintSql) &&
+    (constraintMigration.match(/^BEGIN;/gm) || []).length === 1 &&
+    (constraintMigration.match(/^COMMIT;/gm) || []).length === 1
+);
+check(
+  "38-20. the successor chain is exactly 20260802 -> 20260803 -> 20260804",
+  sha(MIGRATION) === "3a615486820cfe3eed76b697de97bc3d8304f7ca76c76b68f285a73ba71f495b" &&
+    sha(LEDGER_MIGRATION) === "d33c3981463b323e049119bcfe6e268006c4c3c5cb7c90912c4d270c4bab5238" &&
+    fs
+      .readdirSync(path.join(root, "supabase/migrations"))
+      .filter((f) => f >= "20260802010000" && f.endsWith(".sql"))
+      .sort()
+      .join(",") ===
+      [
+        "20260802010000_finalize_meal_identification_v3_restaurant_context.sql",
+        "20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql",
+        "20260804010000_relax_ai_candidate_restaurant_identity_constraint.sql"
+      ].join(",")
+);
+
 // ---- MI-E-C5-R7-B1-R2: v3 ledger restaurant identity projection ----
 check(
   "38a. the corrective successor exists and only CREATE OR REPLACEs the same single RPC",
@@ -503,18 +653,19 @@ check(
   // MI-E-C5-R7-B1-R2: 20260802010000 is now COMMITTED (freeze 28f487fa), so it must be tracked and
   // unmodified; the corrective successor is the only new file. Both halves of "history is immutable"
   // are asserted — the shipped one cannot be edited, the new one cannot already be in HEAD.
-  "44. the shipped successor is tracked+unmodified and the corrective one is genuinely new",
-  !trackedChanged.has(MIGRATION) &&
-    !untracked.has(MIGRATION) &&
-    git(["ls-files", MIGRATION]) === MIGRATION &&
-    untracked.has(LEDGER_MIGRATION) &&
-    !trackedChanged.has(LEDGER_MIGRATION)
+  // MI-E-C5-R7-B2-R1: 20260802010000 and 20260803010000 are both COMMITTED now, so both must be
+  // tracked and unmodified; 20260804010000 is the only new file.
+  "44. both shipped successors are tracked+unmodified and the corrective one is genuinely new",
+  !trackedChanged.has(MIGRATION) && !untracked.has(MIGRATION) && git(["ls-files", MIGRATION]) === MIGRATION &&
+    !trackedChanged.has(LEDGER_MIGRATION) && !untracked.has(LEDGER_MIGRATION) &&
+    git(["ls-files", LEDGER_MIGRATION]) === LEDGER_MIGRATION &&
+    untracked.has(CONSTRAINT_MIGRATION) && !trackedChanged.has(CONSTRAINT_MIGRATION)
 );
 check(
-  "45. exactly ONE migration is added by this candidate, and it is EXACTLY the corrective path",
+  "45. exactly ONE migration is added by this candidate, and it is EXACTLY the constraint path",
   (() => {
     const added = [...untracked].filter((entry) => entry.startsWith("supabase/migrations/"));
-    return added.length === 1 && added[0] === LEDGER_MIGRATION;
+    return added.length === 1 && added[0] === CONSTRAINT_MIGRATION;
   })()
 );
 check(
@@ -524,7 +675,7 @@ check(
     return (
       // MI-E-C5-R7-B1-R2: the allowlist is now an EXACT TWO-entry set. Still never a pattern, and
       // the entry count is pinned so a third path cannot be slipped in.
-      /const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set\(\[[\s\S]{0,600}?"supabase\/migrations\/20260802010000_finalize_meal_identification_v3_restaurant_context\.sql",[\s\S]{0,600}?"supabase\/migrations\/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity\.sql"\s*\r?\n\s*\]\);/.test(r2) &&
+      /const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set\(\[[\s\S]{0,900}?"supabase\/migrations\/20260802010000_finalize_meal_identification_v3_restaurant_context\.sql",[\s\S]{0,900}?"supabase\/migrations\/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity\.sql",[\s\S]{0,900}?"supabase\/migrations\/20260804010000_relax_ai_candidate_restaurant_identity_constraint\.sql"\s*\r?\n\s*\]\);/.test(r2) &&
       // Counted INSIDE the Set literal only, so a negative fixture that mentions an unauthorized
       // migration path elsewhere in the guard cannot inflate the count.
       (() => {
@@ -532,7 +683,7 @@ check(
         const close = r2.indexOf("]);", open);
         if (open < 0 || close < 0) return false;
         const body = r2.slice(open, close);
-        return (body.match(/"supabase\/migrations\/\d{14}_[a-z0-9_]+\.sql"/g) || []).length === 2;
+        return (body.match(/"supabase\/migrations\/\d{14}_[a-z0-9_]+\.sql"/g) || []).length === 3;
       })() &&
       !/\\d\{14\}_\[a-z0-9_\]\+\\\.sql/.test(r2) &&
       /AUTHORIZED_SUCCESSOR_MIGRATIONS\.has\(entry\)/.test(r2)
