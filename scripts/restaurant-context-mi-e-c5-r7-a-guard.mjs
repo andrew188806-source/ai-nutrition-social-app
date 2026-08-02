@@ -130,12 +130,23 @@ check(
 
 // ---------- deferred scope must stay deferred ----------
 check(
-  "21. R7-A adds NO restaurant field to the finalization draft or fingerprint",
-  !/restaurantId|branchId/.test(finalizationDraft)
+  // MI-E-C5-R7-B1 successor-compatible locator. R7-A's real invariant was never "no restaurant
+  // anything in the payload" — it was that no restaurant NAME or display snapshot may become
+  // durable payload. R7-B1 deliberately makes the canonical IDS durable, so the check now allows
+  // exactly the ID-only spelling and still fails on any name/snapshot field. A payload layer that
+  // re-acquired a display name would fail here just as it did before.
+  "21. the finalization draft carries restaurant IDS ONLY — never a name or display snapshot",
+  !/restaurantName|restaurantDisplayName|branchName|displayName/.test(finalizationDraft) &&
+    (!/restaurantId|branchId/.test(finalizationDraft) ||
+      (/restaurantId: string \| null;/.test(finalizationDraft) &&
+        /branchId: string \| null;/.test(finalizationDraft)))
 );
 check(
-  "22. R7-A adds NO restaurant field to the finalization hook payload path",
-  !/restaurantId|branchId/.test(finalizationHook)
+  "22. the finalization hook payload path carries restaurant IDS ONLY — never a name or snapshot",
+  !/restaurantName|restaurantDisplayName|branchName|displayName/.test(finalizationHook) &&
+    (!/restaurantId|branchId/.test(finalizationHook) ||
+      (/input\.context\.restaurantId/.test(finalizationHook) &&
+        /input\.context\.branchId/.test(finalizationHook)))
 );
 check(
   "23. R7-A adds no user-facing restaurant selector CTA",
@@ -267,6 +278,83 @@ check(
     /\{!hasAiFinalizationFlow && !analysis\.isSelfCooked && analysis\.matchState === "editing" \? \(\s*\r?\n?\s*<CandidateCorrectionList/.test(screen) &&
     // The legacy adapter still declares the field, confirming this check is guarding a live surface.
     /restaurantName: string;/.test(finalizationAdapter)
+);
+
+
+// ==========================================================================================
+// MI-E-C5-R7-B1-R1 §九: v3Contract.ts is NOT blanket-trusted just because R7-B1 is allowed to
+// extend it. This projection compares the candidate against HEAD region by region: every part of
+// the contract that this guard's era froze must be byte-identical, and only the authorized
+// restaurant extension may be new. An unauthorized change to the version string, to any original
+// command field, to mealWrite/nutrition shape, to the limits, or to the scalar validation lines
+// fails here — path exclusion alone would have let all of those through.
+// ==========================================================================================
+const V3_CONTRACT_RELATIVE = "apps/mobile/features/meal-identification-finalization/v3Contract.ts";
+function v3ContractOnlyGainedAuthorizedRestaurantExtension() {
+  const headResult = spawnSync("git", ["show", `HEAD:${V3_CONTRACT_RELATIVE}`], { cwd: root, encoding: "utf8" });
+  if (headResult.status !== 0) return false;
+  const headText = headResult.stdout ?? "";
+  const diskText = fs.readFileSync(path.join(root, V3_CONTRACT_RELATIVE), "utf8");
+  if (!headText) return false;
+
+  const slice = (text, from, to) => {
+    const start = text.indexOf(from);
+    if (start < 0) return null;
+    if (to === null) return text.slice(start);
+    const end = text.indexOf(to, start + from.length);
+    return end < 0 ? null : text.slice(start, end);
+  };
+  // The scalar-field validation block ends at whichever declaration follows it — HEAD goes
+  // straight to mealWrite, the candidate inserts the restaurant validator first.
+  const scalarValidation = (text) => {
+    const start = text.indexOf("if (!input.analysisRequestId");
+    if (start < 0) return null;
+    const ends = ["const mealWrite = validateMealWrite", "const restaurant = validateRestaurantContext"]
+      .map((marker) => text.indexOf(marker, start))
+      .filter((index) => index > 0);
+    return ends.length ? text.slice(start, Math.min(...ends)) : null;
+  };
+
+  const FROZEN_REGIONS = [
+    // version constant + nutrition + mealWrite input shape
+    ["export const MEAL_IDENTIFICATION_FINALIZATION_V3_VERSION", "export type MealIdentificationFinalizationV3Input"],
+    // error codes, result type, every limit and the source-context/nutrition vocabularies
+    ["export type MealIdentificationFinalizationV3ErrorCode", "export function buildMealIdentificationFinalizationV3"],
+    // the whole mealWrite/nutrition validator
+    ["function validateMealWrite(", "function success<T>"],
+    // result helpers
+    ["function success<T>", null]
+  ];
+  for (const [from, to] of FROZEN_REGIONS) {
+    const headRegion = slice(headText, from, to);
+    const diskRegion = slice(diskText, from, to);
+    if (headRegion === null || diskRegion === null || headRegion !== diskRegion) return false;
+  }
+  const headScalar = scalarValidation(headText);
+  if (headScalar === null || headScalar !== scalarValidation(diskText)) return false;
+
+  // No restaurant NAME or display snapshot may ever exist in the durable command layer.
+  if (/restaurantName|restaurantDisplayName|branchName|displayName/.test(diskText)) return false;
+
+  // The only new top-level declarations may be the authorized restaurant extension.
+  const declarations = (text) => text.match(/^(?:export )?(?:function|type|const) \w+/gm) ?? [];
+  const headDeclarations = new Set(declarations(headText));
+  const AUTHORIZED_ADDITIONS = new Set([
+    "export type MealIdentificationFinalizationV3RestaurantContext",
+    "function validateRestaurantContext",
+    "function blankToNull"
+  ]);
+  const added = declarations(diskText).filter((entry) => !headDeclarations.has(entry));
+  if (!added.every((entry) => AUTHORIZED_ADDITIONS.has(entry))) return false;
+
+  // And every original declaration must still exist.
+  const diskDeclarations = new Set(declarations(diskText));
+  return [...headDeclarations].every((entry) => diskDeclarations.has(entry));
+}
+
+check(
+  "v3Contract.ts gained ONLY the authorized R7-B1 restaurant extension (frozen regions byte-identical to HEAD)",
+  v3ContractOnlyGainedAuthorizedRestaurantExtension()
 );
 
 const failed = checks.filter((entry) => !entry.pass);

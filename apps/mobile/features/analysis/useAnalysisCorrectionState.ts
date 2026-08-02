@@ -6,7 +6,12 @@ import {
   type MealSourceContext
 } from "../meal-identification";
 import { buildCorrectionSections, buildNutritionSummary } from "./analysisCorrectionData";
-import { getAnalysisSession, type AnalysisSessionState } from "./analysisSessionStore";
+import {
+  getAnalysisSession,
+  normalizeAnalysisRestaurantContext,
+  reconcileAnalysisRestaurantContextForSourceContext,
+  type AnalysisSessionState
+} from "./analysisSessionStore";
 import { buildMealPhotoAnalysisActorIdentity } from "./mealPhotoAnalysisFlowState";
 import { useConsumerRuntime } from "../consumer-runtime";
 import { isMealOccurrenceTooFarInFuture } from "./mealOccurrenceTime";
@@ -78,6 +83,12 @@ export function useAnalysisCorrectionState(initialSession: AnalysisSessionState 
     session.recordTiming = recordTiming;
     session.recordTimingConfirmed = recordTimingConfirmed;
     session.occurredAt = occurredAt;
+    // MI-E-C5-R7-B1 (LAYER 2, commit phase): re-apply the R7-A restaurant invariants against the
+    // source context that was just written. A switch to self_cooked clears the venue durably here;
+    // the render-time derivation below has ALREADY cleared it for this same render, so no payload
+    // can be frozen with a venue the user just disowned. Idempotent — re-running it with an
+    // unchanged source context is a no-op, and it never resurrects a cleared id.
+    reconcileAnalysisRestaurantContextForSourceContext(sourceContext);
   });
 
   // ==========================================================================================
@@ -107,6 +118,20 @@ export function useAnalysisCorrectionState(initialSession: AnalysisSessionState 
   const publicShowExternalBreakdown = isCurrentActorState ? showExternalBreakdown : session.showExternalBreakdown;
   const publicExternalBreakdownTriggered = isCurrentActorState ? externalBreakdownTriggered : session.externalBreakdownTriggered;
   const publicCaptureMethod = isCurrentActorState ? captureMethod : session.captureMethod;
+  // MI-E-C5-R7-B1 (LAYER 1, pure render-time derivation): the canonical restaurant context this
+  // hook exposes to the finalization payload. Ids only — the legacy publicRestaurantName above is
+  // NOT an input here and never becomes durable payload.
+  //
+  // Not mirrored into local state: there is no selector yet, so the session is the only writer, and
+  // reading the ownership-safe view directly means a non-owning actor gets the sanitized nulls with
+  // no mount-time snapshot to go stale. Routed through the R7-A normalizer with the PUBLIC source
+  // context, so a self_cooked switch clears the venue in the very same render that reports it —
+  // strictly before the commit-phase reconciliation persists the same decision.
+  const publicRestaurantContext = normalizeAnalysisRestaurantContext({
+    restaurantId: session.restaurantId,
+    branchId: session.branchId,
+    sourceContext: publicSourceContext
+  });
   const publicCapturedImageUri = isCurrentActorState ? capturedImageUri : session.capturedImageUri;
   const publicRecordTiming = isCurrentActorState ? recordTiming : session.recordTiming;
   const publicRecordTimingConfirmed = isCurrentActorState ? recordTimingConfirmed : session.recordTimingConfirmed;
@@ -413,6 +438,10 @@ export function useAnalysisCorrectionState(initialSession: AnalysisSessionState 
     openCatalogUnavailableFallback: actorOwnedHandler(openCatalogUnavailableFallback),
     openSupplementalData: actorOwnedHandler(openSupplementalData),
     restaurantName: publicRestaurantName,
+    // MI-E-C5-R7-B1 canonical ids — the durable authority. `restaurantName` above stays the legacy
+    // non-C5 display field and is not derived from, nor a fallback for, either of these.
+    restaurantId: publicRestaurantContext.restaurantId,
+    branchId: publicRestaurantContext.branchId,
     selectedCandidate: publicSelectedCandidate,
     selectCatalogCandidate: actorOwnedHandler(selectCatalogCandidate),
     setMatchState: actorOwnedHandler(setMatchState),

@@ -53,12 +53,23 @@ export type MealPhotoFinalizationDraftState = Readonly<{
   lastSafeError: string | null;
   resultIds: MealPhotoFinalizationResultIds | null;
   dirty: boolean;
+  // MI-E-C5-R7-B1: restaurantId/branchId join the EXISTING context authority rather than getting a
+  // layer of their own. Everything the round needs already operates on `context` as one unit —
+  // the payload fingerprint hashes it wholesale, payloadLocked freezes it, updateContext rotates
+  // the clientRequestId when it changes, and prepare() copies it into the frozen submission — so a
+  // single insertion point makes restaurant identity fingerprint-bearing, lock-respecting and
+  // retry-stable with no parallel machinery.
+  //
+  // Ids only. There is deliberately no restaurant NAME field here: a display name must never
+  // become durable payload, and the catalog resolver's output is presentation-only.
   context: Readonly<{
     captureMethod: MealPhotoCaptureMethod | null;
     sourceContext: MealSourceContext;
     recordTiming: MealRecordTimingChoice;
     occurredAt: string;
     selectedMealPeriod: string;
+    restaurantId: string | null;
+    branchId: string | null;
   }>;
 }>;
 
@@ -253,6 +264,10 @@ export function prepareMealPhotoFinalization(
     sourceContext: state.context.sourceContext,
     recordTiming: state.context.recordTiming,
     occurredAt: state.context.occurredAt,
+    // Ids only, straight from the frozen context. When both are null the builder omits the keys
+    // entirely and the command stays the unchanged 8-key shape.
+    restaurantId: state.context.restaurantId,
+    branchId: state.context.branchId,
     mealWrite
   });
   if (!built.ok) {
@@ -432,13 +447,20 @@ function isDirty(
   });
 }
 
+// Every field compared here is fingerprint-bearing, so this is also the definition of "the payload
+// changed". MI-E-C5-R7-B1 adds the restaurant ids: without them a venue change would compare equal,
+// updateMealPhotoFinalizationContext would return the same state, and the draft would keep both the
+// previous restaurant AND the previous clientRequestId — a different meal submitted under an
+// already-used idempotency token.
 function sameContext(left: MealPhotoFinalizationContext, right: MealPhotoFinalizationContext) {
   return (
     left.captureMethod === right.captureMethod &&
     left.sourceContext === right.sourceContext &&
     left.recordTiming === right.recordTiming &&
     left.occurredAt === right.occurredAt &&
-    left.selectedMealPeriod === right.selectedMealPeriod
+    left.selectedMealPeriod === right.selectedMealPeriod &&
+    left.restaurantId === right.restaurantId &&
+    left.branchId === right.branchId
   );
 }
 

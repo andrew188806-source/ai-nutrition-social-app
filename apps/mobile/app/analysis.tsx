@@ -260,18 +260,26 @@ export default function AnalysisScreen() {
   // MI-E-C5-R5-R3 §八: nothing that captures, uploads, analyses, accepts or finalizes may run
   // before commit-phase reconciliation has bound this actor.
   const sessionReconciled = reconciledActorIdentity === actorIdentity && analysisSessionOwned;
+  // MI-E-C5-R7-B1: restaurantId/branchId come from the R7-A ID-only session, surfaced through the
+  // same actor-gated hook as every other context field, so they are already sanitized when this
+  // render does not own the session. The legacy analysis.restaurantName is NOT read here, and the
+  // catalog resolver's display name is presentation-only and never reaches this memo.
   const finalizationContext = useMemo(
     () => ({
       captureMethod: analysis.captureMethod,
       sourceContext: analysis.sourceContext,
       recordTiming: analysis.recordTiming,
       occurredAt: analysis.occurredAt ?? "",
-      selectedMealPeriod
+      selectedMealPeriod,
+      restaurantId: analysis.restaurantId,
+      branchId: analysis.branchId
     }),
     [
+      analysis.branchId,
       analysis.captureMethod,
       analysis.occurredAt,
       analysis.recordTiming,
+      analysis.restaurantId,
       analysis.sourceContext,
       selectedMealPeriod
     ]

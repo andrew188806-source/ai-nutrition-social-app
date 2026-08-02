@@ -366,9 +366,17 @@ check(
     /lastSafeError: "finalization_client_error"/.test(acceptCandidateFn)
 );
 check(
+  // MI-E-C5-R7-B1-R1 successor-compatible locator. The R6-A invariant — re-accepting the SAME
+  // candidate continues the existing draft through the context transition (so its clientRequestId
+  // is reused, rather than a fresh draft minting a new one) — is unchanged. R7-B1-R1 moved that
+  // transition behind the shared invocation-time reconciler, so the named helper is accepted ONLY
+  // when it is proven to delegate to updateMealPhotoFinalizationContext. An acceptCandidate that
+  // stopped continuing the existing draft still fails here.
   "46. one-step acceptance reuses the same clientRequestId when re-accepting the same candidate",
   /existing\.selectedCandidateId === candidate\.candidateId/.test(acceptCandidateFn) &&
-    /updateMealPhotoFinalizationContext\(/.test(acceptCandidateFn)
+    (/updateMealPhotoFinalizationContext\(/.test(acceptCandidateFn) ||
+      (/reconcileDraftWithCurrentContext\(existing\)/.test(acceptCandidateFn) &&
+        /const reconcileDraftWithCurrentContext = useCallback\([\s\S]{0,800}?updateMealPhotoFinalizationContext\(/.test(finalizationHook)))
 );
 check(
   "47. both the primary CTA and every fallback row route through the one-step accept",

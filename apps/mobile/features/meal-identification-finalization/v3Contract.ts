@@ -39,7 +39,34 @@ export type MealIdentificationFinalizationV3Input = Readonly<{
   sourceContext: MealSourceContext;
   recordTiming: MealRecordTiming;
   occurredAt: MealOccurrenceTimestamp;
+  // MI-E-C5-R7-B1 canonical restaurant context. Ids only — see the command type below.
+  restaurantId?: string | null;
+  branchId?: string | null;
   mealWrite: MealIdentificationFinalizationV3MealWriteInput;
+}>;
+
+// MI-E-C5-R7-B1: the durable command is one of exactly TWO top-level key sets.
+//
+//  * no restaurant context  → the unchanged 8-key command, byte-identical to what shipped in
+//                             C5-B1. Both keys are OMITTED, not sent as null.
+//  * a restaurant context   → the same 8 keys plus restaurantId AND branchId, always as a pair.
+//
+// Omission (rather than always-present nulls) is deliberate: the deployed RPC validates the
+// top-level key set by exact array equality, so an always-present spelling would make every
+// finalization fail against any server that has not yet been upgraded. With omission the old
+// server keeps accepting old commands and the successor accepts both shapes, so the Mobile and
+// SQL sides can be frozen and deployed independently.
+//
+// The ids are opaque canonical TEXT (public.restaurants.id / public.restaurant_branches.id are
+// text primary keys, not uuids). This builder therefore enforces structure only — pairing,
+// non-blankness, and the self_cooked exclusion. Existence, active status and the branch→restaurant
+// relationship are the SQL layer's authority and are re-validated there against the base tables.
+//
+// A restaurant NAME never appears here in any form: there is no field for one, and the legacy
+// analysis-session display field is not readable from this layer.
+export type MealIdentificationFinalizationV3RestaurantContext = Readonly<{
+  restaurantId: string;
+  branchId: string | null;
 }>;
 
 export type MealIdentificationFinalizationV3Command = Readonly<{
@@ -50,6 +77,8 @@ export type MealIdentificationFinalizationV3Command = Readonly<{
   sourceContext: MealSourceContext;
   recordTiming: MealRecordTiming;
   occurredAt: MealOccurrenceTimestamp;
+  restaurantId?: string;
+  branchId?: string | null;
   mealWrite: MealIdentificationFinalizationV3MealWriteInput;
 }>;
 
@@ -97,21 +126,73 @@ export function buildMealIdentificationFinalizationV3(
     return failure("invalid_finalization", "occurredAt must be a valid explicit timestamp.");
   }
 
+  const restaurant = validateRestaurantContext(input.restaurantId, input.branchId, input.sourceContext);
+  if (!restaurant.ok) return restaurant;
+
   const mealWrite = validateMealWrite(input.mealWrite, input.selectedCandidateId === null);
   if (!mealWrite.ok) return mealWrite;
 
+  // Rebuilt from scratch, field by field, from values this function itself validated. No caller
+  // key is ever spread in, so an unknown/extra input key can never reach the durable command.
+  const base = {
+    version: MEAL_IDENTIFICATION_FINALIZATION_V3_VERSION,
+    analysisRequestId: input.analysisRequestId,
+    selectedCandidateId: input.selectedCandidateId,
+    captureMethod: input.captureMethod,
+    sourceContext: input.sourceContext,
+    recordTiming: input.recordTiming,
+    occurredAt: input.occurredAt,
+    mealWrite: mealWrite.value
+  };
+
+  if (!restaurant.value) {
+    return success(Object.freeze(base));
+  }
+
   return success(
     Object.freeze({
-      version: MEAL_IDENTIFICATION_FINALIZATION_V3_VERSION,
-      analysisRequestId: input.analysisRequestId,
-      selectedCandidateId: input.selectedCandidateId,
-      captureMethod: input.captureMethod,
-      sourceContext: input.sourceContext,
-      recordTiming: input.recordTiming,
-      occurredAt: input.occurredAt,
-      mealWrite: mealWrite.value
+      ...base,
+      restaurantId: restaurant.value.restaurantId,
+      branchId: restaurant.value.branchId
     })
   );
+}
+
+// Structure only. Returns null for "this command carries no restaurant context", which is the
+// signal to emit the 8-key command with both keys absent.
+function validateRestaurantContext(
+  restaurantId: string | null | undefined,
+  branchId: string | null | undefined,
+  sourceContext: MealSourceContext
+): MealIdentificationFinalizationV3Result<MealIdentificationFinalizationV3RestaurantContext | null> {
+  const restaurant = blankToNull(restaurantId);
+  const branch = blankToNull(branchId);
+
+  // A branch can never outlive its restaurant: an orphan branchId is a corrupted context, not a
+  // partially-filled one, so it is rejected rather than quietly dropped.
+  if (!restaurant) {
+    if (branch) {
+      return failure("invalid_finalization", "branchId requires a restaurantId.");
+    }
+    return success(null);
+  }
+
+  // A self-cooked meal has no venue. Reaching here means the session-level reconciliation that
+  // clears the context on a self_cooked switch did not run, so fail closed rather than persist a
+  // restaurant against a home-cooked meal.
+  if (sourceContext === "self_cooked") {
+    return failure("invalid_finalization", "self_cooked meals must not carry a restaurant context.");
+  }
+
+  return success(Object.freeze({ restaurantId: restaurant, branchId: branch }));
+}
+
+// Canonical ids are opaque text. Trim and non-blankness are the only shape rules applied here —
+// deliberately no uuid/format assertion, because public.restaurants.id is a text primary key.
+function blankToNull(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
 }
 
 function validateMealWrite(

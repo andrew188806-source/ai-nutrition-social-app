@@ -225,7 +225,28 @@ const ALLOWED_APP_SCREENS = new Set([
   "apps/mobile/app/analysis.tsx",
   "apps/mobile/app/meal-photo.tsx"
 ]);
-function isForbiddenSuccessorPath(entry) {
+// MI-E-C5-R7-B1 successor exceptions. The R2-era rule existed so a UI-readiness round could not
+// quietly reach into the durable finalization contract or the server. R7-B1 is the round whose
+// whole authorised purpose IS to extend that contract, so exactly two narrow exceptions are named
+// here — the v3 command builder, and a NEW additive migration file. Every other file under
+// features/meal-identification-finalization, every shared-domain file, every Edge Function and any
+// EDIT to an existing migration all remain forbidden, so the fence still catches the class of
+// change it was written to catch.
+const ALLOWED_SUCCESSOR_CONTRACT_PATHS = new Set([
+  "apps/mobile/features/meal-identification-finalization/v3Contract.ts"
+]);
+// EXACT allowlist, never a pattern. A generic "any 14-digit timestamp" rule would have admitted
+// any arbitrary or destructive new migration, which is precisely the class of change this fence
+// exists to stop. Only the one migration this round authorises may appear, and only as a new file.
+const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set([
+  "supabase/migrations/20260802010000_finalize_meal_identification_v3_restaurant_context.sql"
+]);
+function isForbiddenSuccessorPath(entry, options = {}) {
+  const isNewFile = Boolean(options.isNewFile);
+  if (ALLOWED_SUCCESSOR_CONTRACT_PATHS.has(entry)) return false;
+  // A brand-new authorised migration is additive history; editing one that already shipped, or
+  // adding an unauthorised one, never is.
+  if (isNewFile && AUTHORIZED_SUCCESSOR_MIGRATIONS.has(entry)) return false;
   if (FORBIDDEN_SUCCESSOR_PREFIXES.some((prefix) => entry.startsWith(prefix))) return true;
   if (entry.startsWith("apps/mobile/app/") && !ALLOWED_APP_SCREENS.has(entry)) return true;
   return false;
@@ -245,12 +266,58 @@ check(
   isForbiddenSuccessorPath("supabase/migrations/20260101000000_example.sql")
 );
 check(
+  "scope predicate: the v3 command builder is the ONLY allowed finalization-contract path",
+  !isForbiddenSuccessorPath("apps/mobile/features/meal-identification-finalization/v3Contract.ts") &&
+    isForbiddenSuccessorPath("apps/mobile/features/meal-identification-finalization/mealIdentificationFinalizationMappers.ts") &&
+    isForbiddenSuccessorPath("apps/mobile/features/meal-identification-finalization/validation.ts")
+);
+// MI-E-C5-R7-B1-R1 negative fixtures. Each case runs the real predicate, so a future widening of
+// the allowlist back to a pattern fails here immediately.
+const AUTHORIZED_MIGRATION = "supabase/migrations/20260802010000_finalize_meal_identification_v3_restaurant_context.sql";
+check(
+  "migration allowlist: the ONE authorized successor migration is allowed as a new file",
+  !isForbiddenSuccessorPath(AUTHORIZED_MIGRATION, { isNewFile: true })
+);
+check(
+  "migration allowlist: even the authorized path is rejected when it is a MODIFICATION",
+  isForbiddenSuccessorPath(AUTHORIZED_MIGRATION, { isNewFile: false })
+);
+check(
+  "migration allowlist: an arbitrary-timestamp migration is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/99999999999999_arbitrary_unauthorized_change.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: a destructive-looking migration is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/20261231010000_drop_everything.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: the same name under a different timestamp is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/20260803010000_finalize_meal_identification_v3_restaurant_context.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: the same timestamp under a different name is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/20260802010000_something_else.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: a second new migration alongside the authorized one is rejected",
+  [AUTHORIZED_MIGRATION, "supabase/migrations/20260802020000_second_migration.sql"].filter((entry) =>
+    isForbiddenSuccessorPath(entry, { isNewFile: true })
+  ).length === 1
+);
+check(
+  "migration allowlist: an Edge Function is rejected even as a new file",
+  isForbiddenSuccessorPath("supabase/functions/meal-photo-analysis/index.ts", { isNewFile: true })
+);
+check(
   "scope predicate: a meal-photo-upload contract path is rejected",
   isForbiddenSuccessorPath("apps/mobile/features/meal-photo-upload/factories.ts")
 );
 check(
+  // MI-E-C5-R7-B1: the sample path moved off v3Contract.ts, which is now the one named exception
+  // (asserted explicitly by its own fixture below). The fence itself is unchanged — every other
+  // file in this tree is still rejected, which is what this fixture proves.
   "scope predicate: a meal-identification-finalization contract path is rejected",
-  isForbiddenSuccessorPath("apps/mobile/features/meal-identification-finalization/v3Contract.ts")
+  isForbiddenSuccessorPath("apps/mobile/features/meal-identification-finalization/mealIdentificationFinalizationMappers.ts")
 );
 check(
   "scope predicate: the shared finalization domain path is rejected",
@@ -271,14 +338,92 @@ const r2FreezeIsAncestor = (() => {
 })();
 check("R2 frozen commit (3319c45) remains ancestor authority of HEAD", r2FreezeIsAncestor);
 
-const changedEntries = [
-  ...git(["diff", "--name-only"]).split("\n"),
-  ...git(["ls-files", "--others", "--exclude-standard"]).split("\n")
-].filter(Boolean);
-const forbiddenLiveEntries = changedEntries.filter(isForbiddenSuccessorPath);
+const modifiedEntries = git(["diff", "--name-only"]).split("\n").filter(Boolean);
+const newEntries = git(["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean);
+const forbiddenLiveEntries = [
+  ...modifiedEntries.filter((entry) => isForbiddenSuccessorPath(entry, { isNewFile: false })),
+  ...newEntries.filter((entry) => isForbiddenSuccessorPath(entry, { isNewFile: true }))
+];
 check(
   "successor work touches no forbidden backend/upload/finalization path and no app screen outside the allowed set",
   forbiddenLiveEntries.length === 0
+);
+
+
+// ==========================================================================================
+// MI-E-C5-R7-B1-R1 §九: v3Contract.ts is NOT blanket-trusted just because R7-B1 is allowed to
+// extend it. This projection compares the candidate against HEAD region by region: every part of
+// the contract that this guard's era froze must be byte-identical, and only the authorized
+// restaurant extension may be new. An unauthorized change to the version string, to any original
+// command field, to mealWrite/nutrition shape, to the limits, or to the scalar validation lines
+// fails here — path exclusion alone would have let all of those through.
+// ==========================================================================================
+const V3_CONTRACT_RELATIVE = "apps/mobile/features/meal-identification-finalization/v3Contract.ts";
+function v3ContractOnlyGainedAuthorizedRestaurantExtension() {
+  const headResult = spawnSync("git", ["show", `HEAD:${V3_CONTRACT_RELATIVE}`], { cwd: root, encoding: "utf8" });
+  if (headResult.status !== 0) return false;
+  const headText = headResult.stdout ?? "";
+  const diskText = fs.readFileSync(path.join(root, V3_CONTRACT_RELATIVE), "utf8");
+  if (!headText) return false;
+
+  const slice = (text, from, to) => {
+    const start = text.indexOf(from);
+    if (start < 0) return null;
+    if (to === null) return text.slice(start);
+    const end = text.indexOf(to, start + from.length);
+    return end < 0 ? null : text.slice(start, end);
+  };
+  // The scalar-field validation block ends at whichever declaration follows it — HEAD goes
+  // straight to mealWrite, the candidate inserts the restaurant validator first.
+  const scalarValidation = (text) => {
+    const start = text.indexOf("if (!input.analysisRequestId");
+    if (start < 0) return null;
+    const ends = ["const mealWrite = validateMealWrite", "const restaurant = validateRestaurantContext"]
+      .map((marker) => text.indexOf(marker, start))
+      .filter((index) => index > 0);
+    return ends.length ? text.slice(start, Math.min(...ends)) : null;
+  };
+
+  const FROZEN_REGIONS = [
+    // version constant + nutrition + mealWrite input shape
+    ["export const MEAL_IDENTIFICATION_FINALIZATION_V3_VERSION", "export type MealIdentificationFinalizationV3Input"],
+    // error codes, result type, every limit and the source-context/nutrition vocabularies
+    ["export type MealIdentificationFinalizationV3ErrorCode", "export function buildMealIdentificationFinalizationV3"],
+    // the whole mealWrite/nutrition validator
+    ["function validateMealWrite(", "function success<T>"],
+    // result helpers
+    ["function success<T>", null]
+  ];
+  for (const [from, to] of FROZEN_REGIONS) {
+    const headRegion = slice(headText, from, to);
+    const diskRegion = slice(diskText, from, to);
+    if (headRegion === null || diskRegion === null || headRegion !== diskRegion) return false;
+  }
+  const headScalar = scalarValidation(headText);
+  if (headScalar === null || headScalar !== scalarValidation(diskText)) return false;
+
+  // No restaurant NAME or display snapshot may ever exist in the durable command layer.
+  if (/restaurantName|restaurantDisplayName|branchName|displayName/.test(diskText)) return false;
+
+  // The only new top-level declarations may be the authorized restaurant extension.
+  const declarations = (text) => text.match(/^(?:export )?(?:function|type|const) \w+/gm) ?? [];
+  const headDeclarations = new Set(declarations(headText));
+  const AUTHORIZED_ADDITIONS = new Set([
+    "export type MealIdentificationFinalizationV3RestaurantContext",
+    "function validateRestaurantContext",
+    "function blankToNull"
+  ]);
+  const added = declarations(diskText).filter((entry) => !headDeclarations.has(entry));
+  if (!added.every((entry) => AUTHORIZED_ADDITIONS.has(entry))) return false;
+
+  // And every original declaration must still exist.
+  const diskDeclarations = new Set(declarations(diskText));
+  return [...headDeclarations].every((entry) => diskDeclarations.has(entry));
+}
+
+check(
+  "v3Contract.ts gained ONLY the authorized R7-B1 restaurant extension (frozen regions byte-identical to HEAD)",
+  v3ContractOnlyGainedAuthorizedRestaurantExtension()
 );
 
 const failed = checks.filter((entry) => !entry.pass);

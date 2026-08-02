@@ -181,9 +181,54 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     runtime.beginMealIdentificationFinalizationOperation(operationIdentity);
   }, [isRuntimeBoundToCurrentOperation, operationIdentity, runtime]);
 
+  // ==========================================================================================
+  // MI-E-C5-R7-B1-R1 §四: THE single invocation-time context authority.
+  //
+  // Every NEW durable submission calls this immediately before preparing its payload, so the
+  // payload is always built from the context this render can see — never from whatever the last
+  // committed effect happened to leave in the draft. The eager synchronisation below is now a
+  // layout effect (pre-paint) as defence in depth, but it is NOT the safety authority: a handler
+  // can be invoked programmatically, and React gives no ordering guarantee strong enough to bet a
+  // durable write on.
+  //
+  // It owns no rules of its own. Change detection is `sameContext` (via
+  // updateMealPhotoFinalizationContext), token rotation is that same pure transition's
+  // attempted-only secure-UUID semantics, and the payload lock is the existing
+  // applyMealPhotoFinalizationPayloadMutation — so a locked payload cannot drift here either.
+  //
+  // Returns the state the caller MUST prepare from. Callers must not fall back to
+  // draftRef.current afterwards, which is exactly the stale read this exists to remove.
+  //
+  // Deliberately NOT used by retryPending: an uncertain retry replays the frozen submission and
+  // must never re-read live session context.
+  const reconcileDraftWithCurrentContext = useCallback(
+    (current: MealPhotoFinalizationDraftState): MealPhotoFinalizationDraftState => {
+      const next = applyMealPhotoFinalizationPayloadMutation(
+        current,
+        runtime.mealIdentificationFinalizationState.status,
+        () =>
+          updateMealPhotoFinalizationContext(
+            current,
+            input.context,
+            generateConsumerMealIdentificationFinalizationClientRequestId
+          )
+      );
+      if (next === current) return current;
+      // The context moved, so any frozen submission describes a payload that is no longer the
+      // one being sent.
+      frozenSubmissionRef.current = null;
+      setDraft(next);
+      return next;
+    },
+    [input.context, runtime.mealIdentificationFinalizationState.status, setDraft]
+  );
+
   // Context fields are fingerprint-bearing. If the user changes source/time/meal period
   // after an attempt, the pure state transition rotates the UUID before another submit.
-  useEffect(() => {
+  // MI-E-C5-R7-B1-R1: promoted to a LAYOUT effect so the draft is already reconciled before the
+  // user can see (and therefore touch) the new context. Eager only — the real guarantee is the
+  // invocation-time reconciliation above.
+  useLayoutEffect(() => {
     const current = draftRef.current;
     if (!current) return;
     const next = applyMealPhotoFinalizationPayloadMutation(
@@ -200,9 +245,14 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     frozenSubmissionRef.current = null;
     setDraft(next);
   }, [
+    // MI-E-C5-R7-B1: the restaurant ids are fingerprint-bearing context, so they must appear here
+    // too. Without them a venue change alone would not re-run this effect, the draft would keep the
+    // previous restaurant, and no clientRequestId rotation would happen.
+    input.context.branchId,
     input.context.captureMethod,
     input.context.occurredAt,
     input.context.recordTiming,
+    input.context.restaurantId,
     input.context.selectedMealPeriod,
     input.context.sourceContext,
     runtime.mealIdentificationFinalizationState.status,
@@ -367,8 +417,12 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     ) {
       return;
     }
-    const current = draftRef.current;
-    if (!current || !gateRef.current.tryStart()) return;
+    const existing = draftRef.current;
+    if (!existing || !gateRef.current.tryStart()) return;
+    // MI-E-C5-R7-B1-R1: reconcile with the CURRENT context before preparing. Without this the
+    // editor could submit a payload built from a restaurant/source the user has already changed,
+    // because the eager sync is only an effect.
+    const current = reconcileDraftWithCurrentContext(existing);
     const expectedIdentity = identityRef.current;
 
     // prepareMealPhotoFinalization calls the secure UUID provider, which can throw on a runtime
@@ -414,7 +468,10 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
     } finally {
       gateRef.current.finish();
     }
-  }, [applyResultIfCurrent, retryPending, runtime, setDraft]);
+    // MI-E-C5-R7-B1-R1: reconcileDraftWithCurrentContext MUST be a dependency. It closes over
+    // input.context, so omitting it would leave submit holding a stale reconciler — reintroducing
+    // exactly the stale-context submission this repair removes.
+  }, [applyResultIfCurrent, reconcileDraftWithCurrentContext, retryPending, runtime, setDraft]);
 
   // MI-E-C5-R5-R1 one-step acceptance. 「分析正確」 and tapping a fallback are FINAL acceptance
   // actions, not selection actions — each must adopt the candidate and run the one atomic
@@ -444,16 +501,15 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
       const expectedIdentity = identityRef.current;
 
       const existing = draftRef.current;
+      // MI-E-C5-R7-B1-R1: the SAME invocation-time authority the editor submit uses, so the two
+      // durable entry points cannot drift apart. A brand-new draft is created from input.context
+      // directly, which is already the current context.
       const base =
         existing &&
         existing.mode === "candidate" &&
         existing.selectedCandidateId === candidate.candidateId &&
         existing.analysisRequestId === analysisRequestId
-          ? updateMealPhotoFinalizationContext(
-              existing,
-              input.context,
-              generateConsumerMealIdentificationFinalizationClientRequestId
-            )
+          ? reconcileDraftWithCurrentContext(existing)
           : createCandidateMealPhotoFinalizationDraft(analysisRequestId, candidate, input.context);
 
       setSelectedMealPhotoAnalysisCandidateId(candidate.candidateId);
@@ -497,7 +553,8 @@ export function useMealPhotoFinalization(input: UseMealPhotoFinalizationInput) {
         gateRef.current.finish();
       }
     },
-    [applyResultIfCurrent, input.context, retryPending, runtime, setDraft]
+    // MI-E-C5-R7-B1-R1: same reason as submit — the reconciler closes over input.context.
+    [applyResultIfCurrent, input.context, reconcileDraftWithCurrentContext, retryPending, runtime, setDraft]
   );
 
   // MI-E-C5-R5-R4 §四: SYNCHRONOUS actor-safe public view. While the internal draft still belongs to
