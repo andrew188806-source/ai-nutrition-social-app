@@ -592,6 +592,94 @@ const uuidFactory = () => `uuid-${++uuidCounter}`;
   );
 }
 
+// =============================================================================================
+// I. MI-E-C5-R7-B1-R2 — three-way durable projection of the venue.
+//
+// The corrective successor writes the SAME two validated local variables into the meal item, into
+// the finalization ledger's own columns, and (as the verbatim command) into command_snapshot. This
+// section proves that from the migration's own text: it locates each of the three sinks and asserts
+// they all read v3_restaurant_id / v3_branch_id, never a re-read of p_finalization.
+//
+// Again: no SQL was executed and no database was contacted. This is a structural proof of the
+// projection, paired with a behavioural proof of what the command that feeds it contains.
+// =============================================================================================
+{
+  const ledger = fs.readFileSync(
+    path.join(root, "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql"),
+    "utf8"
+  );
+  const between = (from, to) => {
+    const a = ledger.indexOf(from);
+    if (a < 0) return "";
+    const b = to ? ledger.indexOf(to, a) : ledger.length;
+    return b > a ? ledger.slice(a, b) : "";
+  };
+  const itemBlock = between("v3_items := pg_catalog.jsonb_build_array(", "v3_created := public.create_current_user_meal_record(");
+  const ledgerBlock = between("INSERT INTO public.meal_identification_finalizations (", "RETURNING id INTO v3_finalization_id;");
+
+  expect(itemBlock.length > 0 && ledgerBlock.length > 0, "S101 both durable write blocks are locatable in the corrective successor");
+  expect(
+    /'restaurantId', v3_restaurant_id,/.test(itemBlock) && /'branchId', v3_branch_id,/.test(itemBlock),
+    "S102 the MEAL ITEM projects both ids from the validated locals"
+  );
+  expect(
+    /identity_validation_status, restaurant_id, branch_id, command_snapshot,/.test(ledgerBlock),
+    "S103 the LEDGER names its own restaurant_id/branch_id columns"
+  );
+  expect(
+    /'not_applicable', v3_restaurant_id, v3_branch_id, p_finalization,/.test(ledgerBlock),
+    "S104 the LEDGER projects both ids from the SAME validated locals"
+  );
+  expect(
+    /p_finalization,/.test(ledgerBlock) && !/jsonb_build_object/.test(ledgerBlock),
+    "S105 command_snapshot is still the verbatim canonical command, not a rebuilt object"
+  );
+  expect(
+    !/p_finalization ->> 'restaurantId'/.test(ledgerBlock) &&
+      !/p_finalization ->> 'branchId'/.test(ledgerBlock) &&
+      !/btrim\(/.test(ledgerBlock) &&
+      !/FROM public\.meal_record_items/.test(ledgerBlock),
+    "S106 the ledger never re-reads the json, re-trims, or reads the item back"
+  );
+  expect(
+    /v3_restaurant_id := NULL;\s*\r?\n\s*v3_branch_id := NULL;/.test(ledger),
+    "S107 a no-context command leaves both locals NULL, so all three sinks agree on absent"
+  );
+  // The ledger INSERT sits after the record/item write and before the return — i.e. only on the
+  // new-success path, never on replay (which returns earlier) and never on conflict (which raises).
+  expect(
+    ledger.indexOf("v3_created := public.create_current_user_meal_record(") <
+      ledger.indexOf("INSERT INTO public.meal_identification_finalizations (") &&
+      ledger.indexOf("'replayed', true,") < ledger.indexOf("v3_created := public.create_current_user_meal_record(") &&
+      ledger.indexOf("RAISE EXCEPTION 'IDEMPOTENCY_KEY_CONFLICT'") <
+        ledger.indexOf("INSERT INTO public.meal_identification_finalizations ("),
+    "S108 the ledger insert happens only on the NEW-success path — after replay returns, after conflict raises"
+  );
+  expect(
+    /pg_catalog\.btrim\(v3_restaurant_id\) <> v3_restaurant_id/.test(ledger) &&
+      ledger.indexOf("pg_catalog.btrim(v3_restaurant_id) <> v3_restaurant_id") <
+        ledger.indexOf("v3_fingerprint := pg_catalog.jsonb_build_object"),
+    "S109 Model A canonical rejection is unchanged and still precedes the fingerprint"
+  );
+
+  // What the three sinks receive is exactly what the client command carries — proven behaviourally.
+  const only = v3.buildMealIdentificationFinalizationV3(baseInput({ restaurantId: RESTAURANT, branchId: null }));
+  expect(
+    only.ok && only.value.restaurantId === RESTAURANT && only.value.branchId === null,
+    "S110 restaurant-only: the command carries the venue and an explicit null branch"
+  );
+  const both = v3.buildMealIdentificationFinalizationV3(baseInput({ restaurantId: RESTAURANT, branchId: BRANCH }));
+  expect(
+    both.ok && both.value.restaurantId === RESTAURANT && both.value.branchId === BRANCH,
+    "S111 restaurant+branch: the command carries both, identically to what the locals will hold"
+  );
+  const none = v3.buildMealIdentificationFinalizationV3(baseInput());
+  expect(
+    none.ok && !("restaurantId" in none.value) && !("branchId" in none.value),
+    "S112 no-context: the command omits both keys, matching the NULL locals and NULL columns"
+  );
+}
+
 const failed = checks.filter((entry) => !entry.pass);
 console.log(
   JSON.stringify(

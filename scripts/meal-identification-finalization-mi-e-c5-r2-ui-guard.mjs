@@ -239,7 +239,11 @@ const ALLOWED_SUCCESSOR_CONTRACT_PATHS = new Set([
 // any arbitrary or destructive new migration, which is precisely the class of change this fence
 // exists to stop. Only the one migration this round authorises may appear, and only as a new file.
 const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set([
-  "supabase/migrations/20260802010000_finalize_meal_identification_v3_restaurant_context.sql"
+  "supabase/migrations/20260802010000_finalize_meal_identification_v3_restaurant_context.sql",
+  // MI-E-C5-R7-B1-R2: the ledger-projection corrective successor. Added as a second EXACT entry,
+  // never as a pattern — a third migration, a different timestamp or a different filename all
+  // still fail.
+  "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql"
 ]);
 function isForbiddenSuccessorPath(entry, options = {}) {
   const isNewFile = Boolean(options.isNewFile);
@@ -303,6 +307,33 @@ check(
   [AUTHORIZED_MIGRATION, "supabase/migrations/20260802020000_second_migration.sql"].filter((entry) =>
     isForbiddenSuccessorPath(entry, { isNewFile: true })
   ).length === 1
+);
+// MI-E-C5-R7-B1-R2 fixtures for the second authorized successor.
+const AUTHORIZED_LEDGER_MIGRATION =
+  "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql";
+check(
+  "migration allowlist: the ledger-projection successor is allowed as a new file",
+  !isForbiddenSuccessorPath(AUTHORIZED_LEDGER_MIGRATION, { isNewFile: true })
+);
+check(
+  "migration allowlist: the ledger-projection successor is rejected as a MODIFICATION",
+  isForbiddenSuccessorPath(AUTHORIZED_LEDGER_MIGRATION, { isNewFile: false })
+);
+check(
+  "migration allowlist: the ledger successor's name under a different timestamp is rejected",
+  isForbiddenSuccessorPath(
+    "supabase/migrations/20260804010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql",
+    { isNewFile: true }
+  )
+);
+check(
+  "migration allowlist: the ledger successor's timestamp under a different name is rejected",
+  isForbiddenSuccessorPath("supabase/migrations/20260803010000_something_else.sql", { isNewFile: true })
+);
+check(
+  "migration allowlist: exactly TWO successors are authorized — a third is rejected",
+  AUTHORIZED_SUCCESSOR_MIGRATIONS.size === 2 &&
+    isForbiddenSuccessorPath("supabase/migrations/20260804010000_third_successor.sql", { isNewFile: true })
 );
 check(
   "migration allowlist: an Edge Function is rejected even as a new file",

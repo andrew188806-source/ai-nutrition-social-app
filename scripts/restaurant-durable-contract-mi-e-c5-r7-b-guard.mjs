@@ -32,6 +32,9 @@ const SCREEN = "apps/mobile/app/analysis.tsx";
 const SESSION = "apps/mobile/features/analysis/analysisSessionStore.ts";
 const RUNTIME = "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts";
 const MIGRATION = "supabase/migrations/20260802010000_finalize_meal_identification_v3_restaurant_context.sql";
+// MI-E-C5-R7-B1-R2 corrective successor: projects the same validated ids onto the ledger columns.
+const LEDGER_MIGRATION =
+  "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql";
 const PREDECESSOR = "supabase/migrations/20260729010000_persist_user_confirmed_for_accepted_analysis_finalization.sql";
 
 const v3 = read(V3_CONTRACT);
@@ -42,6 +45,7 @@ const screen = read(SCREEN);
 const session = read(SESSION);
 const runtime = read(RUNTIME);
 const migration = read(MIGRATION);
+const ledgerMigration = read(LEDGER_MIGRATION);
 
 const trackedChanged = new Set(git(["diff", "--name-only"]).split("\n").filter(Boolean));
 const untracked = new Set(git(["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean));
@@ -336,9 +340,118 @@ check(
     !/'restaurantId', p_finalization/.test(migration)
 );
 check(
+  // MI-E-C5-R7-B1-R2. The ledger's restaurant_id/branch_id columns were NOT created by this work —
+  // they have existed since 20260724020000 and v1/v2 has always populated them. The invariant this
+  // check owns is unchanged: this candidate adds NO ledger column. What changed is that v3 now
+  // POPULATES the existing pair, so the base migration's "leave them out of the INSERT" spelling is
+  // no longer the correct shape and is asserted on the corrective successor instead (checks 38a-38f).
   "38. the ledger gains NO restaurant columns; command_snapshot stays the whole command",
   !/ALTER TABLE public\.meal_identification_finalizations/.test(migration) &&
-    /identity_validation_status, command_snapshot,[\s\S]{0,300}?'not_applicable', p_finalization,/.test(migration)
+    !/ALTER TABLE public\.meal_identification_finalizations/.test(ledgerMigration) &&
+    /identity_validation_status, command_snapshot,[\s\S]{0,300}?'not_applicable', p_finalization,/.test(migration) &&
+    /'not_applicable', v3_restaurant_id, v3_branch_id, p_finalization,/.test(ledgerMigration)
+);
+
+// ---- MI-E-C5-R7-B1-R2: v3 ledger restaurant identity projection ----
+check(
+  "38a. the corrective successor exists and only CREATE OR REPLACEs the same single RPC",
+  /^CREATE OR REPLACE FUNCTION public\.finalize_current_user_meal_identification_v1\($/m.test(ledgerMigration) &&
+    (ledgerMigration.match(/^CREATE OR REPLACE FUNCTION/gm) || []).length === 1
+);
+check(
+  "38b. the v3 ledger INSERT names restaurant_id and branch_id as real columns",
+  /INSERT INTO public\.meal_identification_finalizations \([\s\S]{0,400}?identity_validation_status, restaurant_id, branch_id, command_snapshot,/.test(
+    ledgerMigration
+  )
+);
+check(
+  "38c. their values are the SAME validated locals the meal item uses — not a re-read",
+  /'not_applicable', v3_restaurant_id, v3_branch_id, p_finalization,/.test(ledgerMigration) &&
+    /'restaurantId', v3_restaurant_id,\s*\r?\n\s*'branchId', v3_branch_id,/.test(ledgerMigration)
+);
+check(
+  "38d. the ledger never re-reads the command json, the item, or the snapshot for those ids",
+  !/restaurant_id, .{0,40}p_finalization ->>/.test(ledgerMigration) &&
+    !/INSERT INTO public\.meal_identification_finalizations \([\s\S]{0,600}?p_finalization ->> 'restaurantId'/.test(ledgerMigration) &&
+    !/INSERT INTO public\.meal_identification_finalizations \([\s\S]{0,600}?btrim\(/.test(ledgerMigration) &&
+    !/INSERT INTO public\.meal_identification_finalizations \([\s\S]{0,600}?FROM public\.meal_record_items/.test(ledgerMigration)
+);
+check(
+  "38e. command_snapshot is still the whole canonical command, unchanged",
+  /'not_applicable', v3_restaurant_id, v3_branch_id, p_finalization,/.test(ledgerMigration)
+);
+check(
+  "38f. no-context finalizations leave both locals NULL, so all three sinks agree on absent",
+  /v3_restaurant_id := NULL;\s*\r?\n\s*v3_branch_id := NULL;/.test(ledgerMigration)
+);
+check(
+  "38g. the corrective successor changes ONLY the v3 ledger INSERT and the function comment",
+  (() => {
+    const strip = (text) => {
+      const at = text.indexOf("CREATE OR REPLACE FUNCTION public.finalize_current_user_meal_identification_v1(");
+      return at < 0 ? null : text.slice(at);
+    };
+    const before = strip(migration);
+    const after = strip(ledgerMigration);
+    if (!before || !after) return false;
+    // Re-applying the exact ledger edit to the base must reproduce the successor byte for byte.
+    const projected = before
+      .replace(
+        "      identity_validation_status, command_snapshot,",
+        "      identity_validation_status, restaurant_id, branch_id, command_snapshot,"
+      )
+      .replace("      'not_applicable', p_finalization,", "      'not_applicable', v3_restaurant_id, v3_branch_id, p_finalization,");
+    // Everything except the two INSERT lines, the new comment block and the function comment must
+    // be identical; compare with comment lines and the function COMMENT literal removed.
+    const normalize = (text) =>
+      text
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("--"))
+        .filter((line) => !line.includes("'Single authenticated atomic meal-identification finalization RPC."))
+        .join("\n");
+    return normalize(projected) === normalize(after);
+  })()
+);
+check(
+  "38h. v1 and v2 are carried over from 20260802010000 byte-identically",
+  (() => {
+    const slice = (text, from, to) => {
+      const start = text.indexOf(from);
+      const end = text.indexOf(to);
+      return start >= 0 && end > start ? text.slice(start, end) : null;
+    };
+    const v1New = slice(ledgerMigration, "IF v_version = 'meal-identification-finalization-v1' THEN", "  -- ====");
+    const v1Old = slice(migration, "IF v_version = 'meal-identification-finalization-v1' THEN", "  -- ====");
+    const v2New = slice(ledgerMigration, "IF v_version <> 'meal-identification-finalization-v2' THEN", "\n$$;");
+    const v2Old = slice(migration, "IF v_version <> 'meal-identification-finalization-v2' THEN", "\n$$;");
+    return Boolean(v1New) && Boolean(v2New) && v1New === v1Old && v2New === v2Old;
+  })()
+);
+check(
+  "38i. the corrective successor adds no DDL and no policy change",
+  !/ALTER TABLE/.test(ledgerMigration) &&
+    !/CREATE INDEX/.test(ledgerMigration) &&
+    !/CREATE UNIQUE INDEX/.test(ledgerMigration) &&
+    !/CREATE POLICY/.test(ledgerMigration) &&
+    !/ADD COLUMN/.test(ledgerMigration) &&
+    !/DROP /.test(ledgerMigration)
+);
+check(
+  "38j. the corrective successor preserves signature, security context and grants",
+  /p_client_request_id uuid,\s*\r?\n\s*p_meal_type public\.meal_type,/.test(ledgerMigration) &&
+    /RETURNS jsonb/.test(ledgerMigration) &&
+    /LANGUAGE plpgsql/.test(ledgerMigration) &&
+    /SECURITY DEFINER/.test(ledgerMigration) &&
+    /SET search_path = pg_catalog, public, pg_temp/.test(ledgerMigration) &&
+    /GRANT EXECUTE ON FUNCTION public\.finalize_current_user_meal_identification_v1\(/.test(ledgerMigration)
+);
+check(
+  "38k. the Model A canonical rejection and replay ordering are untouched by the correction",
+  /pg_catalog\.btrim\(v3_restaurant_id\) <> v3_restaurant_id/.test(ledgerMigration) &&
+    ledgerMigration.indexOf("pg_catalog.btrim(v3_restaurant_id) <> v3_restaurant_id") <
+      ledgerMigration.indexOf("v3_fingerprint := pg_catalog.jsonb_build_object") &&
+    ledgerMigration.indexOf("SELECT * INTO v_record") <
+      ledgerMigration.indexOf("canonical restaurant EXISTENCE validation")
 );
 check(
   "39. the server request fingerprint still embeds the ENTIRE finalization command",
@@ -387,20 +500,40 @@ check(
   ![...trackedChanged].some((entry) => entry.startsWith("supabase/migrations/"))
 );
 check(
-  "44. the successor migration is a NEW untracked file, not an edit",
-  untracked.has(MIGRATION) && !trackedChanged.has(MIGRATION)
+  // MI-E-C5-R7-B1-R2: 20260802010000 is now COMMITTED (freeze 28f487fa), so it must be tracked and
+  // unmodified; the corrective successor is the only new file. Both halves of "history is immutable"
+  // are asserted — the shipped one cannot be edited, the new one cannot already be in HEAD.
+  "44. the shipped successor is tracked+unmodified and the corrective one is genuinely new",
+  !trackedChanged.has(MIGRATION) &&
+    !untracked.has(MIGRATION) &&
+    git(["ls-files", MIGRATION]) === MIGRATION &&
+    untracked.has(LEDGER_MIGRATION) &&
+    !trackedChanged.has(LEDGER_MIGRATION)
 );
 check(
-  "45. exactly one migration is added by this candidate, and it is EXACTLY the authorized path",
-  [...untracked].filter((entry) => entry.startsWith("supabase/migrations/")).length === 1 &&
-    [...untracked].filter((entry) => entry.startsWith("supabase/migrations/"))[0] === MIGRATION
+  "45. exactly ONE migration is added by this candidate, and it is EXACTLY the corrective path",
+  (() => {
+    const added = [...untracked].filter((entry) => entry.startsWith("supabase/migrations/"));
+    return added.length === 1 && added[0] === LEDGER_MIGRATION;
+  })()
 );
 check(
   "45a. the R2 successor fence uses an EXACT migration allowlist, never a timestamp pattern",
   (() => {
     const r2 = read("scripts/meal-identification-finalization-mi-e-c5-r2-ui-guard.mjs");
     return (
-      /const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set\(\[\s*\r?\n\s*"supabase\/migrations\/20260802010000_finalize_meal_identification_v3_restaurant_context\.sql"\s*\r?\n\s*\]\);/.test(r2) &&
+      // MI-E-C5-R7-B1-R2: the allowlist is now an EXACT TWO-entry set. Still never a pattern, and
+      // the entry count is pinned so a third path cannot be slipped in.
+      /const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set\(\[[\s\S]{0,600}?"supabase\/migrations\/20260802010000_finalize_meal_identification_v3_restaurant_context\.sql",[\s\S]{0,600}?"supabase\/migrations\/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity\.sql"\s*\r?\n\s*\]\);/.test(r2) &&
+      // Counted INSIDE the Set literal only, so a negative fixture that mentions an unauthorized
+      // migration path elsewhere in the guard cannot inflate the count.
+      (() => {
+        const open = r2.indexOf("const AUTHORIZED_SUCCESSOR_MIGRATIONS = new Set([");
+        const close = r2.indexOf("]);", open);
+        if (open < 0 || close < 0) return false;
+        const body = r2.slice(open, close);
+        return (body.match(/"supabase\/migrations\/\d{14}_[a-z0-9_]+\.sql"/g) || []).length === 2;
+      })() &&
       !/\\d\{14\}_\[a-z0-9_\]\+\\\.sql/.test(r2) &&
       /AUTHORIZED_SUCCESSOR_MIGRATIONS\.has\(entry\)/.test(r2)
     );
