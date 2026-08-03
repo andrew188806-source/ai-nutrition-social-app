@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Alert, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, ScanningBar, SectionTitle, TagRow, colors } from "../components/DemoUi";
@@ -12,8 +12,10 @@ import {
   resetAnalysisSessionForActor,
   type MealPhotoCaptureMethod
 } from "../features/analysis";
+import { setAnalysisRestaurantContext } from "../features/analysis/analysisSessionStore";
 import { captureMealPhotoFromCamera, pickMealPhotoFromLibrary, type MediaCaptureOutcome } from "../features/analysis/mediaCapture";
 import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryMealPhotoAssetNormalization";
+import { decodeAnalysisRestaurantHandoff } from "../features/meal-identification/analysisRestaurantHandoff";
 import { type PlannedMeal } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 
@@ -32,7 +34,11 @@ const ANALYSIS_SESSION_OWNER_DEPENDENCIES = Object.freeze({
 
 export default function MealPhotoScreen() {
   const router = useRouter();
-  const { autoOpen } = useLocalSearchParams<{ autoOpen?: string }>();
+  const { autoOpen, restaurantId: restaurantIdParam, branchId: branchIdParam } = useLocalSearchParams<{
+    autoOpen?: string;
+    restaurantId?: string | string[];
+    branchId?: string | string[];
+  }>();
   const runtime = useConsumerRuntime();
   // MI-E-C5-R5-R3 §三 LAYER 1 — PURE render-time ownership derivation. No store mutation, no
   // epoch move, no gallery cleanup, no Promise: safe for any speculative or abandoned render.
@@ -73,6 +79,36 @@ export default function MealPhotoScreen() {
   const selectedEstimate = estimateOptions.find((option) => option.name === selectedDishName) ?? estimateOptions[0];
   const hasSpecificMockData = plannedType !== "其他" || restaurantName.trim().length > 0;
 
+  // MI-E-C5-R7-C1: the route's restaurant selection, decoded once per param change. Null is the
+  // generic no-restaurant capture, and a branch without a restaurant decodes to null as well.
+  const routeRestaurantHandoff = useMemo(
+    () => decodeAnalysisRestaurantHandoff({ restaurantId: restaurantIdParam, branchId: branchIdParam }),
+    [branchIdParam, restaurantIdParam]
+  );
+  // MI-E-C5-R7-C1: the SINGLE seam that applies this route's restaurant selection to a session the
+  // caller has JUST reset, so the gesture entry and the autoOpen entry cannot drift apart.
+  //
+  // It is deliberately apply-only rather than a reset+apply wrapper: the frozen R5 (check 69) and
+  // R4 owned-gallery-cache guards both assert the exact `resetAnalysisSessionForActor(captureActor,
+  // ANALYSIS_SESSION_OWNER_DEPENDENCIES)` call inside startAiAnalysis, and hiding that reset behind
+  // a wrapper would silently break authority this round must preserve. Every reset call site is
+  // therefore left verbatim and simply followed by this apply.
+  //
+  // Ordering is the whole point: the reset clears the previous actor's session INCLUDING any venue
+  // it was carrying, and only then is this route's selection applied. The catalog choice is an
+  // explicit input to the new capture, never state inherited across the reset — which is exactly
+  // why R7-B's S64 (a new capture does not inherit the previous venue) still holds. With no usable
+  // route selection nothing is written at all, so a generic capture stays at a null context.
+  const applyRouteRestaurantContextForNewCapture = useCallback(() => {
+    if (!routeRestaurantHandoff) return;
+    // Uses the store's existing source-context default: R7-A's invariants (self_cooked clears a
+    // venue, a branch never outlives its restaurant) stay the session store's authority.
+    setAnalysisRestaurantContext({
+      restaurantId: routeRestaurantHandoff.restaurantId,
+      branchId: routeRestaurantHandoff.branchId
+    });
+  }, [routeRestaurantHandoff]);
+
   function startAiAnalysis() {
     if (!captureSessionReconciled) return;
     // Tapping "開始 AI 分析" is itself a new-session trigger, even before a source is chosen.
@@ -80,6 +116,7 @@ export default function MealPhotoScreen() {
     // first) and an immediate rebind to the current actor, so the capture that follows is owned
     // from its very first write.
     resetAnalysisSessionForActor(captureActor, ANALYSIS_SESSION_OWNER_DEPENDENCIES);
+    applyRouteRestaurantContextForNewCapture();
     setIsSheetOpen(true);
   }
 
@@ -226,8 +263,12 @@ export default function MealPhotoScreen() {
         { actorKey: runtime.state.actorKey, actorGeneration: runtime.state.actorGeneration },
         ANALYSIS_SESSION_OWNER_DEPENDENCIES
       );
+      // MI-E-C5-R7-C1: same seam as the gesture entry, immediately after this lifecycle's reset, so
+      // both entries reapply the route selection identically. Effect-gated on its dependencies, so
+      // a rerender with unchanged params does not repeat the reset/apply pair.
+      applyRouteRestaurantContextForNewCapture();
     }
-  }, [autoOpen, captureSessionReconciled, runtime.state.actorGeneration, runtime.state.actorKey]);
+  }, [applyRouteRestaurantContextForNewCapture, autoOpen, captureSessionReconciled, runtime.state.actorGeneration, runtime.state.actorKey]);
 
   return (
     <PlaceholderScreen

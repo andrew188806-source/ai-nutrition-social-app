@@ -8,6 +8,10 @@ import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { PremiumBadge, colors } from "../components/DemoUi";
 import { getRestaurantMealBuddyCard, upsertMealBuddyCardWithQuota } from "../features/meal-buddy-card";
+import {
+  encodeAnalysisRestaurantHandoffParams,
+  type AnalysisRestaurantHandoffParams
+} from "../features/meal-identification/analysisRestaurantHandoff";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getEffectiveCurrentDate } from "../features/demo-time";
 import {
@@ -456,6 +460,7 @@ export default function RestaurantsScreen() {
         onClose={closeRestaurantDetail}
         onCreateCard={startCreateFromDetail}
         onCreateTable={startTableFromDetail}
+        onIdentifyMeal={(params) => router.push({ pathname: "/meal-photo", params })}
         restaurant={detailRestaurant}
       />
     </PlaceholderScreen>
@@ -671,12 +676,14 @@ function RestaurantDetailModal({
   onClose,
   onCreateCard,
   onCreateTable,
+  onIdentifyMeal,
   restaurant
 }: {
   created: boolean;
   onClose: () => void;
   onCreateCard: (restaurant: Restaurant) => void;
   onCreateTable: (restaurant: Restaurant) => void;
+  onIdentifyMeal: (params: AnalysisRestaurantHandoffParams) => void;
   restaurant: Restaurant | null;
 }) {
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -689,6 +696,16 @@ function RestaurantDetailModal({
     restaurant?.branches.find((branch) => branch.branchId === selectedBranchId) ??
     restaurant?.branches[0];
   const dishes = restaurant ? getRestaurantDishes(restaurant, selectedBranch) : [];
+  // MI-E-C5-R7-C1: the user's OWN branch pick, re-checked against this restaurant's current
+  // branches. `selectedBranch` above deliberately falls back to branches[0] for dish rendering;
+  // that fallback is a display convenience and must never become a durable identity, so the
+  // encoder is given the raw `selectedBranchId` and downgrades to restaurant-only when it is
+  // stale or absent.
+  const identifyMealHandoffParams = encodeAnalysisRestaurantHandoffParams({
+    restaurantId: restaurant?.restaurantId,
+    selectedBranchId,
+    branchIds: restaurant?.branches.map((branch) => branch.branchId) ?? []
+  });
 
   return (
     <Modal transparent animationType="fade" visible={Boolean(restaurant)} onRequestClose={onClose}>
@@ -830,6 +847,18 @@ function RestaurantDetailModal({
                   <View style={styles.detailSecondaryCta}>
                     <SecondaryButton icon="table4" label={zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta} onPress={() => onCreateTable(restaurant)} />
                   </View>
+                  {/* MI-E-C5-R7-C1: carries DURABLE IDS ONLY into the capture flow. Names, districts,
+                      menus and catalog objects stay here — naming the venue on the analysis screen is
+                      R7-C2 and needs a catalog lookup, not a route parameter. */}
+                  {identifyMealHandoffParams ? (
+                    <View style={styles.detailSecondaryCta}>
+                      <SecondaryButton
+                        icon="camera"
+                        label="以這間餐廳辨識餐點"
+                        onPress={() => onIdentifyMeal(identifyMealHandoffParams)}
+                      />
+                    </View>
+                  ) : null}
                 </View>
               </View>
             </ScrollView>
