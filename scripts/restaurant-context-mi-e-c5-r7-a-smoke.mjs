@@ -162,7 +162,21 @@ const DEPS = { releaseOwnedGalleryAsset: () => {} };
 // ===================== presentation resolver =====================
 {
   const resolve = presentation.resolveRestaurantContextPresentation;
-  const catalogHit = () => ({ restaurantId: RESTAURANT, branchId: BRANCH, name: "好廚健康碗 Development", location: "中山區" });
+  // MI-E-C5-R7-C2a: the fixture now mirrors the CANONICAL nested catalog model, and every branch's
+  // `name` is deliberately different from its `district`. The previous fixture was flat and asserted
+  // branchName === "中山區" — a DISTRICT — which is exactly the defect this round corrects, so the
+  // old smoke could never have caught it.
+  const SECOND_BRANCH = "1c0f8a44-2222-4c9d-9c11-77778888dddd";
+  const catalogHit = () => ({
+    restaurantId: RESTAURANT,
+    branchId: BRANCH,
+    name: "好廚健康碗 Development",
+    location: "中山區",
+    branches: [
+      { branchId: BRANCH, restaurantId: RESTAURANT, name: "中山店", district: "中山區", address: "中山路 1 號", menus: [] },
+      { branchId: SECOND_BRANCH, restaurantId: RESTAURANT, name: "大安店", district: "大安區", address: "大安路 2 號", menus: [] }
+    ]
+  });
   const catalogMiss = () => null;
 
   const none = resolve({ restaurantId: null, catalogStatus: "success", findRestaurant: catalogMiss });
@@ -175,7 +189,26 @@ const DEPS = { releaseOwnedGalleryAsset: () => {} };
   });
   expect(resolved.kind === "resolved" && resolved.restaurantName === "好廚健康碗 Development",
     "S5: a ready catalog hit is the only way a name is produced");
-  expect(resolved.branchName === "中山區", "S5: a matching branch contributes its display name");
+  expect(resolved.branchName === "中山店", "S5: a matching branch contributes its own branch NAME");
+  expect(resolved.branchName !== "中山區", "S5: the branch district is never used as the branch name");
+
+  // MI-E-C5-R7-C2a: a NON-first branch must resolve to its own name, not to null and not to the
+  // first branch. Under the flattened-card resolver this case was unreachable.
+  const secondBranch = resolve({
+    restaurantId: RESTAURANT, branchId: SECOND_BRANCH,
+    catalogStatus: "success", findRestaurant: catalogHit
+  });
+  expect(secondBranch.kind === "resolved" && secondBranch.branchName === "大安店",
+    "S5: a second branch resolves to its own name rather than null or the first branch");
+  expect(secondBranch.branchName !== "大安區", "S5: the second branch's district is not used either");
+  expect(secondBranch.restaurantName === "好廚健康碗 Development",
+    "S5: resolving a non-first branch does not disturb the restaurant name");
+
+  const restaurantOnly = resolve({
+    restaurantId: RESTAURANT, catalogStatus: "success", findRestaurant: catalogHit
+  });
+  expect(restaurantOnly.kind === "resolved" && restaurantOnly.branchName === null,
+    "S5: restaurant-only never invents a branch, and never falls back to branches[0]");
 
   const foreignBranch = resolve({
     restaurantId: RESTAURANT, branchId: "9f1d3c22-9999-4a2b-8c3d-44445555cccc",

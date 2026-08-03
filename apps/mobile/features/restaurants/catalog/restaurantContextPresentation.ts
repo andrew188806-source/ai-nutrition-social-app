@@ -1,4 +1,4 @@
-import type { RestaurantCardViewModel } from "../../../view-models/restaurant-view-models";
+import type { CatalogRestaurantViewModel } from "./types";
 
 // MI-E-C5-R7-A-R1 canonical restaurant PRESENTATION authority — CATALOG ONLY.
 //
@@ -15,6 +15,12 @@ import type { RestaurantCardViewModel } from "../../../view-models/restaurant-vi
 //
 // If an offline snapshot is ever genuinely needed, it must arrive as a provenance-carrying trusted
 // type with its own write authority, not as a bare string reopened here.
+//
+// MI-E-C5-R7-C2a: the lookup now returns the CANONICAL nested CatalogRestaurantViewModel (the same
+// model useRestaurantCatalog.findRestaurantById already returns) instead of the flattened
+// RestaurantCardViewModel, so a branch is resolved by its own durable id against
+// `restaurant.branches` and displays its own `name`. The catalog mapper is unchanged: its flattening
+// remains correct for the list/detail card UI, it was simply never a branch-identity authority.
 
 export type RestaurantCatalogLookupStatus = "idle" | "loading" | "success" | "error" | "disabled";
 
@@ -68,7 +74,7 @@ export function resolveRestaurantContextPresentation(
     restaurantId: string | null;
     branchId?: string | null;
     catalogStatus: RestaurantCatalogLookupStatus;
-    findRestaurant: (restaurantId: string) => RestaurantCardViewModel | null;
+    findRestaurant: (restaurantId: string) => CatalogRestaurantViewModel | null;
   }>
 ): RestaurantContextPresentation {
   const restaurantId = typeof input.restaurantId === "string" ? input.restaurantId.trim() : "";
@@ -82,10 +88,20 @@ export function resolveRestaurantContextPresentation(
   const match = input.findRestaurant(restaurantId);
   if (!match || !isDisplayableRestaurantName(match.name)) return UNRESOLVED;
 
-  const branchName =
-    input.branchId && match.branchId === input.branchId && isDisplayableRestaurantName(match.location)
-      ? match.location
-      : null;
+  // MI-E-C5-R7-C2a: resolve the branch against the CANONICAL nested branches, by exact durable id.
+  //
+  // The previous version compared `match.branchId` and rendered `match.location`, both of which come
+  // from the FLATTENED card the catalog mapper builds for list/detail UI. That card collapses a
+  // restaurant to its first branch (mapper.ts sets `branchId`/`location` from `branches[0]`), and its
+  // `location` field is the branch DISTRICT, not the branch name. So a two-branch restaurant showed
+  // the district for its first branch and nothing at all for every other branch.
+  //
+  // There is no index fallback and no district/address substitute: an unknown or foreign branchId
+  // yields null, which is a restaurant-only presentation rather than a wrong venue.
+  const branch = input.branchId
+    ? match.branches.find((candidate) => candidate.branchId === input.branchId) ?? null
+    : null;
+  const branchName = branch && isDisplayableRestaurantName(branch.name) ? branch.name : null;
 
   return Object.freeze({
     kind: "resolved",

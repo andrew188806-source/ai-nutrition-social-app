@@ -16,6 +16,13 @@ const git = (args) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
 
 const sessionStore = read("apps/mobile/features/analysis/analysisSessionStore.ts");
 const presentation = read("apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts");
+// MI-E-C5-R7-C2a: executable source only. The module's comments legitimately name the OLD flattened
+// model and the mapper's `branches[0]` collapse while explaining why they are no longer used, and
+// prose must never satisfy or break a check about the code.
+const presentationCode = presentation
+  .split("\n")
+  .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*") && !line.trim().startsWith("/*"))
+  .join("\n");
 const todayIntake = read("apps/mobile/features/consumer-meals/todayIntakeUiModel.ts");
 const catalogFlags = read("apps/mobile/features/restaurants/catalog/featureFlags.ts");
 const screen = read("apps/mobile/app/analysis.tsx");
@@ -109,8 +116,12 @@ check(
   /if \(!restaurantId\) return NONE;/.test(presentation)
 );
 check(
+  // MI-E-C5-R7-C2a: the reused model is now the CANONICAL nested CatalogRestaurantViewModel — the
+  // same one useRestaurantCatalog.findRestaurantById already returns — instead of the flattened
+  // RestaurantCardViewModel. The invariant is unchanged: exactly one catalog source, never a second.
   "17. the resolver reuses the existing catalog view model rather than a second source",
-  /import type \{ RestaurantCardViewModel \}/.test(presentation) &&
+  /import type \{ CatalogRestaurantViewModel \} from "\.\/types";/.test(presentation) &&
+    !/RestaurantCardViewModel/.test(presentationCode) &&
     !/mockRepository|MockRestaurantCatalogRepository/.test(presentation)
 );
 
@@ -214,7 +225,8 @@ check(
       /restaurantId: string \| null;/.test(params) &&
       /branchId\?: string \| null;/.test(params) &&
       /catalogStatus: RestaurantCatalogLookupStatus;/.test(params) &&
-      /findRestaurant: \(restaurantId: string\) => RestaurantCardViewModel \| null;/.test(params) &&
+      // MI-E-C5-R7-C2a: canonical nested lookup result; the parameter list is otherwise unchanged.
+      /findRestaurant: \(restaurantId: string\) => CatalogRestaurantViewModel \| null;/.test(params) &&
       // No parameter through which a caller could inject a name.
       !/[Dd]isplayName/.test(params) &&
       !/snapshot/i.test(params) &&
@@ -245,8 +257,20 @@ check(
   })()
 );
 check(
+  // MI-E-C5-R7-C2a: the ownership invariant is unchanged — a branch name may only come from a branch
+  // that genuinely belongs to this restaurant — but it is now enforced against the CANONICAL nested
+  // branches by exact durable id, and the displayed value is the branch's own `name`. The previous
+  // spelling compared the flattened card's single `branchId` and rendered `location` (a DISTRICT),
+  // so only the mapper's first branch could ever match and even that showed the wrong field.
   "36. R1 a branch name is only used when the branch genuinely belongs to that restaurant",
-  /input\.branchId && match\.branchId === input\.branchId && isDisplayableRestaurantName\(match\.location\)/.test(presentation)
+  /match\.branches\.find\(\(candidate\) => candidate\.branchId === input\.branchId\)/.test(presentation) &&
+    /const branchName = branch && isDisplayableRestaurantName\(branch\.name\) \? branch\.name : null;/.test(presentation) &&
+    // No district/address/flattened-location substitute and no positional fallback. Scoped to
+    // EXECUTABLE source: the module's comments name those very fields while explaining why they are
+    // no longer used, and prose must not be able to fail a check about the code.
+    !/branchName[\s\S]{0,200}?(match\.location|\.district|\.address|branches\[0\])/.test(presentationCode) &&
+    !/branches\[0\]/.test(presentationCode) &&
+    !/match\.location/.test(presentationCode)
 );
 check(
   "37. R1 legacy restaurantName carries an explicit deprecation boundary",

@@ -37,6 +37,20 @@ const SMOKE = "scripts/restaurant-selection-mi-e-c5-r7-c1-smoke.mjs";
 const R2_UI_GUARD = "scripts/meal-identification-finalization-mi-e-c5-r2-ui-guard.mjs";
 // The exact six paths this round is allowed to introduce or change.
 const CANDIDATE_MANIFEST = Object.freeze([CATALOG_SCREEN, CAPTURE_SCREEN, HANDOFF, GUARD, SMOKE, R2_UI_GUARD]);
+// MI-E-C5-R7-C2a successor manifest — the EXACT six paths of the follow-on round that corrects the
+// presentation resolver's multi-branch lookup. Named individually, never a prefix or wildcard, so a
+// seventh path still fails. R7-C1's own selector/handoff/reset authority is untouched by it.
+const R7_C2A_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts",
+  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs",
+  "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs",
+  GUARD,
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs"
+]);
+const AUTHORIZED_WORKTREE_PATHS = Object.freeze([
+  ...new Set([...CANDIDATE_MANIFEST, ...R7_C2A_SUCCESSOR_MANIFEST])
+]);
 
 const catalog = read(CATALOG_SCREEN);
 const capture = read(CAPTURE_SCREEN);
@@ -223,15 +237,15 @@ const PROTECTED = Object.freeze({
   "apps/mobile/app/today-intake.tsx": "8697e1aa9a471e50f8da664e938e90771cb93b6ff62696b2fa5412080e17e68e",
   "apps/mobile/app/index.tsx": "90605d9b7ab7a396bb69b7a146b23759fa968cd56aeb2ba283dfeb9c0fa41ab1",
   "apps/mobile/features/analysis/analysisSessionStore.ts": "34f78ffcd2f2a7282197c4db7ae08ae035314bdb870fabd5782c79cf4e85ecb4",
-  "apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts": "b71ea6875a4305159c10ef23223d7783492caecec24c43754cf4cd45426f4e4c",
+  "apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts": "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789",
   "apps/mobile/features/restaurants/catalog/mapper.ts": "438a405a68a38db6250a00330a7b7f88ab9453cf0638e6be91a1cb2899e5cc38",
   "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts": "d4403fc5e2580758c77ffd7e29052dd72383af4f3ddd3b072a9abe2cd35fa1f2",
   "apps/mobile/features/meal-identification-finalization/v3Contract.ts": "69a33497cb35f0c6a7454d3857c6b4d6e2a055e88a3cc7ee43398f2d5c936505",
   "apps/mobile/features/analysis/useMealPhotoFinalization.ts": "7d4178645730060d81fe7845ecefd682bc51ad9c76e9fcdf3ded780b269678ae",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs": "2b2eb7f32a0a31242254dd0d8b1ba01b9d1ee9aceaf98335d281b90e2c859c7b",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c",
-  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs": "369f3c2476b98e7a2647fcefd65788adc2f9a4db408038cdb476564d6fa12b07",
-  "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs": "8540451c53f19421ff5c70201d900f4e607a04c2ae518aa6576eea2962e67cee",
+  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs": "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+  "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs": "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
   // The 2Z-B3-D historical guard is a PRE-EXISTING failing phase artifact. R7-C1 neither repairs
   // nor retires it; it only proves the file was not touched.
   "scripts/consumer-runtime-phase-2z-b3-d-mobile-planned-meal-guard.mjs":
@@ -365,11 +379,21 @@ const worktree = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]
   .split("\0")
   .filter(Boolean)
   .map((entry) => entry.slice(3).replaceAll("\\", "/"));
-const outsideManifest = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
+const outsideManifest = worktree.filter((file) => !AUTHORIZED_WORKTREE_PATHS.includes(file));
 check(
-  "37. any uncommitted change is confined to the approved manifest (vacuous on a clean tree)",
+  // Accepts this round's own six paths and the exact R7-C2a successor six; anything else fails.
+  // Still vacuous on a clean tree, so the freeze commit cannot invalidate it.
+  "37. any uncommitted change is confined to an approved manifest (vacuous on a clean tree)",
   outsideManifest.length === 0,
   { worktreeEntries: worktree.length, outsideManifest }
+);
+check(
+  "37a. the R7-C2a successor manifest is exactly six named paths, never a prefix or wildcard",
+  R7_C2A_SUCCESSOR_MANIFEST.length === 6 &&
+    new Set(R7_C2A_SUCCESSOR_MANIFEST).size === 6 &&
+    R7_C2A_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(ts|mjs)$/i.test(entry)) &&
+    // The R7-C1 production surfaces are NOT re-opened by the successor manifest.
+    ![CATALOG_SCREEN, CAPTURE_SCREEN, HANDOFF, SMOKE].some((entry) => R7_C2A_SUCCESSOR_MANIFEST.includes(entry))
 );
 check("38. nothing is staged for commit by the guard's own run", git(["diff", "--cached", "--name-only"]).trim() === "");
 
