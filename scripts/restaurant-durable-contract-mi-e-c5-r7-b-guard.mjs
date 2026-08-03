@@ -98,7 +98,83 @@ const constraintSql = constraintMigration
   .join("\n");
 
 const trackedChanged = new Set(git(["diff", "--name-only"]).split("\n").filter(Boolean));
+// MI-E-C5-R7-B2-R3: a migration can also be mutated while sitting in the index only, which
+// `git diff --name-only` never reports. The staged set closes that hole for every fence below.
+const stagedChanged = new Set(git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean));
 const untracked = new Set(git(["ls-files", "--others", "--exclude-standard"]).split("\n").filter(Boolean));
+
+// ============================================================================================
+// MI-E-C5-R7-B2-R3: migration lifecycle authority.
+//
+// Checks 44/45 were written while 20260804010000 was still an uncommitted candidate, so they
+// asserted `untracked.has(CONSTRAINT_MIGRATION)`. Freeze commit 88e9776e put that file under
+// version control, which made the assertion permanently unsatisfiable — a guard lifecycle
+// defect, not a production defect. The repair inverts the expectation: at a clean frozen HEAD
+// all three successors must be TRACKED, unmodified and absent from the untracked set.
+//
+// Everything is derived from a plain snapshot so the negative fixtures below drive the SAME
+// predicate the live repository check uses, rather than a parallel re-implementation.
+// ============================================================================================
+const MIGRATIONS_DIR = "supabase/migrations/";
+const SUCCESSORS = Object.freeze([MIGRATION, LEDGER_MIGRATION, CONSTRAINT_MIGRATION]);
+// Exact content authority. Every successor is pinned, including 20260804010000, whose digest was
+// never pinned before this round.
+const SUCCESSOR_SHA = Object.freeze({
+  [MIGRATION]: "3a615486820cfe3eed76b697de97bc3d8304f7ca76c76b68f285a73ba71f495b",
+  [LEDGER_MIGRATION]: "d33c3981463b323e049119bcfe6e268006c4c3c5cb7c90912c4d270c4bab5238",
+  [CONSTRAINT_MIGRATION]: "a3c17f71d060f09050970be44eee877034afdb1285369215ee5e5399a638b0bf"
+});
+// The first authorized successor timestamp. Anything tracked at or after it that is not one of
+// the three exact paths is a fourth successor — this catches a rename in either direction (same
+// timestamp with a new name, or the same name under a new timestamp) without ever falling back
+// to a generic \d{14} filename pattern.
+const SUCCESSOR_FLOOR = `${MIGRATIONS_DIR}20260802010000`;
+
+function migrationLifecycle(snapshot) {
+  const inMigrations = (entry) => entry.startsWith(MIGRATIONS_DIR);
+  const trackedMigrations = [...snapshot.tracked].filter(inMigrations).sort();
+  const successorsTracked = SUCCESSORS.filter((entry) => snapshot.tracked.has(entry));
+  const successorsUntracked = SUCCESSORS.filter((entry) => snapshot.untracked.has(entry));
+  const successorsModified = SUCCESSORS.filter(
+    (entry) => snapshot.worktreeModified.has(entry) || snapshot.stagedModified.has(entry)
+  );
+  const newMigrations = [...snapshot.untracked].filter(inMigrations).sort();
+  const modifiedMigrations = [...new Set([...snapshot.worktreeModified, ...snapshot.stagedModified])]
+    .filter(inMigrations)
+    .sort();
+  const shaDrift = SUCCESSORS.filter((entry) => snapshot.sha[entry] !== SUCCESSOR_SHA[entry]);
+  const extraSuccessors = trackedMigrations.filter(
+    (entry) => entry >= SUCCESSOR_FLOOR && !SUCCESSORS.includes(entry)
+  );
+  return {
+    successorsTracked,
+    successorsUntracked,
+    successorsModified,
+    newMigrations,
+    modifiedMigrations,
+    shaDrift,
+    extraSuccessors,
+    // The single post-freeze verdict: three tracked successors, none untracked, none modified,
+    // no new migration, no modified migration, no digest drift, no fourth successor.
+    ok:
+      successorsTracked.length === 3 &&
+      successorsUntracked.length === 0 &&
+      successorsModified.length === 0 &&
+      newMigrations.length === 0 &&
+      modifiedMigrations.length === 0 &&
+      shaDrift.length === 0 &&
+      extraSuccessors.length === 0
+  };
+}
+
+const trackedMigrationFiles = new Set(git(["ls-files", MIGRATIONS_DIR]).split("\n").filter(Boolean));
+const liveLifecycle = migrationLifecycle({
+  tracked: trackedMigrationFiles,
+  worktreeModified: trackedChanged,
+  stagedModified: stagedChanged,
+  untracked,
+  sha: Object.fromEntries(SUCCESSORS.map((entry) => [entry, sha(entry)]))
+});
 
 // ============================================================================================
 // Mobile contract (1-10)
@@ -646,8 +722,10 @@ check(
 // Scope / candidate hygiene (43-48)
 // ============================================================================================
 check(
+  // MI-E-C5-R7-B2-R3: the index is checked too, so an edit staged but not left in the worktree
+  // can no longer slip past.
   "43. every already-shipped migration is byte-identical (immutable history)",
-  ![...trackedChanged].some((entry) => entry.startsWith("supabase/migrations/"))
+  liveLifecycle.modifiedMigrations.length === 0
 );
 check(
   // MI-E-C5-R7-B1-R2: 20260802010000 is now COMMITTED (freeze 28f487fa), so it must be tracked and
@@ -655,17 +733,154 @@ check(
   // are asserted — the shipped one cannot be edited, the new one cannot already be in HEAD.
   // MI-E-C5-R7-B2-R1: 20260802010000 and 20260803010000 are both COMMITTED now, so both must be
   // tracked and unmodified; 20260804010000 is the only new file.
-  "44. both shipped successors are tracked+unmodified and the corrective one is genuinely new",
-  !trackedChanged.has(MIGRATION) && !untracked.has(MIGRATION) && git(["ls-files", MIGRATION]) === MIGRATION &&
-    !trackedChanged.has(LEDGER_MIGRATION) && !untracked.has(LEDGER_MIGRATION) &&
-    git(["ls-files", LEDGER_MIGRATION]) === LEDGER_MIGRATION &&
-    untracked.has(CONSTRAINT_MIGRATION) && !trackedChanged.has(CONSTRAINT_MIGRATION)
+  // MI-E-C5-R7-B2-R3: 20260804010000 was committed by freeze 88e9776e, so the candidate-phase
+  // clause `untracked.has(CONSTRAINT_MIGRATION)` is now permanently false. All three successors
+  // are shipped history: tracked, unmodified in worktree AND index, and absent from untracked.
+  "44. all three restaurant-context successors are tracked and unmodified (post-freeze authority)",
+  liveLifecycle.successorsTracked.length === 3 &&
+    liveLifecycle.successorsUntracked.length === 0 &&
+    liveLifecycle.successorsModified.length === 0 &&
+    SUCCESSORS.every((entry) => git(["ls-files", entry]) === entry)
 );
 check(
-  "45. exactly ONE migration is added by this candidate, and it is EXACTLY the constraint path",
+  // MI-E-C5-R7-B2-R3 (new): 20260802010000 and 20260803010000 were already digest-pinned by check
+  // 38-20, but 20260804010000 never was — only its filename was. A silent edit to the constraint
+  // migration would therefore have passed. All three digests are now pinned literally.
+  "44a. all three successor digests are pinned exactly, including 20260804010000",
+  liveLifecycle.shaDrift.length === 0 &&
+    sha(MIGRATION) === "3a615486820cfe3eed76b697de97bc3d8304f7ca76c76b68f285a73ba71f495b" &&
+    sha(LEDGER_MIGRATION) === "d33c3981463b323e049119bcfe6e268006c4c3c5cb7c90912c4d270c4bab5238" &&
+    sha(CONSTRAINT_MIGRATION) === "a3c17f71d060f09050970be44eee877034afdb1285369215ee5e5399a638b0bf"
+);
+check(
+  // MI-E-C5-R7-B2-R3: the inventory is now stated in post-freeze terms. At a clean frozen HEAD the
+  // repository adds NO migration at all; the previous "exactly one added candidate" expectation
+  // described a state that ceased to exist the moment 88e9776e was created.
+  "45. migration inventory at the frozen HEAD: 3 tracked successors, 0 untracked, 0 new, 0 modified",
+  liveLifecycle.successorsTracked.length === 3 &&
+    liveLifecycle.successorsUntracked.length === 0 &&
+    liveLifecycle.newMigrations.length === 0 &&
+    liveLifecycle.modifiedMigrations.length === 0 &&
+    liveLifecycle.extraSuccessors.length === 0 &&
+    liveLifecycle.ok
+);
+check(
+  // MI-E-C5-R7-B2-R3 (new): lifecycle fixtures. Each one drives migrationLifecycle() — the exact
+  // predicate checks 44/44a/45 use — so the fences cannot be proven green by a parallel mock.
+  "45-lifecycle. negative migration-lifecycle fixtures all reject through the SAME predicate",
   (() => {
-    const added = [...untracked].filter((entry) => entry.startsWith("supabase/migrations/"));
-    return added.length === 1 && added[0] === CONSTRAINT_MIGRATION;
+    const FOURTH_SAME_TIMESTAMP = `${MIGRATIONS_DIR}20260804010000_something_else.sql`;
+    const FOURTH_SAME_NAME = `${MIGRATIONS_DIR}20260805010000_relax_ai_candidate_restaurant_identity_constraint.sql`;
+    const SECOND_NEW = `${MIGRATIONS_DIR}20260806010000_second_new_migration.sql`;
+    const ARBITRARY = `${MIGRATIONS_DIR}99999999999999_arbitrary_unauthorized_change.sql`;
+    const cleanSha = () => Object.fromEntries(SUCCESSORS.map((entry) => [entry, SUCCESSOR_SHA[entry]]));
+    const snapshot = (over = {}) => ({
+      tracked: new Set(SUCCESSORS),
+      worktreeModified: new Set(),
+      stagedModified: new Set(),
+      untracked: new Set(),
+      sha: cleanSha(),
+      ...over
+    });
+    const without = (dropped) => new Set(SUCCESSORS.filter((entry) => entry !== dropped));
+
+    const fixtures = [
+      // 1. the frozen HEAD shape itself — the only shape that may pass.
+      ["frozen HEAD: three tracked, unchanged, nothing untracked", snapshot(), true],
+      // 2-4. a shipped successor edited in the worktree.
+      ["20260802010000 modified in worktree", snapshot({ worktreeModified: new Set([MIGRATION]) }), false],
+      ["20260803010000 modified in worktree", snapshot({ worktreeModified: new Set([LEDGER_MIGRATION]) }), false],
+      ["20260804010000 modified in worktree", snapshot({ worktreeModified: new Set([CONSTRAINT_MIGRATION]) }), false],
+      // 2-4 (index variant): the same edit hidden in the index only.
+      ["20260802010000 modified in index only", snapshot({ stagedModified: new Set([MIGRATION]) }), false],
+      ["20260803010000 modified in index only", snapshot({ stagedModified: new Set([LEDGER_MIGRATION]) }), false],
+      ["20260804010000 modified in index only", snapshot({ stagedModified: new Set([CONSTRAINT_MIGRATION]) }), false],
+      // 5. the retired candidate-phase shape must now FAIL, not pass.
+      [
+        "20260804010000 back as an untracked candidate (the retired pre-freeze shape)",
+        snapshot({ tracked: without(CONSTRAINT_MIGRATION), untracked: new Set([CONSTRAINT_MIGRATION]) }),
+        false
+      ],
+      // 6. a successor disappears entirely.
+      ["20260802010000 missing", snapshot({ tracked: without(MIGRATION) }), false],
+      ["20260803010000 missing", snapshot({ tracked: without(LEDGER_MIGRATION) }), false],
+      ["20260804010000 missing", snapshot({ tracked: without(CONSTRAINT_MIGRATION) }), false],
+      // 7. a fourth successor, by either rename direction.
+      [
+        "fourth successor: same timestamp, different name",
+        snapshot({ tracked: new Set([...SUCCESSORS, FOURTH_SAME_TIMESTAMP]) }),
+        false
+      ],
+      [
+        "fourth successor: same name, different timestamp",
+        snapshot({ tracked: new Set([...SUCCESSORS, FOURTH_SAME_NAME]) }),
+        false
+      ],
+      // 8. a second new migration appears alongside.
+      ["second new migration appears untracked", snapshot({ untracked: new Set([SECOND_NEW]) }), false],
+      [
+        "two new migrations appear untracked",
+        snapshot({ untracked: new Set([SECOND_NEW, ARBITRARY]) }),
+        false
+      ],
+      // 9. an arbitrary unauthorized migration.
+      ["arbitrary unauthorized migration, untracked", snapshot({ untracked: new Set([ARBITRARY]) }), false],
+      ["arbitrary unauthorized migration, tracked", snapshot({ tracked: new Set([...SUCCESSORS, ARBITRARY]) }), false],
+      // A migration OUTSIDE the successor set is equally immutable — this is what separates the
+      // whole-directory fence from the three-successor fence.
+      ["a non-successor shipped migration modified in worktree", snapshot({ worktreeModified: new Set([PREDECESSOR]) }), false],
+      [
+        "a non-successor shipped migration modified in index only",
+        snapshot({ stagedModified: new Set([CONSTRAINT_PREDECESSOR]) }),
+        false
+      ],
+      // SHA drift on each successor independently.
+      ["20260802010000 digest drift", snapshot({ sha: { ...cleanSha(), [MIGRATION]: "0".repeat(64) } }), false],
+      ["20260803010000 digest drift", snapshot({ sha: { ...cleanSha(), [LEDGER_MIGRATION]: "0".repeat(64) } }), false],
+      ["20260804010000 digest drift", snapshot({ sha: { ...cleanSha(), [CONSTRAINT_MIGRATION]: "0".repeat(64) } }), false]
+    ];
+
+    const everyFixtureMatches = fixtures.every(([, snap, expected]) => migrationLifecycle(snap).ok === expected);
+    // 10. the passing shape must not depend on candidate-phase state: it passes with an EMPTY
+    // untracked set, and the same repository with 20260804010000 untracked must fail.
+    const passingShapeIsCandidateFree =
+      migrationLifecycle(snapshot()).ok === true &&
+      migrationLifecycle(snapshot()).successorsUntracked.length === 0 &&
+      migrationLifecycle(snapshot()).newMigrations.length === 0 &&
+      migrationLifecycle(
+        snapshot({ tracked: without(CONSTRAINT_MIGRATION), untracked: new Set([CONSTRAINT_MIGRATION]) })
+      ).ok === false;
+    // Exactly one fixture may pass, so a predicate that returned true unconditionally is caught.
+    const exactlyOnePasses = fixtures.filter(([, snap]) => migrationLifecycle(snap).ok).length === 1;
+    // `successorsUntracked` and `successorsModified` are deliberate restatements of the §四
+    // requirements, not independent gates: because every successor path lives under
+    // supabase/migrations/, an untracked successor is necessarily also in newMigrations and a
+    // modified successor is necessarily also in modifiedMigrations. Both clauses are kept so the
+    // successor-specific requirement is stated explicitly, and the implication is asserted here so
+    // the redundancy is a proven property rather than an assumption.
+    const successorClausesAreSubsumed = SUCCESSORS.every((entry) => {
+      const asUntracked = migrationLifecycle(snapshot({ tracked: without(entry), untracked: new Set([entry]) }));
+      const asWorktreeEdit = migrationLifecycle(snapshot({ worktreeModified: new Set([entry]) }));
+      const asIndexEdit = migrationLifecycle(snapshot({ stagedModified: new Set([entry]) }));
+      return (
+        asUntracked.successorsUntracked.includes(entry) &&
+        asUntracked.newMigrations.includes(entry) &&
+        !asUntracked.ok &&
+        asWorktreeEdit.successorsModified.includes(entry) &&
+        asWorktreeEdit.modifiedMigrations.includes(entry) &&
+        !asWorktreeEdit.ok &&
+        asIndexEdit.successorsModified.includes(entry) &&
+        asIndexEdit.modifiedMigrations.includes(entry) &&
+        !asIndexEdit.ok
+      );
+    });
+    return (
+      everyFixtureMatches &&
+      passingShapeIsCandidateFree &&
+      exactlyOnePasses &&
+      successorClausesAreSubsumed &&
+      fixtures.length === 22
+    );
   })()
 );
 check(
@@ -708,8 +923,10 @@ check(
   })
 );
 check(
+  // MI-E-C5-R7-B2-R3: the staged set is included, so an Edge Function or packages/ change parked
+  // in the index is caught as well.
   "46. no Edge Function and no packages/shared file is touched",
-  ![...trackedChanged, ...untracked].some(
+  ![...trackedChanged, ...stagedChanged, ...untracked].some(
     (entry) => entry.startsWith("supabase/functions/") || entry.startsWith("packages/")
   )
 );
