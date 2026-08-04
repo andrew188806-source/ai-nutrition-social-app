@@ -30,6 +30,48 @@ const GUARD = "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs";
 const SMOKE = "scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs";
 const CANDIDATE_MANIFEST = Object.freeze([RESOLVER, R7A_GUARD, R7A_SMOKE, R7C1_GUARD, GUARD, SMOKE]);
 
+// =============================================================================================
+// MI-E-C5-R7-C2b-R1 SUCCESSOR AUTHORITY
+//
+// Four of this guard's checks (3, 20, 21, 27) were written as C2a-round non-goal / candidate-
+// lifecycle fences. They were correct for C2a, which deliberately corrected the resolver WITHOUT
+// giving it a caller — but as written they also made C2a's own declared successor impossible:
+// check 3 required the resolver to have zero production callers forever, and check 20 required the
+// R7-C1 guard to keep the pre-C2b analysis.tsx digest forever.
+//
+// The amendment below makes those four checks LIFECYCLE-AWARE rather than round-locked. Each now
+// accepts exactly two states — the frozen C2a state, and the exact C2b successor state — and
+// nothing else. No wildcard, no prefix exception, no hard-true, no specific-HEAD bypass. Every
+// resolver-correctness assertion (checks 4-16) and every other fence is untouched.
+// =============================================================================================
+const ANALYSIS_SCREEN = "apps/mobile/app/analysis.tsx";
+const R7B_GUARD = "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs";
+const R3_GUARD = "scripts/consumer-runtime-mi-e-c5-r3-guard.mjs";
+const R5_GUARD = "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs";
+const C2B_GUARD = "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs";
+const C2B_SMOKE = "scripts/restaurant-display-mi-e-c5-r7-c2b-smoke.mjs";
+
+// The EXACT eight paths of the C2b-R1 successor candidate. Named individually — never a prefix,
+// never a wildcard — so a ninth path fails. Exactly one is a production file.
+const C2B_R1_MANIFEST = Object.freeze([
+  ANALYSIS_SCREEN, R3_GUARD, R5_GUARD, R7B_GUARD, R7C1_GUARD, GUARD, C2B_GUARD, C2B_SMOKE
+]);
+
+// The two digests C2b is authorised to move, pinned to the ACTUAL successor candidate bytes. An
+// arbitrary edit to either file fails: only these exact contents are accepted as the successor
+// state, and only the frozen values are accepted as the pre-C2b state.
+const C2A_FROZEN_DIGESTS = Object.freeze({
+  [ANALYSIS_SCREEN]: "426bced651c2b3ea8d6f3d69d4ab3c6e2f532e8c9e767b338c8ae9d53ef300c8",
+  [R7B_GUARD]: "2b2eb7f32a0a31242254dd0d8b1ba01b9d1ee9aceaf98335d281b90e2c859c7b"
+});
+const C2B_SUCCESSOR_DIGESTS = Object.freeze({
+  [ANALYSIS_SCREEN]: "0c3488138597249ca15506db65cb7d4aaa3a88ca1c041dd9aa912acc1b6c5cd2",
+  [R7B_GUARD]: "86972f1e557d20faa1f048d6e81f4698fe9940332f16cddf607c343250ce4f83"
+});
+// True only in the exact successor state; used to select which lifecycle branch is authoritative.
+const inC2bSuccessorState =
+  exists(ANALYSIS_SCREEN) && sha(ANALYSIS_SCREEN) === C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN];
+
 const resolver = read(RESOLVER);
 // Executable source only: the module's comments legitimately name the old flattened model, the
 // mapper's branches[0] collapse and the district field while explaining why none of them is used.
@@ -43,14 +85,33 @@ const resolverCode = resolver
 // =============================================================================================
 check("1. the only production path in this candidate is the resolver", CANDIDATE_MANIFEST.filter((p) => !p.startsWith("scripts/")).join(",") === RESOLVER);
 check("2. the resolver exists at the canonical catalog path", exists(RESOLVER));
+const productionCallers = git(["grep", "-l", "resolveRestaurantContextPresentation", "--", "apps/", "packages/"])
+  .split("\n")
+  .map((line) => line.trim().replaceAll("\\", "/"))
+  .filter(Boolean)
+  .sort();
+// Exactly two legal states, both stated as EXACT sorted path lists.
+const CALLER_STATE_FROZEN = [RESOLVER].sort();
+const CALLER_STATE_C2B = [RESOLVER, ANALYSIS_SCREEN].sort();
+const callerList = JSON.stringify(productionCallers);
 check(
-  "3. this round adds NO production caller — the display wiring is R7-C2b",
-  (() => {
-    const callers = git(["grep", "-l", "resolveRestaurantContextPresentation", "--", "apps/", "packages/"])
-      .split("\n").map((l) => l.trim()).filter(Boolean);
-    return callers.length === 1 && callers[0].replaceAll("\\", "/") === RESOLVER;
-  })(),
-  git(["grep", "-l", "resolveRestaurantContextPresentation", "--", "apps/", "packages/"]).split("\n").filter(Boolean)
+  "3. the resolver has either NO production caller (frozen C2a) or exactly the analysis.tsx successor caller (C2b)",
+  callerList === JSON.stringify(CALLER_STATE_FROZEN) || callerList === JSON.stringify(CALLER_STATE_C2B),
+  productionCallers
+);
+check(
+  "3a. no third production caller exists — Today Intake, the catalog screen and packages/ are never callers",
+  // Enumerated individually rather than by prefix, so a new screen cannot inherit an allowance.
+  !productionCallers.includes("apps/mobile/app/today-intake.tsx") &&
+    !productionCallers.includes("apps/mobile/features/consumer-meals/todayIntakeUiModel.ts") &&
+    !productionCallers.includes("apps/mobile/app/restaurants.tsx") &&
+    !productionCallers.includes("apps/mobile/app/meal-photo.tsx") &&
+    !productionCallers.includes("apps/mobile/features/meal-identification/analysisRestaurantHandoff.ts") &&
+    !productionCallers.some((entry) => entry.startsWith("packages/")) &&
+    // The resolver itself is always in the list; at most ONE other file may ever be.
+    productionCallers.includes(RESOLVER) &&
+    productionCallers.filter((entry) => entry !== RESOLVER).length <= 1 &&
+    productionCallers.every((entry) => entry === RESOLVER || entry === ANALYSIS_SCREEN)
 );
 check(
   "4. the resolver stays pure — no React, network, repository or storage of its own",
@@ -151,32 +212,104 @@ check(
 check(
   // Plain substring comparison: a constructed RegExp needs path escaping that is easy to get wrong,
   // and these are exact literals in the R7-C1 guard's pin table.
-  "20. the R7-C1 guard refreshed ONLY the resolver/R7-A authority and kept analysis.tsx pinned",
-  r7c1Guard.includes(
-    '"apps/mobile/app/analysis.tsx": "426bced651c2b3ea8d6f3d69d4ab3c6e2f532e8c9e767b338c8ae9d53ef300c8"'
-  ) &&
-    r7c1Guard.includes(`"${RESOLVER}": "${sha(RESOLVER)}"`) &&
+  //
+  // MI-E-C5-R7-C2b-R1: the C2a authority this check exists to protect is the RESOLVER and R7-A
+  // trio, and that part is unchanged. What is relaxed is only the analysis.tsx pin, which C2b is
+  // explicitly authorised to refresh — and even then only to the exact successor bytes, never to an
+  // arbitrary value.
+  "20. the R7-C1 guard still carries the C2a resolver / R7-A authority verbatim",
+  r7c1Guard.includes(`"${RESOLVER}": "${sha(RESOLVER)}"`) &&
     r7c1Guard.includes(`"${R7A_GUARD}": "${sha(R7A_GUARD)}"`) &&
-    r7c1Guard.includes(`"${R7A_SMOKE}": "${sha(R7A_SMOKE)}"`)
+    r7c1Guard.includes(`"${R7A_SMOKE}": "${sha(R7A_SMOKE)}"`) &&
+    // Those three are the C2a FREEZE values, stated literally so a successor cannot re-pin them to
+    // whatever the files happen to contain.
+    sha(RESOLVER) === "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789" &&
+    sha(R7A_GUARD) === "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100" &&
+    sha(R7A_SMOKE) === "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd"
+);
+check(
+  "20a. the R7-C1 analysis.tsx pin is EITHER the frozen C2a digest or the exact C2b successor digest",
+  r7c1Guard.includes(`"${ANALYSIS_SCREEN}": "${C2A_FROZEN_DIGESTS[ANALYSIS_SCREEN]}"`) ||
+    (r7c1Guard.includes(`"${ANALYSIS_SCREEN}": "${C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN]}"`) &&
+      // A refreshed pin must describe the file that is actually on disk — not a stale or invented one.
+      sha(ANALYSIS_SCREEN) === C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN])
+);
+// The manifest DECLARATION itself, not a proximity window: a fixed character budget after the
+// symbol name runs straight past the array literal into unrelated code, where an ordinary
+// `startsWith` (or a protective negative prefix fence) would trip a check about how the manifest is
+// built. Extract the Object.freeze array and inspect only that.
+const r7c1SuccessorDeclaration = (() => {
+  const marker = "const R7_C2B_SUCCESSOR_MANIFEST = Object.freeze([";
+  const start = r7c1Guard.indexOf(marker);
+  if (start < 0) return null;
+  const end = r7c1Guard.indexOf("]);", start);
+  return end < 0 ? null : r7c1Guard.slice(start, end + 3);
+})();
+check(
+  "20b. in the successor state the R7-C1 guard declares the exact C2b successor manifest",
+  !inC2bSuccessorState ||
+    (r7c1SuccessorDeclaration !== null &&
+      // Every one of the eight paths is named literally in the declaration…
+      C2B_R1_MANIFEST.every(
+        (entry) => r7c1SuccessorDeclaration.includes(`"${entry}"`) || r7c1Guard.includes(`"${entry}"`)
+      ) &&
+      // …and the declaration is an enumerated list, never a prefix or glob rule.
+      !/startsWith\(|\*|RegExp|match\(/.test(r7c1SuccessorDeclaration) &&
+      // The R7-C1 guard must also assert the eight-path count itself.
+      /R7_C2B_SUCCESSOR_MANIFEST\.length === 8/.test(r7c1Guard))
 );
 
 // =============================================================================================
 // 5. Protected zero-diff surfaces (21-25)
 // =============================================================================================
+// PERMANENTLY protected — byte-identical in BOTH the frozen and the successor state. C2b is not
+// authorised to touch any of these, so no lifecycle branch exists for them. The resolver, the
+// catalog types and the C2a smoke are added here by C2b-R1: after the C2a freeze they are immutable,
+// so pinning them is a strengthening, not a relaxation.
 const PROTECTED = Object.freeze({
-  "apps/mobile/app/analysis.tsx": "426bced651c2b3ea8d6f3d69d4ab3c6e2f532e8c9e767b338c8ae9d53ef300c8",
+  [RESOLVER]: "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789",
+  "apps/mobile/features/restaurants/catalog/mapper.ts": "438a405a68a38db6250a00330a7b7f88ab9453cf0638e6be91a1cb2899e5cc38",
+  "apps/mobile/features/restaurants/catalog/types.ts": "b67d98a9c2de1a929bd494dd176f8b69d3cbd0288a4df1947f406da094ebe98c",
   "apps/mobile/app/restaurants.tsx": "30f53812245508f4d7664c5e15e9b530349565dd8a81dc169371c8108ddf0cce",
   "apps/mobile/app/meal-photo.tsx": "dccf608fa3dcec88e20a9245cc5b1a9d95b658c043c6a1a93acc8cd444f8395a",
-  "apps/mobile/features/restaurants/catalog/mapper.ts": "438a405a68a38db6250a00330a7b7f88ab9453cf0638e6be91a1cb2899e5cc38",
+  "apps/mobile/app/today-intake.tsx": "8697e1aa9a471e50f8da664e938e90771cb93b6ff62696b2fa5412080e17e68e",
+  "apps/mobile/features/meal-identification/analysisRestaurantHandoff.ts":
+    "7189d67ede2528337dd40f154e080f2fa1fcf3a38582c8d330e03b0bb302e05e",
   "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts": "d4403fc5e2580758c77ffd7e29052dd72383af4f3ddd3b072a9abe2cd35fa1f2",
   "apps/mobile/features/analysis/analysisSessionStore.ts": "34f78ffcd2f2a7282197c4db7ae08ae035314bdb870fabd5782c79cf4e85ecb4",
   "apps/mobile/features/meal-identification-finalization/v3Contract.ts": "69a33497cb35f0c6a7454d3857c6b4d6e2a055e88a3cc7ee43398f2d5c936505",
   "apps/mobile/features/analysis/useMealPhotoFinalization.ts": "7d4178645730060d81fe7845ecefd682bc51ad9c76e9fcdf3ded780b269678ae",
-  "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs": "2b2eb7f32a0a31242254dd0d8b1ba01b9d1ee9aceaf98335d281b90e2c859c7b",
+  [R7A_GUARD]: "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+  [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
+  [SMOKE]: "6596c470fcb856346dfe926269e7a1ee47d1541508f902ead4f850143191ac86",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c"
 });
 const drift = Object.entries(PROTECTED).filter(([file, want]) => !exists(file) || sha(file) !== want);
-check("21. every protected surface is byte-identical to its frozen content", drift.length === 0, drift.map(([f]) => f));
+check("21. every permanently protected surface is byte-identical to its frozen content", drift.length === 0, drift.map(([f]) => f));
+// The two former members of this table that C2b IS authorised to move. Each may hold exactly one of
+// two values — the C2a freeze bytes, or the C2b successor bytes — and nothing else. This is an
+// enumerated two-state exception, not a prefix exception and not a free pass.
+const exceptionDrift = Object.keys(C2A_FROZEN_DIGESTS).filter((file) => {
+  if (!exists(file)) return true;
+  const actual = sha(file);
+  return actual !== C2A_FROZEN_DIGESTS[file] && actual !== C2B_SUCCESSOR_DIGESTS[file];
+});
+check(
+  "21a. the two C2b-authorised surfaces hold either their frozen or their exact successor content",
+  exceptionDrift.length === 0,
+  exceptionDrift
+);
+check(
+  "21b. the successor exception is exactly two enumerated paths, never a prefix or a wildcard",
+  Object.keys(C2A_FROZEN_DIGESTS).length === 2 &&
+    Object.keys(C2B_SUCCESSOR_DIGESTS).length === 2 &&
+    Object.keys(C2A_FROZEN_DIGESTS).every((file) => Object.hasOwn(C2B_SUCCESSOR_DIGESTS, file)) &&
+    Object.keys(C2A_FROZEN_DIGESTS).every((file) => file === ANALYSIS_SCREEN || file === R7B_GUARD) &&
+    // The two states must be genuinely different, so "either value" can never collapse to "any value".
+    Object.keys(C2A_FROZEN_DIGESTS).every((file) => C2A_FROZEN_DIGESTS[file] !== C2B_SUCCESSOR_DIGESTS[file]) &&
+    // Nothing permanently protected may also appear in the exception table.
+    Object.keys(C2A_FROZEN_DIGESTS).every((file) => !Object.hasOwn(PROTECTED, file))
+);
 check(
   "22. the catalog mapper is NOT modified to accommodate the resolver",
   !CANDIDATE_MANIFEST.includes("apps/mobile/features/restaurants/catalog/mapper.ts") &&
@@ -212,13 +345,40 @@ check(
 );
 const worktree = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
   .split("\0").filter(Boolean).map((entry) => entry.slice(3).replaceAll("\\", "/"));
-const outside = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
+// Lifecycle-AWARE, never lifecycle-DEPENDENT. Three states are accepted, each an EXACT named list:
+//   (1) a clean frozen repository — the empty worktree is a subset of both lists,
+//   (2) the exact C2a six-path candidate shape,
+//   (3) the exact C2b-R1 eight-path candidate shape.
+// Nothing must be modified or untracked for the guard to pass, and no other shape is accepted.
+const outsideC2a = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
+const outsideC2bR1 = worktree.filter((file) => !C2B_R1_MANIFEST.includes(file));
 check(
-  // Lifecycle-AWARE, never lifecycle-DEPENDENT: a clean post-freeze tree and a tree holding exactly
-  // this candidate both satisfy it. Nothing must be modified or untracked for the guard to pass.
-  "27. any uncommitted change is confined to the approved manifest (vacuous on a clean tree)",
-  outside.length === 0,
-  { worktreeEntries: worktree.length, outside }
+  "27. any uncommitted change is confined to the C2a or the C2b-R1 manifest (vacuous on a clean tree)",
+  outsideC2a.length === 0 || outsideC2bR1.length === 0,
+  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1 }
+);
+check(
+  "27a. the C2b-R1 manifest is exactly eight named paths with exactly one production file",
+  C2B_R1_MANIFEST.length === 8 &&
+    new Set(C2B_R1_MANIFEST).size === 8 &&
+    C2B_R1_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C2B_R1_MANIFEST.filter((entry) => !entry.startsWith("scripts/")).length === 1 &&
+    C2B_R1_MANIFEST.includes(ANALYSIS_SCREEN) &&
+    // This guard is the authorised eighth path; the C2a smoke is NOT in the successor candidate.
+    C2B_R1_MANIFEST.includes(GUARD) &&
+    !C2B_R1_MANIFEST.includes(SMOKE)
+);
+check(
+  "27b. no successor manifest may reach the resolver, the mapper, Today Intake, packages, functions or migrations",
+  !C2B_R1_MANIFEST.includes(RESOLVER) &&
+    !C2B_R1_MANIFEST.includes("apps/mobile/features/restaurants/catalog/mapper.ts") &&
+    !C2B_R1_MANIFEST.includes("apps/mobile/features/consumer-meals/todayIntakeUiModel.ts") &&
+    !C2B_R1_MANIFEST.includes("apps/mobile/app/today-intake.tsx") &&
+    C2B_R1_MANIFEST.every(
+      (entry) => !entry.startsWith("packages/") && !entry.startsWith("supabase/")
+    ) &&
+    // Every accepted script is named; no arbitrary scripts/ path is admitted by prefix.
+    C2B_R1_MANIFEST.every((entry) => entry !== "scripts/" && !/\*/.test(entry))
 );
 check("28. nothing is staged by the guard's own run", git(["diff", "--cached", "--name-only"]).trim() === "");
 

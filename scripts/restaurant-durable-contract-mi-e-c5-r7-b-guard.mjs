@@ -930,11 +930,74 @@ check(
     (entry) => entry.startsWith("supabase/functions/") || entry.startsWith("packages/")
   )
 );
+// MI-E-C5-R7-C2b EXACT SUCCESSOR AMENDMENT to check 47.
+//
+// The original clause banned `resolveRestaurantContextPresentation` from the screen outright. That
+// was correct for R7-B, which had no producer of a restaurant context and therefore nothing safe to
+// name — but it also permanently forbade the resolver from ever acquiring a production caller. Two
+// later rounds removed the reason for the ban: R7-C1 gave the session a durable restaurantId /
+// branchId, and R7-C2a corrected the resolver to name the exact branch from the canonical nested
+// catalog model.
+//
+// So exactly one clause is relaxed — the screen may IMPORT and CALL the frozen resolver and render
+// what it returns. Everything check 47 actually protects is kept and made explicit below: no
+// selector in analysis, no screen-side mutation of the durable ids, no screen-side branch lookup,
+// and no display name anywhere near the command payload.
+//
+// Executable source only, so this comment (which necessarily names the forbidden tokens) can never
+// satisfy or break a code assertion.
+const screenCode = screen
+  .split("\n")
+  .filter((line) => {
+    const trimmed = line.trim();
+    return (
+      !trimmed.startsWith("//") &&
+      !trimmed.startsWith("*") &&
+      !trimmed.startsWith("/*") &&
+      !trimmed.startsWith("{/*")
+    );
+  })
+  .join("\n");
+
 check(
-  "47. no user-facing restaurant selector or real restaurant-name display is introduced",
-  !/選擇餐廳/.test(screen) &&
-    !/resolveRestaurantContextPresentation/.test(screen) &&
-    /restaurantNameUnknown/.test(screen)
+  "47. the screen may display resolver-provided names, but introduces no restaurant selector",
+  // (3) No user-facing selector is introduced into the analysis screen.
+  !/選擇餐廳/.test(screenCode) &&
+    // (1) The screen may import and call the FROZEN resolver — and only that resolver, exactly once.
+    /import \{\s*\r?\n?\s*resolveRestaurantContextPresentation/.test(screenCode) &&
+    (screenCode.match(/resolveRestaurantContextPresentation\(/g) ?? []).length === 1 &&
+    // (2) A displayable name may replace the fallback, which must still exist for unnameable context.
+    /restaurantNameUnknown/.test(screenCode)
+);
+check(
+  "47a. the screen never writes the durable restaurant identity — it only reads it",
+  // (4) No session mutation, no id rewriting, no handoff/selector authority in the screen.
+  !/setAnalysisRestaurantContext/.test(screenCode) &&
+    !/reconcileAnalysisRestaurantContextForSourceContext/.test(screenCode) &&
+    !/analysisRestaurantHandoff/.test(screenCode) &&
+    // The ids reach the resolver by READ, and reach finalization through the untouched memo.
+    /restaurantId: analysis\.restaurantId,/.test(screenCode) &&
+    /branchId: analysis\.branchId/.test(screenCode)
+);
+check(
+  "47b. the screen performs no lookup of its own and never rebuilds the branch relationship",
+  // (5) The resolver owns the lookup; the screen must not search branches or substitute a district.
+  !/\.branches/.test(screenCode) &&
+    !/branches\[0\]/.test(screenCode) &&
+    !/\.district/.test(screenCode) &&
+    !/findRestaurantById\([\s\S]{0,40}\)\s*[?.]/.test(screenCode)
+);
+check(
+  "47c. no display name may enter the durable command payload or the finalization contract",
+  // (6)(7)(8) Names stay presentation-only: the v3 command, its builder and the draft/fingerprint
+  // remain name-free, so both the 8-key and the 10-key command shapes are untouched by this wiring.
+  !/restaurantName|branchName|displayName/.test(v3) &&
+    !/restaurantName|branchName|displayName/.test(draft) &&
+    !/restaurantName|branchName|displayName/.test(hook) &&
+    // The finalization memo carries ids only — no display value was added to it.
+    !/finalizationContext = useMemo\([\s\S]{0,600}?(restaurantContextDisplayText|restaurantDisplayName|branchDisplayName)/.test(
+      screenCode
+    )
 );
 check(
   "48. this candidate makes NO claim that the migration was deployed or physically accepted",

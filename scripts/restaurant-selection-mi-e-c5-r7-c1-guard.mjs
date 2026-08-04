@@ -48,8 +48,28 @@ const R7_C2A_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
   "scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs"
 ]);
+// MI-E-C5-R7-C2b successor manifest — the EXACT eight paths of the round that finally gives the
+// resolver a production caller by wiring it into the two analysis display sites. Named
+// individually, never a prefix or wildcard, so a NINTH path still fails. Exactly ONE of them is a
+// production file; the other seven are guard/smoke suites.
+//
+// MI-E-C5-R7-C2b-R1 raised this from seven to eight. The C2a guard is the eighth: four of its
+// checks (3/20/21/27) were C2a-round non-goal fences that, as written, made C2a's own declared
+// successor unreachable — check 3 required the resolver to have zero production callers forever.
+// Amending it there is the only way C2b can exist, so that path is authorised explicitly and its
+// amended bytes are pinned below.
+const R7_C2B_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/app/analysis.tsx",
+  "scripts/consumer-runtime-mi-e-c5-r3-guard.mjs",
+  "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs",
+  "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs",
+  GUARD,
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-smoke.mjs"
+]);
 const AUTHORIZED_WORKTREE_PATHS = Object.freeze([
-  ...new Set([...CANDIDATE_MANIFEST, ...R7_C2A_SUCCESSOR_MANIFEST])
+  ...new Set([...CANDIDATE_MANIFEST, ...R7_C2A_SUCCESSOR_MANIFEST, ...R7_C2B_SUCCESSOR_MANIFEST])
 ]);
 
 const catalog = read(CATALOG_SCREEN);
@@ -232,8 +252,13 @@ check(
 // 4. Protected surfaces — pinned to the content this round must not touch (28-31)
 // =============================================================================================
 // Content digests, NOT worktree state: these hold identically before and after the freeze commit.
+// MI-E-C5-R7-C2b: exactly TWO pins are refreshed — the analysis screen, which C2b wires to the
+// resolver, and the R7-B guard, whose check 47 C2b is explicitly authorised to amend. Every other
+// entry keeps its C2a freeze value verbatim, and check 28a below asserts that immutability
+// separately so a later round cannot quietly refresh the resolver or R7-A pins under cover of a
+// screen change.
 const PROTECTED = Object.freeze({
-  "apps/mobile/app/analysis.tsx": "426bced651c2b3ea8d6f3d69d4ab3c6e2f532e8c9e767b338c8ae9d53ef300c8",
+  "apps/mobile/app/analysis.tsx": "0c3488138597249ca15506db65cb7d4aaa3a88ca1c041dd9aa912acc1b6c5cd2",
   "apps/mobile/app/today-intake.tsx": "8697e1aa9a471e50f8da664e938e90771cb93b6ff62696b2fa5412080e17e68e",
   "apps/mobile/app/index.tsx": "90605d9b7ab7a396bb69b7a146b23759fa968cd56aeb2ba283dfeb9c0fa41ab1",
   "apps/mobile/features/analysis/analysisSessionStore.ts": "34f78ffcd2f2a7282197c4db7ae08ae035314bdb870fabd5782c79cf4e85ecb4",
@@ -242,7 +267,7 @@ const PROTECTED = Object.freeze({
   "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts": "d4403fc5e2580758c77ffd7e29052dd72383af4f3ddd3b072a9abe2cd35fa1f2",
   "apps/mobile/features/meal-identification-finalization/v3Contract.ts": "69a33497cb35f0c6a7454d3857c6b4d6e2a055e88a3cc7ee43398f2d5c936505",
   "apps/mobile/features/analysis/useMealPhotoFinalization.ts": "7d4178645730060d81fe7845ecefd682bc51ad9c76e9fcdf3ded780b269678ae",
-  "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs": "2b2eb7f32a0a31242254dd0d8b1ba01b9d1ee9aceaf98335d281b90e2c859c7b",
+  "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs": "86972f1e557d20faa1f048d6e81f4698fe9940332f16cddf607c343250ce4f83",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c",
   "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs": "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
   "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs": "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
@@ -253,6 +278,25 @@ const PROTECTED = Object.freeze({
 });
 const protectedDrift = Object.entries(PROTECTED).filter(([file, want]) => !exists(file) || sha(file) !== want);
 check("28. every protected surface is byte-identical to its frozen content", protectedDrift.length === 0, protectedDrift.map(([f]) => f));
+// The C2a freeze values, stated literally. A successor round may refresh the analysis-screen or
+// R7-B-guard pin above, but any edit to the resolver or the R7-A suites must fail check 28 rather
+// than be absorbed by a convenient re-pin.
+const C2A_IMMUTABLE_DIGESTS = Object.freeze({
+  "apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts":
+    "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789",
+  "apps/mobile/features/restaurants/catalog/mapper.ts":
+    "438a405a68a38db6250a00330a7b7f88ab9453cf0638e6be91a1cb2899e5cc38",
+  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs":
+    "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+  "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs":
+    "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
+  "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs":
+    "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c"
+});
+check(
+  "28a. the C2a-frozen resolver/mapper/R7-A/R7-B-smoke pins are unchanged, not re-pinned by a successor",
+  Object.entries(C2A_IMMUTABLE_DIGESTS).every(([file, digest]) => PROTECTED[file] === digest && sha(file) === digest)
+);
 check(
   "29. no protected surface is inside the R7-C1 candidate manifest",
   Object.keys(PROTECTED).every((file) => !CANDIDATE_MANIFEST.includes(file))
@@ -394,6 +438,40 @@ check(
     R7_C2A_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(ts|mjs)$/i.test(entry)) &&
     // The R7-C1 production surfaces are NOT re-opened by the successor manifest.
     ![CATALOG_SCREEN, CAPTURE_SCREEN, HANDOFF, SMOKE].some((entry) => R7_C2A_SUCCESSOR_MANIFEST.includes(entry))
+);
+check(
+  "37b. the R7-C2b successor manifest is exactly eight named paths, with exactly one production file",
+  R7_C2B_SUCCESSOR_MANIFEST.length === 8 &&
+    new Set(R7_C2B_SUCCESSOR_MANIFEST).size === 8 &&
+    R7_C2B_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    R7_C2B_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 1 &&
+    // C2b touches the analysis screen only: R7-C1's own selector, capture and handoff surfaces and
+    // the C2a resolver are NOT re-opened by it.
+    ![CATALOG_SCREEN, CAPTURE_SCREEN, HANDOFF, SMOKE].some((entry) => R7_C2B_SUCCESSOR_MANIFEST.includes(entry)) &&
+    !R7_C2B_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts") &&
+    // No successor manifest may reach a migration, Edge Function or shared package.
+    R7_C2B_SUCCESSOR_MANIFEST.every(
+      (entry) =>
+        !entry.startsWith("supabase/migrations/") && !entry.startsWith("supabase/functions/") && !entry.startsWith("packages/")
+    ) &&
+    // The C2a SMOKE is never part of the successor candidate — only the C2a guard is.
+    !R7_C2B_SUCCESSOR_MANIFEST.includes("scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs")
+);
+check(
+  "37c. the authorised C2a guard amendment is pinned to its exact bytes, and the C2a smoke is untouched",
+  sha("scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs") ===
+    "5068793ead93ece4bb68ef5267e4491bc2d59c6e565318f930816043b462f0fc" &&
+    sha("scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs") ===
+      "6596c470fcb856346dfe926269e7a1ee47d1541508f902ead4f850143191ac86"
+);
+check(
+  // Without this, the C2b guard is the one suite nothing else pins: silently dropping its own
+  // C2a-amendment pin would leave the whole successor chain unenforced and pass every other suite.
+  "37d. the C2b guard and smoke are pinned to their exact successor bytes",
+  sha("scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs") ===
+    "1090dc53aa7fafbd7a580fc27790223239f60083d89b7c3cc3756484980406b6" &&
+    sha("scripts/restaurant-display-mi-e-c5-r7-c2b-smoke.mjs") ===
+      "172ea122c073b78d7396ba02303b2e2ee3aeea0d63e8fae374b5c36d71fa215d"
 );
 check("38. nothing is staged for commit by the guard's own run", git(["diff", "--cached", "--name-only"]).trim() === "");
 

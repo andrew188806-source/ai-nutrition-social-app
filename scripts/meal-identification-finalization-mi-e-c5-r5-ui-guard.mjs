@@ -140,9 +140,72 @@ check(
   screen.indexOf("copy.restaurantNameLabel") > 0 &&
     screen.indexOf("copy.restaurantNameLabel") < screen.indexOf("{fields.map((field) => {")
 );
+// MI-E-C5-R7-C2b SUCCESSOR AUTHORITY for check 11.
+//
+// The original form required the literal `{copy.restaurantNameUnknown}` inside the editor, which
+// collided with the display wiring the moment a real restaurant became knowable. R5's actual UI
+// concern is preserved exactly — the editor still shows a restaurant row, it still has no authority
+// of its own, and 未知 is still what an unnameable context renders — but the value now comes from
+// the ONE shared screen-level presentation instead of being hardcoded at each site.
+//
+// Executable source only, so prose above a display site cannot satisfy or break a code assertion.
+const screenCode = screen
+  .split("\n")
+  .filter((line) => {
+    const trimmed = line.trim();
+    return (
+      !trimmed.startsWith("//") &&
+      !trimmed.startsWith("*") &&
+      !trimmed.startsWith("/*") &&
+      !trimmed.startsWith("{/*")
+    );
+  })
+  .join("\n");
+const finalizationEditor = sliceBetween(screenCode, "function MealPhotoFinalizationEditor", "function MealPhotoAnalysisCandidateRow");
+const completedSnapshotCard = sliceBetween(
+  screenCode,
+  "isDurableCompleted && completionSnapshot ?",
+  "<CompletedAnalysisHero"
+);
+
 check(
-  "11. restaurant display has no authority and shows the 未知 fallback",
-  /restaurantNameUnknown: "未知"/.test(i18n) && /\{copy\.restaurantNameUnknown\}/.test(screen)
+  "11. the restaurant row still has no authority of its own, and 未知 remains the unnameable-context fallback",
+  /restaurantNameUnknown: "未知"/.test(i18n) &&
+    /restaurantNameUnknown/.test(screenCode) &&
+    // Still purely presentational: never a draft field, never an input, never editable.
+    !/restaurantName/.test(read("apps/mobile/features/analysis/mealPhotoFinalizationDraft.ts")) &&
+    finalizationEditor.length > 0 &&
+    !/<TextInput[^>]*restaurant/i.test(finalizationEditor)
+);
+check(
+  "11a. the editor and the completed snapshot card render ONE shared presentation, not two lookups",
+  /\{restaurantContextDisplayText\}/.test(finalizationEditor) &&
+    /\{restaurantContextDisplayText\}/.test(completedSnapshotCard) &&
+    // Exactly one composition site in the whole screen.
+    (screenCode.match(/const restaurantContextDisplayText =/g) ?? []).length === 1 &&
+    (screenCode.match(/resolveRestaurantContextPresentation\(/g) ?? []).length === 1
+);
+check(
+  "11b. a resolved restaurant / branch may replace the fallback (the display is conditional, not fixed)",
+  /restaurantDisplayName === null[\s\S]{0,220}restaurantNameUnknown/.test(screenCode) &&
+    /branchDisplayName === null/.test(screenCode)
+);
+check(
+  "11c. the display wiring adds no second 「加入今日飲食」 action and no second finalization write",
+  (screenCode.match(/viewTodayIntake/g) ?? []).length ===
+    (sliceBetween(screenCode, "function CompletedAnalysisHero", "function MealIdentificationFinalizationErrorCard").match(
+      /viewTodayIntake/g
+    ) ?? []).length &&
+    !/restaurantContextDisplayText[\s\S]{0,200}(saveMealRecord|finalize)/i.test(screenCode)
+);
+check(
+  "11d. the display wiring does not touch primary/alternative candidate flow, photo placement or post-success navigation",
+  // Primary-first split, photo render sites and the same-page completion are all still intact and
+  // are not conditioned on anything the restaurant presentation produces.
+  /splitPrimaryAndFallbackCandidates\(/.test(screenCode) &&
+    !/restaurantContextPresentation[\s\S]{0,200}(primaryCandidate|fallbackCandidates)/.test(screenCode) &&
+    !/restaurantContextDisplayText[\s\S]{0,200}(photoArea|ownedCapturedImageUri)/.test(screenCode) &&
+    !/restaurantContextDisplayText[\s\S]{0,200}router\.push/.test(screenCode)
 );
 
 // --- Same-page completion ---

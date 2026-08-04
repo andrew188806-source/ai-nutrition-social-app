@@ -56,7 +56,13 @@ import {
   type CatalogMealIdentificationCandidate,
   type MealIdentificationCandidateResolution
 } from "../features/meal-identification";
-import { useRestaurantCatalog } from "../features/restaurants/catalog";
+import { useRestaurantCatalog, type RestaurantCatalogUiState } from "../features/restaurants/catalog";
+// MI-E-C5-R7-C2b: the frozen R7-C2a presentation resolver, imported from its own module because the
+// catalog barrel does not re-export it. It is the ONLY restaurant-name authority this screen has.
+import {
+  resolveRestaurantContextPresentation,
+  type RestaurantCatalogLookupStatus
+} from "../features/restaurants/catalog/restaurantContextPresentation";
 import { mobileMenuItemService } from "../services/mobile-menu-item-service";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
 import { Icon } from "../theme/icons";
@@ -112,6 +118,30 @@ function buildMatchPercent(calories: number, referenceCalories: number): number 
 // list naturally changes whenever that reference calorie value changes.
 function buildNextMealRecommendationCards(limit: number, referenceCalories: number): NextMealRecommendationCard[] {
   return mobileMenuItemService.getRecommendedMenuItemsForNextMeal(limit, referenceCalories);
+}
+
+// MI-E-C5-R7-C2b: the catalog hook and the frozen presentation resolver were written in different
+// rounds and carry different status vocabularies, so the CALL SITE adapts one to the other. The
+// resolver's API is untouched — reopening it to learn the hook's vocabulary would put a UI concern
+// back inside the durable presentation authority.
+//
+// `empty` deliberately maps to "success": the catalog answered authoritatively and simply holds no
+// row, so the lookup misses and the resolver returns `unresolved`. Calling that an error would be
+// untrue, and every non-success status reaches the same fail-soft outcome anyway.
+function toRestaurantContextLookupStatus(
+  status: RestaurantCatalogUiState["status"]
+): RestaurantCatalogLookupStatus {
+  switch (status) {
+    case "loading":
+      return "loading";
+    case "success":
+    case "empty":
+      return "success";
+    case "unavailable":
+      return "disabled";
+    case "error":
+      return "error";
+  }
 }
 
 export default function AnalysisScreen() {
@@ -186,6 +216,39 @@ export default function AnalysisScreen() {
       }),
     [analysis.mealName, analysis.restaurantName, restaurantCatalog.state]
   );
+  // MI-E-C5-R7-C2b: THE single restaurant presentation for this screen. Both display sites — the
+  // pre-finalization editor and the completed snapshot card — read this one derived value, so the
+  // screen contains exactly one lookup, one fallback and one branch composition.
+  //
+  // Pure derivation on top of the catalog hook that was already mounted here: the frozen resolver
+  // performs no I/O, this never refreshes the catalog, never writes the analysis session, never
+  // opens a second Supabase query and never reaches the finalization payload. The resolver owns the
+  // branch lookup, so the screen never touches `branches`, district, location or address itself.
+  const restaurantContextPresentation = useMemo(
+    () =>
+      resolveRestaurantContextPresentation({
+        restaurantId: analysis.restaurantId,
+        branchId: analysis.branchId,
+        catalogStatus: toRestaurantContextLookupStatus(restaurantCatalog.state.status),
+        findRestaurant: restaurantCatalog.findRestaurantById
+      }),
+    // The hook returns a fresh facade every render, so this recomputes each pass. That is
+    // deliberate: the derivation is a pure array read, and depending on the facade is what keeps
+    // `findRestaurantById` from ever being called through a stale closure.
+    [analysis.branchId, analysis.restaurantId, restaurantCatalog]
+  );
+  const restaurantDisplayName = restaurantContextPresentation.restaurantName;
+  const branchDisplayName = restaurantContextPresentation.branchName;
+  // `none`, `loading` and `unresolved` all carry null names, so every one of them falls through to
+  // the existing 未知 copy. The display therefore fails soft in every non-resolved state and can
+  // never block, spin over, or disable finalization. A resolved restaurant with no resolvable
+  // branch renders the restaurant alone — no separator, no empty brackets, no undefined/null.
+  const restaurantContextDisplayText =
+    restaurantDisplayName === null
+      ? zhTW.mobile.mealPhotoFinalization.restaurantNameUnknown
+      : branchDisplayName === null
+        ? restaurantDisplayName
+        : `${restaurantDisplayName} · ${branchDisplayName}`;
   const hasAiFinalizationFlow =
     mealPhotoAnalysis.analysisInvocationStatus === "completed" ||
     mealPhotoAnalysis.analysisInvocationStatus === "low_confidence";
@@ -653,8 +716,12 @@ export default function AnalysisScreen() {
                 <Text style={styles.photoBadgeText}>{zhTW.mobile.analysis.imageLabel}</Text>
               </View>
             </View>
+            {/* MI-E-C5-R7-C2b: the SAME shared presentation the editor renders — live catalog
+                names, not a historical snapshot. A venue renamed after this analysis completed
+                shows its current name; durable historical naming is R7-C3's decision, not this
+                screen's. */}
             <Text style={styles.finalizationFieldLabel}>{zhTW.mobile.mealPhotoFinalization.restaurantNameLabel}</Text>
-            <Text style={styles.stateText}>{zhTW.mobile.mealPhotoFinalization.restaurantNameUnknown}</Text>
+            <Text style={styles.stateText}>{restaurantContextDisplayText}</Text>
             <Text style={styles.finalizationFieldLabel}>{zhTW.mobile.mealPhotoFinalization.mealNameLabel}</Text>
             <Text style={styles.stateText}>{completionSnapshot.mealName}</Text>
           </SnowCard>
@@ -838,6 +905,7 @@ export default function AnalysisScreen() {
                     selectedMealPeriod
                 })}
                 payloadLocked={mealPhotoFinalization.payloadLocked}
+                restaurantContextDisplayText={restaurantContextDisplayText}
                 onChange={mealPhotoFinalization.updateField}
                 onSubmit={submitMealPhotoFinalizationEditor}
               />
@@ -1325,6 +1393,7 @@ function MealPhotoFinalizationEditor({
   draft,
   contextBlockReason,
   payloadLocked,
+  restaurantContextDisplayText,
   onChange,
   onSubmit,
   embedded = false
@@ -1332,6 +1401,10 @@ function MealPhotoFinalizationEditor({
   draft: MealPhotoFinalizationDraftState;
   contextBlockReason: MealPhotoFinalizationContextBlockReason | null;
   payloadLocked: boolean;
+  // MI-E-C5-R7-C2b: already-composed display text from the screen's single shared restaurant
+  // presentation. Passing the resolved STRING rather than ids/catalog state is what keeps a second
+  // lookup, fallback or branch composition from ever appearing inside this editor.
+  restaurantContextDisplayText: string;
   onChange: (field: MealPhotoFinalizationField, value: string) => void;
   onSubmit: () => void;
   embedded?: boolean;
@@ -1392,14 +1465,17 @@ function MealPhotoFinalizationEditor({
             subtitle={draft.mode === "manual" ? copy.manualMode : copy.candidateMode}
           />
         ) : null}
-        {/* MI-E-C5-R3: read-only presentation only — no authoritative restaurant source exists
-            anywhere in the AI candidate contract yet, so this always shows the 未知 fallback. Not
-            part of MealPhotoFinalizationDraftState: nothing here needs to be tracked, retried, or
-            sent in the finalization payload, so it stays out of the draft/fingerprint entirely. */}
+        {/* MI-E-C5-R7-C2b: read-only presentation of the SHARED screen-level restaurant value.
+            R7-C1 gave the session a durable restaurant/branch id and R7-C2a taught the resolver to
+            name the exact branch, so the 未知 fallback is now only what an absent or unnameable
+            context falls back to — never a permanent placeholder. This editor performs no lookup,
+            no fallback and no branch composition of its own. Still NOT part of
+            MealPhotoFinalizationDraftState: nothing here is tracked, retried, or sent in the
+            finalization payload, so it stays out of the draft/fingerprint entirely. */}
         <View style={styles.finalizationField}>
           <Text style={styles.finalizationFieldLabel}>{copy.restaurantNameLabel}</Text>
           <Text accessibilityLabel={copy.restaurantNameLabel} accessibilityRole="text" style={styles.stateText}>
-            {copy.restaurantNameUnknown}
+            {restaurantContextDisplayText}
           </Text>
         </View>
         {fields.map((field) => {

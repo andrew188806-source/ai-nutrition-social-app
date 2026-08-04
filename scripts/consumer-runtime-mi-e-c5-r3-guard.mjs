@@ -110,15 +110,80 @@ check(
     return restaurantIdx !== -1 && mealNameFieldIdx !== -1 && restaurantIdx < analysisTsx.indexOf("{fields.map((field) => {");
   })()
 );
+// MI-E-C5-R7-C2b SUCCESSOR AUTHORITY.
+//
+// The original assertion required the editor to render `{copy.restaurantNameUnknown}` literally,
+// which encoded a fact that was true only while no authoritative restaurant source existed: R3 was
+// written before there was any way for the app to KNOW a restaurant. R7-C1 gave the analysis session
+// a durable restaurantId/branchId, and R7-C2a taught the frozen resolver to name the exact branch.
+// The requirement therefore becomes conditional rather than absolute — 未知 stays the fallback for an
+// absent or unnameable context, and never becomes a permanent placeholder over a known venue.
+//
+// Executable source only, so the explanatory prose above a display site cannot satisfy or break a
+// code assertion.
+const stripComments = (source) =>
+  source
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return (
+        !trimmed.startsWith("//") &&
+        !trimmed.startsWith("*") &&
+        !trimmed.startsWith("/*") &&
+        !trimmed.startsWith("{/*")
+      );
+    })
+    .join("\n");
+const analysisCode = stripComments(analysisTsx);
+const editorBody = (() => {
+  const start = analysisCode.indexOf("function MealPhotoFinalizationEditor");
+  const end = analysisCode.indexOf("function MealPhotoAnalysisCandidateRow");
+  return start === -1 || end === -1 || end <= start ? null : analysisCode.slice(start, end);
+})();
+
 check(
-  "restaurant display always renders the 未知 fallback (no guessing, no legacy mock authority)",
-  (() => {
-    const start = analysisTsx.indexOf("function MealPhotoFinalizationEditor");
-    const end = analysisTsx.indexOf("function MealPhotoAnalysisCandidateRow");
-    if (start === -1 || end === -1 || end <= start) return false;
-    const body = analysisTsx.slice(start, end);
-    return /\{copy\.restaurantNameUnknown\}/.test(body) && !/analysis\.restaurantName/.test(body);
-  })()
+  "restaurant display still has no authority of its own: 未知 remains the fallback and the legacy mock name is still never read",
+  editorBody !== null &&
+    // The fallback is still reachable, now composed once at screen level rather than hardcoded here.
+    /restaurantNameUnknown/.test(analysisCode) &&
+    // The legacy demo/mock restaurant name remains banned everywhere in the screen.
+    !/analysis\.restaurantName/.test(editorBody)
+);
+check(
+  "the display value is resolved by the frozen production resolver, never by screen-local guessing",
+  /resolveRestaurantContextPresentation\(/.test(analysisCode) &&
+    /restaurantId: analysis\.restaurantId,/.test(analysisCode) &&
+    /branchId: analysis\.branchId,/.test(analysisCode)
+);
+check(
+  "a resolved restaurant may display its real name, and a valid branch its real branch name",
+  /restaurantContextPresentation\.restaurantName/.test(analysisCode) &&
+    /restaurantContextPresentation\.branchName/.test(analysisCode) &&
+    // 未知 is now the null branch of a conditional, not an unconditional literal.
+    /restaurantDisplayName === null[\s\S]{0,200}restaurantNameUnknown/.test(analysisCode)
+);
+check(
+  "the screen never substitutes a district / location / address for a branch name",
+  editorBody !== null &&
+    !/\.district/.test(analysisCode) &&
+    !/match\.location/.test(analysisCode) &&
+    !/branches\[0\]/.test(analysisCode)
+);
+check(
+  "display resolution never blocks finalization: no disabled submit, no blocking spinner keyed off the catalog",
+  !/catalogStatus[\s\S]{0,120}(disabled|submitDisabled)\s*=/.test(analysisCode) &&
+    !/restaurantContextPresentation[\s\S]{0,160}submitDisabled/.test(analysisCode) &&
+    !/restaurantContextPresentation[\s\S]{0,160}canFinalize/.test(analysisCode)
+);
+check(
+  "no restaurant SELECTOR is introduced into the analysis screen by the display wiring",
+  !/選擇餐廳/.test(analysisCode) &&
+    !/setAnalysisRestaurantContext/.test(analysisCode) &&
+    !/analysisRestaurantHandoff/.test(analysisCode)
+);
+check(
+  "exactly one catalog hook call exists in the screen (the display reuses it, never mounts a second)",
+  (analysisCode.match(/useRestaurantCatalog\(\)/g) ?? []).length === 1
 );
 check(
   "restaurant field is presentation-only: not added to MealPhotoFinalizationDraftState or the fingerprint",
