@@ -39,6 +39,7 @@ export type TodayIntakeUiMealRecord = {
   fat: number;
   source: ConsumerMealSourceType;
   restaurantId?: string;
+  branchId: string | null;
 };
 
 export type TodayIntakeUiSummary = {
@@ -256,9 +257,8 @@ function mapConsumerMealToUiMeal(meal: ConsumerMealRecord): TodayIntakeUiMealRec
     // null for the photo-analysis path — the moment R7-C starts persisting real ids, every row would
     // have rendered a raw UUID where the user expects a restaurant name.
     //
-    // The canonical id keeps its own field below. A name is a catalog lookup, not an id, so until
-    // R7-C adds that catalog composition to the Today Intake overview this reports "no resolvable
-    // name" rather than inventing one. Historical rows with no restaurant context behave identically.
+    // The canonical ids keep their own fields below. A name is a catalog lookup, not an id, so this
+    // remains a display placeholder for the screen-level live catalog composition.
     restaurantName: "",
     ingredients,
     portion: firstItem?.portion ?? "",
@@ -269,7 +269,8 @@ function mapConsumerMealToUiMeal(meal: ConsumerMealRecord): TodayIntakeUiMealRec
     carbohydrates: nutrition.carbohydrates,
     fat: nutrition.fat,
     source: meal.source,
-    restaurantId: firstItem?.restaurantId ?? undefined
+    restaurantId: firstItem?.restaurantId ?? undefined,
+    branchId: firstItem?.branchId ?? null
   };
 }
 

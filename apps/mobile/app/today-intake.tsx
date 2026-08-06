@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -5,13 +6,67 @@ import { Card, SectionTitle, TagRow, colors } from "../components/DemoUi";
 import { NutritionDetailReport } from "../components/NutritionDetailReport";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getUiMealCalories, useTodayIntakeUiModel } from "../features/consumer-meals";
+import type { TodayIntakeUiMealRecord } from "../features/consumer-meals";
 import { useConsumerRuntime } from "../features/consumer-runtime";
+import { useRestaurantCatalog } from "../features/restaurants/catalog";
+import type { CatalogRestaurantViewModel, RestaurantCatalogUiState } from "../features/restaurants/catalog";
+import {
+  resolveRestaurantContextPresentation,
+  type RestaurantCatalogLookupStatus,
+  type RestaurantContextPresentation
+} from "../features/restaurants/catalog/restaurantContextPresentation";
+
+export function adaptTodayIntakeCatalogStatus(
+  status: RestaurantCatalogUiState["status"]
+): RestaurantCatalogLookupStatus {
+  switch (status) {
+    case "loading":
+      return "loading";
+    case "success":
+    case "empty":
+      return "success";
+    case "error":
+      return "error";
+    case "unavailable":
+      return "disabled";
+    default: {
+      const exhaustiveStatus: never = status;
+      return exhaustiveStatus;
+    }
+  }
+}
+
+export function composeTodayIntakeCompletedMealRow(input: Readonly<{
+  meal: TodayIntakeUiMealRecord;
+  catalogStatus: RestaurantCatalogLookupStatus;
+  findRestaurant: (restaurantId: string) => CatalogRestaurantViewModel | null;
+}>): Readonly<{ meal: TodayIntakeUiMealRecord; restaurantPresentation: RestaurantContextPresentation }> {
+  // Durable restaurant/branch IDs come from the meal record; names are composed live from the current catalog.
+  const restaurantPresentation = resolveRestaurantContextPresentation({
+    restaurantId: input.meal.restaurantId ?? null,
+    branchId: input.meal.branchId ?? null,
+    catalogStatus: input.catalogStatus,
+    findRestaurant: input.findRestaurant
+  });
+  return Object.freeze({ meal: input.meal, restaurantPresentation });
+}
+
+export function getTodayIntakeRestaurantDisplayText(
+  presentation: RestaurantContextPresentation,
+  fallback: string
+): string {
+  if (presentation.restaurantName === null) return fallback;
+  return presentation.branchName === null
+    ? presentation.restaurantName
+    : `${presentation.restaurantName}｜${presentation.branchName}`;
+}
 
 export default function TodayIntakeScreen() {
   const router = useRouter();
   const intake = zhTW.mobile.analysis.savedIntake;
   const daily = zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake;
   const runtime = useConsumerRuntime();
+  const restaurantCatalog = useRestaurantCatalog();
   const intakeState = useTodayIntakeUiModel({
     overviewService: runtime.overviewService,
     plannedMealsLoader: runtime.getPlannedMeals,
@@ -21,6 +76,18 @@ export default function TodayIntakeScreen() {
     enabled: runtime.state.authState.status === "signedIn"
   });
   const model = intakeState.model;
+  const catalogStatus = adaptTodayIntakeCatalogStatus(restaurantCatalog.state.status);
+  const completedMealRows = useMemo(
+    () =>
+      (model?.mealRecords ?? []).map((meal) =>
+        composeTodayIntakeCompletedMealRow({
+          meal,
+          catalogStatus,
+          findRestaurant: restaurantCatalog.findRestaurantById
+        })
+      ),
+    [catalogStatus, model?.mealRecords, restaurantCatalog.findRestaurantById]
+  );
 
   if (!model) {
     return (
@@ -32,7 +99,10 @@ export default function TodayIntakeScreen() {
     );
   }
 
-  const { mealRecords, lunchRecord, summary, plannedMeals } = model;
+  const { lunchRecord, summary, plannedMeals } = model;
+  const lunchRow = lunchRecord
+    ? completedMealRows.find((row) => row.meal.mealId === lunchRecord.mealId) ?? null
+    : null;
 
   return (
     <PlaceholderScreen
@@ -58,7 +128,7 @@ export default function TodayIntakeScreen() {
       <Card>
         <SectionTitle title={daily.mealRecordsTitle} />
         <View style={styles.mealList}>
-          {mealRecords.map((meal) => (
+          {completedMealRows.map(({ meal, restaurantPresentation }) => (
             <View key={meal.mealId ?? `${meal.date}-${meal.mealPeriod}-${meal.mealName}`} style={styles.mealCard}>
               <View style={styles.mealHeader}>
                 <Text style={styles.mealTime}>{meal.mealPeriod}</Text>
@@ -66,7 +136,9 @@ export default function TodayIntakeScreen() {
               </View>
               <Text style={styles.mealTitle}>{meal.mealName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}</Text>
               <Text style={styles.mealNote}>
-                {meal.restaurantName || zhTW.mobile.refinedLogic.mealBuddyCard.emptyField}｜{meal.ingredients}｜{meal.portion}
+                {[getTodayIntakeRestaurantDisplayText(restaurantPresentation, zhTW.mobile.refinedLogic.mealBuddyCard.emptyField), meal.ingredients, meal.portion]
+                  .filter(Boolean)
+                  .join("｜")}
               </Text>
               <TagRow tags={[meal.source ?? "manual", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
             </View>
@@ -76,15 +148,19 @@ export default function TodayIntakeScreen() {
 
       <Card tone="mint">
         <SectionTitle title={zhTW.mobile.plannedDinner.lunchRecommendationLabel} subtitle={zhTW.mobile.plannedDinner.lunchAdvice[0]} />
-        {lunchRecord ? (
+        {lunchRow ? (
           <View style={styles.currentMealCard}>
             <View style={styles.mealHeader}>
-              <Text style={styles.mealTime}>{lunchRecord.mealPeriod}</Text>
-              <Text style={styles.mealCalories}>{getUiMealCalories(lunchRecord)} kcal</Text>
+              <Text style={styles.mealTime}>{lunchRow.meal.mealPeriod}</Text>
+              <Text style={styles.mealCalories}>{getUiMealCalories(lunchRow.meal)} kcal</Text>
             </View>
-            <Text style={styles.mealTitle}>{lunchRecord.mealName}</Text>
-            <Text style={styles.mealNote}>{lunchRecord.restaurantName}｜{lunchRecord.ingredients}</Text>
-            <TagRow tags={[lunchRecord.source ?? "manual", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
+            <Text style={styles.mealTitle}>{lunchRow.meal.mealName}</Text>
+            <Text style={styles.mealNote}>
+              {[getTodayIntakeRestaurantDisplayText(lunchRow.restaurantPresentation, zhTW.mobile.refinedLogic.mealBuddyCard.emptyField), lunchRow.meal.ingredients]
+                .filter(Boolean)
+                .join("｜")}
+            </Text>
+            <TagRow tags={[lunchRow.meal.source ?? "manual", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
           </View>
         ) : null}
       </Card>

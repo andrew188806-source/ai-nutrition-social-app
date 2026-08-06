@@ -56,6 +56,15 @@ const C2B_SMOKE = "scripts/restaurant-display-mi-e-c5-r7-c2b-smoke.mjs";
 const C2B_R1_MANIFEST = Object.freeze([
   ANALYSIS_SCREEN, R3_GUARD, R5_GUARD, R7B_GUARD, R7C1_GUARD, GUARD, C2B_GUARD, C2B_SMOKE
 ]);
+const TODAY_INTAKE_SCREEN = "apps/mobile/app/today-intake.tsx";
+const TODAY_INTAKE_MODEL = "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts";
+const R2_UI_GUARD = "scripts/meal-identification-finalization-mi-e-c5-r2-ui-guard.mjs";
+const C3_GUARD = "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs";
+const C3_SMOKE = "scripts/restaurant-display-mi-e-c5-r7-c3-smoke.mjs";
+const C3_SUCCESSOR_MANIFEST = Object.freeze([
+  TODAY_INTAKE_SCREEN, TODAY_INTAKE_MODEL, GUARD, C2B_GUARD,
+  R7C1_GUARD, R2_UI_GUARD, C3_GUARD, C3_SMOKE
+]);
 
 // The two digests C2b is authorised to move, pinned to the ACTUAL successor candidate bytes. An
 // arbitrary edit to either file fails: only these exact contents are accepted as the successor
@@ -67,6 +76,22 @@ const C2A_FROZEN_DIGESTS = Object.freeze({
 const C2B_SUCCESSOR_DIGESTS = Object.freeze({
   [ANALYSIS_SCREEN]: "0c3488138597249ca15506db65cb7d4aaa3a88ca1c041dd9aa912acc1b6c5cd2",
   [R7B_GUARD]: "86972f1e557d20faa1f048d6e81f4698fe9940332f16cddf607c343250ce4f83"
+});
+const C3_FROZEN_DIGESTS = Object.freeze({
+  [TODAY_INTAKE_SCREEN]: "8697e1aa9a471e50f8da664e938e90771cb93b6ff62696b2fa5412080e17e68e",
+  [TODAY_INTAKE_MODEL]: "d4403fc5e2580758c77ffd7e29052dd72383af4f3ddd3b072a9abe2cd35fa1f2"
+});
+const C3_SUCCESSOR_DIGESTS = Object.freeze({
+  [TODAY_INTAKE_SCREEN]: "d50a4cafb3613c4332ee8f6a356d6515e32082080750fdbf93a6f2aa4e323548",
+  [TODAY_INTAKE_MODEL]: "aa17c6d13dab8d3975859ee385c068b22ba3d39da562f9a70e31ab4352352c29"
+});
+const R7A_FROZEN_DIGESTS = Object.freeze({
+  [R7A_GUARD]: "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+  [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd"
+});
+const C3_COMPANION_DIGESTS = Object.freeze({
+  [C3_GUARD]: "86e337277d577c9392af38cfc524643f581ddd09457fa04cd69aec3c116e784d",
+  [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
 // True only in the exact successor state; used to select which lifecycle branch is authoritative.
 const inC2bSuccessorState =
@@ -93,25 +118,29 @@ const productionCallers = git(["grep", "-l", "resolveRestaurantContextPresentati
 // Exactly two legal states, both stated as EXACT sorted path lists.
 const CALLER_STATE_FROZEN = [RESOLVER].sort();
 const CALLER_STATE_C2B = [RESOLVER, ANALYSIS_SCREEN].sort();
+const CALLER_STATE_C3 = [RESOLVER, ANALYSIS_SCREEN, TODAY_INTAKE_SCREEN].sort();
 const callerList = JSON.stringify(productionCallers);
 check(
-  "3. the resolver has either NO production caller (frozen C2a) or exactly the analysis.tsx successor caller (C2b)",
-  callerList === JSON.stringify(CALLER_STATE_FROZEN) || callerList === JSON.stringify(CALLER_STATE_C2B),
+  "3. resolver callers are exactly the frozen C2a, C2b, or named C3 lifecycle state",
+  callerList === JSON.stringify(CALLER_STATE_FROZEN) ||
+    callerList === JSON.stringify(CALLER_STATE_C2B) ||
+    callerList === JSON.stringify(CALLER_STATE_C3),
   productionCallers
 );
 check(
-  "3a. no third production caller exists — Today Intake, the catalog screen and packages/ are never callers",
-  // Enumerated individually rather than by prefix, so a new screen cannot inherit an allowance.
-  !productionCallers.includes("apps/mobile/app/today-intake.tsx") &&
-    !productionCallers.includes("apps/mobile/features/consumer-meals/todayIntakeUiModel.ts") &&
+  "3a. C3 adds only Today Intake as the final named production caller; every other surface is rejected",
+  // Enumerated individually rather than by prefix, so a fourth caller cannot inherit an allowance.
+  !productionCallers.includes(TODAY_INTAKE_MODEL) &&
     !productionCallers.includes("apps/mobile/app/restaurants.tsx") &&
     !productionCallers.includes("apps/mobile/app/meal-photo.tsx") &&
     !productionCallers.includes("apps/mobile/features/meal-identification/analysisRestaurantHandoff.ts") &&
     !productionCallers.some((entry) => entry.startsWith("packages/")) &&
-    // The resolver itself is always in the list; at most ONE other file may ever be.
+    !productionCallers.some((entry) => entry.startsWith("apps/admin-web/") || entry.startsWith("apps/restaurant-web/")) &&
     productionCallers.includes(RESOLVER) &&
-    productionCallers.filter((entry) => entry !== RESOLVER).length <= 1 &&
-    productionCallers.every((entry) => entry === RESOLVER || entry === ANALYSIS_SCREEN)
+    productionCallers.filter((entry) => entry !== RESOLVER).length <= 2 &&
+    productionCallers.every(
+      (entry) => entry === RESOLVER || entry === ANALYSIS_SCREEN || entry === TODAY_INTAKE_SCREEN
+    )
 );
 check(
   "4. the resolver stays pure — no React, network, repository or storage of its own",
@@ -217,15 +246,12 @@ check(
   // trio, and that part is unchanged. What is relaxed is only the analysis.tsx pin, which C2b is
   // explicitly authorised to refresh — and even then only to the exact successor bytes, never to an
   // arbitrary value.
-  "20. the R7-C1 guard still carries the C2a resolver / R7-A authority verbatim",
+  "20. the R7-C1 guard carries the frozen resolver and exact frozen R7-A authority",
   r7c1Guard.includes(`"${RESOLVER}": "${sha(RESOLVER)}"`) &&
     r7c1Guard.includes(`"${R7A_GUARD}": "${sha(R7A_GUARD)}"`) &&
     r7c1Guard.includes(`"${R7A_SMOKE}": "${sha(R7A_SMOKE)}"`) &&
-    // Those three are the C2a FREEZE values, stated literally so a successor cannot re-pin them to
-    // whatever the files happen to contain.
     sha(RESOLVER) === "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789" &&
-    sha(R7A_GUARD) === "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100" &&
-    sha(R7A_SMOKE) === "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd"
+    Object.entries(R7A_FROZEN_DIGESTS).every(([file, expected]) => sha(file) === expected)
 );
 check(
   "20a. the R7-C1 analysis.tsx pin is EITHER the frozen C2a digest or the exact C2b successor digest",
@@ -272,20 +298,35 @@ const PROTECTED = Object.freeze({
   "apps/mobile/features/restaurants/catalog/types.ts": "b67d98a9c2de1a929bd494dd176f8b69d3cbd0288a4df1947f406da094ebe98c",
   "apps/mobile/app/restaurants.tsx": "30f53812245508f4d7664c5e15e9b530349565dd8a81dc169371c8108ddf0cce",
   "apps/mobile/app/meal-photo.tsx": "dccf608fa3dcec88e20a9245cc5b1a9d95b658c043c6a1a93acc8cd444f8395a",
-  "apps/mobile/app/today-intake.tsx": "8697e1aa9a471e50f8da664e938e90771cb93b6ff62696b2fa5412080e17e68e",
   "apps/mobile/features/meal-identification/analysisRestaurantHandoff.ts":
     "7189d67ede2528337dd40f154e080f2fa1fcf3a38582c8d330e03b0bb302e05e",
-  "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts": "d4403fc5e2580758c77ffd7e29052dd72383af4f3ddd3b072a9abe2cd35fa1f2",
   "apps/mobile/features/analysis/analysisSessionStore.ts": "34f78ffcd2f2a7282197c4db7ae08ae035314bdb870fabd5782c79cf4e85ecb4",
   "apps/mobile/features/meal-identification-finalization/v3Contract.ts": "69a33497cb35f0c6a7454d3857c6b4d6e2a055e88a3cc7ee43398f2d5c936505",
   "apps/mobile/features/analysis/useMealPhotoFinalization.ts": "7d4178645730060d81fe7845ecefd682bc51ad9c76e9fcdf3ded780b269678ae",
-  [R7A_GUARD]: "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
-  [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
   [SMOKE]: "6596c470fcb856346dfe926269e7a1ee47d1541508f902ead4f850143191ac86",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c"
 });
 const drift = Object.entries(PROTECTED).filter(([file, want]) => !exists(file) || sha(file) !== want);
 check("21. every permanently protected surface is byte-identical to its frozen content", drift.length === 0, drift.map(([f]) => f));
+const c3ContentDrift = Object.keys(C3_FROZEN_DIGESTS).filter((file) => {
+  if (!exists(file)) return true;
+  const actual = sha(file);
+  return actual !== C3_FROZEN_DIGESTS[file] && actual !== C3_SUCCESSOR_DIGESTS[file];
+});
+check(
+  "21c. Today Intake production surfaces are either frozen C2b bytes or exact C3 successor bytes",
+  c3ContentDrift.length === 0,
+  c3ContentDrift
+);
+const r7aContentDrift = Object.keys(R7A_FROZEN_DIGESTS).filter((file) => {
+  if (!exists(file)) return true;
+  return sha(file) !== R7A_FROZEN_DIGESTS[file];
+});
+check(
+  "21d. R7-A suites hold exact HEAD frozen bytes",
+  r7aContentDrift.length === 0,
+  r7aContentDrift
+);
 // The two former members of this table that C2b IS authorised to move. Each may hold exactly one of
 // two values — the C2a freeze bytes, or the C2b successor bytes — and nothing else. This is an
 // enumerated two-state exception, not a prefix exception and not a free pass.
@@ -348,14 +389,15 @@ const worktree = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]
 // Lifecycle-AWARE, never lifecycle-DEPENDENT. Three states are accepted, each an EXACT named list:
 //   (1) a clean frozen repository — the empty worktree is a subset of both lists,
 //   (2) the exact C2a six-path candidate shape,
-//   (3) the exact C2b-R1 eight-path candidate shape.
+//   (3) the exact C2b-R1 or C3 eight-path candidate shape.
 // Nothing must be modified or untracked for the guard to pass, and no other shape is accepted.
 const outsideC2a = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
 const outsideC2bR1 = worktree.filter((file) => !C2B_R1_MANIFEST.includes(file));
+const outsideC3 = worktree.filter((file) => !C3_SUCCESSOR_MANIFEST.includes(file));
 check(
-  "27. any uncommitted change is confined to the C2a or the C2b-R1 manifest (vacuous on a clean tree)",
-  outsideC2a.length === 0 || outsideC2bR1.length === 0,
-  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1 }
+  "27. any uncommitted change is confined to the C2a, C2b-R1, or exact C3 manifest (vacuous when clean)",
+  outsideC2a.length === 0 || outsideC2bR1.length === 0 || outsideC3.length === 0,
+  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3 }
 );
 check(
   "27a. the C2b-R1 manifest is exactly eight named paths with exactly one production file",
@@ -379,6 +421,22 @@ check(
     ) &&
     // Every accepted script is named; no arbitrary scripts/ path is admitted by prefix.
     C2B_R1_MANIFEST.every((entry) => entry !== "scripts/" && !/\*/.test(entry))
+);
+check(
+  "27c. the C3 successor manifest is exactly eight named paths and reopens only Today Intake production",
+  C3_SUCCESSOR_MANIFEST.length === 8 &&
+    new Set(C3_SUCCESSOR_MANIFEST).size === 8 &&
+    C3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C3_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 2 &&
+    C3_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_SCREEN) &&
+    C3_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_MODEL) &&
+    !C3_SUCCESSOR_MANIFEST.includes(R7A_GUARD) &&
+    !C3_SUCCESSOR_MANIFEST.includes(R7A_SMOKE) &&
+    !C3_SUCCESSOR_MANIFEST.includes(RESOLVER) &&
+    !C3_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/mapper.ts") &&
+    C3_SUCCESSOR_MANIFEST.every((entry) => !entry.startsWith("packages/") && !entry.startsWith("supabase/")) &&
+    !C3_SUCCESSOR_MANIFEST.some((entry) => /\*/.test(entry)) &&
+    Object.entries(C3_COMPANION_DIGESTS).every(([file, expected]) => sha(file) === expected)
 );
 check("28. nothing is staged by the guard's own run", git(["diff", "--cached", "--name-only"]).trim() === "");
 

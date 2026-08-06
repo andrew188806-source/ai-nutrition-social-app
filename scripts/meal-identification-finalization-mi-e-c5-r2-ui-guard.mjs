@@ -227,7 +227,10 @@ const ALLOWED_APP_SCREENS = new Set([
   // MI-E-C5-R7-C1: restaurants.tsx is the exact successor entry surface for the Restaurant Catalog
   // -> /meal-photo durable-ID handoff (restaurantId + optional branchId only, no names or menus).
   // Third EXACT entry, still never a pattern — every other apps/mobile/app/* path stays forbidden.
-  "apps/mobile/app/restaurants.tsx"
+  "apps/mobile/app/restaurants.tsx",
+  // MI-E-C5-R7-C3: Today Intake is the exact live catalog presentation successor. It reads durable
+  // meal IDs and composes current names; no finalization or backend authority is added here.
+  "apps/mobile/app/today-intake.tsx"
 ]);
 // MI-E-C5-R7-B1 successor exceptions. The R2-era rule existed so a UI-readiness round could not
 // quietly reach into the durable finalization contract or the server. R7-B1 is the round whose
