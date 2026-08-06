@@ -80,16 +80,36 @@ const R7_C3_SUCCESSOR_MANIFEST = Object.freeze([
 ]);
 const C3_SUCCESSOR_DIGESTS = Object.freeze({
   "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts": "aa17c6d13dab8d3975859ee385c068b22ba3d39da562f9a70e31ab4352352c29",
-  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs": "c0a2a28f66794dd135c81b272913c07ca8587dd0a82bf8713ccd7a4ceaca421c",
-  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs": "95d3fc8295e61552cece079acb8e7a5a8f4ef1a7c717a42ebc2009d332a77745",
-  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs": "86e337277d577c9392af38cfc524643f581ddd09457fa04cd69aec3c116e784d",
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs": "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs": "7bb9256ccdaec2a74585d9ffcfa900d12fecb10a6757658625b2cd686ccf408a",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs": "10170b2c3b544fb2288633652582208d53a3addbc789ed2fad1e3c87a8431123",
   "scripts/restaurant-display-mi-e-c5-r7-c3-smoke.mjs": "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
+// MI-E-C5-R7-C4-R1 successor manifest — repairs live Supabase consumer client composition (the
+// Catalog/Favorites/Ratings compositions passed raw Phase 1D flags into the client factory) and the
+// Development Mobile launcher env gap. Enumerated, never a prefix. It touches no selector, capture,
+// handoff or reset surface, so R7-C1's own authority is untouched by it.
+const R7_C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/features/consumer-auth/liveClientCompositionFlags.ts",
+  "apps/mobile/features/consumer-auth/index.ts",
+  "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts",
+  "apps/mobile/features/restaurants/catalog/composition.ts",
+  "apps/mobile/features/consumer-favorites/consumerFavoriteComposition.ts",
+  "apps/mobile/features/consumer-ratings/consumerRatingComposition.ts",
+  "scripts/start-mobile.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-smoke.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
+  GUARD
+]);
 const AUTHORIZED_WORKTREE_PATHS = Object.freeze([
   ...new Set([
     ...CANDIDATE_MANIFEST,
     ...R7_C2A_SUCCESSOR_MANIFEST,
     ...R7_C2B_SUCCESSOR_MANIFEST,
+    ...R7_C4_R1_SUCCESSOR_MANIFEST,
     ...R7_C3_SUCCESSOR_MANIFEST
   ])
 ]);
@@ -510,7 +530,7 @@ check(
 check(
   "37c. the authorised C2a guard amendment is pinned to its exact bytes, and the C2a smoke is untouched",
   sha("scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs") ===
-    "c0a2a28f66794dd135c81b272913c07ca8587dd0a82bf8713ccd7a4ceaca421c" &&
+    "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350" &&
     sha("scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs") ===
       "6596c470fcb856346dfe926269e7a1ee47d1541508f902ead4f850143191ac86"
 );
@@ -519,7 +539,7 @@ check(
   // C2a-amendment pin would leave the whole successor chain unenforced and pass every other suite.
   "37d. the C2b guard and smoke are pinned to their exact successor bytes",
   sha("scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs") ===
-    "95d3fc8295e61552cece079acb8e7a5a8f4ef1a7c717a42ebc2009d332a77745" &&
+    "7bb9256ccdaec2a74585d9ffcfa900d12fecb10a6757658625b2cd686ccf408a" &&
     sha("scripts/restaurant-display-mi-e-c5-r7-c2b-smoke.mjs") ===
       "172ea122c073b78d7396ba02303b2e2ee3aeea0d63e8fae374b5c36d71fa215d"
 );

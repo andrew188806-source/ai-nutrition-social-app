@@ -1,5 +1,6 @@
 import { createAsyncStorageConsumerAuthStorage } from "../../consumer-auth/asyncStorageConsumerAuthStorage";
 import { getConsumerRuntimeFlags } from "../../consumer-auth/featureFlags";
+import { deriveLiveSupabaseClientFlags } from "../../consumer-auth/liveClientCompositionFlags";
 import { getSupabaseConsumerEnvironment } from "../../consumer-auth/supabaseConsumerEnvironment";
 import { SupabaseConsumerClientFactory } from "../../consumer-auth/supabaseConsumerClientFactory";
 import { createOfficialSupabaseConsumerSdkLoader } from "../../consumer-auth/supabaseSdkLoader";
@@ -27,7 +28,10 @@ export function createMobileRestaurantCatalogComposition(env: RuntimeEnv = readE
     const authFlags = getConsumerRuntimeFlags(env);
     const factory = new SupabaseConsumerClientFactory({
       env: getSupabaseConsumerEnvironment(env),
-      flags: authFlags,
+      // MI-E-C5-R7-C4-R1: construction flags, not capability flags. Passing raw flags here made the
+      // factory throw on the obsolete Phase 1D gates whenever consumer writes were enabled, and the
+      // catch below turned that into a silent disabled catalog on a live Development device.
+      flags: deriveLiveSupabaseClientFlags(authFlags),
       storage: createAsyncStorageConsumerAuthStorage(),
       sdkLoader: createOfficialSupabaseConsumerSdkLoader()
     });

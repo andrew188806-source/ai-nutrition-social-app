@@ -18,6 +18,8 @@ export {
 } from "@haocu/shared";
 export * from "./ports";
 export * from "./featureFlags";
+// MI-E-C5-R7-C4-R1: shared authority for live Supabase client construction flags.
+export * from "./liveClientCompositionFlags";
 export * from "./storage";
 export * from "./factories";
 export * from "./consumerProfileBootstrapService";

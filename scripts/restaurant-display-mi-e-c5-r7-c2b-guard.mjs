@@ -85,11 +85,26 @@ const C3_SUCCESSOR_MANIFEST = Object.freeze([
   TODAY_INTAKE_SCREEN, TODAY_INTAKE_MODEL, C2A_GUARD, GUARD,
   R7C1_GUARD, R2_UI_GUARD, C3_GUARD, C3_SMOKE
 ]);
+// MI-E-C5-R7-C4-R1 successor manifest — live Supabase consumer client composition repair plus the
+// Development Mobile launcher. Enumerated, never a prefix. It touches no Analysis screen, resolver,
+// Today Intake or finalization surface, so every C2b display fence stays in force.
+const C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/features/consumer-auth/liveClientCompositionFlags.ts",
+  "apps/mobile/features/consumer-auth/index.ts",
+  "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts",
+  "apps/mobile/features/restaurants/catalog/composition.ts",
+  "apps/mobile/features/consumer-favorites/consumerFavoriteComposition.ts",
+  "apps/mobile/features/consumer-ratings/consumerRatingComposition.ts",
+  "scripts/start-mobile.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-smoke.mjs",
+  C3_GUARD, C2A_GUARD, GUARD, R7C1_GUARD
+]);
 const C3_COMPANION_DIGESTS = Object.freeze({
   [R7A_GUARD]: "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
   [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
-  [C2A_GUARD]: "c0a2a28f66794dd135c81b272913c07ca8587dd0a82bf8713ccd7a4ceaca421c",
-  [C3_GUARD]: "86e337277d577c9392af38cfc524643f581ddd09457fa04cd69aec3c116e784d",
+  [C2A_GUARD]: "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350",
+  [C3_GUARD]: "10170b2c3b544fb2288633652582208d53a3addbc789ed2fad1e3c87a8431123",
   [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
 
@@ -204,8 +219,16 @@ const PRODUCTION_PREFIXES = ["apps/", "packages/", "supabase/", "lib/"];
 const productionTouched = touched.filter((entry) => PRODUCTION_PREFIXES.some((prefix) => entry.startsWith(prefix)));
 
 check(
-  "1. production changes are confined to frozen C2b or the exact Today Intake C3 successor surface",
-  productionTouched.every((entry) => entry === SCREEN || entry === TODAY_INTAKE_SCREEN || entry === TODAY_INTAKE_MODEL),
+  // MI-E-C5-R7-C4-R1 adds the live-client composition surfaces. They are enumerated individually and
+  // are all COMPOSITION wiring — no Analysis screen, no resolver, no Today Intake model.
+  "1. production changes are confined to frozen C2b, the C3 Today Intake surface, or the exact C4-R1 composition surface",
+  productionTouched.every(
+    (entry) =>
+      entry === SCREEN ||
+      entry === TODAY_INTAKE_SCREEN ||
+      entry === TODAY_INTAKE_MODEL ||
+      C4_R1_SUCCESSOR_MANIFEST.includes(entry)
+  ),
   { productionTouched }
 );
 check("2. the R7-C2a presentation resolver is byte-identical to its frozen content", !digestDrift(RESOLVER));
@@ -391,7 +414,7 @@ check(
 );
 check(
   "26a. the C2a guard carries EXACTLY the authorised successor amendment, pinned to its bytes",
-  sha(C2A_GUARD) === "c0a2a28f66794dd135c81b272913c07ca8587dd0a82bf8713ccd7a4ceaca421c"
+  sha(C2A_GUARD) === "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350"
 );
 check(
   "26b. the amended C2a guard admits analysis.tsx as the ONLY new production caller",
@@ -445,9 +468,10 @@ check(
 );
 const outsideManifest = touched.filter((entry) => !CANDIDATE_MANIFEST.includes(entry));
 const outsideC3Manifest = touched.filter((entry) => !C3_SUCCESSOR_MANIFEST.includes(entry));
+const outsideC4R1Manifest = touched.filter((entry) => !C4_R1_SUCCESSOR_MANIFEST.includes(entry));
 check(
-  "28. uncommitted changes are confined to the C2b or exact C3 manifest, and clean committed state passes",
-  outsideManifest.length === 0 || outsideC3Manifest.length === 0,
+  "28. uncommitted changes are confined to the C2b, C3 or exact C4-R1 manifest, and clean committed state passes",
+  outsideManifest.length === 0 || outsideC3Manifest.length === 0 || outsideC4R1Manifest.length === 0,
   { touched: touched.length, outsideManifest, outsideC3Manifest }
 );
 check(

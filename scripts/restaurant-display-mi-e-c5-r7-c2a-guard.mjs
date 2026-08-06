@@ -65,6 +65,21 @@ const C3_SUCCESSOR_MANIFEST = Object.freeze([
   TODAY_INTAKE_SCREEN, TODAY_INTAKE_MODEL, GUARD, C2B_GUARD,
   R7C1_GUARD, R2_UI_GUARD, C3_GUARD, C3_SMOKE
 ]);
+// MI-E-C5-R7-C4-R1 successor manifest — repairs live Supabase consumer client composition and the
+// Development Mobile launcher. Enumerated, never a prefix. It contains no resolver, mapper, catalog
+// type or Analysis surface, so every C2a correctness fence below stays fully in force.
+const C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/features/consumer-auth/liveClientCompositionFlags.ts",
+  "apps/mobile/features/consumer-auth/index.ts",
+  "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts",
+  "apps/mobile/features/restaurants/catalog/composition.ts",
+  "apps/mobile/features/consumer-favorites/consumerFavoriteComposition.ts",
+  "apps/mobile/features/consumer-ratings/consumerRatingComposition.ts",
+  "scripts/start-mobile.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-smoke.mjs",
+  C3_GUARD, GUARD, C2B_GUARD, R7C1_GUARD
+]);
 
 // The two digests C2b is authorised to move, pinned to the ACTUAL successor candidate bytes. An
 // arbitrary edit to either file fails: only these exact contents are accepted as the successor
@@ -90,7 +105,7 @@ const R7A_FROZEN_DIGESTS = Object.freeze({
   [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd"
 });
 const C3_COMPANION_DIGESTS = Object.freeze({
-  [C3_GUARD]: "86e337277d577c9392af38cfc524643f581ddd09457fa04cd69aec3c116e784d",
+  [C3_GUARD]: "10170b2c3b544fb2288633652582208d53a3addbc789ed2fad1e3c87a8431123",
   [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
 // True only in the exact successor state; used to select which lifecycle branch is authoritative.
@@ -394,10 +409,21 @@ const worktree = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]
 const outsideC2a = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
 const outsideC2bR1 = worktree.filter((file) => !C2B_R1_MANIFEST.includes(file));
 const outsideC3 = worktree.filter((file) => !C3_SUCCESSOR_MANIFEST.includes(file));
+const outsideC4R1 = worktree.filter((file) => !C4_R1_SUCCESSOR_MANIFEST.includes(file));
 check(
-  "27. any uncommitted change is confined to the C2a, C2b-R1, or exact C3 manifest (vacuous when clean)",
-  outsideC2a.length === 0 || outsideC2bR1.length === 0 || outsideC3.length === 0,
-  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3 }
+  "27. any uncommitted change is confined to the C2a, C2b-R1, C3 or exact C4-R1 manifest (vacuous when clean)",
+  outsideC2a.length === 0 || outsideC2bR1.length === 0 || outsideC3.length === 0 || outsideC4R1.length === 0,
+  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3, outsideC4R1 }
+);
+check(
+  "27c. the C4-R1 successor manifest is exactly thirteen named paths and reaches no C2a-protected surface",
+  C4_R1_SUCCESSOR_MANIFEST.length === 13 &&
+    new Set(C4_R1_SUCCESSOR_MANIFEST).size === 13 &&
+    !C4_R1_SUCCESSOR_MANIFEST.includes(RESOLVER) &&
+    !C4_R1_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/mapper.ts") &&
+    !C4_R1_SUCCESSOR_MANIFEST.includes(ANALYSIS_SCREEN) &&
+    !C4_R1_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_MODEL) &&
+    C4_R1_SUCCESSOR_MANIFEST.every((entry) => !entry.startsWith("supabase/") && !entry.startsWith("packages/"))
 );
 check(
   "27a. the C2b-R1 manifest is exactly eight named paths with exactly one production file",

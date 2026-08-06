@@ -2,6 +2,7 @@ import { SupabaseConsumerAuthAdapter } from "../consumer-auth/adapters/supabaseC
 import { createConsumerAuthPort } from "../consumer-auth/factories";
 import { createAsyncStorageConsumerAuthStorage } from "../consumer-auth/asyncStorageConsumerAuthStorage";
 import { getConsumerRuntimeFlags } from "../consumer-auth/featureFlags";
+import { deriveLiveSupabaseClientFlags } from "../consumer-auth/liveClientCompositionFlags";
 import type { ConsumerAuthPort } from "../consumer-auth/ports";
 import { getSupabaseConsumerEnvironment } from "../consumer-auth/supabaseConsumerEnvironment";
 import { SupabaseConsumerClientFactory } from "../consumer-auth/supabaseConsumerClientFactory";
@@ -43,7 +44,9 @@ export function createMobileConsumerRatingComposition(env: RuntimeEnv = readEnv(
 
   const factory = new SupabaseConsumerClientFactory({
     env: getSupabaseConsumerEnvironment(env),
-    flags: authFlags,
+    // MI-E-C5-R7-C4-R1: client-construction flags via the shared consumer-auth authority. Raw flags
+    // tripped the obsolete Phase 1D gates once consumer writes were enabled.
+    flags: deriveLiveSupabaseClientFlags(authFlags),
     storage: createAsyncStorageConsumerAuthStorage(),
     sdkLoader: createOfficialSupabaseConsumerSdkLoader()
   });

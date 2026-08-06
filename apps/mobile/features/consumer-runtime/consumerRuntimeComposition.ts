@@ -8,8 +8,10 @@ import {
   createConsumerAuthScaffold,
   createOfficialSupabaseConsumerSdkLoader,
   createReactNativeConsumerAppStateSource,
+  deriveLiveSupabaseClientFlags,
   getConsumerRuntimeFlags,
   getSupabaseConsumerEnvironment,
+  withoutObsoleteConsumerWritesIssue,
   type ConsumerAuthError,
   type ConsumerAuthPort,
   type ConsumerAuthState,
@@ -583,17 +585,18 @@ function normalizeMealIdentificationFinalizationFlags(
   return flags;
 }
 
+// MI-E-C5-R7-C4-R1: both of these were private duplicates of the shared consumer-auth authority.
+// They now delegate, so the Restaurant Catalog, Favorites and Ratings compositions reconcile the
+// legacy Phase 1D gates through exactly the same code path this runtime uses.
+//
+// The two remain distinct on purpose: capability flags keep supabaseWritesEnabled TRUE (the product
+// really does write), while only the CLIENT-CONSTRUCTION flags clear the factory-facing gate.
 function normalizeConsumerCapabilityFlags(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {
-  if (!flags.supabaseWritesEnabled) return flags;
-  return {
-    ...flags,
-    issues: flags.issues.filter((issue) => issue !== "Consumer Supabase writes are not enabled in Consumer Runtime Phase 1D.")
-  };
+  return withoutObsoleteConsumerWritesIssue(flags);
 }
 
 function deriveAuthCompositionFlags(flags: ConsumerRuntimeFlags): ConsumerRuntimeFlags {
-  if (!flags.supabaseWritesEnabled) return flags;
-  return { ...flags, supabaseWritesEnabled: false };
+  return deriveLiveSupabaseClientFlags(flags);
 }
 
 function normalizeMealWriteFlags(flags: ConsumerMealRuntimeFlags, authSource: ConsumerRuntimeFlags["authSource"]): ConsumerMealRuntimeFlags {

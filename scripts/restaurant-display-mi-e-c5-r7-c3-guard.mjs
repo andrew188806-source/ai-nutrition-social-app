@@ -232,8 +232,30 @@ check("48. C3 smoke distinguishes legacy UI undefined from resolver-boundary nul
 
 const worktree = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
   .split("\0").filter(Boolean).map((entry) => entry.slice(3).replaceAll("\\", "/"));
+// MI-E-C5-R7-C4-R1 successor manifest — the exact thirteen paths of the round that repairs live
+// Supabase consumer client composition (Catalog/Favorites/Ratings passed raw Phase 1D flags into the
+// client factory and silently degraded to disabled repositories) and the Development Mobile
+// launcher env gap. Named individually, never a prefix, so a fourteenth path still fails. It touches
+// no Today Intake, resolver or finalization surface, which is why C3's own authority is unaffected.
+const C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/features/consumer-auth/liveClientCompositionFlags.ts",
+  "apps/mobile/features/consumer-auth/index.ts",
+  "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts",
+  "apps/mobile/features/restaurants/catalog/composition.ts",
+  "apps/mobile/features/consumer-favorites/consumerFavoriteComposition.ts",
+  "apps/mobile/features/consumer-ratings/consumerRatingComposition.ts",
+  "scripts/start-mobile.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-smoke.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
+  "scripts/restaurant-selection-mi-e-c5-r7-c1-guard.mjs"
+]);
 const outside = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
-check("49. uncommitted state is a subset of the exact manifest; clean committed state also passes", outside.length === 0, { worktreeEntries: worktree.length, outside });
+const outsideC4R1 = worktree.filter((file) => !C4_R1_SUCCESSOR_MANIFEST.includes(file));
+check("49. uncommitted state is a subset of the exact manifest; clean committed state also passes", outside.length === 0 || outsideC4R1.length === 0, { worktreeEntries: worktree.length, outside, outsideC4R1 });
+check("49a. the C4-R1 successor manifest is exactly thirteen named paths, never a prefix", C4_R1_SUCCESSOR_MANIFEST.length === 13 && new Set(C4_R1_SUCCESSOR_MANIFEST).size === 13 && C4_R1_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) && !C4_R1_SUCCESSOR_MANIFEST.some((entry) => entry.includes("todayIntakeUiModel") || entry.includes("app/today-intake") || entry.includes("restaurantContextPresentation")));
 check("50. no candidate file contains remote-operation implementation", CANDIDATE_MANIFEST.every((file) => !/createClient\s*\(|functions\.invoke\s*\(|\.rpc\s*\(|\bfetch\s*\(|supabase\s+(?:db|functions|migration)\s+push/.test(stripComments(read(file)))));
 const secretPatterns = [new RegExp(["ey", "J[A-Za-z0-9_-]{12,}\\.[A-Za-z0-9_-]{12,}"].join("")), new RegExp(["sb", "p_[A-Za-z0-9]{16,}"].join("")), new RegExp(["service", "_role[\"'\\s:=]+[A-Za-z0-9_-]{12,}"].join(""))];
 check("51. no candidate file contains an actual secret", CANDIDATE_MANIFEST.every((file) => !secretPatterns.some((pattern) => pattern.test(read(file)))));
