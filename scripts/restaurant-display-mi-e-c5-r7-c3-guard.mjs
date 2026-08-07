@@ -152,8 +152,21 @@ const C4_R2_SUCCESSOR_DIGESTS = Object.freeze({
   [R7A_GUARD]: "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8",
   [R5_UI_GUARD]: "25120055ed808fbe0b8ae7d73cca8ddbd9ae33e78426e0cf155d40be8fa00a14"
 });
-const allowedDigests = (file) =>
-  Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, file) ? [FROZEN[file], C4_R2_SUCCESSOR_DIGESTS[file]] : [FROZEN[file]];
+// MI-E-C5-R7-C4-R3 successor lifecycle. Two further pins gain a second, EXACT value: the capture
+// screen, whose beginAnalysisCapture call now passes the decoded restaurant context as its seventh
+// argument (omitting it destroyed the venue selection at capture time and rendered 未知 on
+// /analysis), and the R5 UI guard, which pins that call's exact spelling. C3's own Today Intake
+// production authority is untouched — neither appears in C3_PRODUCTION.
+const C4_R3_SUCCESSOR_DIGESTS = Object.freeze({
+  [CAPTURE]: "500127929252b376bdb578ed28aa8279436eb310229b97945efaed3d186dbf7d",
+  [R5_UI_GUARD]: "d3b22c736f7f4507e2bb5af29351c11dcb75bd92da9013871a9958d534a03729"
+});
+const allowedDigests = (file) => {
+  const allowed = [FROZEN[file]];
+  if (Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, file)) allowed.push(C4_R2_SUCCESSOR_DIGESTS[file]);
+  if (Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, file)) allowed.push(C4_R3_SUCCESSOR_DIGESTS[file]);
+  return allowed;
+};
 const frozenOrC4R2 = (file) => exists(file) && allowedDigests(file).includes(sha(file));
 const drift = Object.entries(FROZEN).filter(([file]) => !frozenOrC4R2(file));
 check("1. the exact candidate manifest has eight unique named paths", exactEightManifestAuthority(CANDIDATE_MANIFEST) && CANDIDATE_MANIFEST.every(exists));
@@ -176,7 +189,20 @@ check(
     !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, MAPPER) &&
     !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, R7A_SMOKE)
 );
-check("8. selector, capture and handoff are byte-identical", [SELECTOR, CAPTURE, HANDOFF].every((file) => sha(file) === FROZEN[file]));
+check("8. selector, capture and handoff are byte-identical", [SELECTOR, HANDOFF].every((file) => sha(file) === FROZEN[file]) && frozenOrC4R2(CAPTURE));
+check(
+  "8a. the C4-R3 capture-seam allowance is exactly two enumerated, genuinely distinct successor values",
+  Object.keys(C4_R3_SUCCESSOR_DIGESTS).length === 2 &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS).every((file) => file === CAPTURE || file === R5_UI_GUARD) &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS).every((file) => Object.hasOwn(FROZEN, file)) &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS).every((file) => FROZEN[file] !== C4_R3_SUCCESSOR_DIGESTS[file]) &&
+    // The selector, the pure handoff, the resolver and C3's own Today Intake bytes are NOT reopened.
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, SELECTOR) &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, HANDOFF) &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, RESOLVER) &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, SCREEN) &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, UI_MODEL)
+);
 check("9. analysis session is byte-identical", sha(SESSION) === FROZEN[SESSION]);
 check("10. finalization contract, draft and hook are byte-identical", [V3, FINALIZATION_DRAFT, FINALIZATION_HOOK].every((file) => sha(file) === FROZEN[file]));
 check("11. all frozen companion suites are byte-identical", drift.length === 0, drift.map(([file]) => file));
@@ -301,7 +327,25 @@ const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
 const outside = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
 const outsideC4R1 = worktree.filter((file) => !C4_R1_SUCCESSOR_MANIFEST.includes(file));
 const outsideC4R2 = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file));
-check("49. uncommitted state is a subset of the exact manifest; clean committed state also passes", outside.length === 0 || outsideC4R1.length === 0 || outsideC4R2.length === 0, { worktreeEntries: worktree.length, outside, outsideC4R1, outsideC4R2 });
+// MI-E-C5-R7-C4-R3 successor manifest — the exact eleven paths of the capture-seam repair round.
+// Named individually, never a prefix. Its single production path is the capture screen; no Today
+// Intake, resolver, mapper or finalization surface appears in it.
+const C4_R3_SUCCESSOR_MANIFEST = Object.freeze([
+  CAPTURE,
+  "scripts/meal-photo-gallery-mi-e-c5-r4-guard.mjs",
+  R5_UI_GUARD,
+  C1_GUARD,
+  C2A_GUARD,
+  C2B_GUARD,
+  GUARD,
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-smoke.mjs"
+]);
+const outsideC4R3 = worktree.filter((file) => !C4_R3_SUCCESSOR_MANIFEST.includes(file));
+check("49. uncommitted state is a subset of the exact manifest; clean committed state also passes", outside.length === 0 || outsideC4R1.length === 0 || outsideC4R2.length === 0 || outsideC4R3.length === 0, { worktreeEntries: worktree.length, outside, outsideC4R1, outsideC4R2, outsideC4R3 });
+check("49c. the C4-R3 successor manifest is exactly eleven named paths with one production file, never a prefix", C4_R3_SUCCESSOR_MANIFEST.length === 11 && new Set(C4_R3_SUCCESSOR_MANIFEST).size === 11 && C4_R3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) && C4_R3_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 1 && C4_R3_SUCCESSOR_MANIFEST.includes(CAPTURE) && !C4_R3_SUCCESSOR_MANIFEST.some((entry) => entry === SCREEN || entry === UI_MODEL || entry === RESOLVER || entry === MAPPER || entry === ANALYSIS || entry === SMOKE || /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")));
 check("49b. the C4-R2 successor manifest is exactly eleven named paths with exactly two production files, never a prefix", C4_R2_SUCCESSOR_MANIFEST.length === 11 && new Set(C4_R2_SUCCESSOR_MANIFEST).size === 11 && C4_R2_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) && C4_R2_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 2 && !C4_R2_SUCCESSOR_MANIFEST.some((entry) => entry === SCREEN || entry === UI_MODEL || entry === RESOLVER || entry === MAPPER || entry === R7A_SMOKE || entry === SMOKE || /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")));
 check("49a. the C4-R1 successor manifest is exactly thirteen named paths, never a prefix", C4_R1_SUCCESSOR_MANIFEST.length === 13 && new Set(C4_R1_SUCCESSOR_MANIFEST).size === 13 && C4_R1_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) && !C4_R1_SUCCESSOR_MANIFEST.some((entry) => entry.includes("todayIntakeUiModel") || entry.includes("app/today-intake") || entry.includes("restaurantContextPresentation")));
 check("50. no candidate file contains remote-operation implementation", CANDIDATE_MANIFEST.every((file) => !/createClient\s*\(|functions\.invoke\s*\(|\.rpc\s*\(|\bfetch\s*\(|supabase\s+(?:db|functions|migration)\s+push/.test(stripComments(read(file)))));

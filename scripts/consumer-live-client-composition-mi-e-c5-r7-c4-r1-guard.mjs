@@ -215,6 +215,25 @@ const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
   "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs"
 ]);
+// MI-E-C5-R7-C4-R3 successor manifest — the exact eleven paths of the round that repairs the capture
+// seam: beginAnalysisCapture full-resets the session and re-applies the restaurant context from its
+// own seventh parameter, which meal-photo.tsx never passed, so a venue selection was destroyed at
+// capture time and /analysis rendered 未知. Enumerated individually, never a prefix. It touches no
+// live-client composition surface, no auth flag helper and no launcher, so every C4-R1 authority
+// stays in force; the only overlap is the capture screen, which C4-R1 itself never modified.
+const C4_R3_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/app/meal-photo.tsx",
+  "scripts/meal-photo-gallery-mi-e-c5-r4-guard.mjs",
+  "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs",
+  R7C1_GUARD,
+  C2A_GUARD,
+  C2B_GUARD,
+  C3_GUARD,
+  GUARD,
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-smoke.mjs"
+]);
 const changedVsHead = git(["diff", "--name-only", "HEAD"]).split("\n").map((entry) => entry.trim()).filter(Boolean);
 check(
   // MI-E-C5-R7-C4-R2: the Analysis screen leaves this zero-diff fence, because that successor round
@@ -222,12 +241,31 @@ check(
   // the catalog types, Today Intake, the analysis session store, the handoff, the v3 contract, the
   // repository factory and the auth flags — stays absolutely unchanged in both lifecycle states.
   "28. no R7-C3 / resolver / finalization / factory surface is modified by this round (vacuous on a clean tree)",
-  PROTECTED_UNCHANGED.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file)).every(
-    (file) => !changedVsHead.includes(file)
-  ),
+  PROTECTED_UNCHANGED.filter(
+    (file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file) && !C4_R3_SUCCESSOR_MANIFEST.includes(file)
+  ).every((file) => !changedVsHead.includes(file)),
   changedVsHead.filter(
-    (file) => PROTECTED_UNCHANGED.includes(file) && !C4_R2_SUCCESSOR_MANIFEST.includes(file)
+    (file) =>
+      PROTECTED_UNCHANGED.includes(file) &&
+      !C4_R2_SUCCESSOR_MANIFEST.includes(file) &&
+      !C4_R3_SUCCESSOR_MANIFEST.includes(file)
   )
+);
+check(
+  "28b. the C4-R3 allowance removes EXACTLY the capture screen from the zero-diff fence, nothing else",
+  PROTECTED_UNCHANGED.filter((file) => C4_R3_SUCCESSOR_MANIFEST.includes(file)).join(",") ===
+    "apps/mobile/app/meal-photo.tsx" &&
+    C4_R3_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R3_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C4_R3_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 1 &&
+    // No live-client composition surface may be reopened through the successor manifest.
+    ![HELPER, AUTH_INDEX, RUNTIME, CATALOG, FAVORITES, RATINGS, LAUNCHER, FACTORY, AUTH_FLAGS].some((entry) =>
+      C4_R3_SUCCESSOR_MANIFEST.includes(entry)
+    ) &&
+    C4_R3_SUCCESSOR_MANIFEST.every(
+      (entry) => !entry.startsWith("supabase/") && !entry.startsWith("packages/") && !/\*/.test(entry)
+    )
 );
 check(
   "28a. the C4-R2 allowance removes EXACTLY the Analysis screen from the zero-diff fence, nothing else",
@@ -262,10 +300,11 @@ const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=al
   .map((entry) => entry.slice(3).replaceAll("\\", "/"));
 const outsideManifest = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
 const outsideC4R2Manifest = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file));
+const outsideC4R3Manifest = worktree.filter((file) => !C4_R3_SUCCESSOR_MANIFEST.includes(file));
 check(
   "31. every uncommitted change is confined to the manifest, and a clean committed tree also passes",
-  outsideManifest.length === 0 || outsideC4R2Manifest.length === 0,
-  { worktreeEntries: worktree.length, outsideManifest, outsideC4R2Manifest }
+  outsideManifest.length === 0 || outsideC4R2Manifest.length === 0 || outsideC4R3Manifest.length === 0,
+  { worktreeEntries: worktree.length, outsideManifest, outsideC4R2Manifest, outsideC4R3Manifest }
 );
 const guardCode = stripComments(read(GUARD));
 check(

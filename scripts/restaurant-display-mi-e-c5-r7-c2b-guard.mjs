@@ -107,8 +107,8 @@ const C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
 const C3_COMPANION_DIGESTS = Object.freeze({
   [R7A_GUARD]: "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8",
   [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
-  [C2A_GUARD]: "316bd0363eb111b75fcdbe011d7c457e13cc398d644063d3cac48e97aeb7668e",
-  [C3_GUARD]: "9664a5c3e9b79acc2b892ac510926d0af3153d4a75e9d36abfb36d29f9092899",
+  [C2A_GUARD]: "852a1572d6819d64dd048a038aebb2d20b4253bcd115c5c6838b9ce74c69a7ff",
+  [C3_GUARD]: "1ba0061bae3ac356f90068906464df6261fa81558d23910876f09be9baaef5f0",
   [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
 // MI-E-C5-R7-C4-R2 successor manifest — the exact eleven paths of the round that consolidates
@@ -127,6 +127,22 @@ const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
   "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
   "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs"
+]);
+// MI-E-C5-R7-C4-R3 successor manifest — the exact eleven paths of the capture-seam repair round.
+// Enumerated, never a prefix. Its only production entry is the capture screen; the Analysis screen,
+// the resolver, Today Intake and every finalization surface stay outside it.
+const C4_R3_SUCCESSOR_MANIFEST = Object.freeze([
+  CAPTURE,
+  "scripts/meal-photo-gallery-mi-e-c5-r4-guard.mjs",
+  R5_GUARD,
+  R7C1_GUARD,
+  C2A_GUARD,
+  GUARD,
+  C3_GUARD,
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-smoke.mjs"
 ]);
 
 const screen = read(SCREEN);
@@ -216,7 +232,18 @@ const FROZEN = Object.freeze({
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs":
     "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c"
 });
-const digestDrift = (file) => !exists(file) || sha(file) !== FROZEN[file];
+// MI-E-C5-R7-C4-R3 successor lifecycle. Exactly ONE frozen surface gains a second, EXACT value: the
+// capture screen. That round appends the decoded restaurant context as beginAnalysisCapture's
+// seventh argument — the function full-resets the session and re-applies the context from its own
+// parameter alone, so omitting it destroyed the venue selection at capture time and made C2b's own
+// display render 未知 for every venue-entered meal. The resolver, the mapper, the selector, the pure
+// handoff, the session store and the finalization contract are all untouched.
+const C4_R3_SUCCESSOR_DIGESTS = Object.freeze({
+  [CAPTURE]: "500127929252b376bdb578ed28aa8279436eb310229b97945efaed3d186dbf7d"
+});
+const frozenAllowed = (file) =>
+  Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, file) ? [FROZEN[file], C4_R3_SUCCESSOR_DIGESTS[file]] : [FROZEN[file]];
+const digestDrift = (file) => !exists(file) || !frozenAllowed(file).includes(sha(file));
 const TODAY_INTAKE_LIFECYCLE_DIGESTS = Object.freeze({
   [TODAY_INTAKE_SCREEN]: Object.freeze([
     "8697e1aa9a471e50f8da664e938e90771cb93b6ff62696b2fa5412080e17e68e",
@@ -250,7 +277,9 @@ check(
       entry === TODAY_INTAKE_MODEL ||
       C4_R1_SUCCESSOR_MANIFEST.includes(entry) ||
       // MI-E-C5-R7-C4-R2: the pure page-composition authority, named individually.
-      C4_R2_SUCCESSOR_MANIFEST.includes(entry)
+      C4_R2_SUCCESSOR_MANIFEST.includes(entry) ||
+      // MI-E-C5-R7-C4-R3: the capture screen holding the seam, named individually.
+      C4_R3_SUCCESSOR_MANIFEST.includes(entry)
   ),
   { productionTouched }
 );
@@ -262,7 +291,20 @@ check(
 );
 check(
   "5. the R7-C1 selector, capture handoff and pure handoff module are byte-identical to their frozen content",
-  !digestDrift(SELECTOR) && !digestDrift(CAPTURE) && !digestDrift(HANDOFF)
+  !digestDrift(SELECTOR) && !digestDrift(CAPTURE) && !digestDrift(HANDOFF) &&
+    // The selector and the pure handoff have exactly ONE permitted value each; only the capture
+    // screen carries the enumerated C4-R3 successor state.
+    sha(SELECTOR) === FROZEN[SELECTOR] &&
+    sha(HANDOFF) === FROZEN[HANDOFF]
+);
+check(
+  "5a. the C4-R3 allowance is exactly one enumerated, genuinely distinct capture-screen digest",
+  Object.keys(C4_R3_SUCCESSOR_DIGESTS).length === 1 &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS)[0] === CAPTURE &&
+    FROZEN[CAPTURE] !== C4_R3_SUCCESSOR_DIGESTS[CAPTURE] &&
+    [RESOLVER, MAPPER, SELECTOR, HANDOFF, SESSION, V3_CONTRACT, FINALIZATION_HOOK].every(
+      (file) => !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, file)
+    )
 );
 check("6. the analysis session store is byte-identical to its frozen content", !digestDrift(SESSION));
 check(
@@ -493,13 +535,32 @@ const outsideManifest = touched.filter((entry) => !CANDIDATE_MANIFEST.includes(e
 const outsideC3Manifest = touched.filter((entry) => !C3_SUCCESSOR_MANIFEST.includes(entry));
 const outsideC4R1Manifest = touched.filter((entry) => !C4_R1_SUCCESSOR_MANIFEST.includes(entry));
 const outsideC4R2Manifest = touched.filter((entry) => !C4_R2_SUCCESSOR_MANIFEST.includes(entry));
+const outsideC4R3Manifest = touched.filter((entry) => !C4_R3_SUCCESSOR_MANIFEST.includes(entry));
 check(
   "28. uncommitted changes are confined to the C2b, C3 or exact C4-R1 manifest, and clean committed state passes",
   outsideManifest.length === 0 ||
     outsideC3Manifest.length === 0 ||
     outsideC4R1Manifest.length === 0 ||
-    outsideC4R2Manifest.length === 0,
-  { touched: touched.length, outsideManifest, outsideC3Manifest, outsideC4R2Manifest }
+    outsideC4R2Manifest.length === 0 ||
+    outsideC4R3Manifest.length === 0,
+  { touched: touched.length, outsideManifest, outsideC3Manifest, outsideC4R2Manifest, outsideC4R3Manifest }
+);
+check(
+  "28e. the C4-R3 successor is exactly eleven named paths, one production file, no protected surface",
+  C4_R3_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R3_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C4_R3_SUCCESSOR_MANIFEST.filter((entry) => PRODUCTION_PREFIXES.some((prefix) => entry.startsWith(prefix))).length === 1 &&
+    C4_R3_SUCCESSOR_MANIFEST.includes(CAPTURE) &&
+    // Only the capture screen may be a frozen surface inside it; everything else stays untouchable.
+    C4_R3_SUCCESSOR_MANIFEST.filter((entry) => Object.keys(FROZEN).includes(entry)).join(",") === CAPTURE &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(SCREEN) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_SCREEN) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_MODEL) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(SMOKE) &&
+    !C4_R3_SUCCESSOR_MANIFEST.some(
+      (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
+    )
 );
 check(
   "28d. the C4-R2 successor is exactly eleven named paths, two production files, no protected surface",

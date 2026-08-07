@@ -657,12 +657,29 @@ check(
     !/initialSession\.mealPhotoFinalizationDraft\?\.attempted/.test(finalizationHook)
 );
 check(
+  // MI-E-C5-R7-C4-R3 successor amendment. R5's authority here is ACTOR STAMPING — that the capture
+  // carries `captureSessionOwnership.owner` into the store — and every clause enforcing it is kept
+  // verbatim. Only the call's arity moved: C4-R3 appends the decoded restaurant context as the
+  // seventh argument, because beginAnalysisCapture full-resets the session and re-applies that
+  // context from its own parameter alone. Omitting it destroyed a venue selection at capture time
+  // and made /analysis render 未知 for every venue-entered meal. The owner argument is still
+  // asserted in the exact same position, so a dropped or reordered owner still fails this check.
   "69. a new capture is stamped with the actor that captured it",
   /owner: AnalysisSessionActorOwner \| null = null/.test(beginCaptureFn) &&
     /session\.actorOwner = owner;/.test(beginCaptureFn) &&
-    /beginAnalysisCapture\(method, imageUri, capturedAt, mimeType, fileName, captureSessionOwnership\.owner\);/.test(mealPhotoScreen) &&
+    /beginAnalysisCapture\(method, imageUri, capturedAt, mimeType, fileName, captureSessionOwnership\.owner, routeRestaurantHandoff \?\? EMPTY_ANALYSIS_RESTAURANT_CONTEXT\);/.test(mealPhotoScreen) &&
     /const captureSessionOwnership = getAnalysisSessionViewForActor\(captureActor\);/.test(mealPhotoScreen) &&
     /resetAnalysisSessionForActor\(captureActor, ANALYSIS_SESSION_OWNER_DEPENDENCIES\)/.test(mealPhotoScreen)
+);
+check(
+  "69a. the capture seam carries the venue selection across the reset, for BOTH capture entries",
+  // One call site, one decoded value: the gesture entry and the autoOpen effect cannot diverge.
+  (mealPhotoScreen.match(/beginAnalysisCapture\(/g) ?? []).length === 1 &&
+    (mealPhotoScreen.match(/const routeRestaurantHandoff = useMemo\(/g) ?? []).length === 1 &&
+    /function startAiAnalysis\(\)[\s\S]{0,500}?applyRouteRestaurantContextForNewCapture\(\);/.test(mealPhotoScreen) &&
+    /autoOpen === "true" && captureSessionReconciled[\s\S]{0,600}?applyRouteRestaurantContextForNewCapture\(\);/.test(mealPhotoScreen) &&
+    // A generic entry still passes the frozen empty context rather than a fabricated identity.
+    /routeRestaurantHandoff \?\? EMPTY_ANALYSIS_RESTAURANT_CONTEXT/.test(mealPhotoScreen)
 );
 check(
   // Release BEFORE the reset and before any new owner can register a replacement asset, and a

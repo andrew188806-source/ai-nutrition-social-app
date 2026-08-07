@@ -105,7 +105,7 @@ const R7A_FROZEN_DIGESTS = Object.freeze({
   [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd"
 });
 const C3_COMPANION_DIGESTS = Object.freeze({
-  [C3_GUARD]: "9664a5c3e9b79acc2b892ac510926d0af3153d4a75e9d36abfb36d29f9092899",
+  [C3_GUARD]: "1ba0061bae3ac356f90068906464df6261fa81558d23910876f09be9baaef5f0",
   [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
 // MI-E-C5-R7-C4-R2 successor state. That round consolidates /analysis into ONE page: the legacy
@@ -376,8 +376,32 @@ const PROTECTED = Object.freeze({
   [SMOKE]: "6596c470fcb856346dfe926269e7a1ee47d1541508f902ead4f850143191ac86",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c"
 });
-const drift = Object.entries(PROTECTED).filter(([file, want]) => !exists(file) || sha(file) !== want);
-check("21. every permanently protected surface is byte-identical to its frozen content", drift.length === 0, drift.map(([f]) => f));
+// MI-E-C5-R7-C4-R3 successor lifecycle. Exactly ONE of these permanently protected surfaces gains a
+// second, EXACT value: the capture screen. That round appends the decoded restaurant context as
+// beginAnalysisCapture's seventh argument — the function full-resets the session and re-applies the
+// context from its own parameter alone, so omitting it destroyed the venue selection at capture time
+// and made /analysis render 未知. It touches no resolver, mapper, catalog type or catalog surface,
+// so every C2a correctness fence stays fully in force.
+const C4_R3_SUCCESSOR_DIGESTS = Object.freeze({
+  "apps/mobile/app/meal-photo.tsx": "500127929252b376bdb578ed28aa8279436eb310229b97945efaed3d186dbf7d"
+});
+const protectedAllowed = (file) =>
+  Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, file) ? [PROTECTED[file], C4_R3_SUCCESSOR_DIGESTS[file]] : [PROTECTED[file]];
+const drift = Object.keys(PROTECTED).filter((file) => !exists(file) || !protectedAllowed(file).includes(sha(file)));
+check("21. every permanently protected surface is byte-identical to its frozen content", drift.length === 0, drift);
+check(
+  "21f. the C4-R3 allowance is exactly one enumerated, genuinely distinct capture-screen digest",
+  Object.keys(C4_R3_SUCCESSOR_DIGESTS).length === 1 &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS)[0] === "apps/mobile/app/meal-photo.tsx" &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS).every((file) => Object.hasOwn(PROTECTED, file)) &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS).every((file) => PROTECTED[file] !== C4_R3_SUCCESSOR_DIGESTS[file]) &&
+    // The resolver, the mapper, the catalog types, the selector and the pure handoff are NOT reopened.
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, RESOLVER) &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, "apps/mobile/features/restaurants/catalog/mapper.ts") &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, "apps/mobile/features/restaurants/catalog/types.ts") &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, "apps/mobile/app/restaurants.tsx") &&
+    !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, "apps/mobile/features/meal-identification/analysisRestaurantHandoff.ts")
+);
 const c3ContentDrift = Object.keys(C3_FROZEN_DIGESTS).filter((file) => {
   if (!exists(file)) return true;
   const actual = sha(file);
@@ -484,14 +508,48 @@ const outsideC2bR1 = worktree.filter((file) => !C2B_R1_MANIFEST.includes(file));
 const outsideC3 = worktree.filter((file) => !C3_SUCCESSOR_MANIFEST.includes(file));
 const outsideC4R1 = worktree.filter((file) => !C4_R1_SUCCESSOR_MANIFEST.includes(file));
 const outsideC4R2 = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file));
+// MI-E-C5-R7-C4-R3 successor manifest — the exact eleven paths of the capture-seam repair round.
+const C4_R3_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/app/meal-photo.tsx",
+  "scripts/meal-photo-gallery-mi-e-c5-r4-guard.mjs",
+  R5_UI_GUARD,
+  R7C1_GUARD,
+  GUARD,
+  C2B_GUARD,
+  C3_GUARD,
+  C4_R1_GUARD,
+  C4_R2_GUARD,
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-smoke.mjs"
+]);
+const outsideC4R3 = worktree.filter((file) => !C4_R3_SUCCESSOR_MANIFEST.includes(file));
 check(
   "27. any uncommitted change is confined to the C2a, C2b-R1, C3 or exact C4-R1 manifest (vacuous when clean)",
   outsideC2a.length === 0 ||
     outsideC2bR1.length === 0 ||
     outsideC3.length === 0 ||
     outsideC4R1.length === 0 ||
-    outsideC4R2.length === 0,
-  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3, outsideC4R1, outsideC4R2 }
+    outsideC4R2.length === 0 ||
+    outsideC4R3.length === 0,
+  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3, outsideC4R1, outsideC4R2, outsideC4R3 }
+);
+check(
+  "27e. the C4-R3 successor manifest is exactly eleven named paths and reaches no C2a-protected surface",
+  C4_R3_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R3_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C4_R3_SUCCESSOR_MANIFEST.filter((entry) => !entry.startsWith("scripts/")).length === 1 &&
+    C4_R3_SUCCESSOR_MANIFEST.includes("apps/mobile/app/meal-photo.tsx") &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(RESOLVER) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/mapper.ts") &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(ANALYSIS_SCREEN) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_SCREEN) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_MODEL) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(SMOKE) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(R7A_SMOKE) &&
+    C4_R3_SUCCESSOR_MANIFEST.every(
+      (entry) => !entry.startsWith("supabase/") && !entry.startsWith("packages/") && !/\*/.test(entry)
+    )
 );
 check(
   "27d. the C4-R2 successor manifest is exactly eleven named paths and reaches no C2a-protected surface",

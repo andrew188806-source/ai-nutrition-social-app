@@ -133,11 +133,39 @@ const R7_C4_R2_SUCCESSOR_DIGESTS = Object.freeze({
   "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs": "8e05452b16af84b100692a387352082a5c20e4f0f61fc1dc6c36efa8956a56b3",
   "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs": "9664a5c3e9b79acc2b892ac510926d0af3153d4a75e9d36abfb36d29f9092899"
 });
+// MI-E-C5-R7-C4-R3 moves the same three amended guards once more: each grows a lifecycle branch that
+// admits the repaired capture screen. Enumerated to one exact value per file, so the allowance is a
+// three-state enumeration rather than a free pass.
+const R7_C4_R3_SUCCESSOR_DIGESTS = Object.freeze({
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs": "852a1572d6819d64dd048a038aebb2d20b4253bcd115c5c6838b9ce74c69a7ff",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs": "768107bd9a78855a5039de027a1929e22f45be66c792edd4bb63c32dd4a12f27",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs": "1ba0061bae3ac356f90068906464df6261fa81558d23910876f09be9baaef5f0"
+});
 const successorGuardDigestAuthority = (file) => {
   const allowed = [C3_SUCCESSOR_DIGESTS[file]];
   if (Object.hasOwn(R7_C4_R2_SUCCESSOR_DIGESTS, file)) allowed.push(R7_C4_R2_SUCCESSOR_DIGESTS[file]);
+  if (Object.hasOwn(R7_C4_R3_SUCCESSOR_DIGESTS, file)) allowed.push(R7_C4_R3_SUCCESSOR_DIGESTS[file]);
   return exists(file) && allowed.includes(sha(file));
 };
+// MI-E-C5-R7-C4-R3 successor manifest — the EXACT eleven paths of the round that repairs the capture
+// seam. `beginAnalysisCapture` opens a new operation by full-resetting the session and re-applies the
+// restaurant context from its OWN seventh parameter; meal-photo.tsx never passed it, so the selection
+// R7-C1 had just written was destroyed at capture time and /analysis showed 未知 for every
+// venue-entered meal. R7-C1's own selector, pure handoff and reset authority are untouched — the
+// repair is one argument at one call site on the capture screen.
+const R7_C4_R3_SUCCESSOR_MANIFEST = Object.freeze([
+  CAPTURE_SCREEN,
+  "scripts/meal-photo-gallery-mi-e-c5-r4-guard.mjs",
+  "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs",
+  GUARD,
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-smoke.mjs"
+]);
 const AUTHORIZED_WORKTREE_PATHS = Object.freeze([
   ...new Set([
     ...CANDIDATE_MANIFEST,
@@ -145,7 +173,8 @@ const AUTHORIZED_WORKTREE_PATHS = Object.freeze([
     ...R7_C2B_SUCCESSOR_MANIFEST,
     ...R7_C4_R1_SUCCESSOR_MANIFEST,
     ...R7_C3_SUCCESSOR_MANIFEST,
-    ...R7_C4_R2_SUCCESSOR_MANIFEST
+    ...R7_C4_R2_SUCCESSOR_MANIFEST,
+    ...R7_C4_R3_SUCCESSOR_MANIFEST
   ])
 ]);
 
@@ -601,6 +630,35 @@ check(
     !R7_C4_R2_SUCCESSOR_MANIFEST.some(
       (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
     )
+);
+check(
+  "37h. the C4-R3 successor manifest is exactly eleven named paths with one production file",
+  R7_C4_R3_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(R7_C4_R3_SUCCESSOR_MANIFEST).size === 11 &&
+    R7_C4_R3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    R7_C4_R3_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 1 &&
+    R7_C4_R3_SUCCESSOR_MANIFEST.includes(CAPTURE_SCREEN) &&
+    // R7-C1's selector, pure handoff and own smoke are NOT reopened by the successor round.
+    ![CATALOG_SCREEN, HANDOFF, SMOKE].some((entry) => R7_C4_R3_SUCCESSOR_MANIFEST.includes(entry)) &&
+    !R7_C4_R3_SUCCESSOR_MANIFEST.includes("apps/mobile/app/analysis.tsx") &&
+    !R7_C4_R3_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts") &&
+    !R7_C4_R3_SUCCESSOR_MANIFEST.some(
+      (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
+    )
+);
+check(
+  "37i. the C4-R3 guard-digest allowance is exactly three enumerated values, all distinct from C4-R2's",
+  Object.keys(R7_C4_R3_SUCCESSOR_DIGESTS).length === 3 &&
+    Object.keys(R7_C4_R3_SUCCESSOR_DIGESTS).every((file) => Object.hasOwn(R7_C4_R2_SUCCESSOR_DIGESTS, file)) &&
+    Object.keys(R7_C4_R3_SUCCESSOR_DIGESTS).every(
+      (file) => R7_C4_R2_SUCCESSOR_DIGESTS[file] !== R7_C4_R3_SUCCESSOR_DIGESTS[file]
+    ) &&
+    Object.keys(R7_C4_R3_SUCCESSOR_DIGESTS).every(
+      (file) => C3_SUCCESSOR_DIGESTS[file] !== R7_C4_R3_SUCCESSOR_DIGESTS[file]
+    ) &&
+    // Today Intake production bytes and the C3 smoke still have exactly one permitted value.
+    !Object.hasOwn(R7_C4_R3_SUCCESSOR_DIGESTS, "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts") &&
+    !Object.hasOwn(R7_C4_R3_SUCCESSOR_DIGESTS, "scripts/restaurant-display-mi-e-c5-r7-c3-smoke.mjs")
 );
 check(
   "37g. the C4-R2 guard-digest allowance is exactly three enumerated, genuinely distinct successor values",

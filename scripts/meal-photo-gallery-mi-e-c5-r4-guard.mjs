@@ -96,7 +96,14 @@ check("all five safe gallery errors have title/body copy", ["gallery_asset_unava
 // owns the new session. The R4 invariant — a normalized capture enters the ONE existing
 // session/finalization route with exactly the normalized uri/mimeType/fileName — is unchanged; the
 // optional trailing owner argument is additive.
-check("normalized capture still enters the one existing session/finalization route", /startRealAnalysis\(method, outcome\.uri, new Date\(outcome\.capturedAt\), outcome\.mimeType, outcome\.fileName\)/.test(mealPhoto) && /beginAnalysisCapture\(method, imageUri, capturedAt, mimeType, fileName(, captureSessionOwnership\.owner)?\)/.test(mealPhoto));
+// MI-E-C5-R7-C4-R3 successor amendment: the R4 invariant being protected is that the normalized
+// capture still enters the ONE existing session/finalization route with exactly the normalized
+// uri/mimeType/fileName. That is unchanged. What C4-R3 adds is a further trailing argument — the
+// decoded restaurant context — because beginAnalysisCapture full-resets the session and re-applies
+// that context from its own parameter alone; omitting it silently discarded a venue selection and
+// rendered 未知 on /analysis. Both trailing arguments are additive and neither touches the
+// normalized media triple this check exists to pin.
+check("normalized capture still enters the one existing session/finalization route", /startRealAnalysis\(method, outcome\.uri, new Date\(outcome\.capturedAt\), outcome\.mimeType, outcome\.fileName\)/.test(mealPhoto) && /beginAnalysisCapture\(method, imageUri, capturedAt, mimeType, fileName(, captureSessionOwnership\.owner(, routeRestaurantHandoff \?\? EMPTY_ANALYSIS_RESTAURANT_CONTEXT)?)?\)/.test(mealPhoto));
 check("R3-A secure UUID authority remains wired into its three frozen runtime consumers", ["consumerMealIdentificationFinalizationRuntime.ts", "consumerMealWriteRuntime.ts", "consumerPlannedMealRuntime.ts"].every((file) => /generateSecureUuidV4\(\)/.test(read(`apps/mobile/features/consumer-runtime/${file}`))));
 check("upload and analysis failures remain distinct downstream UI states", /setMealPhotoUploadState\(\{ uploadStatus: "failed"/.test(read("apps/mobile/features/analysis/useMealPhotoUpload.ts")) && /setMealPhotoAnalysisState\(\{ analysisInvocationStatus: "failed"/.test(read("apps/mobile/features/analysis/useMealPhotoAnalysis.ts")));
 check("R3 guard is successor-compatible but still forbids competing transcode libraries", /successor-compatible transcode authority/.test(read("scripts/consumer-runtime-mi-e-c5-r3-guard.mjs")) && /react-native-image-resizer/.test(read("scripts/consumer-runtime-mi-e-c5-r3-guard.mjs")));

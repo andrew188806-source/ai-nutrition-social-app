@@ -12,7 +12,7 @@ import {
   resetAnalysisSessionForActor,
   type MealPhotoCaptureMethod
 } from "../features/analysis";
-import { setAnalysisRestaurantContext } from "../features/analysis/analysisSessionStore";
+import { EMPTY_ANALYSIS_RESTAURANT_CONTEXT, setAnalysisRestaurantContext } from "../features/analysis/analysisSessionStore";
 import { captureMealPhotoFromCamera, pickMealPhotoFromLibrary, type MediaCaptureOutcome } from "../features/analysis/mediaCapture";
 import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryMealPhotoAssetNormalization";
 import { decodeAnalysisRestaurantHandoff } from "../features/meal-identification/analysisRestaurantHandoff";
@@ -206,7 +206,26 @@ export default function MealPhotoScreen() {
     // MI-E-C5-R5-R2: the new session is stamped with the actor that took this photo. When signed
     // out, `owner` is null, so the session is explicitly ownerless and /analysis will reset it
     // rather than attributing the photo to whoever mounts next.
-    beginAnalysisCapture(method, imageUri, capturedAt, mimeType, fileName, captureSessionOwnership.owner);
+    //
+    // MI-E-C5-R7-C4-R3 — THE CAPTURE SEAM.
+    //
+    // beginAnalysisCapture opens a brand-new operation by full-resetting the session
+    // (`session = createDefaultSession()`), so it re-applies the restaurant context from its OWN
+    // seventh parameter and from nothing else. Omitting that parameter — which is what this call did
+    // until this round — silently discarded the selection `applyRouteRestaurantContextForNewCapture`
+    // had just written, and /analysis then resolved a null restaurantId to the 未知 fallback for
+    // every venue-entered meal. The store's contract was never wrong; this call site simply never
+    // handed it the value.
+    //
+    // `routeRestaurantHandoff` is the SAME already-decoded, already-normalized value both capture
+    // entries use: the gesture entry (startAiAnalysis) and the autoOpen effect both reset and then
+    // call applyRouteRestaurantContextForNewCapture with it, and both then arrive here through
+    // handleMediaOutcome. There is exactly one beginAnalysisCapture call site in the app, so passing
+    // it here covers both entries by construction rather than by two edits that could drift apart.
+    //
+    // A generic camera/gallery entry decodes to null, which passes the frozen empty context and
+    // preserves the existing "no route selection means no restaurant context" behaviour exactly.
+    beginAnalysisCapture(method, imageUri, capturedAt, mimeType, fileName, captureSessionOwnership.owner, routeRestaurantHandoff ?? EMPTY_ANALYSIS_RESTAURANT_CONTEXT);
     setSource(method);
     setIsSheetOpen(false);
     setIsAnalyzing(true);

@@ -535,14 +535,38 @@ check(
 // =============================================================================================
 // 6. Manifest, protected surfaces and lifecycle (17-18)
 // =============================================================================================
-const protectedDrift = Object.entries(PROTECTED).filter(([file, want]) => !exists(file) || sha(file) !== want);
+// MI-E-C5-R7-C4-R3 successor lifecycle. Exactly ONE protected pin gains a second, exact value: the
+// capture screen. C4-R3 appends the decoded restaurant context as beginAnalysisCapture's seventh
+// argument, because that function full-resets the session and re-applies the context from its own
+// parameter alone — omitting it destroyed a venue selection at capture time and made this round's
+// own display render 未知 for every venue-entered meal. Enumerated to one exact successor digest,
+// genuinely distinct from the frozen value, so an arbitrary edit still fails.
+const C4_R3_SUCCESSOR_DIGESTS = Object.freeze({
+  [CAPTURE]: "500127929252b376bdb578ed28aa8279436eb310229b97945efaed3d186dbf7d"
+});
+const protectedAllowedDigests = (file) =>
+  Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, file) ? [PROTECTED[file], C4_R3_SUCCESSOR_DIGESTS[file]] : [PROTECTED[file]];
+const protectedDrift = Object.keys(PROTECTED).filter(
+  (file) => !exists(file) || !protectedAllowedDigests(file).includes(sha(file))
+);
 check(
   "17. the successor manifest is exactly eleven named paths and no protected surface hides inside it",
   exactManifestAuthority(CANDIDATE_MANIFEST) &&
     CANDIDATE_MANIFEST.every(exists) &&
     CANDIDATE_MANIFEST.every((entry) => !Object.hasOwn(PROTECTED, entry)) &&
     protectedDrift.length === 0,
-  protectedDrift.map(([file]) => file)
+  protectedDrift
+);
+check(
+  "17a. the C4-R3 allowance is exactly one enumerated, genuinely distinct successor digest",
+  Object.keys(C4_R3_SUCCESSOR_DIGESTS).length === 1 &&
+    Object.keys(C4_R3_SUCCESSOR_DIGESTS)[0] === CAPTURE &&
+    PROTECTED[CAPTURE] !== C4_R3_SUCCESSOR_DIGESTS[CAPTURE] &&
+    // This round's own Analysis presentation, the frozen resolver and the legacy mock modules keep
+    // exactly one permitted value each — the successor round may not reopen any of them.
+    [RESOLVER, COMPOSITION, CATALOG_ADAPTER, CANDIDATE_RESOLVER, SESSION, DRAFT].every(
+      (file) => !Object.hasOwn(C4_R3_SUCCESSOR_DIGESTS, file)
+    )
 );
 const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
   .split("\0")
@@ -550,11 +574,45 @@ const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=al
   .map((entry) => entry.slice(3).replaceAll("\\", "/"));
 const versusHead = git(["diff", "--name-only", "HEAD"]).split("\n").map((entry) => entry.trim()).filter(Boolean);
 const touched = [...new Set([...worktree, ...versusHead])];
+// MI-E-C5-R7-C4-R3 successor manifest — the exact eleven paths of the capture-seam repair round.
+// Enumerated, never a prefix, so a twelfth path still fails. Its only production entry is the
+// capture screen; this round's Analysis screen and composition authority stay outside it.
+const C4_R3_SUCCESSOR_MANIFEST = Object.freeze([
+  CAPTURE,
+  "scripts/meal-photo-gallery-mi-e-c5-r4-guard.mjs",
+  R5_UI_GUARD,
+  C1_GUARD,
+  C2A_GUARD,
+  C2B_GUARD,
+  C3_GUARD,
+  C4_R1_GUARD,
+  GUARD,
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-guard.mjs",
+  "scripts/restaurant-capture-seam-mi-e-c5-r7-c4-r3-smoke.mjs"
+]);
 const outsideManifest = touched.filter((entry) => !CANDIDATE_MANIFEST.includes(entry));
+const outsideC4R3Manifest = touched.filter((entry) => !C4_R3_SUCCESSOR_MANIFEST.includes(entry));
 check(
   "18. committed-state lifecycle: uncommitted changes are a subset of the manifest, and a clean tree passes",
-  outsideManifest.length === 0,
-  { touchedEntries: touched.length, outsideManifest }
+  outsideManifest.length === 0 || outsideC4R3Manifest.length === 0,
+  { touchedEntries: touched.length, outsideManifest, outsideC4R3Manifest }
+);
+check(
+  "18c. the C4-R3 successor manifest is exactly eleven named paths with one production file",
+  C4_R3_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R3_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C4_R3_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 1 &&
+    C4_R3_SUCCESSOR_MANIFEST.includes(CAPTURE) &&
+    // The Analysis screen, the composition authority and every frozen module stay outside it.
+    !C4_R3_SUCCESSOR_MANIFEST.includes(SCREEN) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(COMPOSITION) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(RESOLVER) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(SESSION) &&
+    !C4_R3_SUCCESSOR_MANIFEST.includes(SMOKE) &&
+    !C4_R3_SUCCESSOR_MANIFEST.some(
+      (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
+    )
 );
 check(
   "18a. every predecessor guard in the manifest carries an explicit C4-R2 successor amendment",
