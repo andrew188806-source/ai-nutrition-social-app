@@ -41,6 +41,7 @@ const C1_GUARD = "scripts/restaurant-selection-mi-e-c5-r7-c1-guard.mjs";
 const R7A_GUARD = "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs";
 const R7A_SMOKE = "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs";
 const R2_GUARD = "scripts/meal-identification-finalization-mi-e-c5-r2-ui-guard.mjs";
+const R5_UI_GUARD = "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs";
 const GUARD = "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs";
 const SMOKE = "scripts/restaurant-display-mi-e-c5-r7-c3-smoke.mjs";
 const RESOLVER = "apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts";
@@ -84,7 +85,7 @@ const FROZEN = Object.freeze({
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c",
   "scripts/restaurant-selection-mi-e-c5-r7-c1-smoke.mjs": "326baa9c891549169f961d3989148b904c9b51774346d2e04c3a860cddf373d9",
   "scripts/consumer-runtime-mi-e-c5-r3-guard.mjs": "e500c138278fb97270f60faa9399889aa6a3c44cd8f8197cdf58a4920720bddb",
-  "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs": "2478dfbf84ab7b3dbdc74346872b0b3a9aa87f9332b964fe9f8d2f0869521ce0",
+  [R5_UI_GUARD]: "2478dfbf84ab7b3dbdc74346872b0b3a9aa87f9332b964fe9f8d2f0869521ce0",
   "scripts/consumer-public-restaurant-catalog-smoke.mjs": "310f3a866a48b776ed9d8329c03d37be15036dd1f54831f330c0e638a7b2e314"
 });
 const C3_PRODUCTION = Object.freeze({
@@ -140,14 +141,41 @@ const exactEightManifestAuthority = (value) =>
   value.length === 8 && new Set(value).size === 8 &&
   !value.includes(R7A_GUARD) && !value.includes(R7A_SMOKE);
 
-const drift = Object.entries(FROZEN).filter(([file, expected]) => !exists(file) || sha(file) !== expected);
+// MI-E-C5-R7-C4-R2 successor lifecycle. C3's own Today Intake authority is untouched; what changes
+// is that three of C3's frozen COMPANION pins may now hold a second, EXACT value — the Analysis
+// screen the C4-R2 round consolidates into one page, and the two predecessor guards whose frozen
+// assertions that round is authorised to amend (R7-A check 40's legacy gate spelling, R5 checks
+// 15/53/138's legacy-suppression spelling). Enumerated individually, never a prefix, and each
+// successor differs from its frozen value so "either" can never collapse into "any".
+const C4_R2_SUCCESSOR_DIGESTS = Object.freeze({
+  [ANALYSIS]: "ffb37b1ab876280dd8e777ae00a37b4bfda582100abc89a113c5fefac8706c49",
+  [R7A_GUARD]: "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8",
+  [R5_UI_GUARD]: "25120055ed808fbe0b8ae7d73cca8ddbd9ae33e78426e0cf155d40be8fa00a14"
+});
+const allowedDigests = (file) =>
+  Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, file) ? [FROZEN[file], C4_R2_SUCCESSOR_DIGESTS[file]] : [FROZEN[file]];
+const frozenOrC4R2 = (file) => exists(file) && allowedDigests(file).includes(sha(file));
+const drift = Object.entries(FROZEN).filter(([file]) => !frozenOrC4R2(file));
 check("1. the exact candidate manifest has eight unique named paths", exactEightManifestAuthority(CANDIDATE_MANIFEST) && CANDIDATE_MANIFEST.every(exists));
 check("2. exactly two candidate paths are production source", CANDIDATE_MANIFEST.filter((file) => file.startsWith("apps/")).length === 2 && CANDIDATE_MANIFEST.includes(SCREEN) && CANDIDATE_MANIFEST.includes(UI_MODEL));
 check("3. candidate manifest uses no prefix, wildcard, backend or package entry", CANDIDATE_MANIFEST.every((file) => !/\*/.test(file) && !file.startsWith("supabase/") && !file.startsWith("packages/")));
 check("4. resolver is byte-identical to frozen authority", sha(RESOLVER) === FROZEN[RESOLVER]);
 check("5. mapper is byte-identical to frozen authority", sha(MAPPER) === FROZEN[MAPPER]);
 check("6. catalog types are byte-identical to frozen authority", sha(CATALOG_TYPES) === FROZEN[CATALOG_TYPES]);
-check("7. Analysis is byte-identical to frozen authority", sha(ANALYSIS) === FROZEN[ANALYSIS]);
+check("7. Analysis is byte-identical to frozen authority", frozenOrC4R2(ANALYSIS));
+check(
+  "7a. the C4-R2 successor allowance is exactly three enumerated paths, each genuinely distinct from its frozen value",
+  Object.keys(C4_R2_SUCCESSOR_DIGESTS).length === 3 &&
+    Object.keys(C4_R2_SUCCESSOR_DIGESTS).every((file) => file === ANALYSIS || file === R7A_GUARD || file === R5_UI_GUARD) &&
+    Object.keys(C4_R2_SUCCESSOR_DIGESTS).every((file) => Object.hasOwn(FROZEN, file)) &&
+    Object.keys(C4_R2_SUCCESSOR_DIGESTS).every((file) => FROZEN[file] !== C4_R2_SUCCESSOR_DIGESTS[file]) &&
+    // C3's own Today Intake production authority is NOT reopened by the allowance.
+    !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, SCREEN) &&
+    !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, UI_MODEL) &&
+    !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, RESOLVER) &&
+    !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, MAPPER) &&
+    !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, R7A_SMOKE)
+);
 check("8. selector, capture and handoff are byte-identical", [SELECTOR, CAPTURE, HANDOFF].every((file) => sha(file) === FROZEN[file]));
 check("9. analysis session is byte-identical", sha(SESSION) === FROZEN[SESSION]);
 check("10. finalization contract, draft and hook are byte-identical", [V3, FINALIZATION_DRAFT, FINALIZATION_HOOK].every((file) => sha(file) === FROZEN[file]));
@@ -156,8 +184,8 @@ check("12. packages tree matches canonical Git content", trackedTreeDigest("pack
 check("13. Edge Functions tree matches canonical Git content", trackedTreeDigest("supabase/functions") === "37f368cf3bc4e1b6d6a70b7b13b4bfde3f8285f61f62de5db63889549ff556de");
 check("14. migrations tree matches canonical Git content", trackedTreeDigest("supabase/migrations") === "f9b1f2832a39ecc48766ae004d03a6009c83867b44a1af4027138c7578f04e9e");
 check("15. Today Intake production bytes are the exact reviewed C3 content", Object.entries(C3_PRODUCTION).every(([file, expected]) => sha(file) === expected));
-check("15a. R7-A guard and smoke are exact HEAD frozen bytes", [R7A_GUARD, R7A_SMOKE].every((file) => sha(file) === FROZEN[file]));
-check("15b. SavedMealRecord, analysis store, Analysis and calorie sharing remain exact HEAD bytes", [SAVED_MEAL_TYPES, MEAL_RECORD_STORE, ANALYSIS, CALORIE_SHARING_IMPORT].every((file) => sha(file) === FROZEN[file]));
+check("15a. R7-A guard and smoke are exact HEAD frozen bytes", [R7A_GUARD, R7A_SMOKE].every(frozenOrC4R2) && sha(R7A_SMOKE) === FROZEN[R7A_SMOKE]);
+check("15b. SavedMealRecord, analysis store, Analysis and calorie sharing remain exact HEAD bytes", [SAVED_MEAL_TYPES, MEAL_RECORD_STORE, CALORIE_SHARING_IMPORT].every((file) => sha(file) === FROZEN[file]) && frozenOrC4R2(ANALYSIS));
 check("15c. no global required-null SavedMealRecord authority was introduced", /restaurantId\?: string;/.test(read(SAVED_MEAL_TYPES)) && !/restaurantId: string \| null;/.test(read(SAVED_MEAL_TYPES)));
 
 check("16. screen mounts exactly one catalog hook (AST call count)", callCount("useRestaurantCatalog") === 1, callCount("useRestaurantCatalog"));
@@ -252,9 +280,29 @@ const C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
   "scripts/restaurant-selection-mi-e-c5-r7-c1-guard.mjs"
 ]);
+// MI-E-C5-R7-C4-R2 successor manifest — the exact eleven paths of the round that consolidates
+// /analysis into one page and gives the real primary-result card its restaurant context. Named
+// individually, never a prefix, so a twelfth path still fails. Exactly two are production source and
+// neither is a Today Intake, resolver, mapper or finalization surface, which is why C3's own
+// authority is unaffected by it.
+const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
+  ANALYSIS,
+  "apps/mobile/features/analysis/analysisSinglePagePresentation.ts",
+  R7A_GUARD,
+  R5_UI_GUARD,
+  C1_GUARD,
+  C2A_GUARD,
+  C2B_GUARD,
+  GUARD,
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs"
+]);
 const outside = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
 const outsideC4R1 = worktree.filter((file) => !C4_R1_SUCCESSOR_MANIFEST.includes(file));
-check("49. uncommitted state is a subset of the exact manifest; clean committed state also passes", outside.length === 0 || outsideC4R1.length === 0, { worktreeEntries: worktree.length, outside, outsideC4R1 });
+const outsideC4R2 = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file));
+check("49. uncommitted state is a subset of the exact manifest; clean committed state also passes", outside.length === 0 || outsideC4R1.length === 0 || outsideC4R2.length === 0, { worktreeEntries: worktree.length, outside, outsideC4R1, outsideC4R2 });
+check("49b. the C4-R2 successor manifest is exactly eleven named paths with exactly two production files, never a prefix", C4_R2_SUCCESSOR_MANIFEST.length === 11 && new Set(C4_R2_SUCCESSOR_MANIFEST).size === 11 && C4_R2_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) && C4_R2_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 2 && !C4_R2_SUCCESSOR_MANIFEST.some((entry) => entry === SCREEN || entry === UI_MODEL || entry === RESOLVER || entry === MAPPER || entry === R7A_SMOKE || entry === SMOKE || /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")));
 check("49a. the C4-R1 successor manifest is exactly thirteen named paths, never a prefix", C4_R1_SUCCESSOR_MANIFEST.length === 13 && new Set(C4_R1_SUCCESSOR_MANIFEST).size === 13 && C4_R1_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) && !C4_R1_SUCCESSOR_MANIFEST.some((entry) => entry.includes("todayIntakeUiModel") || entry.includes("app/today-intake") || entry.includes("restaurantContextPresentation")));
 check("50. no candidate file contains remote-operation implementation", CANDIDATE_MANIFEST.every((file) => !/createClient\s*\(|functions\.invoke\s*\(|\.rpc\s*\(|\bfetch\s*\(|supabase\s+(?:db|functions|migration)\s+push/.test(stripComments(read(file)))));
 const secretPatterns = [new RegExp(["ey", "J[A-Za-z0-9_-]{12,}\\.[A-Za-z0-9_-]{12,}"].join("")), new RegExp(["sb", "p_[A-Za-z0-9]{16,}"].join("")), new RegExp(["service", "_role[\"'\\s:=]+[A-Za-z0-9_-]{12,}"].join(""))];
@@ -350,8 +398,10 @@ const scopeCorrectedGuardAuthority = (source) =>
   !new RegExp(["sharedRequired", "NullAuthority"].join("")).test(source) &&
   !new RegExp(["R7A_NULLABLE", "_SUCCESSOR"].join("")).test(source) &&
   !new RegExp(["nullable", "Mutations"].join("")).test(source);
+// MI-E-C5-R7-C4-R2: the same two-state allowance the drift table uses, so an arbitrary edit to a
+// lifecycle-aware pin is still killed — only the exact reviewed successor bytes are ever accepted.
 const frozenSourceAuthority = (source, file) =>
-  createHash("sha256").update(source).digest("hex") === FROZEN[file];
+  allowedDigests(file).includes(createHash("sha256").update(source).digest("hex"));
 const exactCallerSetAuthority = (value) =>
   JSON.stringify([...value].sort()) === JSON.stringify([RESOLVER, ANALYSIS, SCREEN].sort());
 

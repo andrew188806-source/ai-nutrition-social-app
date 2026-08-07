@@ -105,12 +105,41 @@ const R7A_FROZEN_DIGESTS = Object.freeze({
   [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd"
 });
 const C3_COMPANION_DIGESTS = Object.freeze({
-  [C3_GUARD]: "10170b2c3b544fb2288633652582208d53a3addbc789ed2fad1e3c87a8431123",
+  [C3_GUARD]: "9664a5c3e9b79acc2b892ac510926d0af3153d4a75e9d36abfb36d29f9092899",
   [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
+// MI-E-C5-R7-C4-R2 successor state. That round consolidates /analysis into ONE page: the legacy
+// catalog-recognition world (catalogCandidateAdapter → candidateResolver → topCandidate.branchName,
+// which is what put 南京復興店 and the fixed menu/price/nutrition on a live screen) becomes reachable
+// only from an explicitly mock runtime, and the REAL primary-result card finally receives this
+// round's own resolver output. That requires exactly two of C2a's pinned files to move: the Analysis
+// screen, and the R7-A guard whose check 40 pins the four legacy render gates verbatim.
+//
+// Enumerated individually, each to ONE exact successor value. Every C2a resolver-correctness fence
+// (checks 4-16) and every permanently protected surface below is untouched.
+const C4_R2_SUCCESSOR_DIGESTS = Object.freeze({
+  [ANALYSIS_SCREEN]: "ffb37b1ab876280dd8e777ae00a37b4bfda582100abc89a113c5fefac8706c49",
+  [R7A_GUARD]: "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8"
+});
+const C4_R2_COMPOSITION = "apps/mobile/features/analysis/analysisSinglePagePresentation.ts";
+const C4_R2_GUARD = "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs";
+const C4_R2_SMOKE = "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs";
+const C4_R1_GUARD = "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs";
+const R5_UI_GUARD = "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs";
+const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
+  ANALYSIS_SCREEN, C4_R2_COMPOSITION,
+  R7A_GUARD, R5_UI_GUARD, R7C1_GUARD, GUARD, C2B_GUARD, C3_GUARD, C4_R1_GUARD,
+  C4_R2_GUARD, C4_R2_SMOKE
+]);
+const r7aGuardAllowedDigests = Object.freeze([
+  R7A_FROZEN_DIGESTS[R7A_GUARD],
+  C4_R2_SUCCESSOR_DIGESTS[R7A_GUARD]
+]);
 // True only in the exact successor state; used to select which lifecycle branch is authoritative.
 const inC2bSuccessorState =
   exists(ANALYSIS_SCREEN) && sha(ANALYSIS_SCREEN) === C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN];
+const inC4R2SuccessorState =
+  exists(ANALYSIS_SCREEN) && sha(ANALYSIS_SCREEN) === C4_R2_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN];
 
 const resolver = read(RESOLVER);
 // Executable source only: the module's comments legitimately name the old flattened model, the
@@ -261,19 +290,27 @@ check(
   // trio, and that part is unchanged. What is relaxed is only the analysis.tsx pin, which C2b is
   // explicitly authorised to refresh — and even then only to the exact successor bytes, never to an
   // arbitrary value.
+  // MI-E-C5-R7-C4-R2: the resolver and R7-A SMOKE pins stay absolute. Only the R7-A GUARD pin gains
+  // a second, exact value, because C4-R2 is authorised to amend that guard's check 40 legacy-gate
+  // spelling — and even then only to the reviewed successor bytes, never to an arbitrary value.
   "20. the R7-C1 guard carries the frozen resolver and exact frozen R7-A authority",
   r7c1Guard.includes(`"${RESOLVER}": "${sha(RESOLVER)}"`) &&
     r7c1Guard.includes(`"${R7A_GUARD}": "${sha(R7A_GUARD)}"`) &&
     r7c1Guard.includes(`"${R7A_SMOKE}": "${sha(R7A_SMOKE)}"`) &&
     sha(RESOLVER) === "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789" &&
-    Object.entries(R7A_FROZEN_DIGESTS).every(([file, expected]) => sha(file) === expected)
+    sha(R7A_SMOKE) === R7A_FROZEN_DIGESTS[R7A_SMOKE] &&
+    r7aGuardAllowedDigests.includes(sha(R7A_GUARD))
 );
 check(
   "20a. the R7-C1 analysis.tsx pin is EITHER the frozen C2a digest or the exact C2b successor digest",
   r7c1Guard.includes(`"${ANALYSIS_SCREEN}": "${C2A_FROZEN_DIGESTS[ANALYSIS_SCREEN]}"`) ||
     (r7c1Guard.includes(`"${ANALYSIS_SCREEN}": "${C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN]}"`) &&
       // A refreshed pin must describe the file that is actually on disk — not a stale or invented one.
-      sha(ANALYSIS_SCREEN) === C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN])
+      sha(ANALYSIS_SCREEN) === C2B_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN]) ||
+    // MI-E-C5-R7-C4-R2 third lifecycle state, held to the same rule: the refreshed pin must be the
+    // exact reviewed successor value AND must describe the file actually on disk.
+    (r7c1Guard.includes(`"${ANALYSIS_SCREEN}": "${C4_R2_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN]}"`) &&
+      sha(ANALYSIS_SCREEN) === C4_R2_SUCCESSOR_DIGESTS[ANALYSIS_SCREEN])
 );
 // The manifest DECLARATION itself, not a proximity window: a fixed character budget after the
 // symbol name runs straight past the array literal into unrelated code, where an ordinary
@@ -298,6 +335,24 @@ check(
       !/startsWith\(|\*|RegExp|match\(/.test(r7c1SuccessorDeclaration) &&
       // The R7-C1 guard must also assert the eight-path count itself.
       /R7_C2B_SUCCESSOR_MANIFEST\.length === 8/.test(r7c1Guard))
+);
+const r7c1C4R2Declaration = (() => {
+  const marker = "const R7_C4_R2_SUCCESSOR_MANIFEST = Object.freeze([";
+  const start = r7c1Guard.indexOf(marker);
+  if (start < 0) return null;
+  const end = r7c1Guard.indexOf("]);", start);
+  return end < 0 ? null : r7c1Guard.slice(start, end + 3);
+})();
+check(
+  "20c. in the C4-R2 successor state the R7-C1 guard declares the exact eleven-path C4-R2 manifest",
+  !inC4R2SuccessorState ||
+    (r7c1C4R2Declaration !== null &&
+      // Every one of the eleven paths is named literally…
+      C4_R2_SUCCESSOR_MANIFEST.every((entry) => r7c1C4R2Declaration.includes(`"${entry}"`) || r7c1Guard.includes(`"${entry}"`)) &&
+      // …and the declaration is an enumerated list, never a prefix or glob rule.
+      !/startsWith\(|\*|RegExp|match\(/.test(r7c1C4R2Declaration) &&
+      // The R7-C1 guard must also assert the eleven-path count itself.
+      /R7_C4_R2_SUCCESSOR_MANIFEST\.length === 11/.test(r7c1Guard))
 );
 
 // =============================================================================================
@@ -335,20 +390,38 @@ check(
 );
 const r7aContentDrift = Object.keys(R7A_FROZEN_DIGESTS).filter((file) => {
   if (!exists(file)) return true;
-  return sha(file) !== R7A_FROZEN_DIGESTS[file];
+  // MI-E-C5-R7-C4-R2: the SMOKE remains absolutely frozen. The GUARD holds either its frozen bytes
+  // or the exact C4-R2 successor bytes — a two-state enumeration, never a free pass.
+  const allowed = file === R7A_GUARD ? r7aGuardAllowedDigests : [R7A_FROZEN_DIGESTS[file]];
+  return !allowed.includes(sha(file));
 });
 check(
   "21d. R7-A suites hold exact HEAD frozen bytes",
   r7aContentDrift.length === 0,
   r7aContentDrift
 );
+check(
+  "21e. the R7-A guard allowance is exactly two enumerated, genuinely distinct digests",
+  r7aGuardAllowedDigests.length === 2 &&
+    new Set(r7aGuardAllowedDigests).size === 2 &&
+    r7aGuardAllowedDigests[0] === R7A_FROZEN_DIGESTS[R7A_GUARD] &&
+    // The R7-A SMOKE never gains a lifecycle branch.
+    !Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, R7A_SMOKE) &&
+    // Nor does the resolver, the mapper, the catalog types or any permanently protected surface.
+    Object.keys(C4_R2_SUCCESSOR_DIGESTS).every((file) => !Object.hasOwn(PROTECTED, file)) &&
+    Object.keys(C4_R2_SUCCESSOR_DIGESTS).length === 2 &&
+    Object.keys(C4_R2_SUCCESSOR_DIGESTS).every((file) => file === ANALYSIS_SCREEN || file === R7A_GUARD)
+);
 // The two former members of this table that C2b IS authorised to move. Each may hold exactly one of
 // two values — the C2a freeze bytes, or the C2b successor bytes — and nothing else. This is an
 // enumerated two-state exception, not a prefix exception and not a free pass.
+// MI-E-C5-R7-C4-R2 adds a THIRD enumerated state for the analysis screen only. The R7-B guard keeps
+// exactly its two states, so the exception never widens beyond the file the successor round touches.
 const exceptionDrift = Object.keys(C2A_FROZEN_DIGESTS).filter((file) => {
   if (!exists(file)) return true;
-  const actual = sha(file);
-  return actual !== C2A_FROZEN_DIGESTS[file] && actual !== C2B_SUCCESSOR_DIGESTS[file];
+  const allowed = [C2A_FROZEN_DIGESTS[file], C2B_SUCCESSOR_DIGESTS[file]];
+  if (Object.hasOwn(C4_R2_SUCCESSOR_DIGESTS, file)) allowed.push(C4_R2_SUCCESSOR_DIGESTS[file]);
+  return !allowed.includes(sha(file));
 });
 check(
   "21a. the two C2b-authorised surfaces hold either their frozen or their exact successor content",
@@ -410,10 +483,37 @@ const outsideC2a = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file))
 const outsideC2bR1 = worktree.filter((file) => !C2B_R1_MANIFEST.includes(file));
 const outsideC3 = worktree.filter((file) => !C3_SUCCESSOR_MANIFEST.includes(file));
 const outsideC4R1 = worktree.filter((file) => !C4_R1_SUCCESSOR_MANIFEST.includes(file));
+const outsideC4R2 = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file));
 check(
   "27. any uncommitted change is confined to the C2a, C2b-R1, C3 or exact C4-R1 manifest (vacuous when clean)",
-  outsideC2a.length === 0 || outsideC2bR1.length === 0 || outsideC3.length === 0 || outsideC4R1.length === 0,
-  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3, outsideC4R1 }
+  outsideC2a.length === 0 ||
+    outsideC2bR1.length === 0 ||
+    outsideC3.length === 0 ||
+    outsideC4R1.length === 0 ||
+    outsideC4R2.length === 0,
+  { worktreeEntries: worktree.length, outsideC2a, outsideC2bR1, outsideC3, outsideC4R1, outsideC4R2 }
+);
+check(
+  "27d. the C4-R2 successor manifest is exactly eleven named paths and reaches no C2a-protected surface",
+  C4_R2_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R2_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R2_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    // Exactly two production files: the Analysis screen and this round's own pure composition module.
+    C4_R2_SUCCESSOR_MANIFEST.filter((entry) => !entry.startsWith("scripts/")).length === 2 &&
+    C4_R2_SUCCESSOR_MANIFEST.includes(ANALYSIS_SCREEN) &&
+    C4_R2_SUCCESSOR_MANIFEST.includes(C4_R2_COMPOSITION) &&
+    // The resolver, the mapper, the catalog types, Today Intake, the R7-A smoke and the C2a smoke are
+    // all outside it, so no C2a correctness authority can be reopened through the successor round.
+    !C4_R2_SUCCESSOR_MANIFEST.includes(RESOLVER) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/mapper.ts") &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/types.ts") &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_SCREEN) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_MODEL) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(R7A_SMOKE) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(SMOKE) &&
+    C4_R2_SUCCESSOR_MANIFEST.every(
+      (entry) => !entry.startsWith("supabase/") && !entry.startsWith("packages/") && !/\*/.test(entry)
+    )
 );
 check(
   "27c. the C4-R1 successor manifest is exactly thirteen named paths and reaches no C2a-protected surface",

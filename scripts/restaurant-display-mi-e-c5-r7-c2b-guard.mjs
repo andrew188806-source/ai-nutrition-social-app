@@ -100,13 +100,34 @@ const C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-smoke.mjs",
   C3_GUARD, C2A_GUARD, GUARD, R7C1_GUARD
 ]);
+// MI-E-C5-R7-C4-R2 refreshes three of these companion pins — the R7-A guard (its check 40 pins the
+// four legacy render gates verbatim and had to learn the new mock-only spelling), the C2a guard and
+// the C3 guard (both carry lifecycle digest tables that now admit the consolidated Analysis screen).
+// Each moves to ONE exact reviewed value; the two SMOKES stay absolutely frozen.
 const C3_COMPANION_DIGESTS = Object.freeze({
-  [R7A_GUARD]: "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+  [R7A_GUARD]: "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8",
   [R7A_SMOKE]: "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
-  [C2A_GUARD]: "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350",
-  [C3_GUARD]: "10170b2c3b544fb2288633652582208d53a3addbc789ed2fad1e3c87a8431123",
+  [C2A_GUARD]: "316bd0363eb111b75fcdbe011d7c457e13cc398d644063d3cac48e97aeb7668e",
+  [C3_GUARD]: "9664a5c3e9b79acc2b892ac510926d0af3153d4a75e9d36abfb36d29f9092899",
   [C3_SMOKE]: "afbe9c8db2609bb3228adac1f0f0f1ddf75a821832ab14af71a4c2fd090c8767"
 });
+// MI-E-C5-R7-C4-R2 successor manifest — the exact eleven paths of the round that consolidates
+// /analysis into one page and gives the real primary-result card its restaurant context. Enumerated,
+// never a prefix. Exactly two are production source; the resolver, the mapper, Today Intake and every
+// finalization surface stay outside it, so every C2b display fence below remains in force.
+const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
+  SCREEN,
+  "apps/mobile/features/analysis/analysisSinglePagePresentation.ts",
+  R7A_GUARD,
+  R5_GUARD,
+  R7C1_GUARD,
+  C2A_GUARD,
+  GUARD,
+  C3_GUARD,
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs"
+]);
 
 const screen = read(SCREEN);
 const screenCode = stripComments(screen);
@@ -227,7 +248,9 @@ check(
       entry === SCREEN ||
       entry === TODAY_INTAKE_SCREEN ||
       entry === TODAY_INTAKE_MODEL ||
-      C4_R1_SUCCESSOR_MANIFEST.includes(entry)
+      C4_R1_SUCCESSOR_MANIFEST.includes(entry) ||
+      // MI-E-C5-R7-C4-R2: the pure page-composition authority, named individually.
+      C4_R2_SUCCESSOR_MANIFEST.includes(entry)
   ),
   { productionTouched }
 );
@@ -414,7 +437,7 @@ check(
 );
 check(
   "26a. the C2a guard carries EXACTLY the authorised successor amendment, pinned to its bytes",
-  sha(C2A_GUARD) === "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350"
+  sha(C2A_GUARD) === C3_COMPANION_DIGESTS[C2A_GUARD]
 );
 check(
   "26b. the amended C2a guard admits analysis.tsx as the ONLY new production caller",
@@ -469,10 +492,34 @@ check(
 const outsideManifest = touched.filter((entry) => !CANDIDATE_MANIFEST.includes(entry));
 const outsideC3Manifest = touched.filter((entry) => !C3_SUCCESSOR_MANIFEST.includes(entry));
 const outsideC4R1Manifest = touched.filter((entry) => !C4_R1_SUCCESSOR_MANIFEST.includes(entry));
+const outsideC4R2Manifest = touched.filter((entry) => !C4_R2_SUCCESSOR_MANIFEST.includes(entry));
 check(
   "28. uncommitted changes are confined to the C2b, C3 or exact C4-R1 manifest, and clean committed state passes",
-  outsideManifest.length === 0 || outsideC3Manifest.length === 0 || outsideC4R1Manifest.length === 0,
-  { touched: touched.length, outsideManifest, outsideC3Manifest }
+  outsideManifest.length === 0 ||
+    outsideC3Manifest.length === 0 ||
+    outsideC4R1Manifest.length === 0 ||
+    outsideC4R2Manifest.length === 0,
+  { touched: touched.length, outsideManifest, outsideC3Manifest, outsideC4R2Manifest }
+);
+check(
+  "28d. the C4-R2 successor is exactly eleven named paths, two production files, no protected surface",
+  C4_R2_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R2_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R2_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C4_R2_SUCCESSOR_MANIFEST.filter((entry) => PRODUCTION_PREFIXES.some((prefix) => entry.startsWith(prefix))).length === 2 &&
+    C4_R2_SUCCESSOR_MANIFEST.includes(SCREEN) &&
+    C4_R2_SUCCESSOR_MANIFEST.includes("apps/mobile/features/analysis/analysisSinglePagePresentation.ts") &&
+    // No permanently frozen surface, no Today Intake production path and no smoke may hide inside it.
+    C4_R2_SUCCESSOR_MANIFEST.every((entry) => !Object.keys(FROZEN).includes(entry)) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(RESOLVER) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(MAPPER) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_SCREEN) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(TODAY_INTAKE_MODEL) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(C3_SMOKE) &&
+    !C4_R2_SUCCESSOR_MANIFEST.includes(SMOKE) &&
+    !C4_R2_SUCCESSOR_MANIFEST.some(
+      (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
+    )
 );
 check(
   "28b. the C3 successor is exactly eight named paths, two Today Intake production paths and reviewed companion bytes",

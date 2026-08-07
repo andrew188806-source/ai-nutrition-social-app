@@ -225,9 +225,37 @@ check(
     /setCompletionSnapshot\(snapshot\)/.test(completeCallback)
 );
 check(
+  // MI-E-C5-R7-C4-R2 successor amendment. R5 froze the suppression as a TIMING conjunction. The
+  // C4-R1 audit proved that is not enough: during a live analysis `!hasAiFinalizationFlow` is true,
+  // so the legacy demo blocks rendered on a `supabase-live` screen and only unmounted on completion.
+  // The conjunction now comes from the single pure composition authority, which adds a MOCK-ONLY
+  // runtime clause on top of the two frozen clauses — strictly stronger suppression, never weaker.
+  // The four render sites are still counted exactly, so deleting or adding one still fails.
   "15. legacy demo blocks are suppressed for the whole real C5 flow",
-  /const showLegacyAnalysisBlocks = !hasAiFinalizationFlow && !isDurableCompleted;/.test(screen) &&
+  /const showLegacyAnalysisBlocks = analysisPage\.showLegacyFixtureWorld;/.test(screen) &&
+    /showLegacyFixtureWorld:\s*\r?\n?\s*mock && !hasAiFinalizationFlowForStatus\(input\.invocationStatus\) && !input\.isDurableCompleted/.test(
+      read("apps/mobile/features/analysis/analysisSinglePagePresentation.ts")
+    ) &&
     (screen.match(/showLegacyAnalysisBlocks && !isAnalysisConfirmed \?/g) ?? []).length === 4
+);
+check(
+  "15a. the legacy fixture world is gated on RUNTIME MODE, not only on analysis timing",
+  // The defect this kills: a live analysis screen showing catalog-ranked fixture content
+  // (南京復興店 / fixed menu / fixed price / fixed nutrition) because the only gate was timing.
+  (() => {
+    const composition = read("apps/mobile/features/analysis/analysisSinglePagePresentation.ts");
+    return (
+      /const MOCK_ANALYSIS_RUNTIME_MODE: AnalysisRuntimeMode = "mock";/.test(composition) &&
+      /export function isMockAnalysisRuntime\(runtimeMode: AnalysisRuntimeMode\): boolean \{\s*\r?\n\s*return runtimeMode === MOCK_ANALYSIS_RUNTIME_MODE;/.test(
+        composition
+      ) &&
+      /const mock = isMockAnalysisRuntime\(input\.runtimeMode\);/.test(composition) &&
+      // No second, weaker legacy-visibility authority anywhere in the module.
+      (composition.match(/showLegacyFixtureWorld/g) ?? []).length === 2
+    );
+  })() &&
+    /runtimeMode: consumerRuntime\.mode,/.test(screen) &&
+    (screen.match(/composeAnalysisPage\(\{/g) ?? []).length === 1
 );
 check(
   "16. completed nutrition comes from the confirmed draft snapshot, never legacy demo state",
@@ -491,10 +519,38 @@ check(
 check(
   // The compact controls exist so the long standalone cards are not the only way to unblock; those
   // standalone cards are now scoped to the legacy non-C5 path only.
+  //
+  // MI-E-C5-R7-C4-R2 successor amendment. The frozen R5 panel boundary `) : !hasAiFinalizationFlow ? (`
+  // is kept verbatim, so the R2 ordered-panel locator still finds the same slice. What changed is the
+  // AUTHORITY: which container hosts the three controls is now a single `metadataControlHost` enum,
+  // so "the compact set and the standalone set are never both rendered" is unrepresentable rather
+  // than merely asserted, and the standalone host is unreachable outside a mock runtime.
   "53. the long standalone context cards no longer render in the real C5 flow",
   /\) : !hasAiFinalizationFlow \? \(/.test(screen) &&
     /standalone cards belong to the legacy non-C5 path only/.test(screen) &&
-    /showFinalizationEditor \? null : \(/.test(screen)
+    /analysisPage\.metadataControlHost !== "legacy_standalone" \? null : \(/.test(screen) &&
+    /analysisPage\.metadataControlHost !== "result_card" \? null : \(/.test(screen)
+);
+check(
+  "53a. exactly ONE container hosts the three required controls, chosen by a single enum",
+  (() => {
+    const composition = read("apps/mobile/features/analysis/analysisSinglePagePresentation.ts");
+    return (
+      /export type AnalysisMetadataControlHost =\s*\r?\n\s*\| "none"\s*\r?\n\s*\| "result_card"\s*\r?\n\s*\| "finalization_editor"\s*\r?\n\s*\| "legacy_standalone";/.test(
+        composition
+      ) &&
+      /const metadataControlHost: AnalysisMetadataControlHost = input\.isDurableCompleted/.test(composition)
+    );
+  })() &&
+    // Exactly three render sites for each control in the whole screen: the result card's compact
+    // set, the correction/manual editor panel, and the mock-only legacy standalone set. They are
+    // mutually exclusive by the enum above, so at most one is ever mounted.
+    (screen.match(/<MealPeriodSection/g) ?? []).length === 3 &&
+    (screen.match(/<MealSourceSection/g) ?? []).length === 3 &&
+    (screen.match(/<RecordTimingSection/g) ?? []).length === 3 &&
+    (screen.match(/function MealPeriodSection/g) ?? []).length === 1 &&
+    (screen.match(/function MealSourceSection/g) ?? []).length === 1 &&
+    (screen.match(/function RecordTimingSection/g) ?? []).length === 1
 );
 check(
   '54. "unknown" remains an accepted meal source and is never treated as missing context',
@@ -1105,8 +1161,10 @@ check(
     (correctionStateHook.match(/buildMealPhotoAnalysisActorIdentity\(/g) ?? []).length === 1
 );
 check(
+  // MI-E-C5-R7-C4-R2 successor amendment: the same branch, now behind the mock-only
+  // showLegacyAnalysisBlocks gate (see check 15/15a). The actor-safety clauses are untouched.
   "138. the legacy self-cooked and confirmed-match branches read only actor-safe values",
-  /\{!hasAiFinalizationFlow && analysis\.isSelfCooked \?/.test(screen) &&
+  /\{showLegacyAnalysisBlocks && analysis\.isSelfCooked \?/.test(screen) &&
     /const isSelfCooked = publicMode === "selfCooked";/.test(correctionStateHook) &&
     /nutritionSummary=\{analysis\.nutritionSummary\}/.test(screen) &&
     /buildNutritionSummary\(\{\s*\r?\n?\s*addedSections: publicAddedSections,/.test(correctionStateHook)

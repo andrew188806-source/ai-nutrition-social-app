@@ -296,12 +296,55 @@ check(
   // The four analysis.tsx components that consume analysis.restaurantName (directly, or via the
   // candidateResolution memo built from it) render only in the legacy non-AI UI generation. Each
   // render gate is asserted verbatim, so deleting or loosening any one of them fails this check.
-  /\{!hasAiFinalizationFlow && analysis\.isSelfCooked \? \(\s*\r?\n?\s*<SelfCookedIntro/.test(screen) &&
-    /\) : !hasAiFinalizationFlow && isAnalysisConfirmed \? \(\s*\r?\n?\s*<CompletedAnalysisHero/.test(screen) &&
-    /\) : !hasAiFinalizationFlow \? \(\s*\r?\n?\s*<ExternalDiningAnalysis/.test(screen) &&
-    /\{!hasAiFinalizationFlow && !analysis\.isSelfCooked && analysis\.matchState === "editing" \? \(\s*\r?\n?\s*<CandidateCorrectionList/.test(screen) &&
+  //
+  // MI-E-C5-R7-C4-R2 successor amendment. The C4-R1 audit proved that `!hasAiFinalizationFlow` is a
+  // TIMING predicate, not a runtime one: while a live analysis was still running it rendered these
+  // same four legacy components, so ExternalDiningAnalysis put a catalog-ranked 「南京復興店」, a fixed
+  // menu name, a fixed price and fixed nutrition on a `supabase-live` screen. The four gates are now
+  // spelled `showLegacyAnalysisBlocks`, which is STRICTLY STRONGER — it is the frozen
+  // `!hasAiFinalizationFlow && !isDurableCompleted` conjunction PLUS a mock-only runtime clause, so
+  // every legacy restaurantName render is still behind !hasAiFinalizationFlow and is additionally
+  // unreachable outside an explicitly mock runtime.
+  //
+  // The four gates are still asserted verbatim (deleting or loosening any one fails), and checks
+  // 40a/40b below prove the new symbol really carries both clauses rather than merely being renamed.
+  /\{showLegacyAnalysisBlocks && analysis\.isSelfCooked \? \(\s*\r?\n?\s*<SelfCookedIntro/.test(screen) &&
+    /\) : showLegacyAnalysisBlocks && isAnalysisConfirmed \? \(\s*\r?\n?\s*<CompletedAnalysisHero/.test(screen) &&
+    /\) : showLegacyAnalysisBlocks \? \(\s*\r?\n?\s*<ExternalDiningAnalysis/.test(screen) &&
+    /\{showLegacyAnalysisBlocks && !analysis\.isSelfCooked && analysis\.matchState === "editing" \? \(\s*\r?\n?\s*<CandidateCorrectionList/.test(screen) &&
     // The legacy adapter still declares the field, confirming this check is guarding a live surface.
     /restaurantName: string;/.test(finalizationAdapter)
+);
+check(
+  "40a. R1 the legacy gate symbol is the composition's MOCK-ONLY fixture decision, not a rename",
+  // The screen must take the value from the single pure composition authority, and that authority
+  // must itself require a mock runtime. A `showLegacyAnalysisBlocks` that was merely re-derived from
+  // analysis timing inside the screen would satisfy check 40's spelling and fail here.
+  /const showLegacyAnalysisBlocks = analysisPage\.showLegacyFixtureWorld;/.test(screen) &&
+    /composeAnalysisPage\(\{/.test(screen) &&
+    /runtimeMode: consumerRuntime\.mode,/.test(screen) &&
+    (() => {
+      const composition = read("apps/mobile/features/analysis/analysisSinglePagePresentation.ts");
+      return (
+        /showLegacyFixtureWorld:\s*\r?\n?\s*mock && !hasAiFinalizationFlowForStatus\(input\.invocationStatus\) && !input\.isDurableCompleted/.test(
+          composition
+        ) &&
+        /const mock = isMockAnalysisRuntime\(input\.runtimeMode\);/.test(composition) &&
+        /return runtimeMode === MOCK_ANALYSIS_RUNTIME_MODE;/.test(composition) &&
+        /const MOCK_ANALYSIS_RUNTIME_MODE: AnalysisRuntimeMode = "mock";/.test(composition)
+      );
+    })()
+);
+check(
+  "40b. R1 no legacy restaurantName consumer regained an analysis-timing-only render gate",
+  // The four legacy components are named individually: each must appear exactly once as an element
+  // and never behind a bare `!hasAiFinalizationFlow` gate again.
+  ["<SelfCookedIntro", "<ExternalDiningAnalysis", "<CandidateCorrectionList"].every(
+    (element) => (screen.match(new RegExp(element.replace("<", "<"), "g")) ?? []).length === 1
+  ) &&
+    !/!hasAiFinalizationFlow && analysis\.isSelfCooked/.test(screen) &&
+    !/!hasAiFinalizationFlow \? \(\s*\r?\n?\s*<ExternalDiningAnalysis/.test(screen) &&
+    !/!hasAiFinalizationFlow && !analysis\.isSelfCooked/.test(screen)
 );
 
 

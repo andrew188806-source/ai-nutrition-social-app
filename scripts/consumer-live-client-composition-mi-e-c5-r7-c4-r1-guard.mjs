@@ -197,11 +197,53 @@ const PROTECTED_UNCHANGED = [
   FACTORY,
   AUTH_FLAGS
 ];
+// MI-E-C5-R7-C4-R2 successor manifest — the exact eleven paths of the round that consolidates
+// /analysis into one page and gives the real primary-result card its restaurant context. Enumerated
+// individually, never a prefix, so a twelfth path still fails. It touches no live-client composition
+// surface, no auth flag helper and no launcher, so every C4-R1 authority stays fully in force; the
+// only overlap is the Analysis screen, which C4-R1 itself never modified.
+const C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/app/analysis.tsx",
+  "apps/mobile/features/analysis/analysisSinglePagePresentation.ts",
+  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs",
+  "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs",
+  R7C1_GUARD,
+  C2A_GUARD,
+  C2B_GUARD,
+  C3_GUARD,
+  GUARD,
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs"
+]);
 const changedVsHead = git(["diff", "--name-only", "HEAD"]).split("\n").map((entry) => entry.trim()).filter(Boolean);
 check(
+  // MI-E-C5-R7-C4-R2: the Analysis screen leaves this zero-diff fence, because that successor round
+  // is explicitly authorised to change it. Every other protected surface — the resolver, the mapper,
+  // the catalog types, Today Intake, the analysis session store, the handoff, the v3 contract, the
+  // repository factory and the auth flags — stays absolutely unchanged in both lifecycle states.
   "28. no R7-C3 / resolver / finalization / factory surface is modified by this round (vacuous on a clean tree)",
-  PROTECTED_UNCHANGED.every((file) => !changedVsHead.includes(file)),
-  changedVsHead.filter((file) => PROTECTED_UNCHANGED.includes(file))
+  PROTECTED_UNCHANGED.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file)).every(
+    (file) => !changedVsHead.includes(file)
+  ),
+  changedVsHead.filter(
+    (file) => PROTECTED_UNCHANGED.includes(file) && !C4_R2_SUCCESSOR_MANIFEST.includes(file)
+  )
+);
+check(
+  "28a. the C4-R2 allowance removes EXACTLY the Analysis screen from the zero-diff fence, nothing else",
+  PROTECTED_UNCHANGED.filter((file) => C4_R2_SUCCESSOR_MANIFEST.includes(file)).join(",") ===
+    "apps/mobile/app/analysis.tsx" &&
+    C4_R2_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(C4_R2_SUCCESSOR_MANIFEST).size === 11 &&
+    C4_R2_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    C4_R2_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 2 &&
+    // No live-client composition surface may be reopened through the successor manifest.
+    ![HELPER, AUTH_INDEX, RUNTIME, CATALOG, FAVORITES, RATINGS, LAUNCHER, FACTORY, AUTH_FLAGS].some((entry) =>
+      C4_R2_SUCCESSOR_MANIFEST.includes(entry)
+    ) &&
+    C4_R2_SUCCESSOR_MANIFEST.every(
+      (entry) => !entry.startsWith("supabase/") && !entry.startsWith("packages/") && !/\*/.test(entry)
+    )
 );
 check(
   "29. this round introduces no database, migration, Edge Function or shared-package change",
@@ -219,10 +261,11 @@ const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=al
   .filter(Boolean)
   .map((entry) => entry.slice(3).replaceAll("\\", "/"));
 const outsideManifest = worktree.filter((file) => !CANDIDATE_MANIFEST.includes(file));
+const outsideC4R2Manifest = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file));
 check(
   "31. every uncommitted change is confined to the manifest, and a clean committed tree also passes",
-  outsideManifest.length === 0,
-  { worktreeEntries: worktree.length, outsideManifest }
+  outsideManifest.length === 0 || outsideC4R2Manifest.length === 0,
+  { worktreeEntries: worktree.length, outsideManifest, outsideC4R2Manifest }
 );
 const guardCode = stripComments(read(GUARD));
 check(

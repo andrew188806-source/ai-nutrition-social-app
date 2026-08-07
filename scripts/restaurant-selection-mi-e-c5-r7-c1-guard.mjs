@@ -104,13 +104,48 @@ const R7_C4_R1_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
   GUARD
 ]);
+// MI-E-C5-R7-C4-R2 successor manifest — the EXACT eleven paths of the round that consolidates
+// /analysis into one page and gives the REAL primary-result card its restaurant context. Named
+// individually, never a prefix or wildcard, so a TWELFTH path still fails. Exactly TWO are
+// production files: the Analysis screen, and the pure page-composition authority that makes the
+// legacy catalog-recognition fixture world (catalogCandidateAdapter → candidateResolver →
+// topCandidate.branchName, the source of 南京復興店 and the fixed menu/price/nutrition) reachable
+// only from an explicitly mock runtime. R7-C1's own selector, capture, handoff and reset authority
+// is untouched by it — none of those paths appear here.
+const R7_C4_R2_SUCCESSOR_MANIFEST = Object.freeze([
+  "apps/mobile/app/analysis.tsx",
+  "apps/mobile/features/analysis/analysisSinglePagePresentation.ts",
+  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs",
+  "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs",
+  GUARD,
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs",
+  "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-guard.mjs",
+  "scripts/analysis-single-page-mi-e-c5-r7-c4-r2-smoke.mjs"
+]);
+// The three predecessor guards C4-R2 is authorised to amend, pinned to their EXACT reviewed
+// successor bytes. Two enumerated states per file — the C3-round value or this one — so an
+// arbitrary edit to any of them still fails, and "either" can never collapse into "any".
+const R7_C4_R2_SUCCESSOR_DIGESTS = Object.freeze({
+  "scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs": "316bd0363eb111b75fcdbe011d7c457e13cc398d644063d3cac48e97aeb7668e",
+  "scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs": "8e05452b16af84b100692a387352082a5c20e4f0f61fc1dc6c36efa8956a56b3",
+  "scripts/restaurant-display-mi-e-c5-r7-c3-guard.mjs": "9664a5c3e9b79acc2b892ac510926d0af3153d4a75e9d36abfb36d29f9092899"
+});
+const successorGuardDigestAuthority = (file) => {
+  const allowed = [C3_SUCCESSOR_DIGESTS[file]];
+  if (Object.hasOwn(R7_C4_R2_SUCCESSOR_DIGESTS, file)) allowed.push(R7_C4_R2_SUCCESSOR_DIGESTS[file]);
+  return exists(file) && allowed.includes(sha(file));
+};
 const AUTHORIZED_WORKTREE_PATHS = Object.freeze([
   ...new Set([
     ...CANDIDATE_MANIFEST,
     ...R7_C2A_SUCCESSOR_MANIFEST,
     ...R7_C2B_SUCCESSOR_MANIFEST,
     ...R7_C4_R1_SUCCESSOR_MANIFEST,
-    ...R7_C3_SUCCESSOR_MANIFEST
+    ...R7_C3_SUCCESSOR_MANIFEST,
+    ...R7_C4_R2_SUCCESSOR_MANIFEST
   ])
 ]);
 
@@ -298,8 +333,13 @@ check(
 // resolver, and the R7-B guard, whose check 47 C2b is explicitly authorised to amend. R7-C3-R2
 // restores the two R7-A validation suites to exact HEAD frozen bytes; every production authority
 // remains frozen.
+// MI-E-C5-R7-C4-R2 refreshes exactly TWO of these pins — the Analysis screen this round
+// consolidates, and the R7-A guard whose check 40 pins the four legacy render gates verbatim and
+// therefore had to learn the new mock-only gate spelling. Both are pinned to their exact reviewed
+// successor bytes; every other entry, including both R7-A/R7-B smokes and every production
+// authority, is unchanged.
 const PROTECTED = Object.freeze({
-  "apps/mobile/app/analysis.tsx": "0c3488138597249ca15506db65cb7d4aaa3a88ca1c041dd9aa912acc1b6c5cd2",
+  "apps/mobile/app/analysis.tsx": "ffb37b1ab876280dd8e777ae00a37b4bfda582100abc89a113c5fefac8706c49",
   "apps/mobile/app/index.tsx": "90605d9b7ab7a396bb69b7a146b23759fa968cd56aeb2ba283dfeb9c0fa41ab1",
   "apps/mobile/features/analysis/analysisSessionStore.ts": "34f78ffcd2f2a7282197c4db7ae08ae035314bdb870fabd5782c79cf4e85ecb4",
   "apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts": "2b69f411c6cc06843cfccc5dd9ca877984d23aed2c013c814e45f5046cef8789",
@@ -308,7 +348,7 @@ const PROTECTED = Object.freeze({
   "apps/mobile/features/analysis/useMealPhotoFinalization.ts": "7d4178645730060d81fe7845ecefd682bc51ad9c76e9fcdf3ded780b269678ae",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-guard.mjs": "86972f1e557d20faa1f048d6e81f4698fe9940332f16cddf607c343250ce4f83",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs": "26d1937ed53c5eb49b6c4b34867a0456400de214fdc8fec8831f900f520d324c",
-  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs": "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+  "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs": "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8",
   "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs": "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
   // The 2Z-B3-D historical guard is a PRE-EXISTING failing phase artifact. R7-C1 neither repairs
   // nor retires it; it only proves the file was not touched.
@@ -339,7 +379,7 @@ const C2A_AND_R7A_SUCCESSOR_DIGESTS = Object.freeze({
   "apps/mobile/features/restaurants/catalog/mapper.ts":
     "438a405a68a38db6250a00330a7b7f88ab9453cf0638e6be91a1cb2899e5cc38",
   "scripts/restaurant-context-mi-e-c5-r7-a-guard.mjs":
-    "3740e2532b5c7a3bc6228a352833b3ca378fc1422de59efda620eb33e79e5100",
+    "7f3db76e58f49f26c3f4417fbf1343466083f5dc8aad78dd949470d57a2640d8",
   "scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs":
     "2bb570c4862970dacc6ac6d24b1b829524f07f26ba6377d4dfd7d5ef9d2f00fd",
   "scripts/restaurant-durable-contract-mi-e-c5-r7-b-smoke.mjs":
@@ -525,12 +565,16 @@ check(
     !R7_C3_SUCCESSOR_MANIFEST.some(
       (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
     ) &&
-    Object.entries(C3_SUCCESSOR_DIGESTS).every(([file, expected]) => sha(file) === expected)
+    // MI-E-C5-R7-C4-R2: each entry holds either its C3-round value or the exact reviewed C4-R2
+    // successor value. The Today Intake production digest and the C3 smoke have no second state.
+    Object.keys(C3_SUCCESSOR_DIGESTS).every(successorGuardDigestAuthority)
 );
 check(
+  // MI-E-C5-R7-C4-R2: two enumerated states per amended guard — the C3-round bytes, or the exact
+  // reviewed C4-R2 bytes. The SMOKES stay absolutely frozen in both states, so the display
+  // semantics they execute can never be quietly re-authored alongside a guard amendment.
   "37c. the authorised C2a guard amendment is pinned to its exact bytes, and the C2a smoke is untouched",
-  sha("scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs") ===
-    "d2028da074866af829f8747ab757087e326e427a195fa13e111e3f84d21dc350" &&
+  successorGuardDigestAuthority("scripts/restaurant-display-mi-e-c5-r7-c2a-guard.mjs") &&
     sha("scripts/restaurant-display-mi-e-c5-r7-c2a-smoke.mjs") ===
       "6596c470fcb856346dfe926269e7a1ee47d1541508f902ead4f850143191ac86"
 );
@@ -538,10 +582,36 @@ check(
   // Without this, the C2b guard is the one suite nothing else pins: silently dropping its own
   // C2a-amendment pin would leave the whole successor chain unenforced and pass every other suite.
   "37d. the C2b guard and smoke are pinned to their exact successor bytes",
-  sha("scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs") ===
-    "7bb9256ccdaec2a74585d9ffcfa900d12fecb10a6757658625b2cd686ccf408a" &&
+  successorGuardDigestAuthority("scripts/restaurant-display-mi-e-c5-r7-c2b-guard.mjs") &&
     sha("scripts/restaurant-display-mi-e-c5-r7-c2b-smoke.mjs") ===
       "172ea122c073b78d7396ba02303b2e2ee3aeea0d63e8fae374b5c36d71fa215d"
+);
+check(
+  "37f. the R7-C4-R2 successor manifest is exactly eleven named paths with exactly two production files",
+  R7_C4_R2_SUCCESSOR_MANIFEST.length === 11 &&
+    new Set(R7_C4_R2_SUCCESSOR_MANIFEST).size === 11 &&
+    R7_C4_R2_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs)$/i.test(entry)) &&
+    R7_C4_R2_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("apps/")).length === 2 &&
+    R7_C4_R2_SUCCESSOR_MANIFEST.includes("apps/mobile/app/analysis.tsx") &&
+    R7_C4_R2_SUCCESSOR_MANIFEST.includes("apps/mobile/features/analysis/analysisSinglePagePresentation.ts") &&
+    // R7-C1's own production authority is NOT reopened by the successor round.
+    ![CATALOG_SCREEN, CAPTURE_SCREEN, HANDOFF, SMOKE].some((entry) => R7_C4_R2_SUCCESSOR_MANIFEST.includes(entry)) &&
+    !R7_C4_R2_SUCCESSOR_MANIFEST.includes("apps/mobile/features/restaurants/catalog/restaurantContextPresentation.ts") &&
+    !R7_C4_R2_SUCCESSOR_MANIFEST.includes("scripts/restaurant-context-mi-e-c5-r7-a-smoke.mjs") &&
+    !R7_C4_R2_SUCCESSOR_MANIFEST.some(
+      (entry) => /\*/.test(entry) || entry.startsWith("supabase/") || entry.startsWith("packages/")
+    )
+);
+check(
+  "37g. the C4-R2 guard-digest allowance is exactly three enumerated, genuinely distinct successor values",
+  Object.keys(R7_C4_R2_SUCCESSOR_DIGESTS).length === 3 &&
+    Object.keys(R7_C4_R2_SUCCESSOR_DIGESTS).every((file) => Object.hasOwn(C3_SUCCESSOR_DIGESTS, file)) &&
+    Object.keys(R7_C4_R2_SUCCESSOR_DIGESTS).every(
+      (file) => C3_SUCCESSOR_DIGESTS[file] !== R7_C4_R2_SUCCESSOR_DIGESTS[file]
+    ) &&
+    // The Today Intake UI model is NOT in the allowance: C3's production bytes stay absolute.
+    !Object.hasOwn(R7_C4_R2_SUCCESSOR_DIGESTS, "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts") &&
+    !Object.hasOwn(R7_C4_R2_SUCCESSOR_DIGESTS, "scripts/restaurant-display-mi-e-c5-r7-c3-smoke.mjs")
 );
 check("38. nothing is staged for commit by the guard's own run", git(["diff", "--cached", "--name-only"]).trim() === "");
 

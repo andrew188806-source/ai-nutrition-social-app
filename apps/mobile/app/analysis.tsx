@@ -43,6 +43,11 @@ import {
   splitPrimaryAndFallbackCandidates,
   type CompletedMealPhotoAnalysisSnapshot
 } from "../features/analysis/mealPhotoAnalysisFlowState";
+import {
+  composeAnalysisPage,
+  type AnalysisPageComposition,
+  type AnalysisResultStage
+} from "../features/analysis/analysisSinglePagePresentation";
 import { maximumMealOccurrenceInstant } from "../features/analysis/mealOccurrenceTime";
 import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../features/calorie-sharing";
 import { useDemoUserPlan } from "../features/demo-user-plan";
@@ -404,9 +409,6 @@ export default function AnalysisScreen() {
     hasCapturedPhoto: Boolean(ownedCapturedImageUri)
   });
   const isDurableCompleted = flowState === "durable_completed";
-  // Legacy demo blocks and the legacy confirmed-match hero are suppressed for the entire real C5
-  // flow, including its completed state, so the two UI generations never stack.
-  const showLegacyAnalysisBlocks = !hasAiFinalizationFlow && !isDurableCompleted;
 
   function revealFallbackCandidates() {
     if (mealPhotoFinalization.payloadLocked) return;
@@ -474,6 +476,28 @@ export default function AnalysisScreen() {
     (correctionRequested ||
       mealPhotoFinalization.draft.mode === "manual" ||
       mealPhotoFinalization.draft.submissionStatus === "failed");
+  // MI-E-C5-R7-C4-R2: THE single composition authority for this page.
+  //
+  // Before this round the legacy catalog-recognition world and the real primary-result world were
+  // switched by ONE time-based predicate (`!hasAiFinalizationFlow`), so during a live analysis the
+  // screen rendered flattened catalog fixtures — 「南京復興店」, a fixed menu name, a fixed price and
+  // fixed nutrition, all produced by ranking catalogCandidateAdapter output on restaurant NAME text
+  // and never consulting the durable branchId — and then swapped the entire tree on completion. That
+  // swap is what felt like a second page, and it is what dropped the restaurant context.
+  //
+  // The composition is derived from state this screen already holds, and the legacy world is now
+  // gated on RUNTIME MODE, so it is unreachable in the live Supabase runtime in every analysis state.
+  // `metadataControlHost` is a single enum rather than several booleans, which is what makes a
+  // duplicated meal-slot / dining-mode / timing control set unrepresentable instead of merely absent.
+  const analysisPage: AnalysisPageComposition = composeAnalysisPage({
+    runtimeMode: consumerRuntime.mode,
+    invocationStatus: mealPhotoAnalysis.analysisInvocationStatus,
+    isDurableCompleted,
+    finalizationEditorOpen: showFinalizationEditor
+  });
+  // Legacy demo blocks and the legacy confirmed-match hero are suppressed for the entire real C5
+  // flow, including its completed state, AND for every non-mock runtime.
+  const showLegacyAnalysisBlocks = analysisPage.showLegacyFixtureWorld;
   // MI-E-C5-R5-R4 §九: the editor never binds mealPhotoFinalization.submit directly. This screen-level
   // handler re-checks reconciliation and both hook owners before delegating; the hook re-checks
   // again before its gate, UUID mint, payload preparation and RPC.
@@ -797,7 +821,15 @@ export default function AnalysisScreen() {
 
           {ownedCapturedImageUri ? (
             <MealPhotoAnalysisResultCard
-              invocationStatus={mealPhotoAnalysis.analysisInvocationStatus}
+              stage={analysisPage.resultStage}
+              lowConfidence={mealPhotoAnalysis.analysisInvocationStatus === "low_confidence"}
+              // MI-E-C5-R7-C4-R2: the ALREADY-COMPOSED text from this screen's single restaurant
+              // presentation — the same value the editor and the completed snapshot card render.
+              // Passing the resolved STRING rather than ids or catalog state is what keeps a second
+              // lookup, a branches[0] fallback or a district/address substitute from ever appearing
+              // inside the result card. It is display-only: it never reaches the draft or the
+              // durable command, and a loading/error/unresolved catalog never blocks acceptance.
+              restaurantContextDisplayText={restaurantContextDisplayText}
               primary={primaryCandidate}
               fallbacks={fallbackCandidates}
               fallbackRevealed={fallbackRevealed}
@@ -805,12 +837,23 @@ export default function AnalysisScreen() {
               onRejectPrimary={revealFallbackCandidates}
               onRequestCorrection={requestPrimaryCorrection}
               contextBlockReason={finalizationContextBlockReason}
-              // Compact inline controls, rendered inside the result card exactly where the blocked
-              // acceptance lives. Suppressed while the editor is open because that panel already
-              // carries the same three controls — they must never appear twice.
+              // MI-E-C5-R7-C4-R2: the ONE metadata control set for the live flow, rendered in the
+              // required page order (meal slot → dining mode → current/backfill) directly above the
+              // acceptance they gate, and now shown for the whole result state rather than only
+              // while something is still missing. Suppressed while the editor is open because that
+              // panel already carries the same three controls — they must never appear twice. The
+              // composition's single `metadataControlHost` enum is the authority for that.
               contextControls={
-                showFinalizationEditor ? null : (
+                analysisPage.metadataControlHost !== "result_card" ? null : (
                   <>
+                    <MealPeriodSection
+                      embedded
+                      selectedMealPeriod={
+                        frozenFinalizationContext?.selectedMealPeriod ?? selectedMealPeriod
+                      }
+                      payloadLocked={mealPhotoFinalization.payloadLocked}
+                      onSelect={setSelectedMealPeriod}
+                    />
                     <MealSourceSection
                       embedded
                       analysis={analysis}
@@ -823,14 +866,6 @@ export default function AnalysisScreen() {
                       timezone={profileTimezone}
                       payloadLocked={mealPhotoFinalization.payloadLocked}
                       frozenContext={frozenFinalizationContext}
-                    />
-                    <MealPeriodSection
-                      embedded
-                      selectedMealPeriod={
-                        frozenFinalizationContext?.selectedMealPeriod ?? selectedMealPeriod
-                      }
-                      payloadLocked={mealPhotoFinalization.payloadLocked}
-                      onSelect={setSelectedMealPeriod}
                     />
                   </>
                 )
@@ -913,7 +948,13 @@ export default function AnalysisScreen() {
           ) : !hasAiFinalizationFlow ? (
             /* MI-E-C5-R5-R1 §九: these standalone cards belong to the legacy non-C5 path only. In
                the real C5 flow the same three controls are rendered compactly inside the result
-               card, next to the acceptance they are actually blocking. */
+               card, next to the acceptance they are actually blocking.
+               MI-E-C5-R7-C4-R2: the outer analysis-timing branch is kept as the frozen R2/R5 panel
+               boundary, but it is no longer what decides live visibility. The single
+               `metadataControlHost` enum is: in the live Supabase runtime it is never
+               "legacy_standalone", so these duplicated containers cannot render there in ANY
+               analysis state, and there is exactly one host for the three controls at all times. */
+            analysisPage.metadataControlHost !== "legacy_standalone" ? null : (
             <>
               <MealPeriodSection
                 selectedMealPeriod={
@@ -935,11 +976,16 @@ export default function AnalysisScreen() {
                 frozenContext={frozenFinalizationContext}
               />
             </>
+            )
           ) : null}
 
-          {!hasAiFinalizationFlow && analysis.isSelfCooked ? (
+          {/* MI-E-C5-R7-C4-R2: every block below is legacy catalog-recognition / demo fixture UI and
+              is now gated on showLegacyAnalysisBlocks, which is MOCK-ONLY. In the live Supabase
+              runtime none of them can render in any analysis state, so the fixed restaurant, fixed
+              menu name, fixed price and fixed nutrition they display are unreachable there. */}
+          {showLegacyAnalysisBlocks && analysis.isSelfCooked ? (
             <SelfCookedIntro nutritionSummary={analysis.nutritionSummary} />
-          ) : !hasAiFinalizationFlow && isAnalysisConfirmed ? (
+          ) : showLegacyAnalysisBlocks && isAnalysisConfirmed ? (
             <CompletedAnalysisHero
               nutritionSummary={analysis.nutritionSummary}
               mealName={analysis.mealName}
@@ -953,7 +999,7 @@ export default function AnalysisScreen() {
               onSelectMeal={openNextMealRecommendation}
               onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
             />
-          ) : !hasAiFinalizationFlow ? (
+          ) : showLegacyAnalysisBlocks ? (
             <ExternalDiningAnalysis
               analysis={analysis}
               resolution={candidateResolution}
@@ -961,7 +1007,7 @@ export default function AnalysisScreen() {
             />
           ) : null}
 
-          {!hasAiFinalizationFlow && !analysis.isSelfCooked && analysis.matchState === "editing" ? (
+          {showLegacyAnalysisBlocks && !analysis.isSelfCooked && analysis.matchState === "editing" ? (
             <CandidateCorrectionList
               analysis={analysis}
               resolution={candidateResolution}
@@ -1033,7 +1079,7 @@ export default function AnalysisScreen() {
             </SnowCard>
           ) : null}
 
-          {!hasAiFinalizationFlow && analysis.isSelfCooked ? (
+          {showLegacyAnalysisBlocks && analysis.isSelfCooked ? (
             <Card>
               <SectionTitle title={zhTW.mobile.finalUx.ingredientCorrectionTitle} subtitle={zhTW.mobile.finalUx.ingredientCorrectionBody} />
               <SelfCookedCorrectionPanel
@@ -1122,7 +1168,9 @@ function MealPhotoUploadStatusCard({
 // meal-photo-analysis/adapters/supabaseMealPhotoAnalysisRepository.ts); this card's copy always
 // reinforces that regardless, since a user should never read "AI 已產生候選" as "meal saved."
 function MealPhotoAnalysisResultCard({
-  invocationStatus,
+  stage,
+  lowConfidence,
+  restaurantContextDisplayText,
   primary,
   fallbacks,
   fallbackRevealed,
@@ -1139,7 +1187,16 @@ function MealPhotoAnalysisResultCard({
   onAcceptFallback,
   onChooseManual
 }: {
-  invocationStatus: ReturnType<typeof useMealPhotoAnalysis>["analysisInvocationStatus"];
+  // MI-E-C5-R7-C4-R2: the card renders the stage the single page composition decided, not a raw
+  // status it re-interprets. `invoking` and `result` are two values of ONE variable, so the
+  // 「正在進行 AI 分析中…」 label cannot survive alongside a completed result.
+  stage: AnalysisResultStage;
+  lowConfidence: boolean;
+  // MI-E-C5-R7-C4-R2: already-composed display text from the screen's single restaurant
+  // presentation (the frozen R7-C2a resolver over the durable restaurantId/branchId). This card
+  // performs no lookup, no branch indexing and no district/address substitution of its own, and the
+  // value never enters the draft, the payload or any durable command.
+  restaurantContextDisplayText: string;
   primary: ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number] | null;
   fallbacks: readonly ReturnType<typeof useMealPhotoAnalysis>["analysisCandidates"][number][];
   fallbackRevealed: boolean;
@@ -1158,9 +1215,9 @@ function MealPhotoAnalysisResultCard({
 }) {
   const copy = zhTW.mobile.mealPhotoAnalysis;
   const primaryCopy = zhTW.mobile.mealPhotoPrimaryResult;
-  if (invocationStatus === "not_started") return null;
+  if (stage === "hidden") return null;
 
-  if (invocationStatus === "waiting_for_upload") {
+  if (stage === "waiting_for_upload") {
     return (
       <SnowCard>
         <SnowSectionHeader title={copy.title} />
@@ -1169,7 +1226,7 @@ function MealPhotoAnalysisResultCard({
     );
   }
 
-  if (invocationStatus === "invoking") {
+  if (stage === "invoking") {
     return (
       <SnowCard>
         <SnowSectionHeader title={copy.title} />
@@ -1178,7 +1235,7 @@ function MealPhotoAnalysisResultCard({
     );
   }
 
-  if (invocationStatus === "failed") {
+  if (stage === "failed") {
     // analysis_disabled is included in this same table, so a disabled runtime explicitly says
     // "not enabled" here rather than falling through to a generic failure message.
     const errorLabel = (safeErrorCode ? copy.errorCodeLabels[safeErrorCode] : null) ?? copy.errorCodeLabels.internal_error;
@@ -1220,9 +1277,24 @@ function MealPhotoAnalysisResultCard({
     <SnowCard>
       <SnowSectionHeader
         title={primaryCopy.title}
-        subtitle={invocationStatus === "low_confidence" ? primaryCopy.lowConfidenceSubtitle : primaryCopy.subtitle}
+        subtitle={lowConfidence ? primaryCopy.lowConfidenceSubtitle : primaryCopy.subtitle}
       />
       {consumerRuntimeMode === "mock" ? <Text style={styles.disclaimer}>{copy.mockBadge}</Text> : null}
+      {/* MI-E-C5-R7-C4-R2 §2.4 step 3 — restaurant + EXACT branch, immediately above the primary
+          candidate it belongs to. It renders for the whole result state, so it survives low
+          confidence, the fallback list, an explicit correction and finalization readiness rather
+          than disappearing at the moment the AI result arrives. */}
+      <View style={styles.finalizationField}>
+        <Text style={styles.finalizationFieldLabel}>{finalizationCopy.restaurantNameLabel}</Text>
+        <Text
+          accessibilityLabel={finalizationCopy.restaurantNameLabel}
+          accessibilityRole="text"
+          style={styles.stateText}
+        >
+          {restaurantContextDisplayText}
+        </Text>
+      </View>
+      {/* §2.4 step 4 — the real primary candidate. */}
       {primary ? (
         <MealPhotoAnalysisCandidateRow
           candidate={primary}
@@ -1231,15 +1303,29 @@ function MealPhotoAnalysisResultCard({
           onSelect={undefined}
         />
       ) : null}
+      {/* §2.4 step 5 — the estimate the AI actually returned for THIS photo. Never a catalog
+          fixture, never a fixed price, never a published menu nutrition row. */}
+      {primary ? (
+        <MacroChipsRow
+          nutritionSummary={{
+            calories: primary.estimatedNutrition.calories,
+            protein: primary.estimatedNutrition.proteinGrams,
+            carbohydrates: primary.estimatedNutrition.carbsGrams,
+            fat: primary.estimatedNutrition.fatGrams
+          }}
+        />
+      ) : null}
       <Text style={styles.disclaimer}>
         {copy.disclaimerEstimate}　·　{copy.disclaimerNutrition}
       </Text>
       {contextBlockLabel ? (
         <View style={styles.finalizationPanelSection}>
           <SnowSectionHeader title={primaryCopy.contextRequiredTitle} subtitle={contextBlockLabel} />
-          {contextControls}
         </View>
       ) : null}
+      {/* §2.4 steps 6-8 — the ONE metadata control set, always available in the result state so a
+          confirmed selection cannot vanish the moment it stops blocking acceptance. */}
+      {contextControls}
       {!fallbackRevealed ? (
         <View style={styles.ctaColumn}>
           <Text style={styles.disclaimer}>{primaryCopy.acceptPrimaryNote}</Text>
