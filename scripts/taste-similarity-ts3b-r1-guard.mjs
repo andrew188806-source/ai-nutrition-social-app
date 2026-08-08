@@ -324,7 +324,11 @@ try {
       const statements = barrel.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
       return barrel.includes('export * from "./similarity";')
         && barrel.includes('export * from "./snapshot";')
-        && statements.every((line) => /^export \* from "\.\/[a-zA-Z]+";$/.test(line));
+        // TS-3D successor amendment: the module-name character class admits kebab-case, because a
+        // sibling module directory may legitimately be named `goal-restriction`. The invariant is
+        // unchanged and still exact — the barrel may contain nothing but relative `export *` lines,
+        // and no path traversal, glob or re-export of anything outside this directory is admitted.
+        && statements.every((line) => /^export \* from "\.\/[a-zA-Z][a-zA-Z-]*";$/.test(line));
     })());
   check("31a. the only predecessor files this round amends are validation harnesses",
     manifest.filter((entry) => !entry.startsWith(similarityRoot) && entry !== "package.json" && !entry.includes("ts3b-r1"))

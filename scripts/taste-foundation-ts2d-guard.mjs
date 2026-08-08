@@ -316,6 +316,17 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts3c-guard.mjs",
   "scripts/taste-similarity-ts3c-mutations.mjs",
   "scripts/taste-similarity-ts3c-smoke.mjs",
+  // TS-3D extends the same enumerated successor allowance with its own pure goal/restriction module
+  // and three suites. Still no prefix and no wildcard, and 26a keeps every TS-2D implementation path
+  // off limits regardless.
+  "packages/shared/src/domain/taste-similarity/goal-restriction/comparator.ts",
+  "packages/shared/src/domain/taste-similarity/goal-restriction/index.ts",
+  "packages/shared/src/domain/taste-similarity/goal-restriction/policy.ts",
+  "packages/shared/src/domain/taste-similarity/goal-restriction/reasonCodes.ts",
+  "packages/shared/src/domain/taste-similarity/goal-restriction/types.ts",
+  "scripts/taste-similarity-ts3d-guard.mjs",
+  "scripts/taste-similarity-ts3d-mutations.mjs",
+  "scripts/taste-similarity-ts3d-smoke.mjs",
   "scripts/taste-similarity-ts3b-r1-mutations.mjs",
   "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
