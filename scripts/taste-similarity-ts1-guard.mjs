@@ -155,6 +155,9 @@ try {
   const index = read(`${domainRoot}/index.ts`);
   const guardSource = read("scripts/taste-similarity-ts1-guard.mjs");
   const domainSource = [evidence, preference, behavior, goal, restriction, normalization, index].join("\n");
+  const frozenCorePaths = ["evidence.ts", "preference.ts", "behavior.ts", "goal.ts", "restriction.ts", "normalization.ts"]
+    .map((file) => `${domainRoot}/${file}`);
+  const frozenCoreSource = [evidence, preference, behavior, goal, restriction, normalization].join("\n");
   const domainImports = domainSource.split(/\r?\n/).filter((line) => /^import\s/.test(line.trim())).join("\n");
 
   check("four evidence categories are structurally separated", /"preference" \| "behavior" \| "goal" \| "restriction"/.test(evidence));
@@ -184,7 +187,9 @@ try {
   check("TS-1 contains no similarity score", !/similarityScore|matchScore|rankScore|weighting|scoreTaste/i.test(domainSource));
   check("TS-1 contains no numeric profile confidence", !/tasteConfidence|profileConfidence|confidenceScore/.test(domainSource));
   check("TS-1 contains no decay formula", !/Math\.exp|halfLife|decayRate|decayWeight/.test(domainSource));
-  check("TasteProfileSnapshot and composition semantics are absent", !/TasteProfileSnapshot|sourceStates|evidenceWindow|generatedAt|truncation/.test(domainSource));
+  check("frozen TS-1 core files have no successor content diff", freezeCommit !== null
+    && git(["diff", "--name-only", freezeCommit, "--", ...frozenCorePaths]).stdout.trim() === "");
+  check("TasteProfileSnapshot and composition semantics remain absent from frozen TS-1 core", !/TasteProfileSnapshot|sourceStates|evidenceWindow|generatedAt|truncation/.test(frozenCoreSource));
   check("normalization uses Unicode NFC, trim, empty rejection, deterministic Set dedupe and code-unit sort", /normalize\("NFC"\)\.trim\(\)/.test(normalization) && /if \(!normalized\) throw/.test(normalization) && /new Set/.test(normalization) && /compareCodeUnits/.test(normalization));
   check("unknown source values preserve rawValue", /classification: "unknown", rawValue/.test(normalization));
   check("shared barrel exports an isolated TasteSimilarityDomain namespace", read("packages/shared/src/domain/index.ts").includes('export * as TasteSimilarityDomain from "./taste-similarity";'));
