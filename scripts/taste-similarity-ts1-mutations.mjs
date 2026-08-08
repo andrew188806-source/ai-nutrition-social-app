@@ -7,7 +7,21 @@ import ts from "typescript";
 const root = process.cwd();
 const temporaryRoot = process.platform === "win32" ? os.tmpdir() : "/tmp";
 const sourceRoot = path.join(root, "packages", "shared", "src", "domain", "taste-similarity");
-const sourceFiles = fs.readdirSync(sourceRoot).filter((file) => file.endsWith(".ts")).sort();
+// TS-3 successor amendment. This harness compiles a COPY of the taste-similarity domain in a
+// temporary directory. The barrel now additively re-exports a nested `similarity` directory, so a
+// FLAT listing silently dropped that module from the copy and the barrel stopped resolving — a
+// limitation of the harness's file enumeration, not a TS-1 regression. The listing is now recursive
+// and preserves relative paths, so the compiled copy is the real module graph again. TS-1 mutation
+// anchors are untouched: the frozen core files still key on their bare file names.
+const listSourceFiles = (directory, prefix = "") =>
+  fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory()
+      ? listSourceFiles(path.join(directory, entry.name), `${prefix}${entry.name}/`)
+      : entry.name.endsWith(".ts")
+        ? [`${prefix}${entry.name}`]
+        : []
+  );
+const sourceFiles = listSourceFiles(sourceRoot).sort();
 const canonicalSources = Object.fromEntries(sourceFiles.map((file) => [file, fs.readFileSync(path.join(sourceRoot, file), "utf8")]));
 
 const explicit = (id) => ({
@@ -152,7 +166,11 @@ function compileModule(sources, token) {
   const srcRoot = path.join(tempRoot, "src");
   const outRoot = path.join(tempRoot, "out");
   fs.mkdirSync(srcRoot, { recursive: true });
-  for (const [file, source] of Object.entries(sources)) fs.writeFileSync(path.join(srcRoot, file), source, "utf8");
+  for (const [file, source] of Object.entries(sources)) {
+    const target = path.join(srcRoot, file);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, source, "utf8");
+  }
   const inputFiles = Object.keys(sources).map((file) => path.join(srcRoot, file));
   const program = ts.createProgram(inputFiles, {
     module: ts.ModuleKind.CommonJS,

@@ -280,11 +280,49 @@ const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=al
   .map((entry) => entry.slice(3).replaceAll("\\", "/"));
 const versusHead = git(["diff", "--name-only", "HEAD"]).split("\n").map((entry) => entry.trim()).filter(Boolean);
 const touched = [...new Set([...worktree, ...versusHead])];
-const outsideManifest = touched.filter((entry) => !CANDIDATE_MANIFEST.includes(entry));
+// TS-3 successor amendment. Check 26 was written as a whole-worktree subset assertion. That was
+// correct while TS-2D was the open round, but it becomes false the moment ANY successor round opens
+// an implementation candidate: a TS-3 file would be reported as a TS-2D scope violation, which is
+// a false positive about this round's scope. The invariant actually being protected is "TS-2D edits
+// nothing outside its own manifest", not "the repository never changes again".
+//
+// The successor manifest is therefore enumerated EXACTLY, path by path, with no prefix and no
+// wildcard, so an unexpected path still fails here. The frozen predecessor is simultaneously held
+// to a STRICTER bar by 26a: once TS-2D is committed, none of its own implementation paths may be
+// left modified by any later round, which the original whole-worktree check never asserted.
+const TS3_SUCCESSOR_MANIFEST = Object.freeze([
+  "packages/shared/src/domain/taste-similarity/index.ts",
+  "packages/shared/src/domain/taste-similarity/similarity/comparator.ts",
+  "packages/shared/src/domain/taste-similarity/similarity/index.ts",
+  "packages/shared/src/domain/taste-similarity/similarity/policy.ts",
+  "packages/shared/src/domain/taste-similarity/similarity/reasonCodes.ts",
+  "packages/shared/src/domain/taste-similarity/similarity/types.ts",
+  "scripts/taste-similarity-ts1-mutations.mjs",
+  "scripts/taste-similarity-ts3-guard.mjs",
+  "scripts/taste-similarity-ts3-mutations.mjs",
+  "scripts/taste-similarity-ts3-smoke.mjs"
+]);
+const ALLOWED_PATHS = new Set([...CANDIDATE_MANIFEST, ...TS3_SUCCESSOR_MANIFEST]);
+const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
-  "26. committed-state lifecycle: uncommitted changes are a subset of the manifest, clean tree passes",
+  "26. committed-state lifecycle: uncommitted changes are a subset of the TS-2D manifest or the exactly enumerated TS-3 successor manifest, clean tree passes",
   outsideManifest.length === 0,
   { touchedEntries: touched.length, outsideManifest }
+);
+const TS2D_IMPLEMENTATION_PATHS = [MIGRATION, LIVE_ADAPTER, CONTRACTS, FACTORIES, FLAGS, TYPES, BARREL];
+const ts2dIsCommitted = spawnSync("git", ["ls-files", "--error-unmatch", MIGRATION], { cwd: root, encoding: "utf8", windowsHide: true }).status === 0;
+const frozenPathsTouched = touched.filter((entry) => TS2D_IMPLEMENTATION_PATHS.includes(entry));
+check(
+  "26a. once TS-2D is committed, no TS-2D implementation path is left modified by a successor round",
+  !ts2dIsCommitted || frozenPathsTouched.length === 0,
+  { ts2dIsCommitted, frozenPathsTouched }
+);
+check(
+  "26b. the successor allowance is enumerated, not a wildcard or prefix escape",
+  TS3_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs|sql|json)$/i.test(entry)) &&
+    TS3_SUCCESSOR_MANIFEST.every((entry) => !/[*?\[\]{}]/.test(entry)) &&
+    !TS3_SUCCESSOR_MANIFEST.some((entry) => entry.startsWith("supabase/")) &&
+    new Set(TS3_SUCCESSOR_MANIFEST).size === TS3_SUCCESSOR_MANIFEST.length
 );
 check(
   "27. this round changes no other migration and no Edge Function",
