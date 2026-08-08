@@ -7,7 +7,9 @@ export const CONSUMER_TASTE_FOUNDATION_TABLE_ALLOWLIST = [
 ] as const;
 
 export type ConsumerTasteFoundationTable = typeof CONSUMER_TASTE_FOUNDATION_TABLE_ALLOWLIST[number];
-export type ConsumerTasteFoundationSource = "supabase-prepared" | "injected-test";
+// TS-2D adds the live source. `supabase-prepared` remains the pre-activation seam so the deferred
+// path is still expressible and still fails closed when live capability is incomplete.
+export type ConsumerTasteFoundationSource = "supabase-prepared" | "supabase-live" | "injected-test";
 
 export type ConsumerTasteProfileRow = {
   id: string;
@@ -77,11 +79,16 @@ export type ConsumerTasteProfileReadResult =
   | { status: "stale" }
   | { status: "failed"; failureCode: "authentication_failed" | "invalid_request" };
 
+export type ConsumerTasteProfileFoundationActivation = "deferred" | "live";
+
+// TS-2D: `sourceState` is the placeholder state the composition must use while the foundation is
+// NOT live. Once activation is live it is null, because the state then comes from the real read
+// (available / empty / failed) rather than from a runtime flag.
 export type ConsumerTasteProfileRuntimeFlags = {
-  foundationSource: "supabase-prepared";
-  foundationActivation: "deferred";
-  liveFoundationReadsEnabled: false;
-  sourceState: Extract<TasteProfileSourceState, { status: "deferred" }>;
+  foundationSource: "supabase-prepared" | "supabase-live";
+  foundationActivation: ConsumerTasteProfileFoundationActivation;
+  liveFoundationReadsEnabled: boolean;
+  sourceState: Extract<TasteProfileSourceState, { status: "deferred" }> | null;
   issues: readonly string[];
 };
 

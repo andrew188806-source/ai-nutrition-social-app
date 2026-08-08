@@ -123,7 +123,23 @@ try {
   check("foundation table allowlist is exact", /"taste_profiles",\s*\n\s*"nutrition_goals",\s*\n\s*"dietary_restrictions"/.test(types));
   check("foundation adapter never invokes a table read", !/\.from\s*\(/.test(adapter));
   check("foundation adapter always reports deferred activation", (adapter.match(/return deferred\(\)/g) ?? []).length === 3);
-  check("runtime flags cannot activate live foundation reads", /liveFoundationReadsEnabled: false/.test(types) && /liveFoundationReadsEnabled: false/.test(flags));
+  // TS-2D successor amendment. TS-2A-C froze live activation as unreachable, which was correct for a
+  // round that shipped only the prepared seam. TS-2D activates it, so the assertion becomes "flags
+  // cannot activate live reads WITHOUT the full capability gate" rather than "cannot activate at
+  // all". Two lifecycle states are accepted and nothing else, and the successor state is held to a
+  // strictly stronger bar: the deferred fallback must still be spelled literally, and live must be
+  // fenced behind BOTH the Development environment and a live authenticated auth source, so no env
+  // value can resolve live outside Development.
+  check("runtime flags cannot activate live foundation reads", (() => {
+    const frozen = /liveFoundationReadsEnabled: false/.test(types) && /liveFoundationReadsEnabled: false/.test(flags);
+    if (frozen) return true;
+    return /liveFoundationReadsEnabled: false/.test(flags)
+      && /const TASTE_FOUNDATION_LIVE_ENVIRONMENT = "development" as const;/.test(flags)
+      && /environment === TASTE_FOUNDATION_LIVE_ENVIRONMENT/.test(flags)
+      && /authSource === "supabase-live" && authEnabled/.test(flags)
+      && /if \(environmentAllowsLive && authAllowsLive\)/.test(flags)
+      && !/liveFoundationReadsEnabled: true[\s\S]{0,200}foundationActivation: "deferred"/.test(flags);
+  })());
   check("profile row contract excludes denormalized favorites", !/favorite_restaurant_ids|favorite_menu_item_ids/.test([types, foundation].join("\n")));
   check("foundation contracts exclude private notes", !/health_notes|private_diet_notes|medical_sensitivity_notes/.test([types, foundation].join("\n")));
   check("meal adapter consumes canonical meal record types", /consumer-meals\/types/.test(behavior) && /ConsumerMealRecord/.test(behavior));
@@ -140,7 +156,21 @@ try {
   check("service has no Social dependency", !/(?:from|import)[^\n]*social/i.test(imports));
   check("service has no GPS dependency", !/(?:from|import)[^\n]*(gps|geolocation)/i.test(imports));
   check("service has no UI fixture dependency", !/(?:from|import)[^\n]*(fixture|mock\/|components|i18n)/i.test(imports));
-  check("implementation contains no migration or grant activation", !/create policy|grant select|alter table|auth\.uid\(\)/i.test(all));
+  // TS-2D successor amendment. The invariant being protected is that the MOBILE IMPLEMENTATION
+  // performs no ACL activation of its own — no DDL, no grant, no policy, no auth.uid() predicate
+  // smuggled into client code. That is unchanged and still enforced here. What changed is scope:
+  // the assertion now runs on EXECUTABLE source only, because TS-2D's code legitimately documents
+  // in prose which RLS predicate (auth.uid() = user_id) it relies on, and a comment explaining that
+  // the database owns owner scoping must not read as the client asserting it. ACL activation now
+  // lives in exactly one place: the migration, which is not part of this set.
+  const executableOnly = (source) => source
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+    })
+    .join("\n");
+  check("implementation contains no migration or grant activation", !/create policy|grant select|alter table|auth\.uid\(\)/i.test(executableOnly(all)));
   check("prepared factory cannot accept live activation", /foundationActivation !== "deferred"/.test(factories));
   const diagnostics = compileProductionGraph();
   check("Mobile production graph compiles", diagnostics.length === 0, { diagnostics });

@@ -5,4 +5,6 @@ export * from "./foundationMappers";
 export * from "./behaviorMappers";
 export * from "./consumerTasteProfileService";
 export * from "./factories";
+export * from "./supabaseTasteFoundationContracts";
 export * from "./adapters/preparedSupabaseConsumerTasteFoundationRepository";
+export * from "./adapters/supabaseConsumerTasteFoundationRepository";
