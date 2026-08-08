@@ -300,7 +300,13 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts1-mutations.mjs",
   "scripts/taste-similarity-ts3-guard.mjs",
   "scripts/taste-similarity-ts3-mutations.mjs",
-  "scripts/taste-similarity-ts3-smoke.mjs"
+  "scripts/taste-similarity-ts3-smoke.mjs",
+  // TS-3B-R1 extends the same enumerated successor allowance with its own three suites. The four
+  // similarity implementation files it edits are already named above. Still no prefix and no
+  // wildcard, and 26a keeps every TS-2D implementation path off limits regardless.
+  "scripts/taste-similarity-ts3b-r1-guard.mjs",
+  "scripts/taste-similarity-ts3b-r1-mutations.mjs",
+  "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
 const ALLOWED_PATHS = new Set([...CANDIDATE_MANIFEST, ...TS3_SUCCESSOR_MANIFEST]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));

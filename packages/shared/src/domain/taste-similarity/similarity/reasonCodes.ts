@@ -14,6 +14,12 @@ export const TASTE_SIMILARITY_REASON_CODES = [
   "shared_spice_preference",
   "shared_favorite_restaurant",
   "shared_favorite_menu_item",
+  // TS-3B-R1. Repeated CONSUMPTION is a weaker, observed signal than an explicit favorite, so it
+  // gets its own codes rather than reusing the favorite codes. "You have both eaten there more than
+  // once" must never be renderable as "you both marked it a favorite". The codes are ranked below
+  // the favorite codes, which keeps every pre-R1 reason sequence byte-identical.
+  "shared_repeated_restaurant_consumption",
+  "shared_repeated_menu_item_consumption",
   "limited_evidence"
 ] as const;
 

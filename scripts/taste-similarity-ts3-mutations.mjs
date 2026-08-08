@@ -206,26 +206,30 @@ mutation(2, "meal_pattern preference leaks into the taste comparison",
     return result.confidenceInputs.explicitEvidenceCount !== 2;
   }));
 
-// 3. meal history contributes to the score
-mutation(3, "meal history contributes to the score",
-  [{ file: COMPARATOR, from: 'if (behavior.behaviorKind !== "favorite") continue;', to: 'if (behavior.behaviorKind !== "favorite" && behavior.behaviorKind !== "meal_occurrence") continue;' }],
+// 3. a SINGLE meal occurrence contributes
+// TS-3B-R1 successor amendment. TS-3A/B excluded meal history categorically, so the original
+// mutation admitted meal evidence wholesale. R1 admits repeated consumption deliberately, so the
+// surviving invariant — the one TS-3A/B was really protecting — is that consuming something ONCE
+// never creates taste affinity. That is what this mutation now attacks.
+mutation(3, "a single meal occurrence creates taste affinity",
+  [{ file: COMPARATOR, from: "    if (evidenceIds.size >= MIN_REPEATED_MEAL_OCCURRENCES) qualifying.push(targetKey);", to: "    void evidenceIds;\n    qualifying.push(targetKey);" }],
   probe(({ compare, snap }) => {
-    const withMeals = compare(
-      snap("user-a", { preferences: [cuisine("a", "japanese")], behavior: [mealOccurrence("a", "rest-1", 1)] }),
-      snap("user-b", { preferences: [cuisine("b", "japanese")], behavior: [mealOccurrence("b", "rest-1", 2)] })
+    const single = compare(
+      snap("user-a", { behavior: [mealOccurrence("a", "rest-1", 1)] }),
+      snap("user-b", { behavior: [mealOccurrence("b", "rest-1", 2)] })
     );
-    return withMeals.confidenceInputs.behavioralEvidenceCount !== 0;
+    return single.status === "scored";
   }));
 
 // 4. ratings contribute to the score
 mutation(4, "rating evidence contributes to the score",
-  [{ file: COMPARATOR, from: 'if (behavior.behaviorKind !== "favorite") continue;', to: 'if (behavior.behaviorKind !== "favorite" && behavior.behaviorKind !== "rating") continue;' }],
+  [{ file: COMPARATOR, from: '    if (behavior.behaviorKind !== "meal_occurrence") continue;', to: '    if (behavior.behaviorKind === "rating") {\n      const ratingTarget = behavior.evidence.target;\n      if (ratingTarget !== null && ratingTarget.kind === "restaurant") {\n        addOccurrence(restaurantOccurrenceIds, ratingTarget.restaurantId, behavior.evidence.evidenceId);\n        addOccurrence(restaurantOccurrenceIds, ratingTarget.restaurantId, `${behavior.evidence.evidenceId}:implied`);\n      }\n    }\n    if (behavior.behaviorKind !== "meal_occurrence") continue;' }],
   probe(({ compare, snap }) => {
     const withRatings = compare(
-      snap("user-a", { preferences: [cuisine("a", "japanese")], behavior: [rating("a", "rest-1", 5)] }),
-      snap("user-b", { preferences: [cuisine("b", "japanese")], behavior: [rating("b", "rest-1", 1)] })
+      snap("user-a", { behavior: [rating("a", "rest-1", 5)] }),
+      snap("user-b", { behavior: [rating("b", "rest-1", 1)] })
     );
-    return withRatings.confidenceInputs.behavioralEvidenceCount !== 0;
+    return withRatings.status === "scored";
   }));
 
 // 5. missing evidence is scored as disagreement
@@ -340,14 +344,16 @@ mutation(16, "an out-of-range score is silently clamped instead of throwing",
   null);
 
 // 17. the policy version stops being pinned
-mutation(17, "the policy version is no longer pinned to taste-similarity-v1",
-  [{ file: POLICY, from: 'export const TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-v1" as const;', to: 'export const TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-latest" as const;' }],
+// TS-3B-R1 successor amendment: the anchor and expectation follow the active pinned version. The
+// invariant is unchanged — the version must be an explicit pin, never a floating label.
+mutation(17, "the policy version becomes a floating label instead of an explicit pin",
+  [{ file: POLICY, from: 'export const TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-v1.1" as const;', to: 'export const TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-latest" as const;' }],
   probe(({ compare, snap }) => {
     const result = compare(
       snap("user-a", { preferences: [cuisine("a", "japanese")] }),
       snap("user-b", { preferences: [cuisine("b", "japanese")] })
     );
-    return result.policyVersion !== "taste-similarity-v1";
+    return result.policyVersion !== "taste-similarity-v1.1";
   }));
 
 // 18. an unsupported snapshot schema is scored anyway
@@ -381,9 +387,11 @@ mutation(21, "GPS, premium or activity contribution is introduced",
 
 // 22. a numeric confidence is fabricated
 mutation(22, "a numeric confidence value is fabricated",
-  [{ file: TYPES, from: "  truncation: {\n    favoritesTruncatedForEither: boolean;\n  };", to: "  truncation: {\n    favoritesTruncatedForEither: boolean;\n  };\n  confidenceScore: number;" },
-   { file: COMPARATOR, from: "    truncation: {\n      favoritesTruncatedForEither: leftFacts.favoritesTruncated || rightFacts.favoritesTruncated\n    }", to: "    truncation: {\n      favoritesTruncatedForEither: leftFacts.favoritesTruncated || rightFacts.favoritesTruncated\n    },\n    confidenceScore: comparableDimensionCount / 5" },
-   { file: COMPARATOR, from: "    sourceAvailability: { tasteProfileAvailableForBoth: false, favoritesAvailableForBoth: false },\n    truncation: { favoritesTruncatedForEither: false }", to: "    sourceAvailability: { tasteProfileAvailableForBoth: false, favoritesAvailableForBoth: false },\n    truncation: { favoritesTruncatedForEither: false },\n    confidenceScore: 0" }],
+  // TS-3B-R1 successor amendment: anchors follow the widened confidence-input block. The invariant is
+  // unchanged — no numeric confidence may appear anywhere in the contract.
+  [{ file: TYPES, from: "  repeatedMealEvidence: {\n    qualifyingRestaurantTargets: number;", to: "  confidenceScore: number;\n  repeatedMealEvidence: {\n    qualifyingRestaurantTargets: number;" },
+   { file: COMPARATOR, from: "  return {\n    comparableDimensionCount,\n    unknownDimensionCount,\n    evidenceCount:", to: "  return {\n    confidenceScore: comparableDimensionCount / 7,\n    comparableDimensionCount,\n    unknownDimensionCount,\n    evidenceCount:" },
+   { file: COMPARATOR, from: "  return {\n    comparableDimensionCount: 0,\n    unknownDimensionCount: 0,", to: "  return {\n    confidenceScore: 0,\n    comparableDimensionCount: 0,\n    unknownDimensionCount: 0," }],
   null);
 
 // 23. reason code ordering becomes locale- or insertion-dependent

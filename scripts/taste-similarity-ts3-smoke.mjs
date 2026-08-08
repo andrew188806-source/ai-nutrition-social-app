@@ -268,7 +268,10 @@ const snapshot = (userId, { preferences = [], behavior = [], goals = [], restric
   unchangedBy("social_logistics preference", { preferences: [...baseA.preferences, payment("a", "split_bill")] }, 18);
   unchangedBy("nutrition goal", { goals: [goal("a")] }, 19);
   unchangedBy("dietary restriction", { restrictions: [restriction("a", "peanut")] }, 20);
-  unchangedBy("meal history", { behavior: [mealOccurrence("a", "rest-1", 1), mealOccurrence("a", "rest-1", 2)] }, 23);
+  // TS-3B-R1 successor amendment. Meal history is no longer categorically excluded, but ONE-SIDED
+  // meal history still changes nothing: a repeated set on a single side can never become comparable,
+  // so neither the score nor the comparable set moves.
+  unchangedBy("one-sided meal history", { behavior: [mealOccurrence("a", "rest-1", 1), mealOccurrence("a", "rest-1", 2)] }, 23);
 
   // sourceConfidence and rating value must not move anything.
   const lowConfidence = compareTasteSimilarity(
@@ -298,7 +301,16 @@ const snapshot = (userId, { preferences = [], behavior = [], goals = [], restric
     "24 every score falls within the canonical 0..1 range"
   );
   expect(cases.every((result) => result.status === "scored" || !("score" in result)), "25 no not_scored result carries a score key");
-  expect(cases.every((result) => result.policyVersion === "taste-similarity-v1"), "26 the policy version is pinned on every result");
+  // TS-3B-R1 successor amendment. The invariant is that EVERY result — scored or not — carries the
+  // one active policy version, so a caller can never receive an unstamped or mixed-version result.
+  // Pinning the literal `taste-similarity-v1` here would have turned R1's mandatory version bump
+  // into a smoke failure, which would punish exactly the behaviour the contract requires.
+  expect(
+    cases.every((result) => result.policyVersion === TASTE_SIMILARITY_POLICY_VERSION) &&
+      /^taste-similarity-v\d+(?:\.\d+)?$/.test(TASTE_SIMILARITY_POLICY_VERSION),
+    "26 the one active policy version is pinned on every result",
+    TASTE_SIMILARITY_POLICY_VERSION
+  );
   expect(cases.every((result) => result.snapshotSchemaVersion === "taste-profile-snapshot-v1"), "27 the snapshot schema version is stamped on every result");
 
   const unsupported = compareTasteSimilarity(

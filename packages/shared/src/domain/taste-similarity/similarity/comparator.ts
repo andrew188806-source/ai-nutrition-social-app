@@ -2,6 +2,7 @@ import type { PreferenceEvidence } from "../preference";
 import type { BehavioralEvidence } from "../behavior";
 import type { TasteProfileSnapshot } from "../snapshot";
 import {
+  MIN_REPEATED_MEAL_OCCURRENCES,
   TASTE_SIMILARITY_POLICY_VERSION,
   TASTE_SIMILARITY_SUPPORTED_SNAPSHOT_SCHEMA_VERSION,
   roundTasteSimilarityScore
@@ -37,6 +38,27 @@ import type {
 // The dividing line this file keeps: MISSING evidence is `unknown` and leaves the denominator
 // entirely; PRESENT evidence that fails to overlap is a measured 0. Conflating the two is the
 // single most damaging thing a similarity scorer can do, so the two paths never meet.
+//
+// TS-3B-R1 — REPEATED OBSERVED CONSUMPTION as a weaker behavioural fallback.
+//
+// `consumed once != liked`. A single meal occurrence proves a person ate somewhere, not that they
+// enjoyed it, so one occurrence never creates taste affinity. Repeated consumption of the SAME
+// canonical target inside the bounded snapshot is a genuine, if weaker, behavioural signal.
+//
+// Two rules keep it honest:
+//
+//   1. FALLBACK, NEVER ADDITIVE. Per identity family — restaurants, then menu items — the repeated
+//      dimension activates only when the corresponding FAVORITE dimension is not comparable. A pair
+//      who both marked favorites and both ate repeatedly casts one vote for that behavioural family,
+//      not two. Evidence priority is enforced by this suppression rule, never by a numeric weight:
+//      TS-1 ranks `user_action` above `observed_consumption` qualitatively and assigns no magnitudes.
+//
+//   2. BINARY, NEVER GRADED. Crossing MIN_REPEATED_MEAL_OCCURRENCES is all there is. Visit counts,
+//      recency, timestamps, `sourceConfidence` and consumed ratio never reach the score. R1
+//      implements no decay of any kind — the bounded snapshot is the only temporal boundary.
+//
+// A dimension whose family has no meal evidence at all on either side does not appear in the result
+// at all, so a snapshot pair without meals scores exactly as it did under `taste-similarity-v1`.
 
 const EMPTY_DIMENSIONS: readonly TasteSimilarityDimension[] = Object.freeze([]);
 
@@ -130,8 +152,53 @@ export function compareTasteSimilarity(
     }
   }
 
+  // --- repeated observed consumption: restaurant family ------------------------------------------
+  // Fallback only. `favoriteRestaurants !== null` means both users supplied canonical favorite
+  // restaurants, so that stronger dimension already speaks for this behavioural family and the
+  // weaker one is suppressed rather than added alongside it.
+  const restaurantFamilyHasMeals = leftFacts.observedMealRestaurants || rightFacts.observedMealRestaurants;
+  const restaurantSuppressedByFavorites = favoriteRestaurants !== null && restaurantFamilyHasMeals;
+  let repeatedRestaurantContribution = 0;
+  if (favoriteRestaurants === null && restaurantFamilyHasMeals) {
+    const repeatedRestaurants = compareSets(leftFacts.repeatedRestaurantIds, rightFacts.repeatedRestaurantIds);
+    if (repeatedRestaurants === null) {
+      unknowns.push("repeated_meal_restaurant");
+    } else {
+      outcomes.push({ dimension: "repeated_meal_restaurant", agreement: repeatedRestaurants.agreement });
+      repeatedRestaurantContribution =
+        (leftFacts.repeatedRestaurantIds?.length ?? 0) + (rightFacts.repeatedRestaurantIds?.length ?? 0);
+      if (repeatedRestaurants.intersectionSize > 0) {
+        overlaps.push("repeated_meal_restaurant");
+        reasonCodes.add("shared_repeated_restaurant_consumption");
+      }
+    }
+  }
+
+  // --- repeated observed consumption: menu item family -------------------------------------------
+  const menuItemFamilyHasMeals = leftFacts.observedMealMenuItems || rightFacts.observedMealMenuItems;
+  const menuItemSuppressedByFavorites = favoriteMenuItems !== null && menuItemFamilyHasMeals;
+  let repeatedMenuItemContribution = 0;
+  if (favoriteMenuItems === null && menuItemFamilyHasMeals) {
+    const repeatedMenuItems = compareSets(leftFacts.repeatedMenuItemIds, rightFacts.repeatedMenuItemIds);
+    if (repeatedMenuItems === null) {
+      unknowns.push("repeated_meal_menu_item");
+    } else {
+      outcomes.push({ dimension: "repeated_meal_menu_item", agreement: repeatedMenuItems.agreement });
+      repeatedMenuItemContribution =
+        (leftFacts.repeatedMenuItemIds?.length ?? 0) + (rightFacts.repeatedMenuItemIds?.length ?? 0);
+      if (repeatedMenuItems.intersectionSize > 0) {
+        overlaps.push("repeated_meal_menu_item");
+        reasonCodes.add("shared_repeated_menu_item_consumption");
+      }
+    }
+  }
+
   const comparableDimensions = outcomes.map((outcome) => outcome.dimension);
-  const confidenceInputs = buildConfidenceInputs(left, right, leftFacts, rightFacts, comparableDimensions.length, unknowns.length);
+  const confidenceInputs = buildConfidenceInputs(left, right, leftFacts, rightFacts, comparableDimensions.length, unknowns.length, {
+    repeatedBehavioralContribution: repeatedRestaurantContribution + repeatedMenuItemContribution,
+    restaurantSuppressedByFavorites,
+    menuItemSuppressedByFavorites
+  });
 
   if (comparableDimensions.length === 0) {
     // Distinguish "neither side has any v1 evidence" from "one side has none". Both are unscorable,
@@ -193,12 +260,18 @@ type TasteFacts = {
   spice: string | null;
   favoriteRestaurantIds: readonly string[] | null;
   favoriteMenuItemIds: readonly string[] | null;
+  repeatedRestaurantIds: readonly string[] | null;
+  repeatedMenuItemIds: readonly string[] | null;
+  observedMealRestaurants: boolean;
+  observedMealMenuItems: boolean;
   evidenceCount: number;
   explicitEvidenceCount: number;
   behavioralEvidenceCount: number;
   hasTasteProfileSource: boolean;
   hasFavoritesSource: boolean;
+  hasMealsSource: boolean;
   favoritesTruncated: boolean;
+  mealsTruncated: boolean;
 };
 
 // Reads ONLY the v1 food-taste surface. meal_pattern / dining_context / social_logistics
@@ -232,21 +305,55 @@ function collectTasteFacts(snapshot: TasteProfileSnapshot): TasteFacts {
     }
   }
 
+  // Distinct meal-occurrence evidence ids per canonical target. Keyed by evidence id because that is
+  // the frozen dedup authority (`normalizeTasteEvidenceList` collapses identical records by id and
+  // rejects conflicting ones), so a record repeated under the SAME id can never fake repetition.
+  const restaurantOccurrenceIds = new Map<string, Set<string>>();
+  const menuItemOccurrenceIds = new Map<string, Set<string>>();
+
   for (const behavior of snapshot.behavior as readonly BehavioralEvidence[]) {
-    if (behavior.behaviorKind !== "favorite") continue;
+    if (behavior.behaviorKind === "favorite") {
+      const target = behavior.evidence.target;
+      if (behavior.favoriteKind === "restaurant" && target.kind === "restaurant") {
+        favoriteRestaurantIds.push(target.restaurantId);
+        behavioralEvidenceCount += 1;
+      } else if (behavior.favoriteKind === "menu_item" && target.kind === "menu_item") {
+        // Menu items are addressed by the canonical restaurant + menu item pair, never by name.
+        favoriteMenuItemIds.push(`${target.restaurantId}::${target.menuItemId}`);
+        behavioralEvidenceCount += 1;
+      }
+      continue;
+    }
+
+    // TS-3B-R1. Only durable, observed meal consumption is eligible. `interpretation` and the
+    // meal-record origin are already pinned by the frozen normalizer; `confidenceBasis` is not, so it
+    // is checked here — a meal record carrying any other basis is not observed consumption and is
+    // not counted. Ratings, corrections, planned meals, searches and recommendation feedback are
+    // never `meal_occurrence` behavior and therefore cannot reach this branch at all.
+    if (behavior.behaviorKind !== "meal_occurrence") continue;
+    if (behavior.interpretation !== "observed") continue;
+    if (behavior.evidence.confidenceBasis !== "observed_consumption") continue;
     const target = behavior.evidence.target;
-    if (behavior.favoriteKind === "restaurant" && target.kind === "restaurant") {
-      favoriteRestaurantIds.push(target.restaurantId);
-      behavioralEvidenceCount += 1;
-    } else if (behavior.favoriteKind === "menu_item" && target.kind === "menu_item") {
-      // Menu items are addressed by the canonical restaurant + menu item pair, never by name.
-      favoriteMenuItemIds.push(`${target.restaurantId}::${target.menuItemId}`);
-      behavioralEvidenceCount += 1;
+    if (target === null) continue;
+    // `consumedRatio` is deliberately not read: the frozen contract normalizes it to 0..1 and
+    // attaches no meaning to any particular value, so any threshold here would be an invented
+    // product rule. A durable meal occurrence is the unit of evidence.
+    //
+    // A `branch` target is skipped outright. R1 introduces no branch dimension, and treating a
+    // branch reference as a restaurant visit would be an inference this round never authorized.
+    if (target.kind === "restaurant") {
+      addOccurrence(restaurantOccurrenceIds, target.restaurantId, behavior.evidence.evidenceId);
+    } else if (target.kind === "menu_item") {
+      addOccurrence(menuItemOccurrenceIds, `${target.restaurantId}::${target.menuItemId}`, behavior.evidence.evidenceId);
     }
   }
 
+  const repeatedRestaurantIds = selectRepeatedTargets(restaurantOccurrenceIds);
+  const repeatedMenuItemIds = selectRepeatedTargets(menuItemOccurrenceIds);
+
   const favoritesState = snapshot.sourceStates.favorites.status;
   const tasteProfileState = snapshot.sourceStates.taste_profile.status;
+  const mealsState = snapshot.sourceStates.meals.status;
 
   return {
     cuisines: cuisines.length ? sortUnique(cuisines) : null,
@@ -254,13 +361,44 @@ function collectTasteFacts(snapshot: TasteProfileSnapshot): TasteFacts {
     spice,
     favoriteRestaurantIds: favoriteRestaurantIds.length ? sortUnique(favoriteRestaurantIds) : null,
     favoriteMenuItemIds: favoriteMenuItemIds.length ? sortUnique(favoriteMenuItemIds) : null,
+    repeatedRestaurantIds: repeatedRestaurantIds.length ? repeatedRestaurantIds : null,
+    repeatedMenuItemIds: repeatedMenuItemIds.length ? repeatedMenuItemIds : null,
+    // "Any eligible meal evidence was observed for this identity family", which is what decides
+    // whether the fallback dimension exists at all. A family with no meal evidence on either side is
+    // omitted from the result entirely, preserving pre-R1 output byte for byte.
+    observedMealRestaurants: restaurantOccurrenceIds.size > 0,
+    observedMealMenuItems: menuItemOccurrenceIds.size > 0,
     evidenceCount: explicitEvidenceCount + behavioralEvidenceCount,
     explicitEvidenceCount,
     behavioralEvidenceCount,
     hasTasteProfileSource: tasteProfileState === "available" || tasteProfileState === "empty",
     hasFavoritesSource: favoritesState === "available" || favoritesState === "empty",
-    favoritesTruncated: snapshot.evidenceWindow.favorites.truncation !== "not_truncated"
+    hasMealsSource: mealsState === "available" || mealsState === "empty",
+    favoritesTruncated: snapshot.evidenceWindow.favorites.truncation !== "not_truncated",
+    // Truncation is REPORTED, never acted on. A short window can only under-report repetition, so it
+    // must not be converted into a negative assertion about the pair.
+    mealsTruncated: snapshot.evidenceWindow.meals.truncation !== "not_truncated"
   };
+}
+
+function addOccurrence(index: Map<string, Set<string>>, targetKey: string, evidenceId: string): void {
+  const existing = index.get(targetKey);
+  if (existing) {
+    existing.add(evidenceId);
+    return;
+  }
+  index.set(targetKey, new Set([evidenceId]));
+}
+
+// Binary qualification: a target either crossed the repetition boundary or it did not. How far past
+// it a target went is deliberately discarded here, which is what makes an occurrence multiplier
+// impossible to add downstream without changing this function.
+function selectRepeatedTargets(index: Map<string, Set<string>>): readonly string[] {
+  const qualifying: string[] = [];
+  for (const [targetKey, evidenceIds] of index) {
+    if (evidenceIds.size >= MIN_REPEATED_MEAL_OCCURRENCES) qualifying.push(targetKey);
+  }
+  return sortUnique(qualifying);
 }
 
 // Returns null when the dimension is NOT comparable — i.e. at least one side contributed no
@@ -286,22 +424,43 @@ function buildConfidenceInputs(
   leftFacts: TasteFacts,
   rightFacts: TasteFacts,
   comparableDimensionCount: number,
-  unknownDimensionCount: number
+  unknownDimensionCount: number,
+  repeated: {
+    repeatedBehavioralContribution: number;
+    restaurantSuppressedByFavorites: boolean;
+    menuItemSuppressedByFavorites: boolean;
+  }
 ): TasteSimilarityConfidenceInputs {
   void left;
   void right;
+  // Only repetition that actually entered a comparable dimension counts as behavioural evidence.
+  // Suppressed fallback evidence did not contribute to the score and must not inflate the count that
+  // decides whether the pair is flagged as thinly evidenced.
+  const behavioralEvidenceCount =
+    leftFacts.behavioralEvidenceCount + rightFacts.behavioralEvidenceCount + repeated.repeatedBehavioralContribution;
   return {
     comparableDimensionCount,
     unknownDimensionCount,
-    evidenceCount: leftFacts.evidenceCount + rightFacts.evidenceCount,
+    evidenceCount:
+      leftFacts.evidenceCount + rightFacts.evidenceCount + repeated.repeatedBehavioralContribution,
     explicitEvidenceCount: leftFacts.explicitEvidenceCount + rightFacts.explicitEvidenceCount,
-    behavioralEvidenceCount: leftFacts.behavioralEvidenceCount + rightFacts.behavioralEvidenceCount,
+    behavioralEvidenceCount,
     sourceAvailability: {
       tasteProfileAvailableForBoth: leftFacts.hasTasteProfileSource && rightFacts.hasTasteProfileSource,
-      favoritesAvailableForBoth: leftFacts.hasFavoritesSource && rightFacts.hasFavoritesSource
+      favoritesAvailableForBoth: leftFacts.hasFavoritesSource && rightFacts.hasFavoritesSource,
+      mealsAvailableForBoth: leftFacts.hasMealsSource && rightFacts.hasMealsSource
     },
     truncation: {
-      favoritesTruncatedForEither: leftFacts.favoritesTruncated || rightFacts.favoritesTruncated
+      favoritesTruncatedForEither: leftFacts.favoritesTruncated || rightFacts.favoritesTruncated,
+      mealsTruncatedForEither: leftFacts.mealsTruncated || rightFacts.mealsTruncated
+    },
+    repeatedMealEvidence: {
+      qualifyingRestaurantTargets:
+        (leftFacts.repeatedRestaurantIds?.length ?? 0) + (rightFacts.repeatedRestaurantIds?.length ?? 0),
+      qualifyingMenuItemTargets:
+        (leftFacts.repeatedMenuItemIds?.length ?? 0) + (rightFacts.repeatedMenuItemIds?.length ?? 0),
+      restaurantSuppressedByFavorites: repeated.restaurantSuppressedByFavorites,
+      menuItemSuppressedByFavorites: repeated.menuItemSuppressedByFavorites
     }
   };
 }
@@ -313,8 +472,14 @@ function emptyConfidenceInputs(): TasteSimilarityConfidenceInputs {
     evidenceCount: 0,
     explicitEvidenceCount: 0,
     behavioralEvidenceCount: 0,
-    sourceAvailability: { tasteProfileAvailableForBoth: false, favoritesAvailableForBoth: false },
-    truncation: { favoritesTruncatedForEither: false }
+    sourceAvailability: { tasteProfileAvailableForBoth: false, favoritesAvailableForBoth: false, mealsAvailableForBoth: false },
+    truncation: { favoritesTruncatedForEither: false, mealsTruncatedForEither: false },
+    repeatedMealEvidence: {
+      qualifyingRestaurantTargets: 0,
+      qualifyingMenuItemTargets: 0,
+      restaurantSuppressedByFavorites: false,
+      menuItemSuppressedByFavorites: false
+    }
   };
 }
 

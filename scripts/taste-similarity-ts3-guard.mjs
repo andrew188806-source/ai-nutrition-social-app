@@ -227,7 +227,19 @@ try {
   const moduleSpecifiers = [...executable.matchAll(/from\s+"([^"]+)"/g)].map((match) => match[1]);
 
   // ---- versioning authority ---------------------------------------------------------------------
-  check("policy version is exactly taste-similarity-v1", /TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-v1" as const;/.test(policy));
+  // TS-3B-R1 successor amendment. The invariant is that the ACTIVE policy version is an explicitly
+  // pinned member of the taste-similarity version line and that the superseded version stays
+  // recorded — not that the line is frozen at v1 forever. R1 added two behavioural dimensions, so
+  // the same snapshot pair can score differently and the version MUST advance; pinning v1 here would
+  // have made the mandatory bump fail the guard that exists to keep versioning honest. Two lifecycle
+  // states are accepted and nothing else, and the successor is held to a strictly stronger bar: it
+  // must also carry an ordered history whose first entry is the original v1.
+  check("policy version is an explicitly pinned member of the taste-similarity version line", (() => {
+    const original = /TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-v1" as const;/.test(policy);
+    if (original) return true;
+    return /TASTE_SIMILARITY_POLICY_VERSION = "taste-similarity-v1\.\d+" as const;/.test(policy)
+      && /TASTE_SIMILARITY_POLICY_VERSION_HISTORY = \[\s*\n\s*"taste-similarity-v1",/.test(policy);
+  })());
   check("policy version is stamped on every result shape", /policyVersion: typeof TASTE_SIMILARITY_POLICY_VERSION/.test(types)
     && (comparator.match(/policyVersion: TASTE_SIMILARITY_POLICY_VERSION/g) ?? []).length === 2);
   check("supported snapshot schema is derived from the frozen TS-2 constant, never re-declared",
@@ -286,9 +298,31 @@ try {
   check("social_logistics preferences are excluded", !/social_logistics/.test(executable));
   check("nutrition goals are excluded", !/snapshot\.goals|GoalEvidence|daily_calories_target|nutrition_goal/.test(executable));
   check("dietary restrictions are excluded", !/snapshot\.restrictions|RestrictionEvidence|restrictionType|enforcement/.test(executable));
-  check("meal occurrences are excluded", !/meal_occurrence|MealOccurrence|occurredAt|consumedRatio|mealType/.test(executable));
+  // TS-3B-R1 successor amendment. TS-3A/B excluded meal history outright, which was correct for a
+  // round that shipped only explicit and user-action evidence. R1 admits REPEATED observed
+  // consumption as a deliberately weaker fallback. What must not come back is everything TS-3A/B was
+  // actually protecting against: a single meal creating affinity, and the per-record meal attributes
+  // — timestamp, consumed ratio, meal type — reaching the score. Those stay banned here, and the
+  // repetition boundary itself must be a named policy constant rather than a literal in the scorer.
+  check("meal evidence contributes only through the named repetition boundary", (() => {
+    const excluded = !/meal_occurrence|MealOccurrence|occurredAt|consumedRatio|mealType/.test(executable);
+    if (excluded) return true;
+    return /MIN_REPEATED_MEAL_OCCURRENCES/.test(policy)
+      && /evidenceIds\.size >= MIN_REPEATED_MEAL_OCCURRENCES/.test(comparator)
+      && !/occurredAt|consumedRatio|mealType/.test(executable);
+  })());
   check("ratings are excluded", !/ratingValue|RatingEvidence|behaviorKind === "rating"|dislikeReasons/.test(executable));
-  check("only the favorite behavior kind is read", /behavior\.behaviorKind !== "favorite"/.test(comparator));
+  // TS-3B-R1 successor amendment. The favorite branch is still the only path that reads a favorite,
+  // and the only other behaviour kind the scorer may read is a durable observed meal occurrence.
+  // Every other behaviour kind must still be skipped explicitly.
+  check("only favorite and observed meal-occurrence behavior is read", (() => {
+    const original = /behavior\.behaviorKind !== "favorite"/.test(comparator);
+    if (original) return true;
+    return /behavior\.behaviorKind === "favorite"/.test(comparator)
+      && /behavior\.behaviorKind !== "meal_occurrence"\) continue;/.test(comparator)
+      && /behavior\.interpretation !== "observed"\) continue;/.test(comparator)
+      && /behavior\.evidence\.confidenceBasis !== "observed_consumption"\) continue;/.test(comparator);
+  })());
   // Scoped to executable source: the policy file legitimately names the excluded concept in prose to
   // record WHY it is excluded, and a comment explaining an exclusion must not read as a use of it.
   check("sourceConfidence never influences the score", !/sourceConfidence/.test(executable));
