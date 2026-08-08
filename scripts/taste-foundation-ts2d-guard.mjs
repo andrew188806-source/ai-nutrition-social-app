@@ -327,6 +327,15 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts3d-guard.mjs",
   "scripts/taste-similarity-ts3d-mutations.mjs",
   "scripts/taste-similarity-ts3d-smoke.mjs",
+  // TS-3E extends the same enumerated successor allowance with its pure composition module and three
+  // suites. Still no prefix and no wildcard, and 26a keeps every TS-2D implementation path off limits.
+  "packages/shared/src/domain/taste-similarity/comparison/compose.ts",
+  "packages/shared/src/domain/taste-similarity/comparison/index.ts",
+  "packages/shared/src/domain/taste-similarity/comparison/policy.ts",
+  "packages/shared/src/domain/taste-similarity/comparison/types.ts",
+  "scripts/taste-similarity-ts3e-guard.mjs",
+  "scripts/taste-similarity-ts3e-mutations.mjs",
+  "scripts/taste-similarity-ts3e-smoke.mjs",
   "scripts/taste-similarity-ts3b-r1-mutations.mjs",
   "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
