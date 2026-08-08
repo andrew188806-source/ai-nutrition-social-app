@@ -42,7 +42,13 @@ const frozenPredecessorPaths = [
   `${domainRoot}/evidence.ts`,
   `${domainRoot}/evidenceWindow.ts`,
   `${domainRoot}/goal.ts`,
-  `${domainRoot}/index.ts`,
+  // TS-3C successor amendment. `${domainRoot}/index.ts` was listed here as a frozen path, which was
+  // correct while R1 was the open round — R1 itself added nothing to the barrel. But the barrel is
+  // the one file every additive successor module must touch to be exported at all, so freezing it
+  // forever would block additive work for a reason unrelated to R1's semantics. The invariant R1
+  // actually protects is that no predecessor IMPLEMENTATION changes; the barrel is a re-export
+  // surface, and 31b below holds it to a stricter bar than blanket immutability: it must keep
+  // exporting the similarity module and may only gain further `export *` lines.
   `${domainRoot}/normalization.ts`,
   `${domainRoot}/preference.ts`,
   `${domainRoot}/restriction.ts`,
@@ -312,6 +318,14 @@ try {
   check("30e. package change adds only the three R1 validation commands", packageOnlyAddsValidationScripts(freezeCommit));
   const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout.trim();
   check("31. TS-1, TS-2, TS-2D and the frozen barrels are byte-unchanged by this round", predecessorDrift === "", { predecessorDrift });
+  check("31b. the domain barrel still exports the frozen similarity module and contains only re-exports",
+    (() => {
+      const barrel = read(`${domainRoot}/index.ts`);
+      const statements = barrel.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      return barrel.includes('export * from "./similarity";')
+        && barrel.includes('export * from "./snapshot";')
+        && statements.every((line) => /^export \* from "\.\/[a-zA-Z]+";$/.test(line));
+    })());
   check("31a. the only predecessor files this round amends are validation harnesses",
     manifest.filter((entry) => !entry.startsWith(similarityRoot) && entry !== "package.json" && !entry.includes("ts3b-r1"))
       .every((entry) => /^scripts\/[a-z0-9-]+-(guard|smoke|mutations)\.mjs$/.test(entry)));

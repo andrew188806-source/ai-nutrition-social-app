@@ -8,3 +8,4 @@ export * from "./sourceState";
 export * from "./evidenceWindow";
 export * from "./snapshot";
 export * from "./similarity";
+export * from "./compatibility";
