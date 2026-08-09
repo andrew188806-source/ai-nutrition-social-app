@@ -336,6 +336,16 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts3e-guard.mjs",
   "scripts/taste-similarity-ts3e-mutations.mjs",
   "scripts/taste-similarity-ts3e-smoke.mjs",
+  // TS-4 extends the same enumerated successor allowance with its pure evidence-confidence module and
+  // three suites. Still no prefix and no wildcard, and 26a keeps every TS-2D implementation path off
+  // limits regardless.
+  "packages/shared/src/domain/taste-similarity/confidence/compute.ts",
+  "packages/shared/src/domain/taste-similarity/confidence/index.ts",
+  "packages/shared/src/domain/taste-similarity/confidence/policy.ts",
+  "packages/shared/src/domain/taste-similarity/confidence/types.ts",
+  "scripts/taste-similarity-ts4-guard.mjs",
+  "scripts/taste-similarity-ts4-mutations.mjs",
+  "scripts/taste-similarity-ts4-smoke.mjs",
   "scripts/taste-similarity-ts3b-r1-mutations.mjs",
   "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
