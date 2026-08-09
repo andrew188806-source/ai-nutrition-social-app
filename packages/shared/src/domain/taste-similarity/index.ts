@@ -12,3 +12,4 @@ export * from "./compatibility";
 export * from "./goal-restriction";
 export * from "./comparison";
 export * from "./confidence";
+export * from "./cold-start";

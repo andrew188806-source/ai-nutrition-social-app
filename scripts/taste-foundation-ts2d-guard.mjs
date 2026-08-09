@@ -346,6 +346,16 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts4-guard.mjs",
   "scripts/taste-similarity-ts4-mutations.mjs",
   "scripts/taste-similarity-ts4-smoke.mjs",
+  // TS-5 extends the same enumerated successor allowance with its pure cold-start policy module and
+  // three suites. Still no prefix and no wildcard, and 26a keeps every TS-2D implementation path off
+  // limits regardless.
+  "packages/shared/src/domain/taste-similarity/cold-start/assess.ts",
+  "packages/shared/src/domain/taste-similarity/cold-start/index.ts",
+  "packages/shared/src/domain/taste-similarity/cold-start/policy.ts",
+  "packages/shared/src/domain/taste-similarity/cold-start/types.ts",
+  "scripts/taste-similarity-ts5-guard.mjs",
+  "scripts/taste-similarity-ts5-mutations.mjs",
+  "scripts/taste-similarity-ts5-smoke.mjs",
   "scripts/taste-similarity-ts3b-r1-mutations.mjs",
   "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
