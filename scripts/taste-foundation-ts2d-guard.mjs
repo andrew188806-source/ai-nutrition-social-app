@@ -356,6 +356,16 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts5-guard.mjs",
   "scripts/taste-similarity-ts5-mutations.mjs",
   "scripts/taste-similarity-ts5-smoke.mjs",
+  // TS-6 extends the same enumerated successor allowance with its pure shared-adapter module and
+  // three suites. Still no prefix and no wildcard, and 26a keeps every TS-2D implementation path off
+  // limits regardless.
+  "packages/shared/src/domain/taste-similarity/shared-adapter/adapt.ts",
+  "packages/shared/src/domain/taste-similarity/shared-adapter/index.ts",
+  "packages/shared/src/domain/taste-similarity/shared-adapter/policy.ts",
+  "packages/shared/src/domain/taste-similarity/shared-adapter/types.ts",
+  "scripts/taste-similarity-ts6-guard.mjs",
+  "scripts/taste-similarity-ts6-mutations.mjs",
+  "scripts/taste-similarity-ts6-smoke.mjs",
   "scripts/taste-similarity-ts3b-r1-mutations.mjs",
   "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
