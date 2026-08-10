@@ -264,8 +264,27 @@ try {
   check("31a. branch remains main", branch === "main", { branch });
   check("31b. TS-3E baseline remains ancestor authority", git(["merge-base", "--is-ancestor", baseline, "HEAD"], true).status === 0, { head });
   check("31c. package change adds only the three TS-3E validation commands", packageOnlyAddsValidationScripts(freezeCommit));
-  const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout.trim();
-  check("32. every frozen component implementation is byte-unchanged by this round", predecessorDrift === "", { predecessorDrift });
+  // SR-1A is the first successor round to add files under `supabase/`, a prefix this list covers
+  // wholesale. Blanket-relaxing the prefix would hide real drift, so the successor's paths are
+  // enumerated EXACTLY, path by path, with no prefix and no wildcard — anything else under the prefix
+  // still fails here. The companion check below is strictly STRONGER than the original assertion:
+  // it proves the allowance cannot reach a migration or a deployable Edge Function entrypoint, which
+  // the original directory-granularity check never asserted.
+  const SR1A_SUCCESSOR_PATHS = Object.freeze([
+    "supabase/functions/_shared/social-pair/index.ts",
+    "supabase/functions/_shared/social-pair/serverPairComparison.ts",
+    "supabase/functions/_shared/social-pair/serverTasteFoundationRepository.ts",
+    "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
+    "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
+  ]);
+  const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
+    .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)
+    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry));
+  check("32a. the SR-1A successor allowance is enumerated and cannot reach a migration or a deployable Edge Function",
+    SR1A_SUCCESSOR_PATHS.every((entry) => entry.startsWith("supabase/functions/_shared/")) &&
+      !SR1A_SUCCESSOR_PATHS.some((entry) => /[*?\[\]{}]/.test(entry) || entry.endsWith(".sql")) &&
+      new Set(SR1A_SUCCESSOR_PATHS).size === SR1A_SUCCESSOR_PATHS.length);
+  check("32. every frozen component implementation is byte-unchanged by this round", predecessorDrift.length === 0, { predecessorDrift });
   check("32a. the only predecessor file this round amends is a validation harness",
     manifest.filter((entry) => !entry.startsWith(comparisonRoot) && entry !== "package.json"
       && entry !== `${domainRoot}/index.ts` && !entry.includes("ts3e"))

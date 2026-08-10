@@ -202,8 +202,27 @@ try {
   check("package change adds only the three TS-3 validation commands", packageOnlyAddsValidationScripts(freezeCommit));
   check("manifest contains no Mobile, Supabase, migration, RPC, Edge Function, UI, Social or GPS path",
     !manifest.some((entry) => /^(apps\/|supabase\/|lib\/)|migration|rpc|edge-function|components|social|gps/i.test(entry)));
-  const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout.trim();
-  check("no TS-1, TS-2 or TS-2D frozen source is modified by this round", predecessorDrift === "", { predecessorDrift });
+  // SR-1A is the first successor round to add files under `supabase/`, a prefix this list covers
+  // wholesale. Blanket-relaxing the prefix would hide real drift, so the successor's paths are
+  // enumerated EXACTLY, path by path, with no prefix and no wildcard — anything else under the prefix
+  // still fails here. The companion check below is strictly STRONGER than the original assertion:
+  // it proves the allowance cannot reach a migration or a deployable Edge Function entrypoint, which
+  // the original directory-granularity check never asserted.
+  const SR1A_SUCCESSOR_PATHS = Object.freeze([
+    "supabase/functions/_shared/social-pair/index.ts",
+    "supabase/functions/_shared/social-pair/serverPairComparison.ts",
+    "supabase/functions/_shared/social-pair/serverTasteFoundationRepository.ts",
+    "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
+    "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
+  ]);
+  const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
+    .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)
+    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry));
+  check("the SR-1A successor allowance is enumerated and cannot reach a migration or a deployable Edge Function",
+    SR1A_SUCCESSOR_PATHS.every((entry) => entry.startsWith("supabase/functions/_shared/")) &&
+      !SR1A_SUCCESSOR_PATHS.some((entry) => /[*?\[\]{}]/.test(entry) || entry.endsWith(".sql")) &&
+      new Set(SR1A_SUCCESSOR_PATHS).size === SR1A_SUCCESSOR_PATHS.length);
+  check("no TS-1, TS-2 or TS-2D frozen source is modified by this round", predecessorDrift.length === 0, { predecessorDrift });
   check("predecessor amendments touch validation harnesses only, never a predecessor implementation path",
     manifest.filter((entry) => !entry.startsWith(domainRoot) && entry !== "package.json" && !entry.startsWith("scripts/taste-similarity-ts3-"))
       .every((entry) => /^scripts\/[a-z0-9-]+-(guard|smoke|mutations)\.mjs$/.test(entry)));

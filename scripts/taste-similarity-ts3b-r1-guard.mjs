@@ -316,8 +316,27 @@ try {
     ? git(["diff", "--cached", "--name-only", "--", domainRoot]).stdout.trim() === ""
     : git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
   check("30e. package change adds only the three R1 validation commands", packageOnlyAddsValidationScripts(freezeCommit));
-  const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout.trim();
-  check("31. TS-1, TS-2, TS-2D and the frozen barrels are byte-unchanged by this round", predecessorDrift === "", { predecessorDrift });
+  // SR-1A is the first successor round to add files under `supabase/`, a prefix this list covers
+  // wholesale. Blanket-relaxing the prefix would hide real drift, so the successor's paths are
+  // enumerated EXACTLY, path by path, with no prefix and no wildcard — anything else under the prefix
+  // still fails here. The companion check below is strictly STRONGER than the original assertion:
+  // it proves the allowance cannot reach a migration or a deployable Edge Function entrypoint, which
+  // the original directory-granularity check never asserted.
+  const SR1A_SUCCESSOR_PATHS = Object.freeze([
+    "supabase/functions/_shared/social-pair/index.ts",
+    "supabase/functions/_shared/social-pair/serverPairComparison.ts",
+    "supabase/functions/_shared/social-pair/serverTasteFoundationRepository.ts",
+    "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
+    "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
+  ]);
+  const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
+    .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)
+    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry));
+  check("31c. the SR-1A successor allowance is enumerated and cannot reach a migration or a deployable Edge Function",
+    SR1A_SUCCESSOR_PATHS.every((entry) => entry.startsWith("supabase/functions/_shared/")) &&
+      !SR1A_SUCCESSOR_PATHS.some((entry) => /[*?\[\]{}]/.test(entry) || entry.endsWith(".sql")) &&
+      new Set(SR1A_SUCCESSOR_PATHS).size === SR1A_SUCCESSOR_PATHS.length);
+  check("31. TS-1, TS-2, TS-2D and the frozen barrels are byte-unchanged by this round", predecessorDrift.length === 0, { predecessorDrift });
   check("31b. the domain barrel still exports the frozen similarity module and contains only re-exports",
     (() => {
       const barrel = read(`${domainRoot}/index.ts`);

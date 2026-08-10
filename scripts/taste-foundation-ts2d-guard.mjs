@@ -369,10 +369,29 @@ const TS3_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/taste-similarity-ts3b-r1-mutations.mjs",
   "scripts/taste-similarity-ts3b-r1-smoke.mjs"
 ]);
-const ALLOWED_PATHS = new Set([...CANDIDATE_MANIFEST, ...TS3_SUCCESSOR_MANIFEST]);
+
+// SR-1A is the first successor to add paths under `supabase/`, which the TS-3 successor allowance
+// deliberately forbids. Rather than relax that rule, its paths get their own exactly-enumerated list
+// held to its OWN constraint (26c): every entry must live under `supabase/functions/_shared/`, the
+// non-deployable shared directory, so no successor can smuggle a deployable Edge Function entrypoint
+// through this allowance. 26a still keeps every TS-2D implementation path off limits regardless.
+const SR1A_SUCCESSOR_MANIFEST = Object.freeze([
+  "scripts/build-taste-foundation-runtime.mjs",
+  "scripts/social-pair-sr1a-guard.mjs",
+  "scripts/social-pair-sr1a-mutations.mjs",
+  "scripts/social-pair-sr1a-smoke.mjs",
+  // The eight sibling guards that receive the same successor amendment are already covered by
+  // TS3_SUCCESSOR_MANIFEST above and are deliberately not repeated here.
+  "supabase/functions/_shared/social-pair/index.ts",
+  "supabase/functions/_shared/social-pair/serverPairComparison.ts",
+  "supabase/functions/_shared/social-pair/serverTasteFoundationRepository.ts",
+  "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
+  "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
+]);
+const ALLOWED_PATHS = new Set([...CANDIDATE_MANIFEST, ...TS3_SUCCESSOR_MANIFEST, ...SR1A_SUCCESSOR_MANIFEST]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
-  "26. committed-state lifecycle: uncommitted changes are a subset of the TS-2D manifest or the exactly enumerated TS-3 successor manifest, clean tree passes",
+  "26. committed-state lifecycle: uncommitted changes are a subset of the TS-2D manifest or the exactly enumerated TS-3 / SR-1A successor manifests, clean tree passes",
   outsideManifest.length === 0,
   { touchedEntries: touched.length, outsideManifest }
 );
@@ -392,9 +411,28 @@ check(
     new Set(TS3_SUCCESSOR_MANIFEST).size === TS3_SUCCESSOR_MANIFEST.length
 );
 check(
-  "27. this round changes no other migration and no Edge Function",
-  touched.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry === MIGRATION) &&
-    !touched.some((entry) => entry.startsWith("supabase/functions/"))
+  "26c. the SR-1A successor allowance is enumerated and confined to the non-deployable shared directory",
+  SR1A_SUCCESSOR_MANIFEST.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs|json)$/i.test(entry)) &&
+    SR1A_SUCCESSOR_MANIFEST.every((entry) => !/[*?\[\]{}]/.test(entry)) &&
+    SR1A_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("supabase/"))
+      .every((entry) => entry.startsWith("supabase/functions/_shared/")) &&
+    !SR1A_SUCCESSOR_MANIFEST.some((entry) => entry.endsWith(".sql")) &&
+    new Set(SR1A_SUCCESSOR_MANIFEST).size === SR1A_SUCCESSOR_MANIFEST.length
+);
+// The original whole-worktree form of 27 forbade ANY touched `supabase/functions/` path, which would
+// have failed the moment a successor added server-shared code — a false positive about this round's
+// scope. What 27 actually protects is that TS-2D owns exactly one migration and ships no deployable
+// Edge Function. Both halves are now asserted directly, and the second is STRICTER than before: it
+// names the deployable-entrypoint shape rather than banning a whole directory prefix.
+const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
+const otherMigrations = touchedSupabase.filter((entry) => entry.startsWith("supabase/migrations/") && entry !== MIGRATION);
+const deployableFunctionPaths = touchedSupabase.filter((entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry));
+check(
+  "27. this round changes no other migration and adds no deployable Edge Function",
+  touchedSupabase.every((entry) => entry === MIGRATION || SR1A_SUCCESSOR_MANIFEST.includes(entry)) &&
+    otherMigrations.length === 0 &&
+    deployableFunctionPaths.length === 0,
+  { touchedSupabase, otherMigrations, deployableFunctionPaths }
 );
 const guardSource = read(GUARD);
 const guardCode = executableOnly(guardSource);

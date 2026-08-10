@@ -1,0 +1,183 @@
+{
+  "generator": "scripts/build-taste-foundation-runtime.mjs",
+  "entries": [
+    "packages/shared/src/domain/taste-similarity/index.ts",
+    "apps/mobile/features/consumer-taste-profile/foundationMappers.ts"
+  ],
+  "exportCount": 77,
+  "sources": [
+    {
+      "path": "apps/mobile/features/consumer-taste-profile/foundationMappers.ts",
+      "sha256": "04527e751075d18406be5031da6565aa8c030840119cc0033b111eeae904d237"
+    },
+    {
+      "path": "apps/mobile/features/consumer-taste-profile/types.ts",
+      "sha256": "5f39ca55f0298c0c9894460045c22a4af00fff116a4a99be462ac1de7f10b7bd"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/behavior.ts",
+      "sha256": "bc3bfc7b770e492b79e9ca43516680b3c2d5f152c6ebd5289d0c4b9ddff980bd"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/cold-start/assess.ts",
+      "sha256": "06301f7f0ee59eb5a30aab2480c8b2cc6495d764b01f0e548db6ce501b3ab99e"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/cold-start/index.ts",
+      "sha256": "6fdb20df2e619edcb95dbdd2899cd494cecaf5c3bc6fa3e68fdd1be4e6a45479"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/cold-start/policy.ts",
+      "sha256": "74a7d83098d99994786eec6a5642842d6cd6ec7d8319396367a6e4627c3a9971"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/cold-start/types.ts",
+      "sha256": "084e4a794e0aac0797e889f43d4f0d66e0cab3e09658ec6485ad03df2d51bb39"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/comparison/compose.ts",
+      "sha256": "7b44fad895c3eb435baacb495c08e9c1b914ac8088209ef9f2a16f3fc2bd8712"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/comparison/index.ts",
+      "sha256": "6b38b0dcd00492aa63b1ea2319b383da0c730a82d36dc733f3f69f2bf10defd0"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/comparison/policy.ts",
+      "sha256": "f0feebde699992e2ae9259a91661cecda8e22725943f0fc1f4d5ffbc54d90420"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/comparison/types.ts",
+      "sha256": "27d9e585c453063406b3cf66fa5d44025c47036e77a94132ff5422bed5c0303d"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/compatibility/comparator.ts",
+      "sha256": "881f165945400f44250ec50eab14a598def5f4fbcc867f63f40a136f084d0b70"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/compatibility/index.ts",
+      "sha256": "a90d0749423586e62e0cbb39e8f47b44529c6cfe8aa6e3ed5ad4824168f407f3"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/compatibility/policy.ts",
+      "sha256": "9ca7aa95736ca7efb7de85ec9322b8723f5ba896a38d53d89e06d01aace31cad"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/compatibility/reasonCodes.ts",
+      "sha256": "9f21a65e7aa3f5fc6c0895833651cc681edd1f963e39f48db74144043400905e"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/compatibility/types.ts",
+      "sha256": "4f61083c9710f8dfa95fdcea5422cb6992212882854b977236880db46f25a54b"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/confidence/compute.ts",
+      "sha256": "3ae41a941adc0ae948cbfc4a367773230b3793c564dbe3284ad8ba7e82826ef8"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/confidence/index.ts",
+      "sha256": "ab5f3ea09dd9e38bf136bd75e54f6ba7aea8bdeb45e700ddf45e7c09719dbe67"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/confidence/policy.ts",
+      "sha256": "da19d18d6d458359b0000d85d096e504d260facf3c88ae565dd205d924e17e80"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/confidence/types.ts",
+      "sha256": "c80e918869b042506a6319517673176d9d7627763163745469bf8c8438f06475"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/evidence.ts",
+      "sha256": "7d4e2302b322fcdf7053dc32614afdd5d7e2a622abdc0fd0c7e91b944cdfdc94"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/evidenceWindow.ts",
+      "sha256": "15db8eb777c9d172d7a1d0d047875702ee35303c6c06a0c4b7e08ec59ca81a97"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/goal-restriction/comparator.ts",
+      "sha256": "825736dd7c048928b8413af249b3dbabd2fdebf8446b10a77ba67305ef1a0f61"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/goal-restriction/index.ts",
+      "sha256": "a90d0749423586e62e0cbb39e8f47b44529c6cfe8aa6e3ed5ad4824168f407f3"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/goal-restriction/policy.ts",
+      "sha256": "be19b6f5feb7d111b3c913ce3afbac5001ca621187852688b207cbc08a836539"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/goal-restriction/reasonCodes.ts",
+      "sha256": "a00b4874df56747ef8cd8c9cac51fb66b8ab78a2fb76a8e86b0c7b4f2e11f98a"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/goal-restriction/types.ts",
+      "sha256": "4737b4076fe0d92ea16b4e1faa088964088896cf7c62d9370382e72ad1ff841f"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/goal.ts",
+      "sha256": "29cc8323ae77b96fc0f282841d787f9b56b787e8e3b60a6b700fbf692eac19cc"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/index.ts",
+      "sha256": "6b084bfdbfb4a84644c738cea1a8fa5170b3e3251f42094e1fdb187a9abf3c5e"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/normalization.ts",
+      "sha256": "c0d34619d6803bfda74f6cb76ea43cd17c01c7ab5dcf3be0d79c6d691b7131c2"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/preference.ts",
+      "sha256": "9152e72269ff8c2a00e43eaaefd4cfd16e959ff3a616e618a7c82a1a7187c825"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/restriction.ts",
+      "sha256": "9296e63568acd4a8f7e1480ea635dc7d441390c11331222f179d5ce65690a812"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/shared-adapter/adapt.ts",
+      "sha256": "48205c871f3f560def333bc56930522dbaf4accd4ecc3c49c668a1fbfea9d50f"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/shared-adapter/index.ts",
+      "sha256": "0d553f4794690e35e7b0684f7565c0252fa934b035b3cf7c50c7e64fe391b0e7"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/shared-adapter/policy.ts",
+      "sha256": "41ea8f0c3d70fb328977a4006f9f714404ff6c837903a558583fb78b0200f3b8"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/shared-adapter/types.ts",
+      "sha256": "041286674a9c0800adc0c8675470f286ba9e996552ca16db630bae03501109f6"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/similarity/comparator.ts",
+      "sha256": "e8f3cf34d28a0fb00befb57dfb741c80f9522c24114e9856363b2fdc77e27cd7"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/similarity/index.ts",
+      "sha256": "a90d0749423586e62e0cbb39e8f47b44529c6cfe8aa6e3ed5ad4824168f407f3"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/similarity/policy.ts",
+      "sha256": "e23142ea8c437d468a5fd2e36835146717192321fb6dc7881c4b83104c4c361a"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/similarity/reasonCodes.ts",
+      "sha256": "cb68b7dbbd46e2821cce031f3a2d59a15535570e2a41574493cf33bf60c4a56f"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/similarity/types.ts",
+      "sha256": "1a0865263357ecd8a99830d8128823ae21e756495c25564abc7ea35404e621b9"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/snapshot.ts",
+      "sha256": "627ff3f34d9b6eedbd50d3071620a0511d506d28a67a799f4ecd35e904283b3f"
+    },
+    {
+      "path": "packages/shared/src/domain/taste-similarity/sourceState.ts",
+      "sha256": "97dcde8a8af6ea2a0f7a55d6ccf04474b7e0b79869dd945e05c89b00113c206d"
+    }
+  ],
+  "artifactSha256": "dac49661645a16f91118548189d0586658fdf940329e6f4635ba1d2c6c49a9da"
+}
