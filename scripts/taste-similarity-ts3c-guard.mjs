@@ -303,9 +303,20 @@ try {
     "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
     "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
   ]);
+  // SR-1B-B adds the first Social migration. `supabase` is covered by this list wholesale, so the
+  // one new path is enumerated EXACTLY — anything else under the prefix still fails here. The
+  // companion check constrains what the allowance may ever contain: one timestamped migration file,
+  // never supabase/config.toml and never an Edge Function directory.
+  const SR1B_B_SUCCESSOR_PATHS = Object.freeze([
+    "supabase/migrations/20260810010000_social_block_authority.sql"
+  ]);
   const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
     .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)
-    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry) && !SR1B_B_SUCCESSOR_PATHS.includes(entry));
+  check("31b. the SR-1B-B successor allowance is one enumerated additive migration that cannot reach config or an Edge Function",
+    SR1B_B_SUCCESSOR_PATHS.length === 1 &&
+      SR1B_B_SUCCESSOR_PATHS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry)) &&
+      !SR1B_B_SUCCESSOR_PATHS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
   check("31a. the SR-1A successor allowance is enumerated and cannot reach a migration or a deployable Edge Function",
     SR1A_SUCCESSOR_PATHS.every((entry) => entry.startsWith("supabase/functions/_shared/")) &&
       !SR1A_SUCCESSOR_PATHS.some((entry) => /[*?\[\]{}]/.test(entry) || entry.endsWith(".sql")) &&

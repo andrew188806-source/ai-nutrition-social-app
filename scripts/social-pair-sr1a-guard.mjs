@@ -225,13 +225,27 @@ try {
     changedSince(baseline, "apps").length === 0, { changed: changedSince(baseline, "apps") });
   check("7. no packages/ file changed at all",
     changedSince(baseline, "packages").length === 0, { changed: changedSince(baseline, "packages") });
-  const supabaseChanged = changedSince(baseline, "supabase");
-  check("8. supabase changes are exactly the four SR-1A server paths",
+  // SR-1B-B adds the first Social migration. Checks 8, 9 and 36 were written as whole-prefix
+  // assertions and would report a successor's migration as an SR-1A scope violation. The one new
+  // path is enumerated EXACTLY; anything else under supabase/ still fails. Check 8a additionally
+  // constrains what this allowance may ever contain, which the original assertions never did.
+  const SR1B_B_SUCCESSOR_PATHS = Object.freeze([
+    "supabase/migrations/20260810010000_social_block_authority.sql"
+  ]);
+  const supabaseChanged = changedSince(baseline, "supabase")
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));
+  check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
+  check("8a. the SR-1B-B successor allowance is one enumerated additive migration that cannot reach config or an Edge Function",
+    SR1B_B_SUCCESSOR_PATHS.length === 1
+    && SR1B_B_SUCCESSOR_PATHS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry))
+    && !SR1B_B_SUCCESSOR_PATHS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
 
   // ---- 9-12. no migration, no SQL scorer, no grant, no deployment artifact ----------------------
-  check("9. no migration was added or changed",
-    changedSince(baseline, "supabase/migrations").length === 0, { changed: changedSince(baseline, "supabase/migrations") });
+  const migrationsChanged = changedSince(baseline, "supabase/migrations")
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));
+  check("9. SR-1A itself added no migration",
+    migrationsChanged.length === 0, { changed: migrationsChanged });
   check("10. no SQL file appears anywhere in the manifest",
     !manifest.some((entry) => entry.endsWith(".sql")));
   check("11. no new grant, policy or privilege statement was introduced",
@@ -329,9 +343,19 @@ try {
   check("35. no scorer source file was copied into supabase/functions as a second authority",
     !fs.readdirSync(path.join(root, serverRoot)).some((file) => /similarity|comparator|confidence|coldStart|adapt/i.test(file)),
     { files: fs.readdirSync(path.join(root, serverRoot)) });
+  // Originally this asserted "no migration exists at all", using absence as a proxy for "no scorer
+  // was reimplemented in SQL". With one enumerated successor migration now permitted, the proxy is
+  // replaced by the invariant it stood for: the migration is READ and proven to contain no scoring
+  // construct. That is strictly stronger — absence never proved anything about content.
+  const successorMigrationSql = SR1B_B_SUCCESSOR_PATHS
+    .filter((entry) => fs.existsSync(path.join(root, entry)))
+    .map((entry) => read(entry))
+    .join("\n");
   check("36. no SQL re-implementation of a frozen scorer exists",
-    changedSince(baseline, "supabase/migrations").length === 0
-    && !/CREATE (OR REPLACE )?FUNCTION|CREATE (OR REPLACE )?VIEW/i.test(implementation));
+    migrationsChanged.length === 0
+    && !/CREATE (OR REPLACE )?FUNCTION|CREATE (OR REPLACE )?VIEW/i.test(implementation)
+    && !/\bjaccard\b|\bsimilarity\b|\bcosine\b|\bscore\b|\bweight\b|\brank\b|\bconfidence\b|\bcold[_ ]?start\b/i.test(successorMigrationSql),
+    { successorMigrationBytes: successorMigrationSql.length });
 
   // ---- 37-42. generated runtime provenance ------------------------------------------------------
   check("37. the generated artifact contains zero import statements",
