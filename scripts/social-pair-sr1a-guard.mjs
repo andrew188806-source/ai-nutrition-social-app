@@ -230,14 +230,16 @@ try {
   // path is enumerated EXACTLY; anything else under supabase/ still fails. Check 8a additionally
   // constrains what this allowance may ever contain, which the original assertions never did.
   const SR1B_B_SUCCESSOR_PATHS = Object.freeze([
-    "supabase/migrations/20260810010000_social_block_authority.sql"
+    "supabase/migrations/20260810010000_social_block_authority.sql",
+    "supabase/migrations/20260810020000_social_participation_authority.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
     .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));
   check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
-  check("8a. the SR-1B-B successor allowance is one enumerated additive migration that cannot reach config or an Edge Function",
-    SR1B_B_SUCCESSOR_PATHS.length === 1
+  check("8a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
+    SR1B_B_SUCCESSOR_PATHS.length >= 1
+    && new Set(SR1B_B_SUCCESSOR_PATHS).size === SR1B_B_SUCCESSOR_PATHS.length
     && SR1B_B_SUCCESSOR_PATHS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry))
     && !SR1B_B_SUCCESSOR_PATHS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
 

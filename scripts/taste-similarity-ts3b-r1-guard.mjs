@@ -329,20 +329,22 @@ try {
     "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
     "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
   ]);
-  // SR-1B-B adds the first Social migration. `supabase` is covered by this list wholesale, so the
-  // one new path is enumerated EXACTLY — anything else under the prefix still fails here. The
-  // companion check constrains what the allowance may ever contain: one timestamped migration file,
-  // never supabase/config.toml and never an Edge Function directory.
-  const SR1B_B_SUCCESSOR_PATHS = Object.freeze([
-    "supabase/migrations/20260810010000_social_block_authority.sql"
+  // The Social Runtime rounds add migrations under `supabase`, which this list covers wholesale.
+  // Every such path is enumerated EXACTLY — anything else under the prefix still fails here — and
+  // the companion check constrains what the allowance may ever contain: timestamped migration files
+  // only, never supabase/config.toml and never an Edge Function directory.
+  const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
+    "supabase/migrations/20260810010000_social_block_authority.sql",
+    "supabase/migrations/20260810020000_social_participation_authority.sql"
   ]);
   const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
     .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)
-    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry) && !SR1B_B_SUCCESSOR_PATHS.includes(entry));
-  check("31d. the SR-1B-B successor allowance is one enumerated additive migration that cannot reach config or an Edge Function",
-    SR1B_B_SUCCESSOR_PATHS.length === 1 &&
-      SR1B_B_SUCCESSOR_PATHS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry)) &&
-      !SR1B_B_SUCCESSOR_PATHS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
+    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry) && !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+  check("31d. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
+    SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1 &&
+      new Set(SOCIAL_SUCCESSOR_MIGRATIONS).size === SOCIAL_SUCCESSOR_MIGRATIONS.length &&
+      SOCIAL_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry)) &&
+      !SOCIAL_SUCCESSOR_MIGRATIONS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
   check("31c. the SR-1A successor allowance is enumerated and cannot reach a migration or a deployable Edge Function",
     SR1A_SUCCESSOR_PATHS.every((entry) => entry.startsWith("supabase/functions/_shared/")) &&
       !SR1A_SUCCESSOR_PATHS.some((entry) => /[*?\[\]{}]/.test(entry) || entry.endsWith(".sql")) &&

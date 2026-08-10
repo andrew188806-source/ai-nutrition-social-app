@@ -134,13 +134,27 @@ try {
     changedSince(baseline, "packages").length === 0, { changed: changedSince(baseline, "packages") });
   check("8. not one byte of SR-1A's frozen server primitive changed",
     changedSince(baseline, sr1aServerRoot).length === 0, { changed: changedSince(baseline, sr1aServerRoot) });
-  const supabaseChanged = changedSince(baseline, "supabase");
-  check("9. the only supabase change is the single SR-1B-B migration",
+  // SR-1B-C adds the next Social migration. Checks 9 and 10 were written as whole-prefix assertions
+  // and would report a successor's migration as an SR-1B-B scope violation. The successor path is
+  // enumerated EXACTLY; anything else under supabase/ still fails. Check 9a additionally constrains
+  // what the allowance may contain, which the original whole-prefix assertions never did.
+  const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
+    "supabase/migrations/20260810020000_social_participation_authority.sql"
+  ]);
+  const supabaseChanged = changedSince(baseline, "supabase")
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+  check("9. the only supabase change attributable to SR-1B-B is its single migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
+  check("9a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
+    SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1
+    && new Set(SOCIAL_SUCCESSOR_MIGRATIONS).size === SOCIAL_SUCCESSOR_MIGRATIONS.length
+    && SOCIAL_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry))
+    && !SOCIAL_SUCCESSOR_MIGRATIONS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
 
   // ---- 10-12. migration safety ------------------------------------------------------------------
-  check("10. no existing migration was modified",
-    changedSince(baseline, "supabase/migrations").length === 1);
+  check("10. SR-1B-B modified no existing migration",
+    changedSince(baseline, "supabase/migrations")
+      .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry)).length === 1);
   check("11. the migration is additive — it drops nothing and alters no existing consumer table",
     !/\bdrop\s+(table|column|policy|function|view|index|constraint|type)\b/i.test(sql)
     && !/\balter\s+table\s+public\.(consumer_profiles|consumer_private_profiles|taste_profiles|nutrition_goals|dietary_restrictions|meal_records|meal_record_items|favorite_restaurants|favorite_menu_items|subscription_entitlements)\b/i.test(sql),

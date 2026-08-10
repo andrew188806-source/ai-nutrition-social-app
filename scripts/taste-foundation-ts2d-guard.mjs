@@ -391,18 +391,22 @@ const SR1A_SUCCESSOR_MANIFEST = Object.freeze([
 // SR-1B-B is the first successor to add a MIGRATION. Check 27 below asserts TS-2D owns exactly one
 // migration, which is still true — this list names the one successor migration that check must not
 // mistake for a TS-2D scope violation. Enumerated exactly, and 26d confines what it may contain.
-const SR1B_B_SUCCESSOR_MANIFEST = Object.freeze([
+const SOCIAL_SUCCESSOR_MANIFEST = Object.freeze([
   "supabase/migrations/20260810010000_social_block_authority.sql",
   "scripts/social-block-sr1b-b-guard.mjs",
   "scripts/social-block-sr1b-b-mutations.mjs",
-  "scripts/social-block-sr1b-b-smoke.mjs"
+  "scripts/social-block-sr1b-b-smoke.mjs",
+  "supabase/migrations/20260810020000_social_participation_authority.sql",
+  "scripts/social-participation-sr1b-c-guard.mjs",
+  "scripts/social-participation-sr1b-c-mutations.mjs",
+  "scripts/social-participation-sr1b-c-smoke.mjs"
 ]);
-const SR1B_B_SUCCESSOR_MIGRATIONS = SR1B_B_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("supabase/"));
+const SOCIAL_SUCCESSOR_MIGRATIONS = SOCIAL_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("supabase/"));
 const ALLOWED_PATHS = new Set([
   ...CANDIDATE_MANIFEST,
   ...TS3_SUCCESSOR_MANIFEST,
   ...SR1A_SUCCESSOR_MANIFEST,
-  ...SR1B_B_SUCCESSOR_MANIFEST
+  ...SOCIAL_SUCCESSOR_MANIFEST
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -440,13 +444,13 @@ check(
 // Edge Function. Both halves are now asserted directly, and the second is STRICTER than before: it
 // names the deployable-entrypoint shape rather than banning a whole directory prefix.
 check(
-  "26d. the SR-1B-B successor allowance is one enumerated additive migration plus its own suites, and cannot reach config or an Edge Function",
-  SR1B_B_SUCCESSOR_MIGRATIONS.length === 1 &&
-    SR1B_B_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry)) &&
-    SR1B_B_SUCCESSOR_MANIFEST.filter((entry) => !entry.startsWith("supabase/"))
-      .every((entry) => /^scripts\/social-block-sr1b-b-(guard|smoke|mutations)\.mjs$/.test(entry)) &&
-    !SR1B_B_SUCCESSOR_MANIFEST.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")) &&
-    new Set(SR1B_B_SUCCESSOR_MANIFEST).size === SR1B_B_SUCCESSOR_MANIFEST.length
+  "26d. the Social successor allowance is exactly enumerated additive migrations plus their own suites, and cannot reach config or an Edge Function",
+  SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1 &&
+    SOCIAL_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry)) &&
+    SOCIAL_SUCCESSOR_MANIFEST.filter((entry) => !entry.startsWith("supabase/"))
+      .every((entry) => /^scripts\/social-(block-sr1b-b|participation-sr1b-c)-(guard|smoke|mutations)\.mjs$/.test(entry)) &&
+    !SOCIAL_SUCCESSOR_MANIFEST.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")) &&
+    new Set(SOCIAL_SUCCESSOR_MANIFEST).size === SOCIAL_SUCCESSOR_MANIFEST.length
 );
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated
@@ -455,7 +459,7 @@ const otherMigrations = touchedSupabase.filter(
   (entry) =>
     entry.startsWith("supabase/migrations/") &&
     entry !== MIGRATION &&
-    !SR1B_B_SUCCESSOR_MIGRATIONS.includes(entry)
+    !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry)
 );
 const deployableFunctionPaths = touchedSupabase.filter((entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry));
 check(
@@ -464,7 +468,7 @@ check(
     (entry) =>
       entry === MIGRATION ||
       SR1A_SUCCESSOR_MANIFEST.includes(entry) ||
-      SR1B_B_SUCCESSOR_MANIFEST.includes(entry)
+      SOCIAL_SUCCESSOR_MANIFEST.includes(entry)
   ) &&
     otherMigrations.length === 0 &&
     deployableFunctionPaths.length === 0,
