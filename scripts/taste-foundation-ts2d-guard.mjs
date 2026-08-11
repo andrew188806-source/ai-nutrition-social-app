@@ -399,7 +399,11 @@ const SOCIAL_SUCCESSOR_MANIFEST = Object.freeze([
   "supabase/migrations/20260810020000_social_participation_authority.sql",
   "scripts/social-participation-sr1b-c-guard.mjs",
   "scripts/social-participation-sr1b-c-mutations.mjs",
-  "scripts/social-participation-sr1b-c-smoke.mjs"
+  "scripts/social-participation-sr1b-c-smoke.mjs",
+  "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql",
+  "scripts/social-candidate-authorization-sr1b-d1-guard.mjs",
+  "scripts/social-candidate-authorization-sr1b-d1-mutations.mjs",
+  "scripts/social-candidate-authorization-sr1b-d1-smoke.mjs"
 ]);
 const SOCIAL_SUCCESSOR_MIGRATIONS = SOCIAL_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("supabase/"));
 const ALLOWED_PATHS = new Set([
@@ -448,7 +452,7 @@ check(
   SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1 &&
     SOCIAL_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry)) &&
     SOCIAL_SUCCESSOR_MANIFEST.filter((entry) => !entry.startsWith("supabase/"))
-      .every((entry) => /^scripts\/social-(block-sr1b-b|participation-sr1b-c)-(guard|smoke|mutations)\.mjs$/.test(entry)) &&
+      .every((entry) => /^scripts\/social-(block-sr1b-b|participation-sr1b-c|candidate-authorization-sr1b-d1)-(guard|smoke|mutations)\.mjs$/.test(entry)) &&
     !SOCIAL_SUCCESSOR_MANIFEST.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")) &&
     new Set(SOCIAL_SUCCESSOR_MANIFEST).size === SOCIAL_SUCCESSOR_MANIFEST.length
 );

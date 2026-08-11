@@ -303,7 +303,8 @@ try {
   // only, never supabase/config.toml and never an Edge Function directory.
   const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
     "supabase/migrations/20260810010000_social_block_authority.sql",
-    "supabase/migrations/20260810020000_social_participation_authority.sql"
+    "supabase/migrations/20260810020000_social_participation_authority.sql",
+    "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql"
   ]);
   const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
     .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)

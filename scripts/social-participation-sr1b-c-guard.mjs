@@ -134,9 +134,22 @@ try {
     changedSince(baseline, sr1aServerRoot).length === 0, { changed: changedSince(baseline, sr1aServerRoot) });
   check("9. SR-1B-B's frozen block migration is byte-unchanged",
     changedSince(baseline, BLOCK_MIGRATION).length === 0, { changed: changedSince(baseline, BLOCK_MIGRATION) });
-  const supabaseChanged = changedSince(baseline, "supabase");
-  check("10. the only supabase change is the single SR-1B-C migration",
+  // SR-1B-D1 adds the next Social migration. Check 10 was written as a whole-prefix assertion and
+  // would report a successor's migration as an SR-1B-C scope violation. The successor path is
+  // enumerated EXACTLY; anything else under supabase/ still fails. 10a additionally constrains what
+  // the allowance may contain, which the original whole-prefix assertion never did.
+  const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
+    "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql"
+  ]);
+  const supabaseChanged = changedSince(baseline, "supabase")
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+  check("10. the only supabase change attributable to SR-1B-C is its single migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
+  check("10a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
+    SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1
+    && new Set(SOCIAL_SUCCESSOR_MIGRATIONS).size === SOCIAL_SUCCESSOR_MIGRATIONS.length
+    && SOCIAL_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry))
+    && !SOCIAL_SUCCESSOR_MIGRATIONS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
 
   // ---- 11-13. migration safety ------------------------------------------------------------------
   check("11. the migration is additive — it drops nothing and alters no existing table",
