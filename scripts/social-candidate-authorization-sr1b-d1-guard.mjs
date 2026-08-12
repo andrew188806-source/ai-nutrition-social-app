@@ -140,9 +140,21 @@ try {
     changedSince(baseline, BLOCK_MIGRATION).length === 0);
   check("10. SR-1B-C's frozen participation migration is byte-unchanged",
     changedSince(baseline, PARTICIPATION_MIGRATION).length === 0);
-  const supabaseChanged = changedSince(baseline, "supabase");
-  check("11. the only supabase change is the single SR-1B-D1 migration",
+  // SR-1B-D2-B1 adds the next Social migration. Check 11 was a whole-prefix assertion and would
+  // report a successor's migration as an SR-1B-D1 scope violation. The successor path is enumerated
+  // EXACTLY; 11a additionally constrains what the allowance may ever contain.
+  const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
+    "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql"
+  ]);
+  const supabaseChanged = changedSince(baseline, "supabase")
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+  check("11. the only supabase change attributable to SR-1B-D1 is its single migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
+  check("11a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
+    SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1
+    && new Set(SOCIAL_SUCCESSOR_MIGRATIONS).size === SOCIAL_SUCCESSOR_MIGRATIONS.length
+    && SOCIAL_SUCCESSOR_MIGRATIONS.every((e) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(e))
+    && !SOCIAL_SUCCESSOR_MIGRATIONS.some((e) => e.includes("config.toml") || e.includes("/functions/")));
 
   // ---- 12-15. schema exposure boundary ----------------------------------------------------------
   check(`12. the migration creates the internal schema ${SCHEMA}`,

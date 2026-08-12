@@ -232,7 +232,8 @@ try {
   const SR1B_B_SUCCESSOR_PATHS = Object.freeze([
     "supabase/migrations/20260810010000_social_block_authority.sql",
     "supabase/migrations/20260810020000_social_participation_authority.sql",
-    "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql"
+    "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql",
+    "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
     .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));
@@ -350,9 +351,19 @@ try {
   // was reimplemented in SQL". With one enumerated successor migration now permitted, the proxy is
   // replaced by the invariant it stood for: the migration is READ and proven to contain no scoring
   // construct. That is strictly stronger — absence never proved anything about content.
+  // Comments stripped: a successor migration that documents "this performs no scoring" must be able
+  // to say the word. The invariant is that no scoring CONSTRUCT exists in executable SQL.
   const successorMigrationSql = SR1B_B_SUCCESSOR_PATHS
     .filter((entry) => fs.existsSync(path.join(root, entry)))
-    .map((entry) => read(entry))
+    .map((entry) => read(entry).split("\n").map((line) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("--")) return "";
+      const at = line.indexOf("--");
+      return at === -1 ? line : line.slice(0, at);
+    }).join("\n")
+      // `comment on ... is '...'` is documentation that happens to be SQL; its string literal may
+      // legitimately state "performs no scoring". Only executable constructs are in scope here.
+      .replace(/comment on [\s\S]*?;\s*$/gim, ""))
     .join("\n");
   check("36. no SQL re-implementation of a frozen scorer exists",
     migrationsChanged.length === 0
