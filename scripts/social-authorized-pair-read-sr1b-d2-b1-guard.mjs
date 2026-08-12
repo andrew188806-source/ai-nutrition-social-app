@@ -117,8 +117,19 @@ try {
     ["SR-1A server primitive", "supabase/functions/_shared"], ["D1 migration", D1_MIGRATION]]) {
     check(`4. ${n} is byte-unchanged`, changedSince(baseline, p).length === 0, { changed: changedSince(baseline, p) });
   }
-  check("5. the only supabase change is the single B1 migration",
-    same(changedSince(baseline, "supabase"), [MIGRATION]), { changed: changedSince(baseline, "supabase") });
+  // D2-B2 adds only the passwordless executor identity. Keep the B1 authority immutable while
+  // allowing that exact additive successor migration; every other Supabase path still fails.
+  const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
+    "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
+  ]);
+  const supabaseChanged = changedSince(baseline, "supabase")
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+  check("5. the only supabase change attributable to B1 is the single B1 migration",
+    same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
+  check("5a. the successor allowance is one exact additive migration, never config or an Edge Function",
+    SOCIAL_SUCCESSOR_MIGRATIONS.length === 1
+    && SOCIAL_SUCCESSOR_MIGRATIONS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry))
+    && !SOCIAL_SUCCESSOR_MIGRATIONS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
 
   // ---- 10-16 role --------------------------------------------------------------------------------
   const createRole = (sql.match(/create role social_pair_read_authority with([\s\S]*?);/i) ?? [])[1] ?? "";

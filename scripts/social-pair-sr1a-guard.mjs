@@ -233,7 +233,8 @@ try {
     "supabase/migrations/20260810010000_social_block_authority.sql",
     "supabase/migrations/20260810020000_social_participation_authority.sql",
     "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql",
-    "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql"
+    "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql",
+    "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
     .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));

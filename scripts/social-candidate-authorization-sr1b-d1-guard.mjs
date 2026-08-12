@@ -144,7 +144,8 @@ try {
   // report a successor's migration as an SR-1B-D1 scope violation. The successor path is enumerated
   // EXACTLY; 11a additionally constrains what the allowance may ever contain.
   const SOCIAL_SUCCESSOR_MIGRATIONS = Object.freeze([
-    "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql"
+    "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql",
+    "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
     .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
