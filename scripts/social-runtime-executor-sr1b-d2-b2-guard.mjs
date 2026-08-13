@@ -13,6 +13,11 @@ const MIGRATION = "supabase/migrations/20260810050000_social_runtime_executor_ro
 const D1 = "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql";
 const B1 = "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql";
 const ROLE = "social_runtime_executor";
+const B3_SUCCESSOR_PATHS = Object.freeze([
+  "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
+]);
 
 const successorGuards = [
   "scripts/social-authorized-pair-read-sr1b-d2-b1-guard.mjs",
@@ -95,12 +100,17 @@ try {
 
   check("4. no app or package production path changed", changedSince(baseline, "apps").length === 0
     && changedSince(baseline, "packages").length === 0);
-  check("5. the only Supabase change is the single successor migration",
-    same(changedSince(baseline, "supabase"), [MIGRATION]), { changed: changedSince(baseline, "supabase") });
+  const supabaseChanged = changedSince(baseline, "supabase")
+    .filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry));
+  check("5. the only Supabase change attributable to B2 is the single executor migration",
+    same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("6. D1's frozen migration is byte-unchanged", changedSince(baseline, D1).length === 0);
   check("7. D2-B1's frozen migration is byte-unchanged", changedSince(baseline, B1).length === 0);
-  check("8. no Edge Function, config, schema snapshot, or existing migration changed",
-    !changedSince(baseline, "supabase").some((entry) => entry !== MIGRATION));
+  check("8. B3 adds only its exact non-deployable shared transport paths",
+    B3_SUCCESSOR_PATHS.length === 3
+    && new Set(B3_SUCCESSOR_PATHS).size === B3_SUCCESSOR_PATHS.length
+    && B3_SUCCESSOR_PATHS.every((entry) => entry.startsWith("supabase/functions/_shared/social-runtime-transport/"))
+    && !B3_SUCCESSOR_PATHS.some((entry) => /[*?\[\]{}]/.test(entry)));
   check("9. every predecessor guard amendment is validation-only and names this exact successor migration",
     successorGuards.every((file) => read(file).includes(MIGRATION)));
 

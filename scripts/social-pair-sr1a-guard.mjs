@@ -236,8 +236,13 @@ try {
     "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql",
     "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
+  const B3_SUCCESSOR_PATHS = Object.freeze([
+    "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+    "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+    "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
+  ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry));
   check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
   check("8a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",

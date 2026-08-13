@@ -19,6 +19,11 @@ const MIGRATION = "supabase/migrations/20260810010000_social_block_authority.sql
 const domainRoot = "packages/shared/src/domain/taste-similarity";
 const mobileTasteRoot = "apps/mobile/features/consumer-taste-profile";
 const sr1aServerRoot = "supabase/functions/_shared";
+const B3_SUCCESSOR_PATHS = Object.freeze([
+  "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
+]);
 
 const manifest = [
   "package.json",
@@ -133,7 +138,8 @@ try {
   check("7. no packages/ file changed",
     changedSince(baseline, "packages").length === 0, { changed: changedSince(baseline, "packages") });
   check("8. not one byte of SR-1A's frozen server primitive changed",
-    changedSince(baseline, sr1aServerRoot).length === 0, { changed: changedSince(baseline, sr1aServerRoot) });
+    changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)).length === 0,
+    { changed: changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)) });
   // SR-1B-C adds the next Social migration. Checks 9 and 10 were written as whole-prefix assertions
   // and would report a successor's migration as an SR-1B-B scope violation. The successor path is
   // enumerated EXACTLY; anything else under supabase/ still fails. Check 9a additionally constrains
@@ -145,7 +151,7 @@ try {
     "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry));
   check("9. the only supabase change attributable to SR-1B-B is its single migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("9a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -281,7 +287,7 @@ try {
   check("47. no Edge Function and no Social registration in supabase/config.toml",
     !/social/i.test(read("supabase/config.toml"))
     && changedSince(baseline, "supabase/config.toml").length === 0
-    && changedSince(baseline, "supabase/functions").length === 0
+    && changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)).length === 0
     && !fs.existsSync(path.join(root, "supabase/functions/social-block")));
 
   console.log(JSON.stringify({

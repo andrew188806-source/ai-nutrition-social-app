@@ -386,7 +386,10 @@ const SR1A_SUCCESSOR_MANIFEST = Object.freeze([
   "supabase/functions/_shared/social-pair/serverPairComparison.ts",
   "supabase/functions/_shared/social-pair/serverTasteFoundationRepository.ts",
   "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
-  "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
+  "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs",
+  "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
 ]);
 // SR-1B-B is the first successor to add a MIGRATION. Check 27 below asserts TS-2D owns exactly one
 // migration, which is still true — this list names the one successor migration that check must not
@@ -414,11 +417,18 @@ const SOCIAL_SUCCESSOR_MANIFEST = Object.freeze([
   "scripts/social-runtime-executor-sr1b-d2-b2-smoke.mjs"
 ]);
 const SOCIAL_SUCCESSOR_MIGRATIONS = SOCIAL_SUCCESSOR_MANIFEST.filter((entry) => entry.startsWith("supabase/"));
+const B3_VALIDATION_SUCCESSOR_MANIFEST = Object.freeze([
+  "scripts/social-runtime-transport-sr1b-d2-b3-development-live.ts",
+  "scripts/social-runtime-transport-sr1b-d2-b3-guard.mjs",
+  "scripts/social-runtime-transport-sr1b-d2-b3-mutations.mjs",
+  "scripts/social-runtime-transport-sr1b-d2-b3-smoke.mjs"
+]);
 const ALLOWED_PATHS = new Set([
   ...CANDIDATE_MANIFEST,
   ...TS3_SUCCESSOR_MANIFEST,
   ...SR1A_SUCCESSOR_MANIFEST,
-  ...SOCIAL_SUCCESSOR_MANIFEST
+  ...SOCIAL_SUCCESSOR_MANIFEST,
+  ...B3_VALIDATION_SUCCESSOR_MANIFEST
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -463,6 +473,13 @@ check(
       .every((entry) => /^scripts\/social-(block-sr1b-b|participation-sr1b-c|candidate-authorization-sr1b-d1|authorized-pair-read-sr1b-d2-b1|runtime-executor-sr1b-d2-b2)-(guard|smoke|mutations)\.mjs$/.test(entry)) &&
     !SOCIAL_SUCCESSOR_MANIFEST.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")) &&
     new Set(SOCIAL_SUCCESSOR_MANIFEST).size === SOCIAL_SUCCESSOR_MANIFEST.length
+);
+check(
+  "26e. B3 validation successors are exactly one Development live script plus three local suites",
+  B3_VALIDATION_SUCCESSOR_MANIFEST.length === 4 &&
+    B3_VALIDATION_SUCCESSOR_MANIFEST.every((entry) => /^scripts\/social-runtime-transport-sr1b-d2-b3-(development-live\.ts|(guard|smoke|mutations)\.mjs)$/.test(entry)) &&
+    B3_VALIDATION_SUCCESSOR_MANIFEST.every((entry) => !/[*?\[\]{}]/.test(entry)) &&
+    new Set(B3_VALIDATION_SUCCESSOR_MANIFEST).size === B3_VALIDATION_SUCCESSOR_MANIFEST.length
 );
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated

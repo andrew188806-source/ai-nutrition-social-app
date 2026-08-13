@@ -301,7 +301,10 @@ try {
     "supabase/functions/_shared/social-pair/serverPairComparison.ts",
     "supabase/functions/_shared/social-pair/serverTasteFoundationRepository.ts",
     "supabase/functions/_shared/taste-foundation-runtime/provenance.generated.json",
-    "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs"
+    "supabase/functions/_shared/taste-foundation-runtime/tasteFoundation.generated.mjs",
+    "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+    "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+    "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
   ]);
   // The Social Runtime rounds add migrations under `supabase`, which this list covers wholesale.
   // Every such path is enumerated EXACTLY — anything else under the prefix still fails here — and

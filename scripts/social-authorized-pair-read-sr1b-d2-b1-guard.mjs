@@ -18,6 +18,11 @@ const MIGRATION = "supabase/migrations/20260810040000_social_authorized_pair_rea
 const D1_MIGRATION = "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql";
 const ROLE = "social_pair_read_authority";
 const FN = "social_internal.authorized_pair_sources";
+const B3_SUCCESSOR_PATHS = Object.freeze([
+  "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
+]);
 
 // The exact fifty columns SR-1A declares, keyed by source.
 const SR1A_COLUMNS = {
@@ -115,7 +120,8 @@ try {
     ["frozen Mobile taste feature", "apps/mobile/features/consumer-taste-profile"],
     ["any app file", "apps"], ["any packages file", "packages"],
     ["SR-1A server primitive", "supabase/functions/_shared"], ["D1 migration", D1_MIGRATION]]) {
-    check(`4. ${n} is byte-unchanged`, changedSince(baseline, p).length === 0, { changed: changedSince(baseline, p) });
+    const changed = changedSince(baseline, p).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry));
+    check(`4. ${n} is byte-unchanged outside exact B3 transport successors`, changed.length === 0, { changed });
   }
   // D2-B2 adds only the passwordless executor identity. Keep the B1 authority immutable while
   // allowing that exact additive successor migration; every other Supabase path still fails.
@@ -123,7 +129,7 @@ try {
     "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry));
   check("5. the only supabase change attributable to B1 is the single B1 migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("5a. the successor allowance is one exact additive migration, never config or an Edge Function",
@@ -280,7 +286,7 @@ try {
     && changedSince(baseline, "supabase/config.toml").length === 0
     && !/social/i.test(read("supabase/config.toml")));
   check("46. no Edge Function, candidate pool, ranking, entitlement or client DTO appears",
-    changedSince(baseline, "supabase/functions").length === 0
+    changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)).length === 0
     && !/candidate_pool|entitlement|subscription|invitation|\bchat\b|\bdto\b/i.test(sqlNoDocs)
     && !/\bproduction\b/i.test(raw));
 

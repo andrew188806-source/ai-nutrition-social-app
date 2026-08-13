@@ -20,6 +20,11 @@ const BLOCK_MIGRATION = "supabase/migrations/20260810010000_social_block_authori
 const domainRoot = "packages/shared/src/domain/taste-similarity";
 const mobileTasteRoot = "apps/mobile/features/consumer-taste-profile";
 const sr1aServerRoot = "supabase/functions/_shared";
+const B3_SUCCESSOR_PATHS = Object.freeze([
+  "supabase/functions/_shared/social-runtime-transport/denoPostgresExecutorTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
+  "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
+]);
 
 const ACTIONS = ["opt_in", "pause", "resume", "opt_out"];
 
@@ -131,7 +136,8 @@ try {
   check("7. no packages/ file changed",
     changedSince(baseline, "packages").length === 0, { changed: changedSince(baseline, "packages") });
   check("8. not one byte of SR-1A's frozen server primitive changed",
-    changedSince(baseline, sr1aServerRoot).length === 0, { changed: changedSince(baseline, sr1aServerRoot) });
+    changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)).length === 0,
+    { changed: changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)) });
   check("9. SR-1B-B's frozen block migration is byte-unchanged",
     changedSince(baseline, BLOCK_MIGRATION).length === 0, { changed: changedSince(baseline, BLOCK_MIGRATION) });
   // SR-1B-D1 adds the next Social migration. Check 10 was written as a whole-prefix assertion and
@@ -144,7 +150,7 @@ try {
     "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry));
   check("10. the only supabase change attributable to SR-1B-C is its single migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("10a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -289,7 +295,7 @@ try {
   check("50. no Edge Function, no config registration, and no Production reference",
     !/social/i.test(read("supabase/config.toml"))
     && changedSince(baseline, "supabase/config.toml").length === 0
-    && changedSince(baseline, "supabase/functions").length === 0
+    && changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry)).length === 0
     && !/\bproduction\b/i.test(sqlRaw));
 
   console.log(JSON.stringify({
