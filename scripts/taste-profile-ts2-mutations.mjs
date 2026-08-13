@@ -16,13 +16,40 @@ const snapshotPath = "packages/shared/src/domain/taste-similarity/snapshot.ts";
 const normalizationPath = "packages/shared/src/domain/taste-similarity/normalization.ts";
 const canonicalSources = new Map();
 
+function repositoryRelativePath(fileName, repositoryRoot = root, platform = process.platform) {
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  const normalize = (value) => pathApi.resolve(value).replaceAll("\\", "/").replace(/\/+$/, "");
+  const normalizedRoot = normalize(repositoryRoot);
+  const normalizedFile = normalize(fileName);
+  const comparableRoot = platform === "win32" ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const comparableFile = platform === "win32" ? normalizedFile.toLowerCase() : normalizedFile;
+  const repositoryPrefix = `${comparableRoot}/`;
+  return comparableFile.startsWith(repositoryPrefix)
+    ? normalizedFile.slice(normalizedRoot.length + 1)
+    : null;
+}
+
+const pathContainmentChecks = [
+  repositoryRelativePath("C:/repo/app/src/index.ts", "C:\\repo\\app", "win32") === "src/index.ts",
+  repositoryRelativePath("C:\\repo\\app\\src\\index.ts", "C:\\repo\\app", "win32") === "src/index.ts",
+  repositoryRelativePath("/repo/app/src/index.ts", "/repo/app", "linux") === "src/index.ts",
+  repositoryRelativePath("C:\\repo\\application-other\\src\\index.ts", "C:\\repo\\app", "win32") === null,
+  repositoryRelativePath("C:\\repo\\outside\\index.ts", "C:\\repo\\app", "win32") === null,
+  repositoryRelativePath("/repo/application-other/src/index.ts", "/repo/app", "linux") === null,
+  repositoryRelativePath("/repo/outside/index.ts", "/repo/app", "linux") === null
+];
+if (pathContainmentChecks.some((passed) => !passed)) {
+  throw new Error("TS-2 mutation harness path-containment self-check failed");
+}
+
 const baseProgram = ts.createProgram([entry], {
   module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, strict: true, esModuleInterop: true,
   skipLibCheck: true, rootDir: root
 });
 for (const source of baseProgram.getSourceFiles()) {
-  if (source.fileName.startsWith(root) && !source.fileName.includes(`${path.sep}node_modules${path.sep}`)) {
-    canonicalSources.set(path.relative(root, source.fileName).replaceAll("\\", "/"), source.text);
+  const relative = repositoryRelativePath(source.fileName);
+  if (relative !== null && relative !== "node_modules" && !relative.startsWith("node_modules/") && !relative.includes("/node_modules/")) {
+    canonicalSources.set(relative, source.text);
   }
 }
 
@@ -83,7 +110,7 @@ function compile(sources, token) {
   const host = ts.createCompilerHost(baseProgram.getCompilerOptions());
   const originalGetSourceFile = host.getSourceFile.bind(host);
   host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
-    const relative = fileName.startsWith(root) ? path.relative(root, fileName).replaceAll("\\", "/") : null;
+    const relative = repositoryRelativePath(fileName);
     return relative && sources.has(relative)
       ? ts.createSourceFile(fileName, sources.get(relative), languageVersion, true)
       : originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
@@ -103,6 +130,19 @@ function compile(sources, token) {
     fs.rmSync(tempRoot, { recursive: true, force: true });
     return { compiled: true, loaded: false, loadError: error instanceof Error ? error.message : String(error) };
   }
+}
+
+const mutationTargetFiles = [...new Set(mutations.map((mutation) => mutation.file))].sort();
+const missingMutationTargetFiles = mutationTargetFiles.filter((file) => !canonicalSources.has(file));
+if (canonicalSources.size === 0 || missingMutationTargetFiles.length !== 0) {
+  console.error(JSON.stringify({
+    status: "failed",
+    reason: "canonical TS-2 source discovery incomplete",
+    programSourceCount: baseProgram.getSourceFiles().length,
+    canonicalSourceCount: canonicalSources.size,
+    missingMutationTargetFiles
+  }, null, 2));
+  process.exit(1);
 }
 
 const canonical = compile(canonicalSources, "canonical");
@@ -139,10 +179,18 @@ try {
 }
 
 const killedCount = results.filter((entry) => entry.killed).length;
+const appliedCount = results.filter((entry) => entry.applied).length;
+const noOpCount = mutations.filter((mutation) => mutation.from === mutation.to).length;
+const anchorMissingCount = results.filter((entry) => !entry.applied).length;
+const harnessCrashCount = results.filter((entry) => entry.applied && (!entry.compiled || entry.loaded === false)).length;
 const passed = killedCount === mutations.length;
 console.log(JSON.stringify({
   status: passed ? "passed" : "failed", phase: "TS-2A + TS-2B + TS-2C Targeted Semantic Mutation Suite",
-  totalMutations: mutations.length, killedMutations: killedCount, survivedMutations: mutations.length - killedCount,
+  totalMutations: mutations.length, appliedMutations: appliedCount, killedMutations: killedCount,
+  survivedMutations: mutations.length - killedCount, noOpMutations: noOpCount,
+  anchorMissingMutations: anchorMissingCount, harnessCrashMutations: harnessCrashCount,
+  programSourceCount: baseProgram.getSourceFiles().length, canonicalSourceCount: canonicalSources.size,
+  mutationTargetFiles,
   compileOnlyKillsAccepted: false, results, networkUsed: false, databaseUsed: false, credentialsUsed: false, productionTouched: false
 }, null, 2));
 if (!passed) process.exitCode = 1;
