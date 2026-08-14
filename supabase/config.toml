@@ -6,3 +6,7 @@ project_id = "msbgnnoorsoefuiwluye"
 # Must stay true — this function is an authenticated-user endpoint only, never public/anonymous.
 # See MI-E-C4's guard (checks this literal value) and report §8 for why.
 verify_jwt = true
+
+[functions.social-candidate-provenance]
+# SR-1C: authenticated count-only ingress. Actor identity is also resolved by auth.getUser().
+verify_jwt = true

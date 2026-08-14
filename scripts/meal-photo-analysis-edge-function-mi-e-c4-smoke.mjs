@@ -28,7 +28,9 @@ const root = process.cwd();
 const fnRoot = path.join(root, "supabase", "functions");
 const mealPhotoAnalysisRoot = path.join(fnRoot, "meal-photo-analysis");
 const sharedGeneratedRoot = path.join(fnRoot, "_shared", "meal-photo-analysis");
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "meal-photo-analysis-mi-e-c4-smoke-"));
+const sharedAuthRoot = path.join(fnRoot, "_shared", "auth");
+const temporaryRoot = process.platform === "win32" ? os.tmpdir() : "/tmp";
+const tempRoot = fs.mkdtempSync(path.join(temporaryRoot, "meal-photo-analysis-mi-e-c4-smoke-"));
 const outRoot = path.join(tempRoot, "functions");
 const checks = [];
 
@@ -65,7 +67,8 @@ let originalResolveFilename = null;
 try {
   const sourceFiles = [
     ...collectTsFiles(mealPhotoAnalysisRoot).filter((f) => path.basename(f) !== "index.ts"),
-    ...collectTsFiles(sharedGeneratedRoot)
+    ...collectTsFiles(sharedGeneratedRoot),
+    ...collectTsFiles(sharedAuthRoot)
   ];
   expect(sourceFiles.length >= 10, "discovered the expected set of meal-photo-analysis Edge Function + generated shared source files");
   for (const absPath of sourceFiles) {

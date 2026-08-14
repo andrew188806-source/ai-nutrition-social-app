@@ -18,6 +18,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -428,7 +429,8 @@ const ALLOWED_PATHS = new Set([
   ...TS3_SUCCESSOR_MANIFEST,
   ...SR1A_SUCCESSOR_MANIFEST,
   ...SOCIAL_SUCCESSOR_MANIFEST,
-  ...B3_VALIDATION_SUCCESSOR_MANIFEST
+  ...B3_VALIDATION_SUCCESSOR_MANIFEST,
+  ...SR1C_SUCCESSOR_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -481,6 +483,13 @@ check(
     B3_VALIDATION_SUCCESSOR_MANIFEST.every((entry) => !/[*?\[\]{}]/.test(entry)) &&
     new Set(B3_VALIDATION_SUCCESSOR_MANIFEST).size === B3_VALIDATION_SUCCESSOR_MANIFEST.length
 );
+check(
+  "26f. SR-1C successor awareness is an exact path manifest without wildcard authority",
+  SR1C_SUCCESSOR_PATHS.length > 0 &&
+    SR1C_SUCCESSOR_PATHS.every((entry) => /^[a-z0-9./_-]+\.(tsx?|mjs|sql|toml|json)$/i.test(entry)) &&
+    SR1C_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry)) &&
+    new Set(SR1C_SUCCESSOR_PATHS).size === SR1C_SUCCESSOR_PATHS.length
+);
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated
 // SR-1B-B successor. TS-2D still owns exactly one migration; that invariant is unchanged.
@@ -488,16 +497,20 @@ const otherMigrations = touchedSupabase.filter(
   (entry) =>
     entry.startsWith("supabase/migrations/") &&
     entry !== MIGRATION &&
-    !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry)
+    !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) &&
+    !SR1C_SUCCESSOR_PATHS.includes(entry)
 );
-const deployableFunctionPaths = touchedSupabase.filter((entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry));
+const deployableFunctionPaths = touchedSupabase.filter(
+  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry)
+);
 check(
   "27. this round changes no other migration and adds no deployable Edge Function",
   touchedSupabase.every(
     (entry) =>
       entry === MIGRATION ||
       SR1A_SUCCESSOR_MANIFEST.includes(entry) ||
-      SOCIAL_SUCCESSOR_MANIFEST.includes(entry)
+      SOCIAL_SUCCESSOR_MANIFEST.includes(entry) ||
+      SR1C_SUCCESSOR_PATHS.includes(entry)
   ) &&
     otherMigrations.length === 0 &&
     deployableFunctionPaths.length === 0,

@@ -282,7 +282,8 @@ const fixture = {
     "23 no HTTP request or response type exists for pair comparison");
   expect(!/JSON\.stringify/.test(serverSource), "24 no serialization path exists in the primitive");
   const config = fs.readFileSync(path.join(root, "supabase/config.toml"), "utf8");
-  expect(!/social/i.test(config), "25 no Social function is registered in supabase/config.toml");
+  expect(!/\[functions\.social-pair-comparison\]/i.test(config),
+    "25 the SR-1A pair primitive is not registered as a deployable Edge Function");
   expect(!fs.existsSync(path.join(root, "supabase/functions/social-pair-comparison")),
     "25a no deployable Social function directory exists");
   expect(!/SERVICE_ROLE|sb_secret|ADMIN_KEY|createClient|Deno\.env|process\.env/.test(serverSource),

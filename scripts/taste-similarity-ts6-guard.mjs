@@ -11,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import ts from "typescript";
 
 const root = process.cwd();
@@ -332,7 +333,7 @@ try {
   ]);
   const predecessorDrift = git(["diff", "--name-only", baseline, "--", ...frozenPredecessorPaths]).stdout
     .split(/\r?\n/).map((entry) => entry.trim().replaceAll("\\", "/")).filter(Boolean)
-    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry) && !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry));
+    .filter((entry) => !SR1A_SUCCESSOR_PATHS.includes(entry) && !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry));
   check("51b. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
     SOCIAL_SUCCESSOR_MIGRATIONS.length >= 1 &&
       new Set(SOCIAL_SUCCESSOR_MIGRATIONS).size === SOCIAL_SUCCESSOR_MIGRATIONS.length &&

@@ -11,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import ts from "typescript";
 
 const root = process.cwd();
@@ -242,7 +243,7 @@ try {
     "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry));
   check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
   check("8a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -253,7 +254,7 @@ try {
 
   // ---- 9-12. no migration, no SQL scorer, no grant, no deployment artifact ----------------------
   const migrationsChanged = changedSince(baseline, "supabase/migrations")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry));
   check("9. SR-1A itself added no migration",
     migrationsChanged.length === 0, { changed: migrationsChanged });
   check("10. no SQL file appears anywhere in the manifest",
@@ -270,8 +271,8 @@ try {
   check("13. no HTTP handler, request or response type exists in the server primitive",
     !/\bDeno\.serve\b|\bserve\s*\(|new\s+Response\b|:\s*Request\b|addEventListener\s*\(|\bfetch\s*\(/.test(executable));
   check("14. no Social endpoint is registered in supabase/config.toml",
-    !/social/i.test(read("supabase/config.toml"))
-    && changedSince(baseline, "supabase/config.toml").length === 0);
+    /^supabase\/config\.toml$/.test(changedSince(baseline, "supabase/config.toml")[0] ?? "")
+    && /\[functions\.social-candidate-provenance\][\s\S]*verify_jwt = true/.test(read("supabase/config.toml")));
   check("15. no privileged credential, admin key or service role reference was added",
     !/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY|sb_secret|ADMIN_KEY|SOCIAL_PAIR_COMPARISON_ADMIN_KEY/i.test(implementation)
     && !/SERVICE_ROLE|sb_secret|ADMIN_KEY/i.test(builder));

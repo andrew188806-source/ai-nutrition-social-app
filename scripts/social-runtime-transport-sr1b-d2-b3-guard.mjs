@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "9e6dc426a9b8e6f6b01937f068abbdb5609caac3";
@@ -121,15 +122,16 @@ try {
   check("2. every manifest path exists", manifest.every((entry) => fs.existsSync(path.join(root, entry))));
   check("3. package.json adds only four B3 validation/live commands", packageOnlyAddsB3Scripts(freeze));
   check("4. authority baseline is an ancestor of HEAD", git(["merge-base", baseline, "HEAD"]).trim() === baseline);
-  check("5. no migration was added or changed", changedSince(baseline, "supabase/migrations").length === 0,
+  check("5. no migration outside exact SR-1C successor was added or changed",
+    changedSince(baseline, "supabase/migrations").every((entry) => SR1C_SUCCESSOR_PATHS.includes(entry)),
     changedSince(baseline, "supabase/migrations"));
   check("6. D1/B1/B2 frozen migrations are byte-unchanged",
     frozenMigrations.every((file) => git(["diff", "--name-only", baseline, "--", file]).trim() === ""));
-  check("7. no config registration or deployable Edge Function was added",
-    changedSince(baseline, "supabase/config.toml").length === 0
-    && changedSince(baseline, "supabase/functions").every((entry) => entry.startsWith(`${TRANSPORT_ROOT}/`)));
-  check("8. adapter paths are exactly three non-deployable _shared TypeScript modules",
-    same(changedSince(baseline, "supabase/functions"), [CORE, CONFIG, DENO].sort()));
+  check("7. only exact SR-1C config and Edge successors were added",
+    changedSince(baseline, "supabase/config.toml").every((entry) => SR1C_SUCCESSOR_PATHS.includes(entry))
+    && changedSince(baseline, "supabase/functions").every((entry) => entry.startsWith(`${TRANSPORT_ROOT}/`) || SR1C_SUCCESSOR_PATHS.includes(entry)));
+  check("8. B3 adapter paths remain exactly its three non-deployable shared modules",
+    same(changedSince(baseline, "supabase/functions").filter((entry) => !SR1C_SUCCESSOR_PATHS.includes(entry)), [CORE, CONFIG, DENO].sort()));
 
   check("9. production adapter has no HTTP/Auth/candidate/client surface",
     !/\bDeno\.serve\b|\bRequest\b|\bResponse\b|getUser\s*\(|authorization|candidate[_A-Z]|actor[_A-Z]|viewer[_A-Z]/i.test(productionExecutable));
