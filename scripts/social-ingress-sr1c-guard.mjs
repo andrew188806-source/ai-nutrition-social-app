@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import { SR1D_SUCCESSOR_MIGRATION, SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
+import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "2efcac730c954d39a6016f5dc808dc1c9f45e42c";
@@ -124,8 +125,13 @@ try {
     git(["diff", "--name-only", successorBaseline, "--", MIGRATION]).trim() === ""
     && same(changedSince(successorBaseline, "supabase/migrations"), [SR1D_SUCCESSOR_MIGRATION]));
   check("6a. the SR-1D successor is an exact path manifest without wildcard authority",
-    same(changedSince(successorBaseline, "."), SR1D_SUCCESSOR_PATHS)
+    same(changedSince(successorBaseline, "."), [...new Set([...SR1D_SUCCESSOR_PATHS, ...SR2A_SUCCESSOR_PATHS])].sort())
     && SR1D_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry)));
+  check("6b. SR-2A successor paths are exact, wildcard-free and confined to pure shared ranking plus validation", SR2A_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2A_SUCCESSOR_PATHS).size === SR2A_SUCCESSOR_PATHS.length
+    && SR2A_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2A_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-ranking/"))
+    && !SR2A_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry.startsWith("supabase/migrations/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
   check("7. every frozen predecessor migration is byte-unchanged", frozenMigrations.every((file) => git(["diff", "--name-only", baseline, "--", file]).trim() === ""));
   check("8. every predecessor guard imports and applies the exact SR-1C successor manifest", predecessorGuards.every((file) => read(file).includes("social-ingress-sr1c-successor-manifest.mjs") && read(file).includes("SR1C_SUCCESSOR_PATHS")));
 

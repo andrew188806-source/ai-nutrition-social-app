@@ -13,6 +13,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
+import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
 import ts from "typescript";
 
 const root = process.cwd();
@@ -244,8 +245,9 @@ try {
     "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
   ]);
   const sr1dSuccessorOnly = SR1D_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
+  const sr2aSuccessorOnly = SR2A_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !sr1dSuccessorOnly.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !sr1dSuccessorOnly.includes(entry) && !sr2aSuccessorOnly.includes(entry));
   check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
   check("8a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -253,10 +255,15 @@ try {
     && new Set(SR1B_B_SUCCESSOR_PATHS).size === SR1B_B_SUCCESSOR_PATHS.length
     && SR1B_B_SUCCESSOR_PATHS.every((entry) => /^supabase\/migrations\/[0-9]{14}_[a-z0-9_]+\.sql$/.test(entry))
     && !SR1B_B_SUCCESSOR_PATHS.some((entry) => entry.includes("config.toml") || entry.includes("/functions/")));
+  check("8b. SR-2A successor authority is exact, wildcard-free and confined to its pure shared module plus validation", SR2A_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2A_SUCCESSOR_PATHS).size === SR2A_SUCCESSOR_PATHS.length
+    && SR2A_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2A_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-ranking/"))
+    && !SR2A_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry.startsWith("supabase/migrations/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
 
   // ---- 9-12. no migration, no SQL scorer, no grant, no deployment artifact ----------------------
   const migrationsChanged = changedSince(baseline, "supabase/migrations")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry));
   check("9. SR-1A itself added no migration",
     migrationsChanged.length === 0, { changed: migrationsChanged });
   check("10. no SQL file appears anywhere in the manifest",

@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
+import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "9e6dc426a9b8e6f6b01937f068abbdb5609caac3";
@@ -130,9 +131,12 @@ try {
     frozenMigrations.every((file) => git(["diff", "--name-only", baseline, "--", file]).trim() === ""));
   check("7. only exact SR-1C config and Edge successors were added",
     changedSince(baseline, "supabase/config.toml").every((entry) => SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry))
-    && changedSince(baseline, "supabase/functions").every((entry) => entry.startsWith(`${TRANSPORT_ROOT}/`) || SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry)));
+    && changedSince(baseline, "supabase/functions").every((entry) => entry.startsWith(`${TRANSPORT_ROOT}/`) || SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry) || SR2A_SUCCESSOR_PATHS.includes(entry)));
   check("8. B3 adapter paths remain exactly its three non-deployable shared modules",
-    same(changedSince(baseline, "supabase/functions").filter((entry) => !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry)), [CORE, CONFIG, DENO].sort()));
+    same(changedSince(baseline, "supabase/functions").filter((entry) => !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry)), [CORE, CONFIG, DENO].sort()));
+  check("8a. SR-2A successor paths are wildcard-free and any Supabase delta is confined to the pure shared ranking module", SR2A_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2A_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-ranking/"))
+    && !SR2A_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry.startsWith("supabase/migrations/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
 
   check("9. production adapter has no HTTP/Auth/candidate/client surface",
     !/\bDeno\.serve\b|\bRequest\b|\bResponse\b|getUser\s*\(|authorization|candidate[_A-Z]|actor[_A-Z]|viewer[_A-Z]/i.test(productionExecutable));

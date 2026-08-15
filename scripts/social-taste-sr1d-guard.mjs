@@ -5,11 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  classifySr1dLifecycle,
   SR1D_BASELINE,
   SR1D_SUCCESSOR_MIGRATION,
   SR1D_SUCCESSOR_PATHS
 } from "./social-taste-sr1d-successor-manifest.mjs";
+import {
+  classifySr2aLifecycle,
+  SR2A_BASELINE,
+  SR2A_SUCCESSOR_PATHS
+} from "./social-ranking-sr2a-successor-manifest.mjs";
 
 const root = process.cwd();
 const successorMigrationSha256 = "e0859f801c040002e855f2b03e27a5f8f95fd037c23210223a1ce29881bbe624";
@@ -75,8 +79,8 @@ function candidatePaths() {
   return git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0").filter(Boolean)
     .map((entry) => entry.slice(3).replaceAll("\\", "/")).sort();
 }
-function headDeltaEntries() {
-  return git(["diff-tree", "--no-commit-id", "--name-status", "--no-renames", "-r", "HEAD"])
+function commitDeltaEntries(commit = "HEAD") {
+  return git(["diff-tree", "--no-commit-id", "--name-status", "--no-renames", "-r", commit])
     .split(/\r?\n/)
     .map((entry) => entry.trim())
     .filter(Boolean)
@@ -95,12 +99,10 @@ function collectLifecycleState() {
     originHead,
     ahead,
     behind,
-    headParent: head === SR1D_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2A_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: candidatePaths(),
     stagedPaths: sortedLines(git(["diff", "--cached", "--name-only"])),
-    untrackedMigrationPaths: sortedLines(git(["ls-files", "--others", "--exclude-standard", "--", "supabase/migrations"])),
-    headDeltaEntries: head === SR1D_BASELINE ? [] : headDeltaEntries(),
-    migrationTrackedInHead: git(["ls-tree", "-r", "--name-only", "HEAD", "--", SR1D_SUCCESSOR_MIGRATION]).trim() === SR1D_SUCCESSOR_MIGRATION
+    headDeltaEntries: head === SR2A_BASELINE ? [] : commitDeltaEntries()
   });
 }
 
@@ -119,16 +121,18 @@ try {
   const toml = read("supabase/config.toml");
   const packageJson = JSON.parse(read("package.json"));
   const lifecycleState = collectLifecycleState();
-  const lifecycle = classifySr1dLifecycle(lifecycleState);
+  const lifecycle = classifySr2aLifecycle(lifecycleState);
+  const frozenDeltaEntries = commitDeltaEntries(SR2A_BASELINE);
+  const frozenDeltaPaths = frozenDeltaEntries.map(({ path: file }) => file).sort();
+  const frozenMigrationTracked = git(["ls-tree", "-r", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === SR1D_SUCCESSOR_MIGRATION;
 
-  check("1. candidate or frozen commit manifest is exact and contains no unrelated path", same(lifecycle.lifecycleManifest, SR1D_SUCCESSOR_PATHS), { expected: SR1D_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("1. frozen SR-1D commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2A_BASELINE}^`]).trim() === SR1D_BASELINE && same(frozenDeltaPaths, SR1D_SUCCESSOR_PATHS) && !frozenDeltaEntries.some(({ status }) => status === "D"), { expectedParent: SR1D_BASELINE, expected: SR1D_SUCCESSOR_PATHS, actual: frozenDeltaPaths });
+  check("1a. candidate or frozen SR-2A successor manifest is exact and contains no unrelated path", same(lifecycle.lifecycleManifest, SR2A_SUCCESSOR_PATHS), { expected: SR2A_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("2. every exact candidate path exists", SR1D_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-  check("3. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed with the SR-1C parent authority", lifecycle.valid, { phase: lifecycle.phase, head: lifecycleState.head, originHead: lifecycleState.originHead, ahead: lifecycleState.ahead, behind: lifecycleState.behind, headParent: lifecycleState.headParent });
+  check("3. lifecycle is exactly an authorized SR-2A successor state rooted at the frozen SR-1D authority", lifecycle.valid, { phase: lifecycle.phase, head: lifecycleState.head, originHead: lifecycleState.originHead, ahead: lifecycleState.ahead, behind: lifecycleState.behind, headParent: lifecycleState.headParent });
   check("4. candidate and frozen lifecycle both prohibit staged bytes", lifecycleState.stagedPaths.length === 0, { stagedPaths: lifecycleState.stagedPaths });
   check("5. package exposes the three exact SR-1D local suites", ["test:social-taste-sr1d", "test:social-taste-sr1d-smoke", "test:social-taste-sr1d-mutations"].every((key) => typeof packageJson.scripts[key] === "string" && packageJson.scripts[key].includes("social-taste-sr1d-")));
-  check("6. successor migration is exactly untracked in candidate or tracked in the exact frozen commit", lifecycle.candidate
-    ? same(lifecycleState.untrackedMigrationPaths, [SR1D_SUCCESSOR_MIGRATION]) && !lifecycleState.migrationTrackedInHead
-    : lifecycle.frozenShape && lifecycleState.migrationTrackedInHead);
+  check("6. frozen SR-1D successor migration remains tracked at its exact immutable path", frozenMigrationTracked && fs.existsSync(path.join(root, SR1D_SUCCESSOR_MIGRATION)) && git(["diff", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === "");
   check("6a. successor migration retains the Development-accepted SHA-256", sha256(SR1D_SUCCESSOR_MIGRATION) === successorMigrationSha256);
   check("7. all six predecessor migrations retain their frozen SHA-256", [...frozenMigrations].every(([file, hash]) => sha256(file) === hash));
   check("8. all predecessor guards use the exact SR-1D successor manifest", predecessorGuards.every((file) => read(file).includes("social-taste-sr1d-successor-manifest.mjs") && read(file).includes("SR1D_SUCCESSOR_PATHS")));
