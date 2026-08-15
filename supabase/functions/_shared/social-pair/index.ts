@@ -6,3 +6,4 @@
 // network ingress on top of both.
 export * from "./serverTasteFoundationRepository.ts";
 export * from "./serverPairComparison.ts";
+export * from "./authorizedPairSourcesAdapter.ts";

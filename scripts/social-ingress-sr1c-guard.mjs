@@ -4,9 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
+import { SR1D_SUCCESSOR_MIGRATION, SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "2efcac730c954d39a6016f5dc808dc1c9f45e42c";
+const successorBaseline = "800490e14521c0fd277cf31a2dfc39f811a60332";
 const freezeMessage = "Complete SR-1C authenticated Social candidate provenance";
 const MIGRATION = "supabase/migrations/20260811010000_social_canonical_candidate_pool.sql";
 const SHARED_AUTH = "supabase/functions/_shared/auth/authenticateCaller.ts";
@@ -118,7 +120,12 @@ try {
   check("3. baseline remains ancestor authority", git(["merge-base", baseline, "HEAD"]).trim() === baseline);
   check("4. staged diff remains empty", git(["diff", "--cached", "--name-only"]).trim() === "");
   check("5. package adds the three exact SR-1C local scripts", ["test:social-ingress-sr1c", "test:social-ingress-sr1c-smoke", "test:social-ingress-sr1c-mutations"].every((key) => typeof packageJson.scripts[key] === "string"));
-  check("6. exactly one successor migration is present", same(changedSince(baseline, "supabase/migrations"), [MIGRATION]));
+  check("6. SR-1C migration is frozen and the only later migration is the exact SR-1D successor",
+    git(["diff", "--name-only", successorBaseline, "--", MIGRATION]).trim() === ""
+    && same(changedSince(successorBaseline, "supabase/migrations"), [SR1D_SUCCESSOR_MIGRATION]));
+  check("6a. the SR-1D successor is an exact path manifest without wildcard authority",
+    same(changedSince(successorBaseline, "."), SR1D_SUCCESSOR_PATHS)
+    && SR1D_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry)));
   check("7. every frozen predecessor migration is byte-unchanged", frozenMigrations.every((file) => git(["diff", "--name-only", baseline, "--", file]).trim() === ""));
   check("8. every predecessor guard imports and applies the exact SR-1C successor manifest", predecessorGuards.every((file) => read(file).includes("social-ingress-sr1c-successor-manifest.mjs") && read(file).includes("SR1C_SUCCESSOR_PATHS")));
 
@@ -178,7 +185,7 @@ try {
   check("32. auth requires Authorization and real getUser result", /headers\.get\("Authorization"\)/.test(sharedAuth) && /error \|\| !data\.user/.test(sharedAuth));
   check("33. auth has no local JWT decode or service-role shortcut", !/decode|atob|service[_-]?role|admin/i.test(sharedAuth));
 
-  check("34. Edge config registers verify_jwt true", /\[functions\.social-candidate-provenance\][\s\S]*?verify_jwt = true/.test(toml));
+  check("34. Edge config registers verify_jwt true in its own TOML section", /\[functions\.social-candidate-provenance\][^[]*?verify_jwt = true/.test(toml));
   check("35. ingress is POST only", /request\.method !== "POST"/.test(handler));
   check("36. empty body contract rejects all submitted fields", /Object\.keys\([^)]*\)\.length === 0/.test(handler));
   check("37. ingress rejects every query parameter", /url\.searchParams\.keys\(\)/.test(handler));

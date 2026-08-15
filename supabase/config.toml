@@ -10,3 +10,7 @@ verify_jwt = true
 [functions.social-candidate-provenance]
 # SR-1C: authenticated count-only ingress. Actor identity is also resolved by auth.getUser().
 verify_jwt = true
+
+[functions.social-candidate-taste]
+# SR-1D: authenticated aggregate-only Taste diagnostics. Actor identity is resolved by auth.getUser().
+verify_jwt = true

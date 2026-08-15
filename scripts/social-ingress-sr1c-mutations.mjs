@@ -110,7 +110,7 @@ function invariants(sources) {
     /createDenoSocialRuntimeExecutorTransport\(\)/.test(provider) && !/service[_-]?role|SUPABASE_SERVICE_ROLE_KEY/i.test(provider),
     (sharedAuth.match(/auth\.getUser\(\)/g) ?? []).length === 1 && !/atob|decode/i.test(sharedAuth),
     /from "\.\.\/_shared\/auth\/authenticateCaller\.ts"/.test(mealAuth) && !/createClient|getUser/.test(mealAuth),
-    /\[functions\.social-candidate-provenance\][\s\S]*?verify_jwt = true/.test(toml)
+    /\[functions\.social-candidate-provenance\][^[]*?verify_jwt = true/.test(toml)
   ];
 }
 

@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
+import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
 import ts from "typescript";
 
 const root = process.cwd();
@@ -242,8 +243,9 @@ try {
     "supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts",
     "supabase/functions/_shared/social-runtime-transport/executorTransportConfig.ts"
   ]);
+  const sr1dSuccessorOnly = SR1D_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !sr1dSuccessorOnly.includes(entry));
   check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
   check("8a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -254,7 +256,7 @@ try {
 
   // ---- 9-12. no migration, no SQL scorer, no grant, no deployment artifact ----------------------
   const migrationsChanged = changedSince(baseline, "supabase/migrations")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry));
   check("9. SR-1A itself added no migration",
     migrationsChanged.length === 0, { changed: migrationsChanged });
   check("10. no SQL file appears anywhere in the manifest",
@@ -272,7 +274,7 @@ try {
     !/\bDeno\.serve\b|\bserve\s*\(|new\s+Response\b|:\s*Request\b|addEventListener\s*\(|\bfetch\s*\(/.test(executable));
   check("14. no Social endpoint is registered in supabase/config.toml",
     /^supabase\/config\.toml$/.test(changedSince(baseline, "supabase/config.toml")[0] ?? "")
-    && /\[functions\.social-candidate-provenance\][\s\S]*verify_jwt = true/.test(read("supabase/config.toml")));
+    && /\[functions\.social-candidate-provenance\][^[]*verify_jwt = true/.test(read("supabase/config.toml")));
   check("15. no privileged credential, admin key or service role reference was added",
     !/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY|sb_secret|ADMIN_KEY|SOCIAL_PAIR_COMPARISON_ADMIN_KEY/i.test(implementation)
     && !/SERVICE_ROLE|sb_secret|ADMIN_KEY/i.test(builder));
@@ -351,9 +353,12 @@ try {
   check("34a. the only confidence and cold start values come from the frozen stages",
     /const confidence = calculateEvidenceConfidence\(comparison\);/.test(pair)
     && /const coldStart = assessColdStart\(comparison, confidence\);/.test(pair));
+  const serverPairFiles = fs.readdirSync(path.join(root, serverRoot));
+  const sr1dAdapter = read(`${serverRoot}/authorizedPairSourcesAdapter.ts`);
   check("35. no scorer source file was copied into supabase/functions as a second authority",
-    !fs.readdirSync(path.join(root, serverRoot)).some((file) => /similarity|comparator|confidence|coldStart|adapt/i.test(file)),
-    { files: fs.readdirSync(path.join(root, serverRoot)) });
+    !serverPairFiles.some((file) => /similarity|comparator|confidence|coldStart/i.test(file))
+    && !/score|similarity|confidence|coldStart|compareTasteProfiles|adaptSharedTasteComparison/i.test(executableOnly(sr1dAdapter)),
+    { files: serverPairFiles });
   // Originally this asserted "no migration exists at all", using absence as a proxy for "no scorer
   // was reimplemented in SQL". With one enumerated successor migration now permitted, the proxy is
   // replaced by the invariant it stood for: the migration is READ and proven to contain no scoring
@@ -420,9 +425,12 @@ try {
   check("46. the barrel exports server modules only and registers no handler",
     /^export \* from "\.\/serverTasteFoundationRepository\.ts";$/m.test(barrel)
     && /^export \* from "\.\/serverPairComparison\.ts";$/m.test(barrel)
-    && lines(executableOnly(barrel)).length === 2);
+    && /^export \* from "\.\/authorizedPairSourcesAdapter\.ts";$/m.test(barrel)
+    && lines(executableOnly(barrel)).length === 3
+    && !/handler|Deno\.serve|Request|Response/.test(executableOnly(barrel)));
   check("47. no authorization, entitlement, discoverability, block or ranking logic was invented",
-    !/\bauthoriz|entitlement|discoverab|\bblocked\b|blockList|\brank(ing)?\b|\bfeed\b|recommend/i.test(executable));
+    !/\bauthoriz|entitlement|discoverab|\bblocked\b|blockList|\brank(ing)?\b|\bfeed\b|recommend/i.test(executableOnly(`${repository}\n${pair}`))
+    && !/candidate|actor|block|participation|entitlement|rank|recommend/i.test(executableOnly(sr1dAdapter)));
   check("48. the comparison parameter is named so the module cannot be mistaken for a gate",
     /alreadyAuthorizedCandidate/.test(pair));
 
