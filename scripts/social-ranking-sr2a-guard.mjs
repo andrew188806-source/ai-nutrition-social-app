@@ -7,10 +7,15 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import {
   createSr2aCanonicalManifest,
-  classifySr2aLifecycle,
   SR2A_BASELINE,
   SR2A_SUCCESSOR_PATHS
 } from "./social-ranking-sr2a-successor-manifest.mjs";
+import {
+  classifySr2bLifecycle,
+  SR2B_BASELINE,
+  SR2B_SUCCESSOR_MIGRATION,
+  SR2B_SUCCESSOR_PATHS
+} from "./social-exposure-sr2b-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -86,10 +91,10 @@ function lifecycleState() {
     originHead,
     ahead,
     behind,
-    headParent: head === SR2A_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2B_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2A_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2B_BASELINE ? [] : deltaEntries()
   });
 }
 function parse(file) {
@@ -123,11 +128,12 @@ function moduleSpecifiers(source) {
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2aLifecycle(state);
+  const lifecycle = classifySr2bLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2A_BASELINE}:package.json`]));
+  const successorScriptKeys = ["test:social-exposure-sr2b", "test:social-exposure-sr2b-smoke", "test:social-exposure-sr2b-mutations"];
   const packageWithoutSr2a = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2a.scripts[key];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2a.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -141,15 +147,20 @@ try {
   const expectedManifestText = SR2A_SUCCESSOR_PATHS
     .map((file) => `${sha256(file)}  ${file}\n`)
     .join("");
-  const frozenIndexManifest = lifecycle.candidate
-    ? null
-    : createSr2aCanonicalManifest((file) => gitBytes(["show", `:${file}`]));
-  const frozenTreeManifest = lifecycle.candidate
-    ? null
-    : createSr2aCanonicalManifest((file) => gitBytes(["show", `${state.head}:${file}`]));
+  // SR-2A is frozen at SR2B_BASELINE. A successor round legitimately amends the shared predecessor
+  // guards it also lists, so the provable invariant is that every path SR-2A alone owns is still
+  // byte-identical to its freeze commit.
+  const sr2aOwnedPaths = SR2A_SUCCESSOR_PATHS.filter((file) => !SR2B_SUCCESSOR_PATHS.includes(file));
 
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-1D authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2A path set", exact(lifecycle.lifecycleManifest, SR2A_SUCCESSOR_PATHS), { expected: SR2A_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2B successor path set", exact(lifecycle.lifecycleManifest, SR2B_SUCCESSOR_PATHS), { expected: SR2B_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2a. frozen SR-2A commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2B_BASELINE}^`]).trim() === SR2A_BASELINE && exact(deltaEntries(SR2B_BASELINE).map(({ path: file }) => file).sort(), SR2A_SUCCESSOR_PATHS));
+  check("2b. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2B_SUCCESSOR_PATHS).size === SR2B_SUCCESSOR_PATHS.length
+    && SR2B_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-exposure/") || entry === SR2B_SUCCESSOR_MIGRATION)
+    && SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && !SR2B_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
   check("3. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("4. exact module boundary contains only four TypeScript files", exact(directoryFiles, moduleFiles), { expected: moduleFiles, actual: directoryFiles });
   check("5. every exact SR-2A path exists", SR2A_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -214,7 +225,7 @@ try {
   check("49. guard contains no literal-true pass or skip call", !literalPass && !skipCall);
   check("50. canonical manifest is sorted raw-byte SHA-256 serialized as lowercase hash, two spaces, POSIX path and LF", filesystemManifest.text === expectedManifestText && filesystemManifest.paths.every((file, index, files) => index === 0 || files[index - 1] < file) && filesystemManifest.entries.every(({ path: file, sha256: hash }) => /^[0-9a-f]{64}$/.test(hash) && !file.includes("\\")) && filesystemManifest.text.endsWith("\n") && !filesystemManifest.text.includes("\r") && !filesystemManifest.text.includes("\0"));
   check("51. canonical aggregate is SHA-256 over the exact UTF-8 manifest bytes", filesystemManifest.aggregateSha256 === crypto.createHash("sha256").update(Buffer.from(expectedManifestText, "utf8")).digest("hex"));
-  check("52. frozen index and committed tree reproduce filesystem manifest bytes", lifecycle.candidate || (frozenIndexManifest.text === filesystemManifest.text && frozenIndexManifest.aggregateSha256 === filesystemManifest.aggregateSha256 && frozenTreeManifest.text === filesystemManifest.text && frozenTreeManifest.aggregateSha256 === filesystemManifest.aggregateSha256));
+  check("52. every SR-2A-owned path is byte-identical between its freeze commit and the worktree", sr2aOwnedPaths.length > 0 && sr2aOwnedPaths.every((file) => gitBytes(["show", `${SR2B_BASELINE}:${file}`]).equals(fs.readFileSync(path.join(root, file)))), { owned: sr2aOwnedPaths });
 
   console.log(JSON.stringify({
     suite: "social-ranking-sr2a-guard",

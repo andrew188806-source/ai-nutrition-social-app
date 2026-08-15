@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
 import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
+import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "45a115b4f481066e86a9d3e7d6edc967c584b214";
@@ -123,7 +124,7 @@ try {
     ["frozen Mobile taste feature", "apps/mobile/features/consumer-taste-profile"],
     ["any app file", "apps"], ["any packages file", "packages"],
     ["SR-1A server primitive", "supabase/functions/_shared"], ["D1 migration", D1_MIGRATION]]) {
-    const changed = changedSince(baseline, p).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry));
+    const changed = changedSince(baseline, p).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry));
     check(`4. ${n} is byte-unchanged outside exact B3 transport successors`, changed.length === 0, { changed });
   }
   // D2-B2 adds only the passwordless executor identity. Keep the B1 authority immutable while
@@ -132,7 +133,7 @@ try {
     "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry));
   check("5. the only supabase change attributable to B1 is the single B1 migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("5a. the successor allowance is one exact additive migration, never config or an Edge Function",
@@ -142,6 +143,12 @@ try {
   check("5b. SR-2A successor paths are wildcard-free and any Supabase delta is confined to the pure shared ranking module", SR2A_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
     && SR2A_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-ranking/"))
     && !SR2A_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry.startsWith("supabase/migrations/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
+  check("5c. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2B_SUCCESSOR_PATHS).size === SR2B_SUCCESSOR_PATHS.length
+    && SR2B_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-exposure/") || entry === SR2B_SUCCESSOR_MIGRATION)
+    && SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && !SR2B_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
 
   // ---- 10-16 role --------------------------------------------------------------------------------
   const createRole = (sql.match(/create role social_pair_read_authority with([\s\S]*?);/i) ?? [])[1] ?? "";
@@ -292,7 +299,7 @@ try {
     && changedSince(baseline, "supabase/config.toml").every((entry) => SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry))
     && /\[functions\.social-candidate-provenance\][^[]*verify_jwt = true/.test(read("supabase/config.toml")));
   check("46. no Edge Function, candidate pool, ranking, entitlement or client DTO appears",
-    changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry)).length === 0
+    changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry)).length === 0
     && !/candidate_pool|entitlement|subscription|invitation|\bchat\b|\bdto\b/i.test(sqlNoDocs)
     && !/\bproduction\b/i.test(raw));
 

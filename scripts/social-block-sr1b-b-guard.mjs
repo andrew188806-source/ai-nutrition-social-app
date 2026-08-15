@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.mjs";
 import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
 import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
+import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "8fb97da8574cc533e4af901e174ecf0be3a25d03";
@@ -141,8 +142,8 @@ try {
   check("7. no packages/ file changed",
     changedSince(baseline, "packages").length === 0, { changed: changedSince(baseline, "packages") });
   check("8. not one byte of SR-1A's frozen server primitive changed",
-    changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry)).length === 0,
-    { changed: changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry)) });
+    changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry)).length === 0,
+    { changed: changedSince(baseline, sr1aServerRoot).filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry)) });
   // SR-1B-C adds the next Social migration. Checks 9 and 10 were written as whole-prefix assertions
   // and would report a successor's migration as an SR-1B-B scope violation. The successor path is
   // enumerated EXACTLY; anything else under supabase/ still fails. Check 9a additionally constrains
@@ -154,7 +155,7 @@ try {
     "supabase/migrations/20260810050000_social_runtime_executor_role.sql"
   ]);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry));
   check("9. the only supabase change attributable to SR-1B-B is its single migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("9a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -165,11 +166,17 @@ try {
   check("9b. SR-2A successor paths are wildcard-free and any Supabase delta is confined to the pure shared ranking module", SR2A_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
     && SR2A_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-ranking/"))
     && !SR2A_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry.startsWith("supabase/migrations/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
+  check("9c. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2B_SUCCESSOR_PATHS).size === SR2B_SUCCESSOR_PATHS.length
+    && SR2B_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-exposure/") || entry === SR2B_SUCCESSOR_MIGRATION)
+    && SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && !SR2B_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
 
   // ---- 10-12. migration safety ------------------------------------------------------------------
   check("10. SR-1B-B modified no existing migration",
     changedSince(baseline, "supabase/migrations")
-      .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry)).length === 1);
+      .filter((entry) => !SOCIAL_SUCCESSOR_MIGRATIONS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry)).length === 1);
   check("11. the migration is additive — it drops nothing and alters no existing consumer table",
     !/\bdrop\s+(table|column|policy|function|view|index|constraint|type)\b/i.test(sql)
     && !/\balter\s+table\s+public\.(consumer_profiles|consumer_private_profiles|taste_profiles|nutrition_goals|dietary_restrictions|meal_records|meal_record_items|favorite_restaurants|favorite_menu_items|subscription_entitlements)\b/i.test(sql),
@@ -293,7 +300,7 @@ try {
   check("47. no Edge Function and no Social registration in supabase/config.toml",
     /\[functions\.social-candidate-provenance\][^[]*verify_jwt = true/.test(read("supabase/config.toml"))
     && changedSince(baseline, "supabase/config.toml").every((entry) => SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry))
-    && changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry)).length === 0
+    && changedSince(baseline, "supabase/functions").filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry)).length === 0
     && !fs.existsSync(path.join(root, "supabase/functions/social-block")));
 
   console.log(JSON.stringify({

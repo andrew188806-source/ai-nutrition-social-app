@@ -1,0 +1,24 @@
+-- SR-2B forward-only corrective migration.
+--
+-- Grants the minimum table-level read privilege required for an authenticated actor to resolve
+-- their OWN Social entitlement fact (SR-2B canonical exposure authority).
+--
+-- Owner row scoping already exists and is NOT changed here. 20260712131400 enabled row level
+-- security and created the owner policy
+--   subscription_entitlements_owner_read  FOR SELECT USING (auth.uid() = user_id)
+-- so every row a caller can ever see is already restricted to that caller's own auth.uid(). No
+-- caller can read another user's entitlement through this privilege.
+--
+-- A Development read-only ACL audit proved the gate is TABLE PRIVILEGE, not RLS:
+-- has_table_privilege('authenticated','public.subscription_entitlements','SELECT') was false while
+-- the owner policy was already present and permissive, so the existing policy was never reachable.
+-- This migration adds only the missing privilege — the same minimal pattern as 20260713030100 for
+-- consumer_profiles and 20260808010000 for the taste foundation tables.
+--
+-- SELECT only. authenticated only. No anon privilege, no PUBLIC privilege, no service-role Social
+-- runtime shortcut, no social_runtime_executor or authority-role grant, no write privilege
+-- (INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER), no EXECUTE, no policy creation, alteration or
+-- weakening, no schema change, no table creation, no column change, no index, no function, no RPC,
+-- no view, no trigger, no role membership, no seed, no fixture, no Auth user, and no credential.
+
+grant select on table public.subscription_entitlements to authenticated;
