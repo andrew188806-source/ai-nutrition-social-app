@@ -12,6 +12,11 @@ import {
   SR2C_SUCCESSOR_MIGRATION,
   SR2C_SUCCESSOR_PATHS
 } from "./social-profile-sr2c-successor-manifest.mjs";
+import {
+  classifySr2dLifecycle,
+  SR2D_BASELINE,
+  SR2D_SUCCESSOR_PATHS
+} from "./social-candidate-sr2d-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -97,10 +102,10 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2C_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2D_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2C_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2D_BASELINE ? [] : deltaEntries()
   });
 }
 const parse = (file) => ts.createSourceFile(file, read(file), ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
@@ -127,11 +132,12 @@ const moduleSpecifiers = (source) => source.statements
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2cLifecycle(state);
+  const lifecycle = classifySr2dLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2C_BASELINE}:package.json`]));
   const packageWithoutSr2c = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2c.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2d", "test:social-candidate-sr2d-smoke", "test:social-candidate-sr2d-mutations"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2c.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -151,7 +157,7 @@ try {
   const frozenTreeManifest = lifecycle.candidate ? null : createSr2cCanonicalManifest((file) => gitBytes(["cat-file", "blob", `${state.head}:${file}`]));
 
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2B authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2C path set", exact(lifecycle.lifecycleManifest, SR2C_SUCCESSOR_PATHS), { expected: SR2C_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2D successor path set", exact(lifecycle.lifecycleManifest, SR2D_SUCCESSOR_PATHS), { expected: SR2D_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("3. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("4. exact module boundary contains only five TypeScript files", exact(directoryFiles, moduleFiles), { expected: moduleFiles, actual: directoryFiles });
   check("5. every exact SR-2C path exists", SR2C_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -216,7 +222,7 @@ try {
   check("60. no Edge function, HTTP endpoint or public DTO path is introduced", !SR2C_SUCCESSOR_PATHS.some((file) => /^supabase\/functions\/[^_]/.test(file) || /dto/i.test(file)));
   check("61. the Supabase delta is only the pure shared module plus the one migration", SR2C_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/")).every((file) => file.startsWith(`${moduleRoot}/`) || file === SR2C_SUCCESSOR_MIGRATION));
   check("62. all frozen SR-2B, SR-2A and predecessor blobs retain exact SHA-256 at the baseline", [...frozenFiles].every(([file, hash]) => fs.existsSync(path.join(root, file)) && blobSha256(file, SR2C_BASELINE) === hash));
-  check("63. no frozen runtime or migration path has a worktree delta", [...frozenFiles.keys()].every((file) => git(["diff", "--name-only", SR2C_BASELINE, "--", file]).trim() === ""));
+  check("63. no frozen runtime or migration path has a worktree delta", [...frozenFiles.keys()].filter((file) => !SR2D_SUCCESSOR_PATHS.includes(file)).every((file) => git(["diff", "--name-only", SR2C_BASELINE, "--", file]).trim() === ""));
   check("64. frozen SR-2B authority commit remains the exact baseline", git(["cat-file", "-t", SR2C_BASELINE]).trim() === "commit" && git(["show", "-s", "--format=%H", SR2C_BASELINE]).trim() === SR2C_BASELINE);
   const secretPattern = new RegExp(`(?:${["sb", "secret"].join("_")}_[A-Za-z0-9._-]{20,}|${["service", "role", "key"].join("_")}\\s*[=:]\\s*["'][A-Za-z0-9._-]{20,}|eyJ[A-Za-z0-9_-]{30,}\\.)`);
   check("65. candidate files contain no credential-shaped secret", !secretPattern.test(SR2C_SUCCESSOR_PATHS.map((file) => read(file)).join("\n")));

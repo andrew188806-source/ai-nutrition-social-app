@@ -93,7 +93,7 @@ function invariants(sources) {
     !/actor_user_id: authentication|shared_taste_result|candidates: diagnostics/.test(handler),
     /Object\.keys\([^)]*\)\.length === 0/.test(handler),
     /JSON\.stringify\(\{ candidate_count: candidateCount \}\)/.test(sr1cHandler) && !/taste_ready/.test(sr1cHandler),
-    /\[functions\.social-candidate-taste\][\s\S]*?verify_jwt = true/.test(toml)
+    /\[functions\.social-candidate-taste\][^[]*?verify_jwt = true/.test(toml)
   ];
 }
 

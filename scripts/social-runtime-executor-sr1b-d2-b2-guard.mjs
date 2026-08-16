@@ -10,6 +10,7 @@ import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs
 import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
 import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
 import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
+import { SR2D_SUCCESSOR_PATHS } from "./social-candidate-sr2d-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "73ee5e0c224c278f3b536c4cd5978ee3f25a9be7";
@@ -106,7 +107,7 @@ try {
   check("4. no app or package production path changed", changedSince(baseline, "apps").length === 0
     && changedSince(baseline, "packages").length === 0);
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry));
   check("5. the only Supabase change attributable to B2 is the single executor migration",
     same(supabaseChanged, [MIGRATION]), { changed: supabaseChanged });
   check("6. D1's frozen migration is byte-unchanged", changedSince(baseline, D1).length === 0);

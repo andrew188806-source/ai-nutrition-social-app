@@ -8,6 +8,7 @@ import { SR1D_SUCCESSOR_MIGRATION, SR1D_SUCCESSOR_PATHS } from "./social-taste-s
 import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
 import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
 import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
+import { SR2D_SUCCESSOR_PATHS } from "./social-candidate-sr2d-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "2efcac730c954d39a6016f5dc808dc1c9f45e42c";
@@ -127,7 +128,8 @@ try {
     git(["diff", "--name-only", successorBaseline, "--", MIGRATION]).trim() === ""
     && same(changedSince(successorBaseline, "supabase/migrations"), [SR1D_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_MIGRATION].sort()));
   check("6a. the SR-1D successor is an exact path manifest without wildcard authority",
-    same(changedSince(successorBaseline, "."), [...new Set([...SR1D_SUCCESSOR_PATHS, ...SR2A_SUCCESSOR_PATHS, ...SR2B_SUCCESSOR_PATHS, ...SR2C_SUCCESSOR_PATHS])].sort())
+    same(changedSince(successorBaseline, "."), [...new Set([...SR1D_SUCCESSOR_PATHS, ...SR2A_SUCCESSOR_PATHS, ...SR2B_SUCCESSOR_PATHS, ...SR2C_SUCCESSOR_PATHS,
+    ...SR2D_SUCCESSOR_PATHS])].sort())
     && SR1D_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry)));
   check("6b. SR-2A successor paths are exact, wildcard-free and confined to pure shared ranking plus validation", SR2A_SUCCESSOR_PATHS.length > 0
     && new Set(SR2A_SUCCESSOR_PATHS).size === SR2A_SUCCESSOR_PATHS.length

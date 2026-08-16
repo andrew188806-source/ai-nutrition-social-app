@@ -17,6 +17,7 @@ import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.m
 import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
 import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
 import ts from "typescript";
+import { SR2D_SUCCESSOR_PATHS } from "./social-candidate-sr2d-successor-manifest.mjs";
 
 const root = process.cwd();
 const temporaryRoot = process.platform === "win32" ? os.tmpdir() : "/tmp";
@@ -250,8 +251,9 @@ try {
   const sr2aSuccessorOnly = SR2A_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
   const sr2bSuccessorOnly = SR2B_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
   const sr2cSuccessorOnly = SR2C_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
+  const sr2dSuccessorOnly = SR2D_SUCCESSOR_PATHS.filter((entry) => !manifest.includes(entry));
   const supabaseChanged = changedSince(baseline, "supabase")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !sr1dSuccessorOnly.includes(entry) && !sr2aSuccessorOnly.includes(entry) && !sr2bSuccessorOnly.includes(entry) && !sr2cSuccessorOnly.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !B3_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !sr1dSuccessorOnly.includes(entry) && !sr2aSuccessorOnly.includes(entry) && !sr2bSuccessorOnly.includes(entry) && !sr2cSuccessorOnly.includes(entry) && !sr2dSuccessorOnly.includes(entry));
   check("8. supabase changes are exactly the five SR-1A server paths",
     same(supabaseChanged, [ARTIFACT, PROVENANCE, BARREL, PAIR, REPOSITORY].sort()), { changed: supabaseChanged });
   check("8a. the Social successor allowance is exactly enumerated additive migrations that cannot reach config or an Edge Function",
@@ -279,7 +281,7 @@ try {
 
   // ---- 9-12. no migration, no SQL scorer, no grant, no deployment artifact ----------------------
   const migrationsChanged = changedSince(baseline, "supabase/migrations")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry));
   check("9. SR-1A itself added no migration",
     migrationsChanged.length === 0, { changed: migrationsChanged });
   check("10. no SQL file appears anywhere in the manifest",

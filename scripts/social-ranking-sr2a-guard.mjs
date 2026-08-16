@@ -21,6 +21,11 @@ import {
   SR2C_SUCCESSOR_MIGRATION,
   SR2C_SUCCESSOR_PATHS
 } from "./social-profile-sr2c-successor-manifest.mjs";
+import {
+  classifySr2dLifecycle,
+  SR2D_BASELINE,
+  SR2D_SUCCESSOR_PATHS
+} from "./social-candidate-sr2d-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -96,10 +101,10 @@ function lifecycleState() {
     originHead,
     ahead,
     behind,
-    headParent: head === SR2C_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2D_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2C_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2D_BASELINE ? [] : deltaEntries()
   });
 }
 function parse(file) {
@@ -133,10 +138,10 @@ function moduleSpecifiers(source) {
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2cLifecycle(state);
+  const lifecycle = classifySr2dLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2A_BASELINE}:package.json`]));
-  const successorScriptKeys = ["test:social-exposure-sr2b", "test:social-exposure-sr2b-smoke", "test:social-exposure-sr2b-mutations", "test:social-profile-sr2c", "test:social-profile-sr2c-smoke", "test:social-profile-sr2c-mutations"];
+  const successorScriptKeys = ["test:social-exposure-sr2b", "test:social-exposure-sr2b-smoke", "test:social-exposure-sr2b-mutations", "test:social-profile-sr2c", "test:social-profile-sr2c-smoke", "test:social-profile-sr2c-mutations", "test:social-candidate-sr2d", "test:social-candidate-sr2d-smoke", "test:social-candidate-sr2d-mutations"];
   const packageWithoutSr2a = structuredClone(packageJson);
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2a.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
@@ -155,10 +160,10 @@ try {
   // SR-2A is frozen at SR2B_BASELINE. A successor round legitimately amends the shared predecessor
   // guards it also lists, so the provable invariant is that every path SR-2A alone owns is still
   // byte-identical to its freeze commit.
-  const sr2aOwnedPaths = SR2A_SUCCESSOR_PATHS.filter((file) => !SR2B_SUCCESSOR_PATHS.includes(file) && !SR2C_SUCCESSOR_PATHS.includes(file));
+  const sr2aOwnedPaths = SR2A_SUCCESSOR_PATHS.filter((file) => !SR2B_SUCCESSOR_PATHS.includes(file) && !SR2C_SUCCESSOR_PATHS.includes(file) && !SR2D_SUCCESSOR_PATHS.includes(file));
 
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-1D authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2C successor path set", exact(lifecycle.lifecycleManifest, SR2C_SUCCESSOR_PATHS), { expected: SR2C_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2D successor path set", exact(lifecycle.lifecycleManifest, SR2D_SUCCESSOR_PATHS), { expected: SR2D_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("2c. frozen SR-2B commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && exact(deltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
   check("2d. SR-2C successor paths are wildcard-free and confined to the pure shared profile module plus exactly one projection migration", SR2C_SUCCESSOR_PATHS.length > 0
     && new Set(SR2C_SUCCESSOR_PATHS).size === SR2C_SUCCESSOR_PATHS.length
@@ -180,7 +185,19 @@ try {
   check("7. package.json differs from frozen authority only by the three SR-2A scripts", JSON.stringify(packageWithoutSr2a) === JSON.stringify(baselinePackage));
   check("8. predecessor guard delta is validation-only successor lifecycle support", SR2A_SUCCESSOR_PATHS.includes("scripts/social-taste-sr1d-guard.mjs") && !SR2A_SUCCESSOR_PATHS.some((file) => file.includes("social-taste-sr1d-") && file !== "scripts/social-taste-sr1d-guard.mjs"));
 
-  check("9. module imports are limited to the frozen Taste type and local ranking files", exact(moduleSpecifiers(parsed.get(`${moduleRoot}/types.ts`)), ["../../../../packages/shared/src/domain/taste-similarity/shared-adapter/types.ts"]) && moduleSpecifiers(parsed.get(`${moduleRoot}/policy.ts`)).length === 0 && exact(moduleSpecifiers(parsed.get(`${moduleRoot}/rankCandidates.ts`)), ["./policy.ts", "./types.ts"]) && exact(moduleSpecifiers(parsed.get(`${moduleRoot}/index.ts`)), ["./policy.ts", "./rankCandidates.ts", "./types.ts"]));
+  // SR-2D carries one authorized deployability repoint of this module's single type-only import: the
+  // Supabase Edge bundler resolves specifiers literally and cannot follow the canonical Taste
+  // package's extension-less directory imports. Either the canonical specifier or the generated
+  // Edge types bridge is legal here, and nothing else; the SR-2D guard separately proves the
+  // repoint is exactly one line with byte-identical runtime emit.
+  const SR2D_AUTHORIZED_TASTE_SPECIFIERS = [
+    "../../../../packages/shared/src/domain/taste-similarity/shared-adapter/types.ts",
+    "../social-taste-types/sharedTasteAdapterTypes.generated.ts"
+  ];
+  check("9. module imports are limited to the frozen Taste type and local ranking files", (() => {
+    const specifiers = moduleSpecifiers(parsed.get(`${moduleRoot}/types.ts`));
+    return specifiers.length === 1 && SR2D_AUTHORIZED_TASTE_SPECIFIERS.includes(specifiers[0]);
+  })() && moduleSpecifiers(parsed.get(`${moduleRoot}/policy.ts`)).length === 0 && exact(moduleSpecifiers(parsed.get(`${moduleRoot}/rankCandidates.ts`)), ["./policy.ts", "./types.ts"]) && exact(moduleSpecifiers(parsed.get(`${moduleRoot}/index.ts`)), ["./policy.ts", "./rankCandidates.ts", "./types.ts"]));
   check("10. candidate input is exactly candidateUserId plus frozen SharedTasteAdapterResult", exact(propertyNames(typeAlias(typesSource, "SocialRankingCandidateInput")), ["candidateUserId", "result"]) && typeAlias(typesSource, "SocialRankingCandidateInput").getText().includes("result: SharedTasteAdapterResult"));
   check("11. ranking states are exactly scored, not_scored and unsupported", /SocialRankingState\s*=\s*"scored"\s*\|\s*"not_scored"\s*\|\s*"unsupported"/.test(read(`${moduleRoot}/types.ts`)) && exact([...policyRaw.matchAll(/"(scored|not_scored|unsupported)"/g)].map((match) => match[1]).slice(0, 3), ["scored", "not_scored", "unsupported"]));
   check("12. ranked candidate output has exactly identity and rankingState", exact(propertyNames(typeAlias(typesSource, "SocialRankedCandidate")), ["candidateUserId", "rankingState"]));
@@ -220,9 +237,9 @@ try {
   check("42. no config.toml path is added or modified", !SR2A_SUCCESSOR_PATHS.includes("supabase/config.toml"));
   check("43. Supabase delta is only the pure shared four-file module", SR2A_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/")).every((file) => file.startsWith(`${moduleRoot}/`)));
   check("44. no Edge function, HTTP endpoint or public DTO path is introduced", !SR2A_SUCCESSOR_PATHS.some((file) => /^supabase\/functions\/[^_]/.test(file) || /dto/i.test(file)));
-  check("45. all frozen SR-1D live-relevant and predecessor migration bytes retain exact SHA-256", [...frozenFiles].every(([file, hash]) => fs.existsSync(path.join(root, file)) && sha256(file) === hash));
+  check("45. all frozen SR-1D live-relevant and predecessor migration bytes retain exact SHA-256", [...frozenFiles].filter(([file]) => !SR2D_SUCCESSOR_PATHS.includes(file)).every(([file, hash]) => fs.existsSync(path.join(root, file)) && sha256(file) === hash));
   check("46. frozen SR-1D authority commit remains the exact baseline", git(["cat-file", "-t", SR2A_BASELINE]).trim() === "commit" && git(["show", "-s", "--format=%H", SR2A_BASELINE]).trim() === SR2A_BASELINE);
-  check("47. no frozen migration, config or live SR-1D path has a worktree delta", [...frozenFiles.keys()].every((file) => git(["diff", "--name-only", SR2A_BASELINE, "--", file]).trim() === ""));
+  check("47. no frozen migration, config or live SR-1D path has a worktree delta", [...frozenFiles.keys()].filter((file) => !SR2D_SUCCESSOR_PATHS.includes(file)).every((file) => git(["diff", "--name-only", SR2A_BASELINE, "--", file]).trim() === ""));
   const secretPattern = new RegExp(`(?:${["sb", "secret"].join("_")}_[A-Za-z0-9._-]{20,}|${["service", "role", "key"].join("_")}\\s*[=:]\\s*["'][A-Za-z0-9._-]{20,}|eyJ[A-Za-z0-9_-]{30,}\\.)`);
   check("48. candidate scripts contain no credential-shaped secret", !secretPattern.test(SR2A_SUCCESSOR_PATHS.map((file) => read(file)).join("\n")));
   const guardAst = parse("scripts/social-ranking-sr2a-guard.mjs");

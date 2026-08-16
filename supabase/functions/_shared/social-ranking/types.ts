@@ -1,4 +1,4 @@
-import type { SharedTasteAdapterResult } from "../../../../packages/shared/src/domain/taste-similarity/shared-adapter/types.ts";
+import type { SharedTasteAdapterResult } from "../social-taste-types/sharedTasteAdapterTypes.generated.ts";
 
 // SR-2A is server-internal. The candidate identity and comparison result have already passed through
 // the frozen SR-1D authorization and Taste pipeline before entering this pure ranking authority.
