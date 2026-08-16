@@ -24,6 +24,7 @@ import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.m
 import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
 import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
 import { SR2D_SUCCESSOR_PATHS } from "./social-candidate-sr2d-successor-manifest.mjs";
+import { SR2E_SUCCESSOR_PATHS } from "./social-candidate-sr2e-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -440,7 +441,8 @@ const ALLOWED_PATHS = new Set([
   ...SR2A_SUCCESSOR_PATHS,
   ...SR2B_SUCCESSOR_PATHS,
   ...SR2C_SUCCESSOR_PATHS,
-    ...SR2D_SUCCESSOR_PATHS
+    ...SR2D_SUCCESSOR_PATHS,
+    ...SR2E_SUCCESSOR_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -545,10 +547,10 @@ const otherMigrations = touchedSupabase.filter(
     !SR1D_SUCCESSOR_PATHS.includes(entry) &&
     !SR2A_SUCCESSOR_PATHS.includes(entry) &&
     !SR2B_SUCCESSOR_PATHS.includes(entry) &&
-    !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry)
+    !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry)
 );
 const deployableFunctionPaths = touchedSupabase.filter(
-  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry)
+  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry)
 );
 check(
   "27. this round changes no other migration and adds no deployable Edge Function",

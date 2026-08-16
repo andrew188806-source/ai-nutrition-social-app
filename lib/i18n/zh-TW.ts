@@ -1972,6 +1972,20 @@ export const zhTW = {
       groupTableCtaBody: "如果你想把下一餐變成低壓力的健康餐局，可以查看附近即將成團的四人餐桌。",
       groupTableCta: "揪 4 人一起吃"
     },
+    socialCandidates: {
+      title: "口味相近的人",
+      subtitle: "根據你的用餐紀錄，為你找到口味接近的人。",
+      loading: "正在尋找口味相近的人…",
+      emptyTitle: "目前還沒有可以顯示的人",
+      emptyBody: "多記錄幾餐之後，這裡就會出現口味接近的人。",
+      errorTitle: "暫時無法載入",
+      errorBody: "請稍後再試一次。",
+      authTitle: "請先登入",
+      authBody: "登入後才能看到口味相近的人。",
+      retry: "重新載入",
+      willingToChatOpen: "願意先聊聊",
+      willingToChatClosed: "暫時不想聊天"
+    },
     social: {
       matchTitle: "先看相似飲食習慣，再決定是否解鎖",
       matchLimitTitle: "今日社交額度",

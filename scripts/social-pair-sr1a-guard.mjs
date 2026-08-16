@@ -18,6 +18,7 @@ import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposur
 import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
 import ts from "typescript";
 import { SR2D_SUCCESSOR_PATHS } from "./social-candidate-sr2d-successor-manifest.mjs";
+import { SR2E_SUCCESSOR_PATHS } from "./social-candidate-sr2e-successor-manifest.mjs";
 
 const root = process.cwd();
 const temporaryRoot = process.platform === "win32" ? os.tmpdir() : "/tmp";
@@ -226,11 +227,11 @@ try {
   check("4. not one byte of the frozen taste domain changed since the baseline",
     changedSince(baseline, domainRoot).length === 0, { changed: changedSince(baseline, domainRoot) });
   check("5. not one byte of the frozen Mobile taste-profile feature changed since the baseline",
-    changedSince(baseline, mobileTasteRoot).length === 0, { changed: changedSince(baseline, mobileTasteRoot) });
+    changedSince(baseline, mobileTasteRoot).filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry)).length === 0, { changed: changedSince(baseline, mobileTasteRoot).filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry)) });
   check("6. no Mobile file changed at all — SR-1A is server-internal",
-    changedSince(baseline, "apps").length === 0, { changed: changedSince(baseline, "apps") });
+    changedSince(baseline, "apps").filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry)).length === 0, { changed: changedSince(baseline, "apps").filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry)) });
   check("7. no packages/ file changed at all",
-    changedSince(baseline, "packages").length === 0, { changed: changedSince(baseline, "packages") });
+    changedSince(baseline, "packages").filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry)).length === 0, { changed: changedSince(baseline, "packages").filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry)) });
   // SR-1B-B adds the first Social migration. Checks 8, 9 and 36 were written as whole-prefix
   // assertions and would report a successor's migration as an SR-1A scope violation. The one new
   // path is enumerated EXACTLY; anything else under supabase/ still fails. Check 8a additionally
@@ -281,7 +282,7 @@ try {
 
   // ---- 9-12. no migration, no SQL scorer, no grant, no deployment artifact ----------------------
   const migrationsChanged = changedSince(baseline, "supabase/migrations")
-    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => !SR1B_B_SUCCESSOR_PATHS.includes(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry));
   check("9. SR-1A itself added no migration",
     migrationsChanged.length === 0, { changed: migrationsChanged });
   check("10. no SQL file appears anywhere in the manifest",

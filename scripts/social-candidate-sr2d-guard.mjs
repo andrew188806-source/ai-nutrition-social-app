@@ -17,6 +17,11 @@ import {
 } from "./social-candidate-sr2d-successor-manifest.mjs";
 import { BRIDGE_SOURCE_ROOT, collectBridge, renderBridge } from "./build-social-taste-types-bridge.mjs";
 import { proveRepointEquivalence, proveTypeCompatibility, SR2A_FROZEN_BASELINE } from "./social-candidate-sr2d-repoint-equivalence.mjs";
+import {
+  classifySr2eLifecycle,
+  SR2E_BASELINE,
+  SR2E_SUCCESSOR_PATHS
+} from "./social-candidate-sr2e-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -123,10 +128,10 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2D_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2E_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2D_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2E_BASELINE ? [] : deltaEntries()
   });
 }
 const parse = (file) => ts.createSourceFile(file, read(file), ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
@@ -153,11 +158,12 @@ const moduleSpecifiers = (source) => source.statements
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2dLifecycle(state);
+  const lifecycle = classifySr2eLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2D_BASELINE}:package.json`]));
   const packageWithoutSr2d = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2d.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2e", "test:social-candidate-sr2e-smoke", "test:social-candidate-sr2e-mutations", "test:social-candidate-sr2e-development-mobile-smoke"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2d.scripts[key];
 
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
@@ -193,7 +199,7 @@ try {
 
   // --- baseline / lifecycle -------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2D path set", exact(lifecycle.lifecycleManifest, SR2D_SUCCESSOR_PATHS), { expected: SR2D_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2E successor path set", exact(lifecycle.lifecycleManifest, SR2E_SUCCESSOR_PATHS), { expected: SR2E_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("3. the SR-2D baseline is the frozen SR-2C freeze commit", git(["cat-file", "-t", SR2D_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2D_BASELINE]).trim() === "Complete SR-2C public Social profile projection authority");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact SR-2D path exists", SR2D_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -340,9 +346,10 @@ try {
     ["supabase/functions/_shared/social-ranking/rankCandidates.ts", "supabase/functions/_shared/social-ranking/policy.ts", "supabase/functions/_shared/social-ranking/index.ts"]
       .every((file) => blobSha256(file, SR2A_FROZEN_BASELINE) === blobSha256(file, SR2D_BASELINE)
         && crypto.createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex") === blobSha256(file, SR2D_BASELINE)));
-  check("98. no canonical Taste package byte changed",
-    git(["diff", "--name-only", SR2D_BASELINE, "--", "packages/shared"]).trim() === "",
-    git(["diff", "--name-only", SR2D_BASELINE, "--", "packages/shared"]).trim());
+  const packagesChangedSinceSr2d = lines(git(["diff", "--name-only", SR2D_BASELINE, "--", "packages/shared"]))
+    .filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry));
+  check("98. no canonical Taste package byte changed outside the enumerated SR-2E successor",
+    packagesChangedSinceSr2d.length === 0, packagesChangedSinceSr2d);
   check("99. the historical SR-2A freeze commit remains identifiable and immutable",
     git(["cat-file", "-t", SR2A_FROZEN_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2A_FROZEN_BASELINE]).trim() === "Complete SR-2A canonical Social ranking authority");
