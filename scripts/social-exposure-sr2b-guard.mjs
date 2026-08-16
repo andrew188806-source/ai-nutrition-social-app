@@ -7,11 +7,16 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import {
   createSr2bCanonicalManifest,
-  classifySr2bLifecycle,
   SR2B_BASELINE,
   SR2B_SUCCESSOR_MIGRATION,
   SR2B_SUCCESSOR_PATHS
 } from "./social-exposure-sr2b-successor-manifest.mjs";
+import {
+  classifySr2cLifecycle,
+  SR2C_BASELINE,
+  SR2C_SUCCESSOR_MIGRATION,
+  SR2C_SUCCESSOR_PATHS
+} from "./social-profile-sr2c-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -96,10 +101,10 @@ function lifecycleState() {
     originHead,
     ahead,
     behind,
-    headParent: head === SR2B_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2C_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2B_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2C_BASELINE ? [] : deltaEntries()
   });
 }
 function parse(file) {
@@ -133,11 +138,12 @@ function moduleSpecifiers(source) {
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2bLifecycle(state);
+  const lifecycle = classifySr2cLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2B_BASELINE}:package.json`]));
   const packageWithoutSr2b = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2b.scripts[key];
+  const successorScriptKeys = ["test:social-profile-sr2c", "test:social-profile-sr2c-smoke", "test:social-profile-sr2c-mutations"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2b.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -159,7 +165,14 @@ try {
   const frozenTreeManifest = lifecycle.candidate ? null : createSr2bCanonicalManifest((file) => gitBytes(["show", `${state.head}:${file}`]));
 
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2A authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2B path set", exact(lifecycle.lifecycleManifest, SR2B_SUCCESSOR_PATHS), { expected: SR2B_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2C successor path set", exact(lifecycle.lifecycleManifest, SR2C_SUCCESSOR_PATHS), { expected: SR2C_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2a. frozen SR-2B commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && exact(deltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
+  check("2b. SR-2C successor paths are wildcard-free and confined to the pure shared profile module plus exactly one projection migration", SR2C_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2C_SUCCESSOR_PATHS).size === SR2C_SUCCESSOR_PATHS.length
+    && SR2C_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-profile/") || entry === SR2C_SUCCESSOR_MIGRATION)
+    && SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && !SR2C_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
   check("3. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("4. exact module boundary contains only five TypeScript files", exact(directoryFiles, moduleFiles), { expected: moduleFiles, actual: directoryFiles });
   check("5. every exact SR-2B path exists", SR2B_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -210,7 +223,8 @@ try {
   check("45. no randomness can affect exposure", !/Math\.random|crypto\.randomUUID|randomBytes/.test(allExecutable));
 
   check("46. exactly one SR-2B migration is added and it is the only candidate migration", exact(SR2B_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")), [SR2B_SUCCESSOR_MIGRATION]));
-  check("47. the SR-2B migration is the newest repository migration", repositoryMigrations[repositoryMigrations.length - 1] === path.basename(SR2B_SUCCESSOR_MIGRATION));
+  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`));
+  check("47. the SR-2B migration is the newest repository migration outside an enumerated successor", nonSuccessorMigrations[nonSuccessorMigrations.length - 1] === path.basename(SR2B_SUCCESSOR_MIGRATION));
   check("48. the migration executes exactly one grant statement", migrationSql === "grant select on table public.subscription_entitlements to authenticated;");
   check("49. the migration grants SELECT only to authenticated", /grant select on table public\.subscription_entitlements to authenticated;/.test(migrationSql) && !/\bto\s+(anon|public|service_role|social_runtime_executor|social_pair_read_authority|social_authority)\b/i.test(migrationSql));
   check("50. the migration grants no write, truncate, reference, trigger or execute privilege", !/\b(insert|update|delete|truncate|references|trigger|execute|all privileges|grant all)\b/i.test(migrationSql));

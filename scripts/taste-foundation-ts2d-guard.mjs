@@ -22,6 +22,7 @@ import { SR1C_SUCCESSOR_PATHS } from "./social-ingress-sr1c-successor-manifest.m
 import { SR1D_SUCCESSOR_PATHS } from "./social-taste-sr1d-successor-manifest.mjs";
 import { SR2A_SUCCESSOR_PATHS } from "./social-ranking-sr2a-successor-manifest.mjs";
 import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposure-sr2b-successor-manifest.mjs";
+import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -436,7 +437,8 @@ const ALLOWED_PATHS = new Set([
   ...SR1C_SUCCESSOR_PATHS,
   ...SR1D_SUCCESSOR_PATHS,
   ...SR2A_SUCCESSOR_PATHS,
-  ...SR2B_SUCCESSOR_PATHS
+  ...SR2B_SUCCESSOR_PATHS,
+  ...SR2C_SUCCESSOR_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -520,6 +522,15 @@ check(
     SR2B_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1 &&
     !SR2B_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
 );
+check(
+  "26j. SR-2C successor awareness is exact and confines Supabase changes to the pure shared profile module plus one projection migration",
+  SR2C_SUCCESSOR_PATHS.length > 0 &&
+    SR2C_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry)) &&
+    new Set(SR2C_SUCCESSOR_PATHS).size === SR2C_SUCCESSOR_PATHS.length &&
+    SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-profile/") || entry === SR2C_SUCCESSOR_MIGRATION) &&
+    SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1 &&
+    !SR2C_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
+);
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated
 // SR-1B-B successor. TS-2D still owns exactly one migration; that invariant is unchanged.
@@ -531,10 +542,11 @@ const otherMigrations = touchedSupabase.filter(
     !SR1C_SUCCESSOR_PATHS.includes(entry) &&
     !SR1D_SUCCESSOR_PATHS.includes(entry) &&
     !SR2A_SUCCESSOR_PATHS.includes(entry) &&
-    !SR2B_SUCCESSOR_PATHS.includes(entry)
+    !SR2B_SUCCESSOR_PATHS.includes(entry) &&
+    !SR2C_SUCCESSOR_PATHS.includes(entry)
 );
 const deployableFunctionPaths = touchedSupabase.filter(
-  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry)
+  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry)
 );
 check(
   "27. this round changes no other migration and adds no deployable Edge Function",
@@ -546,7 +558,8 @@ check(
       SR1C_SUCCESSOR_PATHS.includes(entry) ||
       SR1D_SUCCESSOR_PATHS.includes(entry) ||
       SR2A_SUCCESSOR_PATHS.includes(entry) ||
-      SR2B_SUCCESSOR_PATHS.includes(entry)
+      SR2B_SUCCESSOR_PATHS.includes(entry) ||
+      SR2C_SUCCESSOR_PATHS.includes(entry)
   ) &&
     otherMigrations.length === 0 &&
     deployableFunctionPaths.length === 0,

@@ -11,11 +11,16 @@ import {
   SR2A_SUCCESSOR_PATHS
 } from "./social-ranking-sr2a-successor-manifest.mjs";
 import {
-  classifySr2bLifecycle,
   SR2B_BASELINE,
   SR2B_SUCCESSOR_MIGRATION,
   SR2B_SUCCESSOR_PATHS
 } from "./social-exposure-sr2b-successor-manifest.mjs";
+import {
+  classifySr2cLifecycle,
+  SR2C_BASELINE,
+  SR2C_SUCCESSOR_MIGRATION,
+  SR2C_SUCCESSOR_PATHS
+} from "./social-profile-sr2c-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -91,10 +96,10 @@ function lifecycleState() {
     originHead,
     ahead,
     behind,
-    headParent: head === SR2B_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2C_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2B_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2C_BASELINE ? [] : deltaEntries()
   });
 }
 function parse(file) {
@@ -128,10 +133,10 @@ function moduleSpecifiers(source) {
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2bLifecycle(state);
+  const lifecycle = classifySr2cLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2A_BASELINE}:package.json`]));
-  const successorScriptKeys = ["test:social-exposure-sr2b", "test:social-exposure-sr2b-smoke", "test:social-exposure-sr2b-mutations"];
+  const successorScriptKeys = ["test:social-exposure-sr2b", "test:social-exposure-sr2b-smoke", "test:social-exposure-sr2b-mutations", "test:social-profile-sr2c", "test:social-profile-sr2c-smoke", "test:social-profile-sr2c-mutations"];
   const packageWithoutSr2a = structuredClone(packageJson);
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2a.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
@@ -150,10 +155,17 @@ try {
   // SR-2A is frozen at SR2B_BASELINE. A successor round legitimately amends the shared predecessor
   // guards it also lists, so the provable invariant is that every path SR-2A alone owns is still
   // byte-identical to its freeze commit.
-  const sr2aOwnedPaths = SR2A_SUCCESSOR_PATHS.filter((file) => !SR2B_SUCCESSOR_PATHS.includes(file));
+  const sr2aOwnedPaths = SR2A_SUCCESSOR_PATHS.filter((file) => !SR2B_SUCCESSOR_PATHS.includes(file) && !SR2C_SUCCESSOR_PATHS.includes(file));
 
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-1D authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2B successor path set", exact(lifecycle.lifecycleManifest, SR2B_SUCCESSOR_PATHS), { expected: SR2B_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2C successor path set", exact(lifecycle.lifecycleManifest, SR2C_SUCCESSOR_PATHS), { expected: SR2C_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2c. frozen SR-2B commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && exact(deltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
+  check("2d. SR-2C successor paths are wildcard-free and confined to the pure shared profile module plus exactly one projection migration", SR2C_SUCCESSOR_PATHS.length > 0
+    && new Set(SR2C_SUCCESSOR_PATHS).size === SR2C_SUCCESSOR_PATHS.length
+    && SR2C_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-profile/") || entry === SR2C_SUCCESSOR_MIGRATION)
+    && SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && !SR2C_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
   check("2a. frozen SR-2A commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2B_BASELINE}^`]).trim() === SR2A_BASELINE && exact(deltaEntries(SR2B_BASELINE).map(({ path: file }) => file).sort(), SR2A_SUCCESSOR_PATHS));
   check("2b. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0
     && new Set(SR2B_SUCCESSOR_PATHS).size === SR2B_SUCCESSOR_PATHS.length
