@@ -7,7 +7,6 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import {
   createSr2eCanonicalManifest,
-  classifySr2eLifecycle,
   SR2E_BASELINE,
   SR2E_FORBIDDEN_IMPORT_MARKERS,
   SR2E_MOBILE_FEATURE_ROOT,
@@ -16,6 +15,13 @@ import {
   SR2E_SUCCESSOR_MIGRATION,
   SR2E_SUCCESSOR_PATHS
 } from "./social-candidate-sr2e-successor-manifest.mjs";
+// Lifecycle classification always belongs to the newest round: SR-2E's own byte assertions stay
+// anchored to SR2E_BASELINE, while "which commit are we sitting on" is now SR-2F's question.
+import {
+  classifySr2fLifecycle,
+  SR2F_BASELINE,
+  SR2F_SUCCESSOR_PATHS
+} from "./social-candidate-sr2f-successor-manifest.mjs";
 import { proveContractEquivalence } from "./social-candidate-sr2e-contract-equivalence.mjs";
 
 const root = process.cwd();
@@ -101,10 +107,10 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2E_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2F_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2E_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2F_BASELINE ? [] : deltaEntries()
   });
 }
 const parse = (file) => ts.createSourceFile(file, read(file), ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX);
@@ -132,11 +138,12 @@ const moduleSpecifiers = (source) => source.statements
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2eLifecycle(state);
+  const lifecycle = classifySr2fLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2E_BASELINE}:package.json`]));
   const packageWithoutSr2e = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2e.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2f", "test:social-candidate-sr2f-smoke", "test:social-candidate-sr2f-mutations", "test:social-candidate-sr2f-development-composition-smoke"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2e.scripts[key];
 
   const featureSources = new Map(featurePaths.map((file) => [file, read(file)]));
   const screenSource = read(SR2E_SCREEN);
@@ -165,7 +172,7 @@ try {
 
   // --- baseline / lifecycle -------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2D authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2E path set", exact(lifecycle.lifecycleManifest, SR2E_SUCCESSOR_PATHS), { expected: SR2E_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2F path set", exact(lifecycle.lifecycleManifest, SR2F_SUCCESSOR_PATHS), { expected: SR2F_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("3. the SR-2E baseline is the frozen SR-2D freeze commit", git(["cat-file", "-t", SR2E_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2E_BASELINE]).trim() === "Complete SR-2D real Social candidate API");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact SR-2E path exists", SR2E_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));

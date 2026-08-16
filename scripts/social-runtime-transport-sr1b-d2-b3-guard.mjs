@@ -12,6 +12,7 @@ import { SR2B_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_PATHS } from "./social-exposur
 import { SR2C_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_PATHS } from "./social-profile-sr2c-successor-manifest.mjs";
 import { SR2D_SUCCESSOR_PATHS } from "./social-candidate-sr2d-successor-manifest.mjs";
 import { SR2E_SUCCESSOR_PATHS } from "./social-candidate-sr2e-successor-manifest.mjs";
+import { SR2F_SUCCESSOR_PATHS } from "./social-candidate-sr2f-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "9e6dc426a9b8e6f6b01937f068abbdb5609caac3";
@@ -137,7 +138,7 @@ try {
     changedSince(baseline, "supabase/config.toml").every((entry) => SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry) || SR2B_SUCCESSOR_PATHS.includes(entry) || SR2C_SUCCESSOR_PATHS.includes(entry) || SR2D_SUCCESSOR_PATHS.includes(entry) || SR2E_SUCCESSOR_PATHS.includes(entry))
     && changedSince(baseline, "supabase/functions").every((entry) => entry.startsWith(`${TRANSPORT_ROOT}/`) || SR1C_SUCCESSOR_PATHS.includes(entry) || SR1D_SUCCESSOR_PATHS.includes(entry) || SR2A_SUCCESSOR_PATHS.includes(entry) || SR2B_SUCCESSOR_PATHS.includes(entry) || SR2C_SUCCESSOR_PATHS.includes(entry) || SR2D_SUCCESSOR_PATHS.includes(entry) || SR2E_SUCCESSOR_PATHS.includes(entry)));
   check("8. B3 adapter paths remain exactly its three non-deployable shared modules",
-    same(changedSince(baseline, "supabase/functions").filter((entry) => !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry)), [CORE, CONFIG, DENO].sort()));
+    same(changedSince(baseline, "supabase/functions").filter((entry) => !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry)), [CORE, CONFIG, DENO].sort()));
   check("8a. SR-2A successor paths are wildcard-free and any Supabase delta is confined to the pure shared ranking module", SR2A_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
     && SR2A_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/")).every((entry) => entry.startsWith("supabase/functions/_shared/social-ranking/"))
     && !SR2A_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry.startsWith("supabase/migrations/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));

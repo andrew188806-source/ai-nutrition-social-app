@@ -38,6 +38,8 @@ import { createMealPhotoAnalysisService } from "../meal-photo-analysis/factories
 import { getMealPhotoAnalysisRuntimeFlags, type MealPhotoAnalysisRuntimeFlags } from "../meal-photo-analysis/featureFlags";
 import type { MealPhotoAnalysisService } from "../meal-photo-analysis/mealPhotoAnalysisService";
 import type { SupabaseMealPhotoAnalysisClientLike } from "../meal-photo-analysis/supabaseMealPhotoAnalysisContracts";
+import { bindSocialCandidateRuntimeDependencies } from "../social-candidates/runtimeBinding";
+import type { SupabaseSocialCandidateClientLike } from "../social-candidates/supabaseSocialCandidateContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
@@ -388,6 +390,20 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         overviewService: options.overviewService
       });
       if (!runtimeParts) return { ok: false, errorCode: "configuration_error" };
+      // SR-2F: hand the Social candidate feature the SAME canonical live dependencies every other
+      // live feature already uses — this exact `authPort` and this exact singleton `client`. No
+      // second client factory, no Social-specific auth adapter, no manual Authorization header and no
+      // actor identifier are constructed anywhere for Social.
+      //
+      // Binding is capability availability, not authentication state, so it happens once per
+      // successful live composition and is never repeated on sign-in, sign-out or token refresh:
+      // `authPort.getCurrentSession()` reads the SDK's current session on every call, so a bound
+      // feature always observes the live session without rebinding. The feature's own mode flag
+      // remains the sole authority over which repository is active.
+      bindSocialCandidateRuntimeDependencies({
+        authPort,
+        candidateClient: client as unknown as SupabaseSocialCandidateClientLike
+      });
       return {
         ok: true,
         value: {
