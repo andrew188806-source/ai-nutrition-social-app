@@ -7,7 +7,6 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import {
   createSr2fCanonicalManifest,
-  classifySr2fLifecycle,
   SR2F_BASELINE,
   SR2F_COMPOSITION,
   SR2F_FORBIDDEN_COMPOSITION_MARKERS,
@@ -17,6 +16,13 @@ import {
   SR2F_SUCCESSOR_MIGRATION,
   SR2F_SUCCESSOR_PATHS
 } from "./social-candidate-sr2f-successor-manifest.mjs";
+// Lifecycle classification always belongs to the newest round: SR-2F's own byte assertions stay
+// anchored to SR2F_BASELINE, while "which commit are we sitting on" is now SR-2G-A's question.
+import {
+  classifySr2gaLifecycle,
+  SR2GA_BASELINE,
+  SR2GA_SUCCESSOR_PATHS
+} from "./social-candidate-sr2g-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -93,10 +99,10 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2F_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GA_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2F_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GA_BASELINE ? [] : deltaEntries()
   });
 }
 // Works identically in candidate and frozen phases: when frozen the worktree equals HEAD.
@@ -107,7 +113,13 @@ function numstatAgainstBaseline(file) {
   return { added, deleted };
 }
 function changedPathsAgainstBaseline() {
-  return lines(git(["diff", "--name-only", SR2F_BASELINE])).map((entry) => entry.replaceAll("\\", "/")).sort();
+  // "What SR-2F changed" must exclude what a LATER round changed, or every assertion built on this
+  // set starts failing the moment a successor is committed. The exclusion is the enumerated SR-2G-A
+  // manifest only — no prefix, no glob.
+  return lines(git(["diff", "--name-only", SR2F_BASELINE]))
+    .map((entry) => entry.replaceAll("\\", "/"))
+    .filter((entry) => !SR2GA_SUCCESSOR_PATHS.includes(entry))
+    .sort();
 }
 function addedLinesAgainstBaseline(file) {
   return git(["diff", "--unified=0", SR2F_BASELINE, "--", file])
@@ -138,11 +150,12 @@ function enclosingFunctionName(node) {
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2fLifecycle(state);
+  const lifecycle = classifySr2gaLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2F_BASELINE}:package.json`]));
   const packageWithoutSr2f = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2f.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-a", "test:social-candidate-sr2g-a-smoke", "test:social-candidate-sr2g-a-mutations", "test:social-candidate-sr2g-a-development-acceptance"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2f.scripts[key];
 
   const compositionRaw = read(SR2F_COMPOSITION);
   const composition = executable(compositionRaw);
@@ -195,7 +208,7 @@ try {
 
   // --- baseline / lifecycle -------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2E authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2F path set", exact(lifecycle.lifecycleManifest, SR2F_SUCCESSOR_PATHS), { expected: SR2F_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-A path set", exact(lifecycle.lifecycleManifest, SR2GA_SUCCESSOR_PATHS), { expected: SR2GA_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("3. the SR-2F baseline is the frozen SR-2E freeze commit", git(["cat-file", "-t", SR2F_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2F_BASELINE]).trim() === "Complete SR-2E real Social candidate mobile integration");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact SR-2F path exists", SR2F_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -274,6 +287,8 @@ try {
   check("54. filesystem manifest text is canonical", filesystemManifest.text === expectedManifestText);
   check("55. manifest aggregate is a 64-character lowercase hex digest", /^[0-9a-f]{64}$/.test(filesystemManifest.aggregateSha256));
   check("56. manifest entry count equals the declared path count", filesystemManifest.entries.length === SR2F_SUCCESSOR_PATHS.length);
+  // This asserts SR-2F's OWN manifest is sorted and POSIX. It is not a successor allowance, so the
+  // SR-2G-A set must not appear here.
   check("57. manifest paths are POSIX and sorted", exact(filesystemManifest.paths, [...SR2F_SUCCESSOR_PATHS].sort()) && filesystemManifest.paths.every((file) => !file.includes("\\")));
   check("58. frozen index bytes equal filesystem bytes", !lifecycle.frozenShape || frozenIndexManifest.aggregateSha256 === filesystemManifest.aggregateSha256, { frozen: lifecycle.frozenShape });
   check("59. frozen tree bytes equal filesystem bytes", !lifecycle.frozenShape || frozenTreeManifest.aggregateSha256 === filesystemManifest.aggregateSha256, { frozen: lifecycle.frozenShape });
