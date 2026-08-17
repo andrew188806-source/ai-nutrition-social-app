@@ -6,7 +6,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   createSr2gbr1CanonicalManifest,
-  classifySr2gbr1Lifecycle,
   SR2GBR1_BASELINE,
   SR2GBR1_FORBIDDEN_MARKERS,
   SR2GBR1_FROZEN_MIGRATIONS,
@@ -14,6 +13,7 @@ import {
   SR2GBR1_SUCCESSOR_PATHS,
   SR2GBR1_TARGET_ROLE
 } from "./social-candidate-sr2g-b-r1-successor-manifest.mjs";
+import { classifySr2gcr1Lifecycle, SR2GCR1_BASELINE, SR2GCR1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-c-r1-successor-manifest.mjs";
 
 const root = process.cwd();
 
@@ -63,20 +63,21 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GBR1_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GCR1_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GBR1_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GCR1_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2gbr1Lifecycle(state);
+  const lifecycle = classifySr2gcr1Lifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GBR1_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithout.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
 
   const migrationRaw = read(SR2GBR1_MIGRATION);
   const migration = sqlExecutable(migrationRaw);
@@ -89,8 +90,8 @@ try {
   const frozenTreeManifest = lifecycle.frozenShape ? createSr2gbr1CanonicalManifest((file) => gitBytes(["cat-file", "blob", `${state.head}:${file}`])) : null;
 
   // --- lifecycle / manifest ---------------------------------------------------------------------
-  check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2G-C authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, ahead: state.ahead });
-  check("2. lifecycle manifest is the exact SR-2G-B-R1 path set", exact(lifecycle.lifecycleManifest, SR2GBR1_SUCCESSOR_PATHS), { expected: SR2GBR1_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2G-B-R1 authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, ahead: state.ahead });
+  check("2. lifecycle manifest is the exact SR-2G-C-R1 path set", exact(lifecycle.lifecycleManifest, SR2GCR1_SUCCESSOR_PATHS), { expected: SR2GCR1_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   check("3. the baseline is the pushed SR-2G-C freeze commit", git(["cat-file", "-t", SR2GBR1_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2GBR1_BASELINE]).trim() === "Establish SR-2G-C Meal Buddy candidate pool authority");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact path exists", SR2GBR1_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -100,9 +101,10 @@ try {
   check("9. predecessor delta is validation-only successor lifecycle support", SR2GBR1_SUCCESSOR_PATHS.filter((file) => file.startsWith("scripts/") && !file.includes("sr2g-b-r1")).every((file) => file.endsWith("-guard.mjs")));
 
   // --- migration containment ------------------------------------------------------------------------
+  const sr2gbr1MigrationFiles = migrationFiles.filter((f) => !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`));
   check("10. exactly one migration is added", SR2GBR1_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 1
-    && exact(migrationFiles, [...baselineMigrations, path.basename(SR2GBR1_MIGRATION)].sort()));
-  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GBR1_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GBR1_MIGRATION).length === 0);
+    && exact(sr2gbr1MigrationFiles, [...baselineMigrations, path.basename(SR2GBR1_MIGRATION)].sort()), { sr2gbr1MigrationFiles });
+  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GBR1_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GBR1_MIGRATION && !SR2GCR1_SUCCESSOR_PATHS.includes(e)).length === 0);
   check("12. the SR-2G-A, SR-2G-B and SR-2G-C migrations are byte-unchanged", lines(git(["diff", "--name-only", SR2GBR1_BASELINE, "--", ...SR2GBR1_FROZEN_MIGRATIONS])).length === 0);
   check("13. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
 
@@ -130,7 +132,7 @@ try {
 
   // --- scope ---------------------------------------------------------------------------------------------
   check("27. no Edge function path is touched", !SR2GBR1_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/functions/")));
-  check("28. supabase/config.toml is untouched", !SR2GBR1_SUCCESSOR_PATHS.includes("supabase/config.toml"));
+  check("28. supabase/config.toml is untouched", !SR2GBR1_SUCCESSOR_PATHS.includes("supabase/config.toml") && !SR2GCR1_SUCCESSOR_PATHS.includes("supabase/config.toml"));
   check("29. no Mobile or shared package path is touched", !SR2GBR1_SUCCESSOR_PATHS.some((file) => file.startsWith("apps/") || file.startsWith("packages/")));
   check("30. no later-round authority is begun", !SR2GBR1_SUCCESSOR_PATHS.some((file) => /candidate-list|sr2g-d/i.test(file)));
   check("31. no Production project reference exists", !SR2GBR1_SUCCESSOR_PATHS.map((file) => read(file)).some((text) => /\bprod(uction)?[-_]?(ref|project|url)\b/i.test(text)));
