@@ -17,6 +17,7 @@ import { SR2GC_SUCCESSOR_PATHS } from "./social-candidate-sr2g-c-successor-manif
 import { SR2GBR1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-b-r1-successor-manifest.mjs";
 import { SR2GCR1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-c-r1-successor-manifest.mjs";
 import { SR2CR1_SUCCESSOR_PATHS } from "./social-interest-sr2c-r1-successor-manifest.mjs";
+import { SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const baseline = "2efcac730c954d39a6016f5dc808dc1c9f45e42c";
@@ -134,11 +135,11 @@ try {
   check("5. package adds the three exact SR-1C local scripts", ["test:social-ingress-sr1c", "test:social-ingress-sr1c-smoke", "test:social-ingress-sr1c-mutations"].every((key) => typeof packageJson.scripts[key] === "string"));
   check("6. SR-1C migration is frozen and every later migration is an exact enumerated successor",
     git(["diff", "--name-only", successorBaseline, "--", MIGRATION]).trim() === ""
-    && same(changedSince(successorBaseline, "supabase/migrations").filter((entry) => !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry)), [SR1D_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_MIGRATION].sort()));
+    && same(changedSince(successorBaseline, "supabase/migrations").filter((entry) => !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry)), [SR1D_SUCCESSOR_MIGRATION, SR2B_SUCCESSOR_MIGRATION, SR2C_SUCCESSOR_MIGRATION].sort()));
   check("6a. the SR-1D successor is an exact path manifest without wildcard authority",
     same(changedSince(successorBaseline, "."), [...new Set([...SR1D_SUCCESSOR_PATHS, ...SR2A_SUCCESSOR_PATHS, ...SR2B_SUCCESSOR_PATHS, ...SR2C_SUCCESSOR_PATHS,
     ...SR2D_SUCCESSOR_PATHS,
-    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS])].sort())
+    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS])].sort())
     && SR1D_SUCCESSOR_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry)));
   check("6b. SR-2A successor paths are exact, wildcard-free and confined to pure shared ranking plus validation", SR2A_SUCCESSOR_PATHS.length > 0
     && new Set(SR2A_SUCCESSOR_PATHS).size === SR2A_SUCCESSOR_PATHS.length

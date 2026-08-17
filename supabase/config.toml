@@ -33,3 +33,9 @@ verify_jwt = true
 # SR-2G-B: authenticated owned-card cancel. Takes one opaque source card reference, which is not
 # authorization: ownership is re-verified server-side.
 verify_jwt = true
+
+[functions.meal-buddy-candidate-list]
+# SR-2G-D: authenticated Meal Buddy candidate list. Actor identity is resolved through auth.getUser();
+# the only request input is one source-purpose card reference, and eligibility, ranking, exposure and
+# interests all come from frozen server authority.
+verify_jwt = true

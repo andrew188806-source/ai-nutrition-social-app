@@ -5,12 +5,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  createSr2cr1CanonicalManifest, classifySr2cr1Lifecycle,
+  createSr2cr1CanonicalManifest,
   SR2CR1_BASELINE, SR2CR1_COMPACT_VISIBLE, SR2CR1_DATA_MIGRATION, SR2CR1_FOOD_CATEGORIES,
   SR2CR1_FORBIDDEN_MARKERS, SR2CR1_FROZEN_MIGRATIONS, SR2CR1_GENERAL_CATEGORIES,
   SR2CR1_MAX_FOOD, SR2CR1_MAX_GENERAL, SR2CR1_MIGRATIONS, SR2CR1_MODULE_ROOT,
   SR2CR1_PROJECTION_MIGRATION, SR2CR1_SCHEMA_MIGRATION, SR2CR1_SUCCESSOR_PATHS
 } from "./social-interest-sr2c-r1-successor-manifest.mjs";
+import { classifySr2gdLifecycle, SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -59,20 +60,21 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2CR1_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GD_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2CR1_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GD_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2cr1Lifecycle(state);
+  const lifecycle = classifySr2gdLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2CR1_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithout.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
 
   const schema = sqlExec(read(SR2CR1_SCHEMA_MIGRATION));
   const data = sqlExec(read(SR2CR1_DATA_MIGRATION));
@@ -90,17 +92,18 @@ try {
   const frozenTree = lifecycle.frozenShape ? createSr2cr1CanonicalManifest((f) => gitBytes(["cat-file", "blob", `${state.head}:${f}`])) : null;
 
   // --- lifecycle / manifest ------------------------------------------------------------------
-  check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2G-C-R1 authority", lifecycle.valid, { phase: lifecycle.phase });
-  check("2. lifecycle manifest is the exact SR-2C-R1 path set", exact(lifecycle.lifecycleManifest, SR2CR1_SUCCESSOR_PATHS), { expected: SR2CR1_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", lifecycle.valid, { phase: lifecycle.phase });
+  check("2. lifecycle manifest is the exact SR-2G-D path set", exact(lifecycle.lifecycleManifest, SR2GD_SUCCESSOR_PATHS), { expected: SR2GD_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   check("3. the baseline is the pushed SR-2G-C-R1 freeze commit", git(["cat-file", "-t", SR2CR1_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2CR1_BASELINE]).trim() === "Repair SR-2G-C pool authority grantor membership");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0);
   check("5. every exact path exists", SR2CR1_SUCCESSOR_PATHS.every((f) => fs.existsSync(path.join(root, f))));
   check("6. candidate paths are wildcard-free and unique", new Set(SR2CR1_SUCCESSOR_PATHS).size === SR2CR1_SUCCESSOR_PATHS.length && SR2CR1_SUCCESSOR_PATHS.every((e) => !/[*?[\]{}]/.test(e)));
   check("7. package exposes the exact canonical commands", Object.entries(packageScripts).every(([k, v]) => packageJson.scripts[k] === v));
   check("8. package.json differs from frozen authority only by the SR-2C-R1 scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+  const sr2cr1MigrationFiles = migrationFiles.filter((f) => !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`));
   check("9. exactly three migrations are added", SR2CR1_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 3
-    && exact(migrationFiles, [...baselineMigrations, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m))].sort()));
-  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e)).length === 0);
+    && exact(sr2cr1MigrationFiles, [...baselineMigrations, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m))].sort()));
+  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e)).length === 0);
   check("11. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", ...SR2CR1_FROZEN_MIGRATIONS])).length === 0);
   check("12. every migration is transactional", [schema, data, projection].every((m) => /^begin;/m.test(m) && /^commit;/m.test(m)));
 
