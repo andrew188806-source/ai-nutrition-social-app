@@ -18,3 +18,18 @@ verify_jwt = true
 [functions.social-candidate-list]
 # SR-2D: authenticated public Social candidate list. Actor identity is resolved through auth.getUser().
 verify_jwt = true
+
+[functions.meal-buddy-card-create]
+# SR-2G-B: authenticated owned-card create. Actor identity is resolved through auth.getUser(); quota
+# is server-derived from the frozen entitlement resolver and is never a request input.
+verify_jwt = true
+
+[functions.meal-buddy-card-list]
+# SR-2G-B: authenticated owned-card list. Empty request body; the actor is the verified caller and
+# no other owner's card is reachable.
+verify_jwt = true
+
+[functions.meal-buddy-card-cancel]
+# SR-2G-B: authenticated owned-card cancel. Takes one opaque source card reference, which is not
+# authorization: ownership is re-verified server-side.
+verify_jwt = true

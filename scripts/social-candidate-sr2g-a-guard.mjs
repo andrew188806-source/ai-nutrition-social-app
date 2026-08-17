@@ -6,7 +6,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   createSr2gaCanonicalManifest,
-  classifySr2gaLifecycle,
   SR2GA_BASELINE,
   SR2GA_CARD_TYPES,
   SR2GA_COLUMNS,
@@ -20,6 +19,13 @@ import {
   SR2GA_SUCCESSOR_PATHS,
   SR2GA_TABLE
 } from "./social-candidate-sr2g-a-successor-manifest.mjs";
+// Lifecycle classification always belongs to the newest round: SR-2G-A's own byte assertions stay
+// anchored to SR2GA_BASELINE, while "which commit are we sitting on" is now SR-2G-B's question.
+import {
+  classifySr2gbLifecycle,
+  SR2GB_BASELINE,
+  SR2GB_SUCCESSOR_PATHS
+} from "./social-candidate-sr2g-b-successor-manifest.mjs";
 
 const root = process.cwd();
 
@@ -87,20 +93,21 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GA_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GB_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GA_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GB_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2gaLifecycle(state);
+  const lifecycle = classifySr2gbLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GA_BASELINE}:package.json`]));
   const packageWithoutSr2ga = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithoutSr2ga.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-b", "test:social-candidate-sr2g-b-smoke", "test:social-candidate-sr2g-b-mutations", "test:social-candidate-sr2g-b-development-acceptance"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2ga.scripts[key];
 
   const migrationRaw = read(SR2GA_MIGRATION);
   const migration = sqlExecutable(migrationRaw);
@@ -141,7 +148,7 @@ try {
 
   // --- lifecycle / manifest ---------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2F authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-A path set", exact(lifecycle.lifecycleManifest, SR2GA_SUCCESSOR_PATHS), { expected: SR2GA_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-B path set", exact(lifecycle.lifecycleManifest, SR2GB_SUCCESSOR_PATHS), { expected: SR2GB_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("3. the SR-2G-A baseline is the frozen SR-2F freeze commit", git(["cat-file", "-t", SR2GA_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2GA_BASELINE]).trim() === "Complete SR-2F Social candidate app composition activation");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact SR-2G-A path exists", SR2GA_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -153,7 +160,8 @@ try {
 
   // --- migration scope --------------------------------------------------------------------------
   check("11. SR-2G-A adds exactly one migration", SR2GA_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1);
-  check("12. the migration is the only new migration file on disk", exact(migrationFiles, [...baselineMigrations, path.basename(SR2GA_MIGRATION)].sort()), { added: migrationFiles.filter((f) => !baselineMigrations.includes(f)) });
+  const sr2gaMigrationFiles = migrationFiles.filter((f) => !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`));
+  check("12. the migration is the only new migration file outside an enumerated successor", exact(sr2gaMigrationFiles, [...baselineMigrations, path.basename(SR2GA_MIGRATION)].sort()), { added: sr2gaMigrationFiles.filter((f) => !baselineMigrations.includes(f)) });
   // Compared through git rather than raw worktree bytes. The repository runs core.autocrlf=true with
   // no .gitattributes, so older migrations are materialised with CRLF while the object store holds
   // LF: a worktree-vs-blob digest comparison would report every historical migration as drifted and
@@ -162,12 +170,13 @@ try {
   // the baseline, and the assertion is about PRE-EXISTING migrations. Without the exclusion the
   // check would pass as a candidate and fail the moment the commit exists.
   const migrationDrift = lines(git(["diff", "--name-only", SR2GA_BASELINE, "--", "supabase/migrations"]))
-    .filter((entry) => entry !== SR2GA_MIGRATION);
+    .filter((entry) => entry !== SR2GA_MIGRATION && !SR2GB_SUCCESSOR_PATHS.includes(entry));
   check("13. no pre-existing migration changed", migrationDrift.length === 0, { migrationDrift });
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
-  check("15. every frozen predecessor backend file is byte-unchanged", frozenBackendFiles.every((file) => sha256(file) === blobSha256(file, SR2GA_BASELINE)), { drifted: frozenBackendFiles.filter((file) => sha256(file) !== blobSha256(file, SR2GA_BASELINE)) });
+  const sr2gaFrozenBackend = frozenBackendFiles.filter((file) => !SR2GB_SUCCESSOR_PATHS.includes(file));
+  check("15. every frozen predecessor backend file outside an enumerated successor is byte-unchanged", sr2gaFrozenBackend.every((file) => sha256(file) === blobSha256(file, SR2GA_BASELINE)), { drifted: sr2gaFrozenBackend.filter((file) => sha256(file) !== blobSha256(file, SR2GA_BASELINE)) });
   check("16. no Edge function directory is added or modified", !SR2GA_SUCCESSOR_PATHS.some((file) => /^supabase\/functions\/(?!_shared\/meal-buddy-card-ref\/)/.test(file)));
-  check("17. supabase/config.toml is untouched, so no function is registered", sha256("supabase/config.toml") === blobSha256("supabase/config.toml", SR2GA_BASELINE));
+  check("17. SR-2G-A itself registers no Edge function", !SR2GA_SUCCESSOR_PATHS.includes("supabase/config.toml") && (SR2GB_SUCCESSOR_PATHS.includes("supabase/config.toml") || sha256("supabase/config.toml") === blobSha256("supabase/config.toml", SR2GA_BASELINE)));
 
   // --- schema: identity, columns, enums ----------------------------------------------------------
   check("18. the canonical card table is created", new RegExp(`create table ${SR2GA_TABLE.replace(".", "\\.")}\\s*\\(`).test(migration));
