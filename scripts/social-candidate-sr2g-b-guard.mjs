@@ -26,7 +26,8 @@ import {
 import { SR2GBR1_BASELINE, SR2GBR1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-b-r1-successor-manifest.mjs";
 import { SR2GCR1_BASELINE, SR2GCR1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-c-r1-successor-manifest.mjs";
 import { SR2CR1_BASELINE, SR2CR1_SUCCESSOR_PATHS } from "./social-interest-sr2c-r1-successor-manifest.mjs";
-import { classifySr2gdLifecycle, SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d-successor-manifest.mjs";
+import { SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d-successor-manifest.mjs";
+import { classifySr2ge1Lifecycle, SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
 
 const root = process.cwd();
 
@@ -87,20 +88,20 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GD_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GE1_TOOLING_COMMIT ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GD_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GE1_TOOLING_COMMIT ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2gdLifecycle(state);
+  const lifecycle = classifySr2ge1Lifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GB_BASELINE}:package.json`]));
   const packageWithoutSr2gb = structuredClone(packageJson);
-  const successorScriptKeys = ["test:social-candidate-sr2g-c", "test:social-candidate-sr2g-c-smoke", "test:social-candidate-sr2g-c-mutations", "test:social-candidate-sr2g-c-development-acceptance", "test:social-candidate-sr2g-b-r1", "test:social-candidate-sr2g-b-r1-smoke", "test:social-candidate-sr2g-b-r1-mutations", "test:social-candidate-sr2g-b-r1-development-acceptance", "test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance", "test:social-interest-sr2c-r1", "test:social-interest-sr2c-r1-smoke", "test:social-interest-sr2c-r1-mutations", "test:social-interest-sr2c-r1-development-acceptance", "test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance"];
+  const successorScriptKeys = ["test:social-candidate-sr2g-c", "test:social-candidate-sr2g-c-smoke", "test:social-candidate-sr2g-c-mutations", "test:social-candidate-sr2g-c-development-acceptance", "test:social-candidate-sr2g-b-r1", "test:social-candidate-sr2g-b-r1-smoke", "test:social-candidate-sr2g-b-r1-mutations", "test:social-candidate-sr2g-b-r1-development-acceptance", "test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance", "test:social-interest-sr2c-r1", "test:social-interest-sr2c-r1-smoke", "test:social-interest-sr2c-r1-mutations", "test:social-interest-sr2c-r1-development-acceptance", "test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance", "test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2gb.scripts[key];
 
   const migration = sqlExecutable(read(SR2GB_MIGRATION));
@@ -127,7 +128,7 @@ try {
 
   // --- lifecycle / manifest ---------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-D path set", exact(lifecycle.lifecycleManifest, SR2GD_SUCCESSOR_PATHS), { expected: SR2GD_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-E1 path set", exact(lifecycle.lifecycleManifest, SR2GE1_SUCCESSOR_PATHS), { expected: SR2GE1_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   check("3. the SR-2G-B baseline is the frozen SR-2G-A freeze commit", git(["cat-file", "-t", SR2GB_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2GB_BASELINE]).trim() === "Establish SR-2G-A canonical Meal Buddy card authority");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact SR-2G-B path exists", SR2GB_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -139,10 +140,10 @@ try {
 
   // --- migration scope --------------------------------------------------------------------------
   check("11. SR-2G-B adds exactly one migration", SR2GB_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1);
-  const sr2gbMigrationFiles = migrationFiles.filter((f) => !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`));
+  const sr2gbMigrationFiles = migrationFiles.filter((f) => !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`));
   check("12. the migration is the only new migration file outside an enumerated successor", exact(sr2gbMigrationFiles, [...baselineMigrations, path.basename(SR2GB_MIGRATION)].sort()), { sr2gbMigrationFiles });
   const migrationDrift = lines(git(["diff", "--name-only", SR2GB_BASELINE, "--", "supabase/migrations"]))
-    .filter((entry) => entry !== SR2GB_MIGRATION && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry));
+    .filter((entry) => entry !== SR2GB_MIGRATION && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry));
   check("13. no pre-existing migration changed", migrationDrift.length === 0, { migrationDrift });
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
   check("15. every frozen predecessor authority file is byte-unchanged", lines(git(["diff", "--name-only", SR2GB_BASELINE, "--", ...frozenPredecessorFiles])).length === 0);

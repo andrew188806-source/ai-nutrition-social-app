@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  createSr2gdCanonicalManifest, classifySr2gdLifecycle,
+  createSr2gdCanonicalManifest,
   SR2GD_API_FILES, SR2GD_API_ROOT, SR2GD_BASELINE, SR2GD_BASELINE_SUBJECT, SR2GD_BRIDGE_FUNCTION,
   SR2GD_CARD_REF_PREFIX, SR2GD_COMPACT_VISIBLE, SR2GD_FORBIDDEN_REQUEST_KEYS,
   SR2GD_FORBIDDEN_RESPONSE_MARKERS, SR2GD_FORBIDDEN_SCOPE_MARKERS, SR2GD_FREE_EXPOSURE,
@@ -15,6 +15,7 @@ import {
   SR2GD_PROFILE_FUNCTION, SR2GD_REQUEST_KEY, SR2GD_RESTAURANT_COLUMNS, SR2GD_RESTAURANT_POLICY,
   SR2GD_SUCCESSOR_PATHS
 } from "./social-candidate-sr2g-d-successor-manifest.mjs";
+import { classifySr2ge1Lifecycle, SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -64,20 +65,21 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GD_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GE1_TOOLING_COMMIT ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GD_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GE1_TOOLING_COMMIT ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2gdLifecycle(state);
+  const lifecycle = classifySr2ge1Lifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GD_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithout.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
 
   const migration = sqlExec(read(SR2GD_MIGRATION));
   const policy = read(`${SR2GD_API_ROOT}/policy.ts`);
@@ -105,7 +107,7 @@ try {
 
   // --- lifecycle / manifest ------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-D path set", exact(lifecycle.lifecycleManifest, SR2GD_SUCCESSOR_PATHS), { expected: SR2GD_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-E1 path set", exact(lifecycle.lifecycleManifest, SR2GE1_SUCCESSOR_PATHS), { expected: SR2GE1_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   check("3. the pinned predecessor is the exact pushed SR-2C-R1 freeze commit",
     git(["cat-file", "-t", SR2GD_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GD_BASELINE]).trim() === SR2GD_BASELINE_SUBJECT
