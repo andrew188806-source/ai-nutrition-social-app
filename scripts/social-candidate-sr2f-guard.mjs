@@ -27,7 +27,8 @@ import { SR2GBR1_BASELINE, SR2GBR1_SUCCESSOR_PATHS } from "./social-candidate-sr
 import { SR2GCR1_BASELINE, SR2GCR1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-c-r1-successor-manifest.mjs";
 import { SR2CR1_BASELINE, SR2CR1_SUCCESSOR_PATHS } from "./social-interest-sr2c-r1-successor-manifest.mjs";
 import { SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d-successor-manifest.mjs";
-import { classifySr2ge1Lifecycle, SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
+import { SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
+import { classifySr2ge2Lifecycle, SR2GE2_BASELINE, SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -104,10 +105,10 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GE1_TOOLING_COMMIT ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GE2_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GE1_TOOLING_COMMIT ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GE2_BASELINE ? [] : deltaEntries()
   });
 }
 // Works identically in candidate and frozen phases: when frozen the worktree equals HEAD.
@@ -123,7 +124,7 @@ function changedPathsAgainstBaseline() {
   // manifest only — no prefix, no glob.
   return lines(git(["diff", "--name-only", SR2F_BASELINE]))
     .map((entry) => entry.replaceAll("\\", "/"))
-    .filter((entry) => !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry))
+    .filter((entry) => !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry))
     .sort();
 }
 function addedLinesAgainstBaseline(file) {
@@ -155,11 +156,11 @@ function enclosingFunctionName(node) {
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2ge1Lifecycle(state);
+  const lifecycle = classifySr2ge2Lifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2F_BASELINE}:package.json`]));
   const packageWithoutSr2f = structuredClone(packageJson);
-  const successorScriptKeys = ["test:social-candidate-sr2g-a", "test:social-candidate-sr2g-a-smoke", "test:social-candidate-sr2g-a-mutations", "test:social-candidate-sr2g-a-development-acceptance", "test:social-candidate-sr2g-b", "test:social-candidate-sr2g-b-smoke", "test:social-candidate-sr2g-b-mutations", "test:social-candidate-sr2g-b-development-acceptance", "test:social-candidate-sr2g-c", "test:social-candidate-sr2g-c-smoke", "test:social-candidate-sr2g-c-mutations", "test:social-candidate-sr2g-c-development-acceptance", "test:social-candidate-sr2g-b-r1", "test:social-candidate-sr2g-b-r1-smoke", "test:social-candidate-sr2g-b-r1-mutations", "test:social-candidate-sr2g-b-r1-development-acceptance", "test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance", "test:social-interest-sr2c-r1", "test:social-interest-sr2c-r1-smoke", "test:social-interest-sr2c-r1-mutations", "test:social-interest-sr2c-r1-development-acceptance", "test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance", "test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance"];
+  const successorScriptKeys = ["test:social-candidate-sr2g-a", "test:social-candidate-sr2g-a-smoke", "test:social-candidate-sr2g-a-mutations", "test:social-candidate-sr2g-a-development-acceptance", "test:social-candidate-sr2g-b", "test:social-candidate-sr2g-b-smoke", "test:social-candidate-sr2g-b-mutations", "test:social-candidate-sr2g-b-development-acceptance", "test:social-candidate-sr2g-c", "test:social-candidate-sr2g-c-smoke", "test:social-candidate-sr2g-c-mutations", "test:social-candidate-sr2g-c-development-acceptance", "test:social-candidate-sr2g-b-r1", "test:social-candidate-sr2g-b-r1-smoke", "test:social-candidate-sr2g-b-r1-mutations", "test:social-candidate-sr2g-b-r1-development-acceptance", "test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance", "test:social-interest-sr2c-r1", "test:social-interest-sr2c-r1-smoke", "test:social-interest-sr2c-r1-mutations", "test:social-interest-sr2c-r1-development-acceptance", "test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance", "test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance", "test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2f.scripts[key];
 
   const compositionRaw = read(SR2F_COMPOSITION);
@@ -213,7 +214,7 @@ try {
 
   // --- baseline / lifecycle -------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-E1 path set", exact(lifecycle.lifecycleManifest, SR2GE1_SUCCESSOR_PATHS), { expected: SR2GE1_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-E2 path set", exact(lifecycle.lifecycleManifest, SR2GE2_SUCCESSOR_PATHS), { expected: SR2GE2_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("3. the SR-2F baseline is the frozen SR-2E freeze commit", git(["cat-file", "-t", SR2F_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2F_BASELINE]).trim() === "Complete SR-2E real Social candidate mobile integration");
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact SR-2F path exists", SR2F_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));

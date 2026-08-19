@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  createSr2ge1CanonicalManifest, classifySr2ge1Lifecycle,
+  createSr2ge1CanonicalManifest,
   SR2GE1_BASELINE, SR2GE1_BASELINE_SUBJECT, SR2GE1_CANDIDATE_LIST_FUNCTION, SR2GE1_CARD_LIST_FUNCTION,
   SR2GE1_CARD_REF_PREFIX, SR2GE1_CATALOG_LABEL_TABLE, SR2GE1_COMPACT_VISIBLE, SR2GE1_FEATURE_FILES,
   SR2GE1_FEATURE_ROOT, SR2GE1_FORBIDDEN_MOCK_IMPORTS, SR2GE1_FORBIDDEN_SCOPE_MARKERS,
@@ -14,6 +14,7 @@ import {
   SR2GE1_SUCCESSOR_PATHS, SR2GE1_TIME_ZONE, SR2GE1_TOOLING_COMMIT, SR2GE1_TOOLING_PATHS,
   SR2GE1_TOOLING_SUBJECT
 } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
+import { classifySr2ge2Lifecycle, SR2GE2_BASELINE, SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -62,20 +63,21 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GE1_TOOLING_COMMIT ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GE2_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GE1_TOOLING_COMMIT ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GE2_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2ge1Lifecycle(state);
+  const lifecycle = classifySr2ge2Lifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GE1_TOOLING_COMMIT}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithout.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke"];
+  for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
 
   const dtoTypes = read(`${SR2GE1_SHARED_ROOT}/types.ts`);
   const dtoValidate = read(`${SR2GE1_SHARED_ROOT}/validate.ts`);
@@ -102,12 +104,14 @@ try {
   // --- baseline and two-commit stack ------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed over the two-commit stack",
     lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-E1 path set", exact(lifecycle.lifecycleManifest, SR2GE1_SUCCESSOR_PATHS),
-    { expected: SR2GE1_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
-  check("3. the pushed authority is the exact frozen SR-2G-D freeze commit",
+  check("2. lifecycle manifest is the exact SR-2G-E2 path set", exact(lifecycle.lifecycleManifest, SR2GE2_SUCCESSOR_PATHS),
+    { expected: SR2GE2_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  // The SR-2G-D commit is still SR-2G-E1's pinned authority. Origin itself legitimately advances as
+  // later rounds are pushed, so it is accepted at either the SR-2G-D or the SR-2G-E1 freeze.
+  check("3. the pinned authority is the exact frozen SR-2G-D freeze commit",
     git(["cat-file", "-t", SR2GE1_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_BASELINE]).trim() === SR2GE1_BASELINE_SUBJECT
-    && state.originHead === SR2GE1_BASELINE);
+    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GE2_BASELINE));
   check("4. the local tooling predecessor is intact, unamended and still the SR-2G-E1 parent",
     git(["cat-file", "-t", SR2GE1_TOOLING_COMMIT]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_TOOLING_COMMIT]).trim() === SR2GE1_TOOLING_SUBJECT
@@ -115,7 +119,7 @@ try {
   check("5. the tooling commit carries exactly its three Development paths",
     exact(deltaEntries(SR2GE1_TOOLING_COMMIT).map(({ path: p }) => p).sort(), [...SR2GE1_TOOLING_PATHS].sort()));
   check("6. the successor manifest ABSORBS the tooling paths rather than exempting them",
-    SR2GE1_TOOLING_PATHS.every((p) => SR2GE1_SUCCESSOR_PATHS.includes(p))
+    SR2GE1_TOOLING_PATHS.every((p) => SR2GE1_SUCCESSOR_PATHS.includes(p) || SR2GE2_SUCCESSOR_PATHS.includes(p))
     && SR2GE1_TOOLING_PATHS.every((p) => !SR2GE1_OWN_PATHS.includes(p)));
   check("7. SR-2G-E1 does not recommit the tooling files",
     !lifecycle.frozenShape || !deltaEntries().some(({ path: p }) => SR2GE1_TOOLING_PATHS.includes(p)));
@@ -310,8 +314,11 @@ try {
   // --- scope ------------------------------------------------------------------------------------------------------------------
   const scopeLeaks = SR2GE1_FORBIDDEN_SCOPE_MARKERS.filter((marker) => new RegExp(marker, "i").test(allFeature));
   check("74. no invite, match, chat, profile-detail or menu-context concept appears", scopeLeaks.length === 0, { scopeLeaks });
-  check("75. SR-2G-E2 screen activation has not begun",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "apps/mobile/app"])).length === 0
+  // SR-2G-E1 itself activates no screen. A later enumerated round legitimately does, so its paths
+  // are excluded rather than the assertion being dropped.
+  check("75. SR-2G-E1 itself begins no screen activation",
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "apps/mobile/app"]))
+      .filter((f) => !SR2GE2_SUCCESSOR_PATHS.includes(f)).length === 0
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("apps/mobile/app/")));
   check("76. the 116KB Meal Buddy screen and its mock stores are untouched",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "apps/mobile/features/meal-buddy-card"])).length === 0);

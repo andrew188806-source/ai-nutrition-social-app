@@ -10,6 +10,7 @@ import {
   getMealBuddyCandidateRuntimeFlags,
   type MealBuddyCandidateRuntimeFlags
 } from "./featureFlags";
+import type { SupabaseInterestCatalogClientLike } from "./interestCatalog";
 import type { MealBuddyCandidateRepository, MealBuddySourceCardRepository } from "./ports";
 import { MealBuddyCandidateService } from "./mealBuddyCandidateService";
 import type { SupabaseMealBuddyClientLike } from "./supabaseMealBuddyCandidateContracts";
@@ -17,6 +18,10 @@ import type { SupabaseMealBuddyClientLike } from "./supabaseMealBuddyCandidateCo
 export type MealBuddyCandidateFactoryDependencies = {
   authPort?: ConsumerAuthPort;
   mealBuddyClient?: SupabaseMealBuddyClientLike;
+  // SR-2G-E2 additive slot. The catalog client reads the PUBLIC interest label vocabulary and
+  // nothing else; it is declared separately from `mealBuddyClient` so this feature never gains a
+  // general-purpose table reader, even though app composition happens to bind one object to both.
+  catalogClient?: SupabaseInterestCatalogClientLike;
 };
 
 // Any unmet precondition returns the DISABLED repositories, never a demo one. There is no mock

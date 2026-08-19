@@ -43,6 +43,15 @@ import {
   type MockMatchedBuddy,
   type RankedMealBuddyCandidate
 } from "../features/meal-buddy-card";
+// Imported from their own modules, not from the SR-2G-E1 barrel: that barrel is the frozen DATA
+// LAYER and stays render-free, so nothing that renders is re-exported through it.
+import { MealBuddyRealCandidateSection } from "../features/meal-buddy-candidates/MealBuddyRealCandidateSection";
+import { MealBuddyRealSourceCardPicker } from "../features/meal-buddy-candidates/MealBuddyRealSourceCardPicker";
+import {
+  useMealBuddyRealCandidates,
+  type MealBuddyRealCandidatesController
+} from "../features/meal-buddy-candidates/useMealBuddyRealCandidates";
+import { useConsumerRuntime } from "../features/consumer-runtime";
 import { resolveCommunityProfileDisplay, type AvatarSource, type CommunityProfileDisplay } from "../features/display-resolvers";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { clearU1NextMealBuddyPrefill, consumeU1NextMealBuddyPrefill, type U1NextMealBuddyPrefillViewModel } from "../features/next-meal-prototype";
@@ -195,6 +204,19 @@ export default function MealBuddyHomeScreen() {
   const [, setSocialVersion] = useState(0);
   const [acceptedMealInvite, setAcceptedMealInvite] = useState<ReturnType<typeof getMealBuddyInvites>[number] | null>(null);
   const [u1Prefill, setU1Prefill] = useState<U1NextMealBuddyPrefillViewModel | null>(null);
+  // SR-2G-E2: authenticated real mode. In this mode the candidate list comes ONLY from the frozen
+  // SR-2G-D endpoint via the SR-2G-E1 data layer, and the mock candidate pipeline below
+  // (getMealBuddyCandidates / rankMealBuddyRecommendations / drawMatchedMealBuddyCandidates) is not
+  // reachable at all — not as a source, not as a fallback and not on error.
+  const consumerRuntime = useConsumerRuntime();
+  const isRealCandidateMode = consumerRuntime.mode === "supabase";
+  const realCandidates = useMealBuddyRealCandidates(isRealCandidateMode);
+  const loadRealSourceCards = realCandidates.loadSourceCards;
+  // The actor's own real cards are read once when real mode becomes active. Leaving real mode is
+  // handled inside the hook, which resets the cards, the selection and the candidates together.
+  useEffect(() => {
+    if (isRealCandidateMode) void loadRealSourceCards();
+  }, [isRealCandidateMode, loadRealSourceCards]);
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
   const chats = getMealBuddyChats();
@@ -305,6 +327,8 @@ export default function MealBuddyHomeScreen() {
           isPremium={demoMode === "premium"}
           highlightCardCreatedAt={params.highlightCardCreatedAt}
           matchedFriendsCount={matchedFriends.length}
+          isRealCandidateMode={isRealCandidateMode}
+          realCandidates={realCandidates}
           recommendationGroups={recommendationGroups}
           onCardsChanged={() => setActiveCards(getActiveMealBuddyCards())}
           onGoToChats={goToChats}
@@ -333,6 +357,10 @@ export default function MealBuddyHomeScreen() {
           onViewCandidateCard={() => undefined}
           onUseCard={(card) => {
             setPaidQuotaMessage("");
+            // Real mode never reaches the mock pipeline below. It also never maps this demo card
+            // onto a real one: the demo shape carries no meal period, so it is not a valid source
+            // identity. Real mode selects a real card by its own opaque reference, in the picker.
+            if (isRealCandidateMode) return;
             const ranked = rankMealBuddyRecommendations(card, getMealBuddyCandidates());
             const draw = drawMatchedMealBuddyCandidates(demoMode, ranked, demoMode === "premium" ? 5 : 3);
             if (draw.allowed === 0) {
@@ -507,8 +535,10 @@ function DiscoverSection({
   invites,
   highlightCardCreatedAt,
   isPremium,
+  isRealCandidateMode,
   matchedFriendsCount,
   paidQuotaMessage,
+  realCandidates,
   recommendationGroups,
   onCardsChanged,
   onDeleteCard,
@@ -534,8 +564,10 @@ function DiscoverSection({
   invites: ReturnType<typeof getMealBuddyInvites>;
   highlightCardCreatedAt?: string;
   isPremium: boolean;
+  isRealCandidateMode: boolean;
   matchedFriendsCount: number;
   paidQuotaMessage: string;
+  realCandidates: MealBuddyRealCandidatesController;
   recommendationGroups: RecommendationGroup[];
   onCardsChanged: () => void;
   onDeleteCard: (card: MealBuddyCard) => void;
@@ -713,7 +745,18 @@ function DiscoverSection({
         <>
           <SnowSectionHeader title="今日推薦飯友" subtitle={`${isPremium ? "依你選擇的飯友卡推薦" : "免費版推薦"} · 今日已看 ${dailyUsage.used}/${dailyUsage.limit}`} />
 
-          {recommendationGroups.length > 0 ? (
+          {/* SR-2G-E2 real mode. The user picks one of their OWN real active Meal Buddy cards, and
+              that card's opaque reference is what the server is asked about. The mock recommendation
+              groups below are not rendered at all here, so no demo candidate, no client-side rank
+              and no 5/3 draw cap can reach an authenticated screen. */}
+          {isRealCandidateMode ? (
+            <View style={styles.cardList}>
+              <MealBuddyRealSourceCardPicker controller={realCandidates} />
+              <MealBuddyRealCandidateSection controller={realCandidates} />
+            </View>
+          ) : null}
+
+          {!isRealCandidateMode && recommendationGroups.length > 0 ? (
             <View style={styles.cardList}>
               {recommendationGroups.map((group) =>
                 group.quotaFull ? (
