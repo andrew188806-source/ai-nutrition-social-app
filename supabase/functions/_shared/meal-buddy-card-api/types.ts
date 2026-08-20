@@ -19,6 +19,10 @@ export type MealBuddyCardCreateRequest = Readonly<{
   diningDate: string;
   mealPeriod: MealBuddyMealPeriod;
   preferredTime: string | null;
+  // SR-2G-F. Optional canonical meal/menu context: a food-namespace social_interest_catalog tag_key
+  // and never a dish name, a free-text string, a menu item id or a restaurant id. Omitting the key
+  // entirely is valid and produces exactly a pre-SR-2G-F card.
+  foodContextTagKey: string | null;
 }>;
 
 // The client-visible owned card. `sourceCardRef` replaces the internal uuid entirely; there is no
@@ -34,6 +38,9 @@ export type OwnedMealBuddyCardDto = Readonly<{
   preferredTime: string | null;
   createdAt: string;
   expiresAt: string;
+  // SR-2G-F. The owner's own context, returned so they can see and choose among their own cards.
+  // This is the card owner reading their own card, never another user's context.
+  foodContextTagKey: string | null;
 }>;
 
 // Used and limit per card type. The limit is server-derived from the frozen entitlement resolver;
@@ -73,6 +80,7 @@ export type InternalMealBuddyCardRow = Readonly<{
   preferred_time: string | null;
   created_at: string;
   expires_at: string;
+  food_context_tag_key: string | null;
 }>;
 
 export type MealBuddyCardCounts = Readonly<{ general: number; restaurant: number }>;

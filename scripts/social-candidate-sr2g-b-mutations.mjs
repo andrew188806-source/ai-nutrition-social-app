@@ -292,8 +292,10 @@ const tsMutants = [
   { name: "the caller may supply a tier", file: VALIDATE,
     apply: (s) => s.replace('"cardType", "intentionType", "restaurantId", "area", "diningDate", "mealPeriod", "preferredTime"',
       '"cardType", "intentionType", "restaurantId", "area", "diningDate", "mealPeriod", "preferredTime", "tier"') },
+  // SR-2G-F successor awareness: the key-set rule became two rules — every required key present,
+  // every present key known — so "unknown keys are ignored" now means deleting the second one.
   { name: "unknown request keys are ignored instead of rejected", file: VALIDATE,
-    apply: (s) => s.replace("if (keys.length !== expected.length || !keys.every((key, index) => key === expected[index])) {\n    return { ok: false };\n  }", "") },
+    apply: (s) => s.replace("if (!keys.every((key) => known.has(key))) return { ok: false };", "") },
   { name: "the past-date rule is removed", file: VALIDATE,
     apply: (s) => s.replace("if (diningDate < taipeiCalendarDate(requestInstant)) return { ok: false };", "") },
   { name: "the raw card id is returned to the client", file: COMPOSE,

@@ -14,7 +14,8 @@ import {
   SR2GE1_SUCCESSOR_PATHS, SR2GE1_TIME_ZONE, SR2GE1_TOOLING_COMMIT, SR2GE1_TOOLING_PATHS,
   SR2GE1_TOOLING_SUBJECT
 } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
-import { classifySr2ge2Lifecycle, SR2GE2_BASELINE, SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -63,20 +64,20 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GE2_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GF_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GE2_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GF_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2ge2Lifecycle(state);
+  const lifecycle = classifySr2gfLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GE1_TOOLING_COMMIT}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  const successorScriptKeys = ["test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke"];
+  const successorScriptKeys = ["test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke", "test:social-candidate-sr2g-f", "test:social-candidate-sr2g-f-smoke", "test:social-candidate-sr2g-f-mutations", "test:social-candidate-sr2g-f-development-acceptance"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
 
   const dtoTypes = read(`${SR2GE1_SHARED_ROOT}/types.ts`);
@@ -104,14 +105,14 @@ try {
   // --- baseline and two-commit stack ------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed over the two-commit stack",
     lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-E2 path set", exact(lifecycle.lifecycleManifest, SR2GE2_SUCCESSOR_PATHS),
-    { expected: SR2GE2_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-F successor path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
+    { expected: SR2GF_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   // The SR-2G-D commit is still SR-2G-E1's pinned authority. Origin itself legitimately advances as
   // later rounds are pushed, so it is accepted at either the SR-2G-D or the SR-2G-E1 freeze.
   check("3. the pinned authority is the exact frozen SR-2G-D freeze commit",
     git(["cat-file", "-t", SR2GE1_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_BASELINE]).trim() === SR2GE1_BASELINE_SUBJECT
-    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GE2_BASELINE));
+    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GF_BASELINE));
   check("4. the local tooling predecessor is intact, unamended and still the SR-2G-E1 parent",
     git(["cat-file", "-t", SR2GE1_TOOLING_COMMIT]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_TOOLING_COMMIT]).trim() === SR2GE1_TOOLING_SUBJECT
@@ -119,10 +120,13 @@ try {
   check("5. the tooling commit carries exactly its three Development paths",
     exact(deltaEntries(SR2GE1_TOOLING_COMMIT).map(({ path: p }) => p).sort(), [...SR2GE1_TOOLING_PATHS].sort()));
   check("6. the successor manifest ABSORBS the tooling paths rather than exempting them",
-    SR2GE1_TOOLING_PATHS.every((p) => SR2GE1_SUCCESSOR_PATHS.includes(p) || SR2GE2_SUCCESSOR_PATHS.includes(p))
+    SR2GE1_TOOLING_PATHS.every((p) => SR2GE1_SUCCESSOR_PATHS.includes(p) || SR2GE2_SUCCESSOR_PATHS.includes(p) || SR2GF_SUCCESSOR_PATHS.includes(p))
     && SR2GE1_TOOLING_PATHS.every((p) => !SR2GE1_OWN_PATHS.includes(p)));
+  // The Development fixture tooling is a declared SR-2G-F successor path: that round extends the
+  // seed to express the meal-context matrix. SR-2G-E1 itself still recommits none of it.
   check("7. SR-2G-E1 does not recommit the tooling files",
-    !lifecycle.frozenShape || !deltaEntries().some(({ path: p }) => SR2GE1_TOOLING_PATHS.includes(p)));
+    !lifecycle.frozenShape || !deltaEntries().some(({ path: p }) =>
+      SR2GE1_TOOLING_PATHS.includes(p) && !SR2GF_SUCCESSOR_PATHS.includes(p)));
   check("8. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("9. every exact path exists", SR2GE1_SUCCESSOR_PATHS.every((f) => fs.existsSync(path.join(root, f))));
   check("10. candidate paths are wildcard-free and unique",
@@ -134,10 +138,13 @@ try {
   check("13. no dependency or lockfile is touched",
     JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
-  check("14. no migration is added or changed", lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).length === 0
+  check("14. no migration is added or changed outside the enumerated SR-2G-F successor set",
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/migrations/")));
-  check("15. no server authority byte is touched at all",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).length === 0
+  // SR-2G-E1 itself introduced no server byte, and that stays provable: the ONLY supabase delta
+  // since its baseline is the exactly-enumerated SR-2G-F successor set.
+  check("15. no server authority byte is touched outside the enumerated SR-2G-F successor set",
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("16. every frozen SR-2E predecessor module is byte-unchanged",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", ...SR2GE1_FROZEN_MOBILE_PATHS])).length === 0);
@@ -334,8 +341,11 @@ try {
   check("79. every tooling script still hard-pins the Development project",
     SR2GE1_TOOLING_PATHS.every((f) => /msbgnnoorsoefuiwluye/.test(read(f)))
     && count(tooling, "DEVELOPMENT ONLY") === SR2GE1_TOOLING_PATHS.length);
-  check("80. the tooling project guard is byte-unchanged by SR-2G-E1",
-    lines(git(["diff", "--name-only", SR2GE1_TOOLING_COMMIT, "--", ...SR2GE1_TOOLING_PATHS])).length === 0);
+  // The Development fixture tooling is a declared SR-2G-F successor path: that round extends the
+  // seed to express the meal-context matrix. Everything else in the tooling stays byte-frozen.
+  check("80. the tooling project guard is byte-unchanged outside the enumerated SR-2G-F successor set",
+    lines(git(["diff", "--name-only", SR2GE1_TOOLING_COMMIT, "--", ...SR2GE1_TOOLING_PATHS]))
+      .every((f) => SR2GF_SUCCESSOR_PATHS.includes(f)));
   check("81. no Production project reference exists anywhere in the candidate",
     !SR2GE1_SUCCESSOR_PATHS.map(read).some((t) => /\bprod(uction)?[-_]?(ref|project|url)\b/i.test(t)));
 

@@ -5,13 +5,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
-  createSr2ge2CanonicalManifest, classifySr2ge2Lifecycle,
-  SR2GE2_BASELINE, SR2GE2_BASELINE_SUBJECT, SR2GE2_CARD_REF_PREFIX, SR2GE2_COMPACT_VISIBLE,
+  createSr2ge2CanonicalManifest,
+  SR2GE2_CARD_REF_PREFIX, SR2GE2_COMPACT_VISIBLE,
   SR2GE2_FEATURE_ROOT, SR2GE2_FORBIDDEN_SCOPE_MARKERS, SR2GE2_FORBIDDEN_SOURCE_DERIVATIONS,
   SR2GE2_FREE_EXPOSURE, SR2GE2_FROZEN_E1_PATHS, SR2GE2_MOCK_CANDIDATE_AUTHORITY,
   SR2GE2_PERSON_REF_PREFIX, SR2GE2_PREMIUM_EXPOSURE, SR2GE2_SCREEN, SR2GE2_SCREEN_FILES,
   SR2GE2_SUCCESSOR_PATHS, SR2GE2_TIME_ZONE
 } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+// SR-2G-F successor awareness. The lifecycle this guard validates is the CURRENT round's, and the
+// SR-2G-F baseline is this round's own freeze commit — so every "unchanged since baseline" check
+// below now measures exactly what SR-2G-F changed, and nothing else.
+import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_BASELINE_SUBJECT, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -61,20 +65,24 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GE2_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GF_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GE2_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GF_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2ge2Lifecycle(state);
+  const lifecycle = classifySr2gfLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
-  const baselinePackage = JSON.parse(git(["show", `${SR2GE2_BASELINE}:package.json`]));
+  const baselinePackage = JSON.parse(git(["show", `${SR2GF_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  for (const key of Object.keys(packageScripts)) delete packageWithout.scripts[key];
+  const successorScriptKeys = ["test:social-candidate-sr2g-f", "test:social-candidate-sr2g-f-smoke", "test:social-candidate-sr2g-f-mutations", "test:social-candidate-sr2g-f-development-acceptance"];
+  // The baseline is now this round's OWN freeze commit, which already carries the SR-2G-E2 keys.
+  // Only the successor round's keys are removed before the comparison; check 7 still proves the
+  // SR-2G-E2 keys are present and exact.
+  for (const key of successorScriptKeys) delete packageWithout.scripts[key];
 
   const screen = read(SR2GE2_SCREEN);
   const screenExec = tsExec(screen);
@@ -94,29 +102,34 @@ try {
   // --- baseline ---------------------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2G-E1 authority",
     lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-E2 path set", exact(lifecycle.lifecycleManifest, SR2GE2_SUCCESSOR_PATHS),
-    { expected: SR2GE2_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-F successor path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
+    { expected: SR2GF_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   check("3. the pinned predecessor is the exact pushed SR-2G-E1 freeze commit",
-    git(["cat-file", "-t", SR2GE2_BASELINE]).trim() === "commit"
-    && git(["log", "-1", "--format=%s", SR2GE2_BASELINE]).trim() === SR2GE2_BASELINE_SUBJECT);
+    git(["cat-file", "-t", SR2GF_BASELINE]).trim() === "commit"
+    && git(["log", "-1", "--format=%s", SR2GF_BASELINE]).trim() === SR2GF_BASELINE_SUBJECT);
   check("4. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("5. every exact path exists", SR2GE2_SUCCESSOR_PATHS.every((f) => fs.existsSync(path.join(root, f))));
   check("6. candidate paths are wildcard-free and unique",
     new Set(SR2GE2_SUCCESSOR_PATHS).size === SR2GE2_SUCCESSOR_PATHS.length
     && SR2GE2_SUCCESSOR_PATHS.every((e) => !/[*?[\]{}]/.test(e)));
   check("7. package exposes the exact canonical commands", Object.entries(packageScripts).every(([k, v]) => packageJson.scripts[k] === v));
-  check("8. package.json differs from the frozen predecessor only by the SR-2G-E2 scripts",
+  check("8. package.json differs from this round's freeze only by the SR-2G-F successor scripts",
     JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   check("9. no dependency or lockfile is touched",
     JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
-  check("10. no server authority byte is touched at all",
-    lines(git(["diff", "--name-only", SR2GE2_BASELINE, "--", "supabase"])).length === 0
+  // SR-2G-E2 itself introduced no server byte, and that stays provable: the ONLY supabase delta
+  // since this round's freeze is the exactly-enumerated SR-2G-F successor set.
+  check("10. no server authority byte is touched outside the enumerated SR-2G-F successor set",
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f))
     && !SR2GE2_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
-  check("11. every frozen SR-2G-E1 data-layer file is byte-unchanged",
-    lines(git(["diff", "--name-only", SR2GE2_BASELINE, "--", ...SR2GE2_FROZEN_E1_PATHS])).length === 0);
+  check("11. every frozen SR-2G-E1 data-layer file is byte-unchanged outside the SR-2G-F successor set",
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", ...SR2GE2_FROZEN_E1_PATHS]))
+      .every((f) => SR2GF_SUCCESSOR_PATHS.includes(f)));
   check("12. the predecessor delta outside SR-2G-E2's own files is validation-only successor awareness",
     SR2GE2_SUCCESSOR_PATHS.filter((f) => f.startsWith("scripts/") && !f.includes("sr2g-e2")).every((f) => f.endsWith("-guard.mjs")));
+  check("12a. the SR-2G-F successor round adds exactly one migration and no new client role",
+    SR2GF_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 1);
 
   // --- real data authority -----------------------------------------------------------------------
   check("13. the screen consumes the frozen SR-2G-E1 feature",
@@ -278,7 +291,7 @@ try {
   // The SR-2G-E1 barrel is the frozen DATA LAYER and stays render-free, exactly as its own header
   // states. The screen therefore imports the E2 modules directly instead of widening the barrel.
   check("67. the frozen E1 barrel is unchanged and still exports nothing that renders",
-    lines(git(["diff", "--name-only", SR2GE2_BASELINE, "--", `${SR2GE2_FEATURE_ROOT}/index.ts`])).length === 0
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", `${SR2GE2_FEATURE_ROOT}/index.ts`])).length === 0
     && !/MealBuddyCandidateCard|MealBuddyRealCandidateSection|MealBuddyRealSourceCardPicker|useMealBuddyRealCandidates/.test(barrel)
     && /meal-buddy-candidates\/MealBuddyRealCandidateSection/.test(screen)
     && /meal-buddy-candidates\/useMealBuddyRealCandidates/.test(screen));
@@ -286,10 +299,10 @@ try {
     /catalogClient\?: SupabaseInterestCatalogClientLike/.test(factories)
     && count(factories, "catalogClient") === 1);
   check("69. no screen file outside meal-buddies.tsx is modified",
-    lines(git(["diff", "--name-only", SR2GE2_BASELINE, "--", "apps/mobile/app"])).length <= 1
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/app"])).length <= 1
     && SR2GE2_SUCCESSOR_PATHS.filter((f) => f.startsWith("apps/mobile/app/")).length === 1);
   check("70. the demo Meal Buddy stores are untouched",
-    lines(git(["diff", "--name-only", SR2GE2_BASELINE, "--", "apps/mobile/features/meal-buddy-card"])).length === 0);
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/features/meal-buddy-card"])).length === 0);
 
   // --- hygiene -----------------------------------------------------------------------------------------------------------------
   const secret = /(postgres(ql)?:\/\/[^\s"']*:[^\s"']*@|eyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY|sb_secret_[A-Za-z0-9_-]{10,}|sbp_[A-Za-z0-9]{20,})/;
@@ -312,7 +325,7 @@ try {
   // edit that broke the file, and the BOM must survive untouched.
   check("75a. the pre-existing screen keeps its own byte conventions and gains no mixed line endings",
     (() => {
-      const blob = gitBytes(["show", `${SR2GE2_BASELINE}:${SR2GE2_SCREEN}`]);
+      const blob = gitBytes(["show", `${SR2GF_BASELINE}:${SR2GE2_SCREEN}`]);
       const disk = fs.readFileSync(path.join(root, SR2GE2_SCREEN));
       const bom = (b) => b.length >= 3 && b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF;
       const crlf = (b) => b.includes(Buffer.from("\r\n"));
@@ -334,7 +347,7 @@ try {
     SR2GE2_PERSON_REF_PREFIX !== SR2GE2_CARD_REF_PREFIX);
 
   const summary = Object.freeze({
-    round: "SR-2G-E2", baseline: SR2GE2_BASELINE, phase: lifecycle.phase,
+    round: "SR-2G-E2", baseline: SR2GF_BASELINE, phase: lifecycle.phase,
     paths: SR2GE2_SUCCESSOR_PATHS.length, aggregateSha256: fsManifest.aggregateSha256,
     total: checks.length, passed: checks.length - failures.length, failed: failures.length
   });

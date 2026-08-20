@@ -256,7 +256,7 @@ try {
     !ordered.cards.some((card) => card.sourceCardRef.includes(ACTOR_A)));
   check("29 the card DTO carries exactly the client-safe fields",
     JSON.stringify(Object.keys(sample).sort()) === JSON.stringify(
-      ["area", "cardType", "createdAt", "diningDate", "expiresAt", "intentionType", "mealPeriod", "preferredTime", "restaurantId", "sourceCardRef"]),
+      ["area", "cardType", "createdAt", "diningDate", "expiresAt", "foodContextTagKey", "intentionType", "mealPeriod", "preferredTime", "restaurantId", "sourceCardRef"]),
     Object.keys(sample).sort());
   check("30 no serialized response mentions a tier or billing fact",
     !/premium|free|plan_code|entitlement|billing|isPremium/i.test(JSON.stringify(ordered)));

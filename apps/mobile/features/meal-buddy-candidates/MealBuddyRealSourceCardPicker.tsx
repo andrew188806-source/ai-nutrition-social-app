@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors } from "../../components/DemoUi";
+import { resolveInterestCategoryLabel } from "./interestCatalog";
 import type { MealBuddySourceCard } from "./types";
 import type { MealBuddyRealCandidatesController } from "./useMealBuddyRealCandidates";
 
@@ -12,6 +13,11 @@ import type { MealBuddyRealCandidatesController } from "./useMealBuddyRealCandid
 // It keeps the screen's existing "pick one of my cards and use it" interaction rather than adding a
 // second parallel selector. A single card is still selected explicitly, so the interaction does not
 // change shape with the number of cards and no new product rule is introduced.
+//
+// SR-2G-F adds ONE line of display: the card's own canonical meal context, resolved through the same
+// SR-2C-R1 label catalog the candidate cards already use, so 火鍋 is never hard-coded here. It is
+// display only. The screen does not match, filter, group, rank or reorder by context, and it still
+// sends nothing but the sealed sourceCardRef — the server decides everything the context implies.
 
 const MEAL_PERIOD_LABELS: Readonly<Record<MealBuddySourceCard["mealPeriod"], string>> = Object.freeze({
   breakfast: "早餐", lunch: "午餐", dinner: "晚餐", late_night: "宵夜"
@@ -85,6 +91,13 @@ export function MealBuddyRealSourceCardPicker({
             <Text style={styles.cardMeta} numberOfLines={1}>
               {card.cardType === "restaurant" ? "指定餐廳" : "不指定餐廳"} · {INTENTION_LABELS[card.intentionType]}
             </Text>
+            {/* A card without a context simply shows no context line, exactly like every card
+                authored before this round. Absence is never rendered as a state. */}
+            {card.foodContextTagKey === null ? null : (
+              <Text style={styles.contextTag} numberOfLines={1}>
+                🍽 {resolveInterestCategoryLabel(controller.labels, card.foodContextTagKey)}
+              </Text>
+            )}
             {selected ? <Text style={styles.selectedTag}>使用中</Text> : null}
           </Pressable>
         );
@@ -103,6 +116,7 @@ const styles = StyleSheet.create({
   cardSelected: { borderColor: colors.teal, backgroundColor: colors.mint },
   cardTitle: { fontSize: 14, fontWeight: "700", color: colors.ink },
   cardMeta: { fontSize: 12, color: colors.muted },
+  contextTag: { fontSize: 12, color: colors.teal, fontWeight: "600" },
   selectedTag: { fontSize: 11, color: colors.teal, fontWeight: "700" },
   centered: { alignItems: "center", gap: 8, paddingVertical: 20 },
   stateTitle: { fontSize: 15, fontWeight: "700", color: colors.ink },

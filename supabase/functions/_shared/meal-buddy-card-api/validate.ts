@@ -6,11 +6,24 @@ import {
 } from "./policy.ts";
 import type { MealBuddyCardCreateRequest } from "./types.ts";
 
-// The create body has exactly these seven keys. An unknown key is a rejection rather than something
-// quietly ignored: a request that tried to name an owner, a cap or a lifetime must fail loudly.
+// These seven keys are REQUIRED and must all be present. An unknown key is still a rejection rather
+// than something quietly ignored: a request that tried to name an owner, a cap or a lifetime must
+// fail loudly.
 const CREATE_KEYS = Object.freeze([
   "cardType", "intentionType", "restaurantId", "area", "diningDate", "mealPeriod", "preferredTime"
 ]);
+
+// SR-2G-F adds exactly one OPTIONAL key. It is optional rather than required precisely so every
+// pre-SR-2G-F client keeps working unchanged: a seven-key body is still a valid body and produces a
+// card with no context. The key set stays closed — this widens it by one, it does not open it.
+const OPTIONAL_CREATE_KEYS = Object.freeze(["foodContextTagKey"]);
+
+// A canonical food tag_key, e.g. food.japanese.sushi. Shape only: EXISTENCE, namespace, selectable
+// and active are decided by the database against the SR-2C-R1 catalog, never here and never by the
+// caller. This pattern admits no space, no CJK dish name and no free-text sentence, so "我想吃火鍋"
+// can never travel as a context.
+const FOOD_CONTEXT_TAG_KEY = /^food\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$/;
+const MAX_TAG_KEY = 120;
 
 const CARD_TYPES = new Set<string>(MEAL_BUDDY_CARD_TYPES);
 const INTENTION_TYPES = new Set<string>(MEAL_BUDDY_INTENTION_TYPES);
@@ -60,11 +73,12 @@ export function validateMealBuddyCardCreateRequest(
 ): MealBuddyCardCreateValidation {
   if (!isRecord(body)) return { ok: false };
 
-  const keys = Object.keys(body).sort();
-  const expected = [...CREATE_KEYS].sort();
-  if (keys.length !== expected.length || !keys.every((key, index) => key === expected[index])) {
-    return { ok: false };
-  }
+  // Every required key present, and every present key known. Checked as two separate rules so that
+  // adding the optional key cannot accidentally make a required one droppable.
+  const keys = Object.keys(body);
+  const known = new Set<string>([...CREATE_KEYS, ...OPTIONAL_CREATE_KEYS]);
+  if (!CREATE_KEYS.every((key) => Object.hasOwn(body, key))) return { ok: false };
+  if (!keys.every((key) => known.has(key))) return { ok: false };
 
   const { cardType, intentionType, mealPeriod, diningDate } = body;
   if (typeof cardType !== "string" || !CARD_TYPES.has(cardType)) return { ok: false };
@@ -91,6 +105,17 @@ export function validateMealBuddyCardCreateRequest(
     preferredTime = body.preferredTime;
   }
 
+  // An omitted key and an explicit null are the same thing: no context. Anything else must be a
+  // well-shaped canonical food tag key; the database then decides whether it actually exists.
+  let foodContextTagKey: string | null = null;
+  if (Object.hasOwn(body, "foodContextTagKey") && body.foodContextTagKey !== null) {
+    if (typeof body.foodContextTagKey !== "string") return { ok: false };
+    const trimmed = body.foodContextTagKey.trim();
+    if (trimmed.length === 0 || trimmed.length > MAX_TAG_KEY) return { ok: false };
+    if (!FOOD_CONTEXT_TAG_KEY.test(trimmed)) return { ok: false };
+    foodContextTagKey = trimmed;
+  }
+
   return {
     ok: true,
     value: Object.freeze({
@@ -100,7 +125,8 @@ export function validateMealBuddyCardCreateRequest(
       area: area.value,
       diningDate,
       mealPeriod: mealPeriod as MealBuddyCardCreateRequest["mealPeriod"],
-      preferredTime
+      preferredTime,
+      foodContextTagKey
     })
   };
 }

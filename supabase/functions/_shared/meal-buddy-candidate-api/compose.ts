@@ -1,6 +1,11 @@
-// The whole SR-2G-D server composition. Every stage is a frozen predecessor authority, called once.
-// This module reproduces no eligibility rule, no Taste algorithm, no ranking rule, no exposure cap,
-// no profile policy and no interest hierarchy of its own, and issues no refill query.
+// The whole SR-2G-D server composition, with the SR-2G-F meal/menu context stage inserted between
+// the candidate pool and ranking. Every stage is an authority called once. This module reproduces no
+// eligibility rule, no Taste algorithm, no ranking rule, no exposure cap, no profile policy, no
+// interest hierarchy and no context classification of its own, and issues no refill query.
+//
+// The request contract is unchanged by SR-2G-F: still `{ sourceCardRef }`, still nothing else. The
+// context is a property of the actor's own card, resolved server-side, so it is not expressible,
+// forgeable or overridable by a caller.
 import { mealBuddyCandidateApiContractViolation } from "./policy.ts";
 import { readExposedCandidateInterests, readMealBuddyCandidateCards } from "./readCandidateCards.ts";
 import { toMealBuddyCandidateApiResponse } from "./toCandidateDto.ts";
@@ -11,7 +16,7 @@ import {
   adaptAuthorizedPairSources, compareComposedServerPair, composeServerSnapshot
 } from "../social-pair/index.ts";
 import { buildSocialCandidateApiAsOf, readSocialCandidateTasteSources } from "../social-candidate-api/readCandidateTasteSources.ts";
-import { rankSocialCandidates } from "../social-ranking/index.ts";
+import { composeMealBuddyContextRanking } from "../meal-buddy-context/index.ts";
 import type { SocialRankingCandidateInput } from "../social-ranking/types.ts";
 import { applySocialExposure, resolveSocialEntitlement } from "../social-exposure/index.ts";
 import { projectPublicSocialProfiles, readExposedSocialProfileFacts } from "../social-profile/index.ts";
@@ -51,8 +56,11 @@ export async function composeMealBuddyCandidateList(
     return mealBuddyCandidateApiContractViolation();
   }
 
-  // 1. Frozen SR-2G-C compatible-card pool, from the one server instant. This is the only stage that
-  //    decides WHICH card represents an owner, and it decides it exactly once, before any ranking.
+  // 1. Frozen SR-2G-C compatible-card pool, from the one server instant, now read through the
+  //    SR-2G-F context primitive that labels each row. This is still the only stage that decides
+  //    WHICH card represents an owner, and it still decides it exactly once, before any ranking.
+  //    Hard eligibility is untouched: the labels ride along with the frozen pool, they do not filter
+  //    it, so a legacy card with no context yields one uniform label and the frozen order stands.
   const selectedCards = await readMealBuddyCandidateCards(
     transport, actorUserId, sourceCardId, requestInstant
   );
@@ -84,8 +92,20 @@ export async function composeMealBuddyCandidateList(
       ) as SocialRankingCandidateInput["result"]
     }));
 
-  // 3. Frozen SR-2A ranking. 4. Frozen SR-2B entitlement and exposure, same request instant.
-  const ranking = rankSocialCandidates(rankingInputs);
+  // 3. SR-2G-F meal/menu context, then frozen SR-2A ranking INSIDE each context bucket. The context
+  //    labels were decided by the database primitive from the actor's own source card; nothing here
+  //    reads a dish, a weight or a client field, and no candidate is dropped — the output is a
+  //    permutation of the input, so context can change WHO is exposed but never how many exist.
+  const ranking = composeMealBuddyContextRanking({
+    candidates: rankingInputs,
+    contextByCandidateUserId: new Map(
+      selectedCards.map((card) => [card.ownerUserId, card.contextState])
+    )
+  });
+
+  // 4. Frozen SR-2B entitlement and exposure, same request instant. Exposure receives an ordinary
+  //    SR-2A ranking result and still slices a pure prefix: the caps are untouched and nothing is
+  //    reranked, refilled or drawn after this point.
   const entitlement = await resolveSocialEntitlement(entitlementRowSource, actorUserId, requestInstant);
   const exposure = applySocialExposure(ranking, entitlement);
 

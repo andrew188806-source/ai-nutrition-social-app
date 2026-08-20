@@ -39,13 +39,18 @@ function adaptSourceCard(value: unknown): MealBuddySourceCard | null {
   // A dining date is a local calendar fact and is kept as the exact string the server sent.
   if (typeof diningDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(diningDate)) return null;
   if (restaurantId !== null && typeof restaurantId !== "string") return null;
+  // Absent on every card authored before SR-2G-F, so a missing key is null rather than a rejection:
+  // a legacy card must stay selectable.
+  const rawContext = value.foodContextTagKey;
+  if (rawContext !== null && rawContext !== undefined && typeof rawContext !== "string") return null;
   return Object.freeze({
     sourceCardRef,
     cardType: cardType as MealBuddySourceCard["cardType"],
     intentionType: intentionType as MealBuddySourceCard["intentionType"],
     restaurantId: (restaurantId as string | null) ?? null,
     diningDate,
-    mealPeriod: mealPeriod as MealBuddySourceCard["mealPeriod"]
+    mealPeriod: mealPeriod as MealBuddySourceCard["mealPeriod"],
+    foodContextTagKey: (rawContext as string | undefined) ?? null
   });
 }
 

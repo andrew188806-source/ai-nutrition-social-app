@@ -71,7 +71,11 @@ const CANDIDATE_KEY = candidateRef.decodeSocialCandidateRefKey(Buffer.alloc(32, 
 const CARD_KEY = cardRef.decodeMealBuddyCardRefKey(Buffer.alloc(32, 9).toString("base64"));
 const candidateCipher = candidateRef.createSocialCandidateRefCipher(CANDIDATE_KEY);
 const cardCipher = cardRef.createMealBuddyCardRefCipher(CARD_KEY);
-const INSTANT = new Date("2026-08-19T04:00:00.000Z");
+// One fixed instant for the whole run, pinned RELATIVE to now rather than to an absolute date. The
+// frozen SR-2G-A card reference has a 24-hour TTL, so an absolute literal silently starts failing
+// the handler checks a day after it is written — the reference expires and the endpoint correctly
+// answers 400. This keeps every check deterministic within a run without re-opening that time bomb.
+const INSTANT = new Date(Date.now() - 60_000);
 
 const EMPTY_SOURCES = Object.freeze({
   dietary_restrictions: { rows: [] }, favorite_menu_items: { rows: [] }, favorite_restaurants: { rows: [] },
@@ -94,7 +98,10 @@ const poolRow = (ownerUserId, index) => ({
   restaurant_id: index % 3 === 0 ? `restaurant-${index + 1}` : null,
   restaurant_name: index % 3 === 0 ? `Restaurant ${index + 1}` : null,
   dining_date: "2026-08-21",
-  meal_period: "dinner"
+  meal_period: "dinner",
+  // SR-2G-F successor awareness. A uniform label is the no-context case, which is exactly the
+  // pre-SR-2G-F behaviour this suite exists to pin: one bucket, frozen SR-2A order, unchanged.
+  context_state: "neutral"
 });
 
 const interestRow = (ordinal, namespace, tagKey, categoryKey, displayOrder) =>
@@ -128,7 +135,7 @@ function createTransport({
       return await operation({
         query: async (statement, parameters) => {
           if (failOn && statement.text.includes(failOn)) throw new Error("dependency_failure");
-          if (statement.text.includes("meal_buddy_candidate_cards_with_restaurant")) {
+          if (statement.text.includes("canonical_meal_buddy_context_candidates")) {
             capture.calls.push("pool");
             capture.params.pool = [...parameters];
             return owners.map((ownerUserId, index) => poolRow(ownerUserId, index));
@@ -251,7 +258,7 @@ try {
     (await call({ body: body({ sourceCardRef: await cardCipher.seal(ACTOR, "source", SOURCE_CARD, new Date(Date.now() - 90_000_000)) }) })).status === 400);
   check("14 an infrastructure failure is a 503, never an empty success",
     (await call({ body: body({ sourceCardRef: SOURCE_REF }) },
-      dependencies({ transportFactory: () => createTransport({ failOn: "meal_buddy_candidate_cards_with_restaurant" }) }))).status === 503);
+      dependencies({ transportFactory: () => createTransport({ failOn: "canonical_meal_buddy_context_candidates" }) }))).status === 503);
   check("15 an absent reference key is a 503, never a degraded success",
     (await call({ body: body({ sourceCardRef: SOURCE_REF }) },
       dependencies({ config: () => ({ ok: false, errorCode: "server_unavailable" }) }))).status === 503);
@@ -388,7 +395,7 @@ try {
         async withTransaction(operation) {
           return await operation({
             query: async (statement, parameters) => {
-              if (statement.text.includes("meal_buddy_candidate_cards_with_restaurant")) {
+              if (statement.text.includes("canonical_meal_buddy_context_candidates")) {
                 return [{ ...poolRow(OWNERS[0], 0), card_type: "restaurant", restaurant_id: null, restaurant_name: null }];
               }
               if (statement.text.includes("canonical_candidate_taste_sources")) return [{ payload: tastePayload([OWNERS[0]]) }];

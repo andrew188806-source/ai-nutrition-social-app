@@ -22,6 +22,10 @@ export type MealBuddySourceCard = Readonly<{
   restaurantId: string | null;
   diningDate: string;
   mealPeriod: "breakfast" | "lunch" | "dinner" | "late_night";
+  // SR-2G-F. The owner's OWN canonical meal context on their own card, so the picker can show which
+  // card asks about which food. It is display only: the screen never matches, filters, ranks or
+  // reorders by it, and it is never sent — the sealed sourceCardRef remains the whole request.
+  foodContextTagKey: string | null;
 }>;
 
 // The closed client vocabulary. `authentication_required`, `invalid_request` and

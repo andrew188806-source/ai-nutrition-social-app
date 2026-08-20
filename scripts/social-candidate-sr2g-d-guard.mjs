@@ -16,8 +16,11 @@ import {
   SR2GD_SUCCESSOR_PATHS
 } from "./social-candidate-sr2g-d-successor-manifest.mjs";
 import { SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
-import { classifySr2ge2Lifecycle, SR2GE2_BASELINE, SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 
+// SR-2G-F successor awareness: the one migration that round adds.
+const SR2GF_MIGRATION_BASENAME = "20260820010000_meal_buddy_food_context_authority.sql";
 const root = process.cwd();
 const packageScripts = Object.freeze({
   "test:social-candidate-sr2g-d": "node scripts/social-candidate-sr2g-d-guard.mjs",
@@ -66,20 +69,20 @@ function lifecycleState() {
   const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"]).trim().split(/\s+/).map(Number);
   return Object.freeze({
     head, originHead, ahead, behind,
-    headParent: head === SR2GE2_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GF_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: statusPaths(),
     stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GE2_BASELINE ? [] : deltaEntries()
+    headDeltaEntries: head === SR2GF_BASELINE ? [] : deltaEntries()
   });
 }
 
 try {
   const state = lifecycleState();
-  const lifecycle = classifySr2ge2Lifecycle(state);
+  const lifecycle = classifySr2gfLifecycle(state);
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GD_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
-  const successorScriptKeys = ["test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance", "test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke"];
+  const successorScriptKeys = ["test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance", "test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke", "test:social-candidate-sr2g-f", "test:social-candidate-sr2g-f-smoke", "test:social-candidate-sr2g-f-mutations", "test:social-candidate-sr2g-f-development-acceptance"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
 
   const migration = sqlExec(read(SR2GD_MIGRATION));
@@ -108,7 +111,7 @@ try {
 
   // --- lifecycle / manifest ------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-E2 path set", exact(lifecycle.lifecycleManifest, SR2GE2_SUCCESSOR_PATHS), { expected: SR2GE2_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+  check("2. lifecycle manifest is the exact SR-2G-F successor path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS), { expected: SR2GF_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
   check("3. the pinned predecessor is the exact pushed SR-2C-R1 freeze commit",
     git(["cat-file", "-t", SR2GD_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GD_BASELINE]).trim() === SR2GD_BASELINE_SUBJECT
@@ -120,8 +123,8 @@ try {
   check("8. package.json differs from the frozen predecessor only by the SR-2G-D scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   check("9. no dependency or lockfile is touched", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("10. exactly one migration is added", SR2GD_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 1
-    && exact(migrationFiles, [...baselineMigrations, path.basename(SR2GD_MIGRATION)].sort()));
-  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION).length === 0);
+    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION)].sort()));
+  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e)).length === 0);
   check("12. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MIGRATIONS])).length === 0);
   check("13. every frozen predecessor runtime module is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MODULES])).length === 0);
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
@@ -199,16 +202,20 @@ try {
     /owner_user_id = p_actor_user_id/.test(read("supabase/migrations/20260817030000_meal_buddy_candidate_pool_authority.sql")));
 
   // --- frozen composition order --------------------------------------------------------------------
-  const order = ["readMealBuddyCandidateCards", "readSocialCandidateTasteSources", "rankSocialCandidates", "resolveSocialEntitlement", "applySocialExposure", "readExposedSocialProfileFacts", "projectPublicSocialProfiles", "readExposedCandidateInterests", "toMealBuddyCandidateApiResponse"];
+  const order = ["readMealBuddyCandidateCards", "readSocialCandidateTasteSources", "composeMealBuddyContextRanking", "resolveSocialEntitlement", "applySocialExposure", "readExposedSocialProfileFacts", "projectPublicSocialProfiles", "readExposedCandidateInterests", "toMealBuddyCandidateApiResponse"];
   const positions = order.map((symbol) => tsExec(compose).indexOf(`${symbol}(`));
   check("47. the composition calls every frozen authority exactly once, in the frozen order",
     positions.every((p) => p > 0) && positions.every((p, i) => i === 0 || p > positions[i - 1]), { positions });
   check("48. the pool is the only card source and no eligibility rule is duplicated in TypeScript",
     !/dining_date|meal_period|cancelled_at|expires_at|blocked|participation/.test(tsExec(compose))
     && !/from public\.meal_buddy_cards/.test(allTs));
+  // SR-2G-F reads the context primitive, which COMPOSES this bridge rather than replacing it, so the
+  // bridge must still be the pool source — proven in the SR-2G-F migration, not merely assumed.
   check("49. exactly two executor statements exist, both frozen primitives",
     count(reads, "defineSocialRuntimeExecutorStatement<") === 2
-    && reads.includes(SR2GD_BRIDGE_FUNCTION) && reads.includes(SR2GD_INTEREST_FUNCTION));
+    && reads.includes("social_internal.canonical_meal_buddy_context_candidates")
+    && read("supabase/migrations/20260820010000_meal_buddy_food_context_authority.sql").includes(SR2GD_BRIDGE_FUNCTION)
+    && reads.includes(SR2GD_INTEREST_FUNCTION));
   check("50. the profile projection is the frozen SR-2C primitive, reused not reimplemented",
     /readExposedSocialProfileFacts|projectPublicSocialProfiles/.test(compose)
     && !allTs.includes(SR2GD_PROFILE_FUNCTION));
@@ -219,7 +226,7 @@ try {
   // runs, so comparing import positions would prove nothing about execution order.
   check("52. the owner to card binding is fixed before ranking and only looked up afterwards",
     /const cardByOwner = new Map/.test(compose)
-    && compose.indexOf("const cardByOwner = new Map") < compose.indexOf("rankSocialCandidates(")
+    && compose.indexOf("const cardByOwner = new Map") < compose.indexOf("composeMealBuddyContextRanking(")
     && /cardByOwner\.get\(exposed\.candidateUserId\)/.test(dto)
     && !/cardByOwner\.set|\.sort\(|reselect/.test(dto));
   check("53. no ranking, exposure or eligibility decision is made after exposure",

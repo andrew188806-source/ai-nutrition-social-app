@@ -63,8 +63,10 @@ export async function processMealBuddyCardCreateRequest(
     }, validation.value);
 
     // A legitimate request that simply exceeds the frozen cap is a closed product outcome, not a
-    // failure: it names no table, no count and no billing fact.
-    if (!outcome.ok) return buildMealBuddyCardError("card_quota_exceeded");
+    // failure: it names no table, no count and no billing fact. SR-2G-F adds one more closed
+    // outcome — a context that is not a currently selectable, active food tag — which is a 400
+    // rather than the opaque 503 an infrastructure fault produces.
+    if (!outcome.ok) return buildMealBuddyCardError(outcome.errorCode);
 
     return new Response(JSON.stringify(outcome.value), {
       status: 200,

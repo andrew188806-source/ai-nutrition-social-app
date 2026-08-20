@@ -126,7 +126,8 @@ try {
       && !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/.test(card.sourceCardRef)));
   check("03 the adapted source card exposes only the fields needed to choose and send it",
     JSON.stringify(Object.keys(general).sort()) === JSON.stringify(
-      ["cardType", "diningDate", "intentionType", "mealPeriod", "restaurantId", "sourceCardRef"]),
+      // SR-2G-F successor awareness: the picker also needs the card's own context to display it.
+      ["cardType", "diningDate", "foodContextTagKey", "intentionType", "mealPeriod", "restaurantId", "sourceCardRef"]),
     Object.keys(general).sort());
 
   // --- 2. real candidates through the frozen SR-2G-D endpoint -------------------------------------

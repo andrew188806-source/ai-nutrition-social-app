@@ -216,7 +216,8 @@ commit;`);
     typeof sample?.card?.sourceCardRef === "string" && sample.card.sourceCardRef.startsWith("mbc1."));
   check("20 the created card carries exactly the client-safe fields",
     JSON.stringify(Object.keys(sample.card).sort()) === JSON.stringify(
-      ["area", "cardType", "createdAt", "diningDate", "expiresAt", "intentionType", "mealPeriod", "preferredTime", "restaurantId", "sourceCardRef"]),
+      // SR-2G-F successor awareness: the owner's own optional meal context joins their own card.
+      ["area", "cardType", "createdAt", "diningDate", "expiresAt", "foodContextTagKey", "intentionType", "mealPeriod", "preferredTime", "restaurantId", "sourceCardRef"]),
     Object.keys(sample.card).sort());
   check("21 quota metadata reports Premium limits without naming the tier",
     sample.quota.general.limit === 3 && sample.quota.restaurant.limit === 2

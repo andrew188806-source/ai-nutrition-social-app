@@ -120,13 +120,20 @@ ${statement}
 reset role;`;
 
 // ---------------------------------------------------------------------------------------------
-// 2. The dining occasion: tomorrow's Asia/Taipei calendar date, resolved at run time.
+// 2. The dining occasion: an Asia/Taipei calendar date resolved at run time.
+//
+// WHY +10 AND NOT +1. A Meal Buddy candidate pool is keyed by (dining_date, meal_period) and is
+// GLOBAL for that occasion — it is not scoped to a fixture family. The frozen SR-2G-B and SR-2G-D
+// Development acceptances seed their own users on today+1 … today+6, so a demo fixture sharing one
+// of those days would inject twenty extra candidates into their pools and crowd their expected
+// names out of the exposure prefix. Ten days out is clear of every acceptance window, so the two
+// fixture families can coexist in the same Development project without either polluting the other.
 // ---------------------------------------------------------------------------------------------
 const taipeiToday = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit"
 }).format(new Date());
 const [ty, tm, td] = taipeiToday.split("-").map(Number);
-const DINING_DATE = new Date(Date.UTC(ty, tm - 1, td + 1)).toISOString().slice(0, 10);
+const DINING_DATE = new Date(Date.UTC(ty, tm - 1, td + 10)).toISOString().slice(0, 10);
 const MEAL_PERIOD = "dinner";
 
 // ---------------------------------------------------------------------------------------------
@@ -146,11 +153,11 @@ const CANDIDATES = [
   { n: 3, name: "Momo", mascot: "TE", bio: "喜歡拍照跟看書，週末常常在展覽。",
     general: [G("creative.photography"), G("creative.drawing"), G("learning_culture.reading"), G("learning_culture.technology")],
     food: [F("japanese.sushi"), F("korean.korean_bbq"), F("western.italian"), F("international.thai")],
-    card: "restaurant", restaurant: "dev-restaurant-haochu", intention: "chat_first", taste: ["japanese", "italian"] },
+    card: "restaurant", restaurant: "dev-restaurant-haochu", intention: "chat_first", taste: ["japanese", "italian"], context: F("japanese.sushi") },
   { n: 4, name: "阿岳", mascot: "BG", bio: "平日健身，假日爬山，吃飯不挑。",
     general: [G("fitness_sports.fitness"), G("fitness_sports.running"), G("fitness_sports.hiking"), G("fitness_sports.yoga")],
     food: [F("western.steak"), F("taiwanese_chinese.hotpot")],
-    card: "general", intention: "eat_together", taste: null },
+    card: "general", intention: "eat_together", taste: null, context: F("taiwanese_chinese.hotpot") },
   { n: 5, name: "Nina", mascot: "VG", bio: "旅行時最大的行程通常是吃東西。",
     general: [G("travel_outdoors.overseas_travel"), G("travel_outdoors.camping"), G("creative.photography"), G("music.listening_music"), G("learning_culture.reading")],
     food: [F("ingredient_style.vegetarian_food"), F("dining_style.brunch"), F("dessert_drinks.coffee")],
@@ -162,11 +169,11 @@ const CANDIDATES = [
   { n: 7, name: "Yuki", mascot: "DH", bio: "動漫、咖啡廳跟音樂祭，三個都不能少。",
     general: [G("entertainment.anime"), G("gaming.mobile_gaming"), G("lifestyle_social.cafes"), G("creative.photography"), G("music.music_festival")],
     food: [F("japanese.ramen"), F("japanese.izakaya"), F("japanese.sushi"), F("dessert_drinks.dessert"), F("dessert_drinks.bubble_tea")],
-    card: "restaurant", restaurant: "synthetic-fixture-restaurant", intention: "chat_first", taste: ["japanese"] },
+    card: "restaurant", restaurant: "synthetic-fixture-restaurant", intention: "chat_first", taste: ["japanese"], context: F("japanese.ramen") },
   { n: 8, name: "阿哲", mascot: "LC", bio: "跑步跟登山愛好者，很喜歡海鮮。",
     general: [G("fitness_sports.running"), G("fitness_sports.hiking"), G("learning_culture.technology")],
     food: [F("ingredient_style.seafood"), F("western.steak"), F("taiwanese_chinese.hotpot"), F("korean.korean_bbq")],
-    card: "general", intention: "eat_together", taste: null },
+    card: "general", intention: "eat_together", taste: null, context: F("taiwanese_chinese.hotpot") },
   { n: 9, name: "Luna", mascot: "TE", bio: "愛看電影跟演唱會，也很愛下午茶。",
     general: [G("entertainment.movie"), G("music.concerts"), G("creative.drawing"), G("learning_culture.museums"), G("lifestyle_social.pets"), G("travel_outdoors.domestic_travel")],
     food: [F("dessert_drinks.cake"), F("dessert_drinks.afternoon_tea"), F("dining_style.brunch")],
@@ -182,7 +189,7 @@ const CANDIDATES = [
   { n: 12, name: "米米", mascot: "DH", bio: "逛街跟咖啡廳的常客，甜點是主食。",
     general: [G("lifestyle_social.shopping"), G("lifestyle_social.cafes"), G("entertainment.tv_series"), G("music.singing")],
     food: [F("dessert_drinks.dessert"), F("dessert_drinks.ice_cream"), F("dessert_drinks.bubble_tea"), F("dessert_drinks.cake")],
-    card: "general", intention: "eat_together", taste: null },
+    card: "general", intention: "eat_together", taste: null, context: F("dessert_drinks.dessert") },
   { n: 13, name: "Evan", mascot: "TE", bio: "喜歡科技也喜歡亂走，什麼都想試一次。",
     general: [G("learning_culture.technology"), G("gaming.pc_gaming"), G("travel_outdoors.city_exploration"), G("learning_culture.exhibitions"), G("creative.photography")],
     food: [F("japanese.sushi"), F("western.italian"), F("international.thai"), F("international.mexican"), F("taiwanese_chinese.hotpot")],
@@ -194,7 +201,7 @@ const CANDIDATES = [
   { n: 15, name: "Leo", mascot: "PB", bio: "健身完最期待的就是一頓好肉。",
     general: [G("fitness_sports.fitness"), G("fitness_sports.ball_sports"), G("gaming.esports"), G("travel_outdoors.overseas_travel")],
     food: [F("ingredient_style.meat_lover"), F("western.steak"), F("japanese.yakiniku"), F("korean.korean_bbq")],
-    card: "restaurant", restaurant: "dev-restaurant-haochu", intention: "eat_together", taste: ["steakhouse", "korean"] },
+    card: "restaurant", restaurant: "dev-restaurant-haochu", intention: "eat_together", taste: ["steakhouse", "korean"], context: F("western.steak") },
   { n: 16, name: "小葵", mascot: "BG", bio: "跟貓一起生活，最近在畫畫。",
     general: [G("lifestyle_social.pets"), G("creative.drawing"), G("travel_outdoors.domestic_travel"), G("music.listening_music")],
     food: [F("taiwanese_chinese.taiwanese_snacks"), F("taiwanese_chinese.stir_fry")],
@@ -202,7 +209,7 @@ const CANDIDATES = [
   { n: 17, name: "Ian", mascot: "MD", bio: "深夜的居酒屋跟老電影最搭。",
     general: [G("entertainment.movie"), G("learning_culture.history"), G("music.instruments")],
     food: [F("dining_style.late_night"), F("japanese.izakaya"), F("ingredient_style.spicy_food")],
-    card: "general", intention: "eat_together", taste: ["japanese", "izakaya"] },
+    card: "general", intention: "eat_together", taste: ["japanese", "izakaya"], context: F("japanese.izakaya") },
   { n: 18, name: "可可", mascot: "DH", bio: "咖啡廳寫東西，一坐就是一下午。",
     general: [G("lifestyle_social.cafes"), G("creative.writing"), G("learning_culture.reading")],
     food: [F("dessert_drinks.coffee"), F("dessert_drinks.afternoon_tea"), F("dessert_drinks.cake"), F("dessert_drinks.dessert"), F("dessert_drinks.ice_cream")],
@@ -365,8 +372,13 @@ async function listOwnCards(person, token, attempts = 5) {
 }
 async function ensureCard(person, spec) {
   const token = await signIn(person.email, PASSWORD);
+  // SR-2G-F: the context is part of the card's identity for reconciliation purposes. Without it a
+  // re-run would find the person's existing no-context card, call it a match and never author the
+  // context card the fixture matrix asks for.
   const matches = (card) =>
-    card.diningDate === DINING_DATE && card.mealPeriod === MEAL_PERIOD && card.cardType === spec.cardType;
+    card.diningDate === DINING_DATE && card.mealPeriod === MEAL_PERIOD && card.cardType === spec.cardType
+    && (card.foodContextTagKey ?? null) === (spec.foodContextTagKey ?? null)
+    && (card.restaurantId ?? null) === (spec.restaurantId ?? null);
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const existing = (await listOwnCards(person, token)).find(matches);
@@ -378,7 +390,9 @@ async function ensureCard(person, spec) {
       area: null,
       diningDate: DINING_DATE,
       mealPeriod: MEAL_PERIOD,
-      preferredTime: null
+      preferredTime: null,
+      // Omitted-as-null is the legacy shape and is exactly what a pre-SR-2G-F card carries.
+      foodContextTagKey: spec.foodContextTagKey ?? null
     });
     if (created.status === 200) return { token, sourceCardRef: created.payload.card.sourceCardRef, created: true };
     if (created.status !== 503) {
@@ -389,18 +403,73 @@ async function ensureCard(person, spec) {
   throw new Error(`card create unavailable for ${person.email}`);
 }
 
+// RECONCILE, DO NOT ACCUMULATE. A card for a PREVIOUS dining occasion can still be active — the
+// occasion is tomorrow, and today's card only expires at the end of today's meal period — so it
+// still holds a Free identity's single general slot and would make an otherwise correct create fail
+// with quota_exceeded. Cancelling through the REAL frozen cancel endpoint converges the fixture to
+// exactly its target card set without touching the quota rule itself.
+async function reconcileCards(person, specs) {
+  const token = await signIn(person.email, PASSWORD);
+  const wanted = (card) => specs.some((spec) =>
+    card.diningDate === DINING_DATE
+    && card.mealPeriod === MEAL_PERIOD
+    && card.cardType === spec.cardType
+    && (card.restaurantId ?? null) === (spec.restaurantId ?? null)
+    && (card.foodContextTagKey ?? null) === (spec.foodContextTagKey ?? null));
+
+  let cancelled = 0;
+  for (const card of await listOwnCards(person, token)) {
+    if (wanted(card)) continue;
+    const outcome = await callFunction("meal-buddy-card-cancel", token, { sourceCardRef: card.sourceCardRef });
+    if (outcome.status !== 200) {
+      throw new Error(`card cancel failed for ${person.email}: ${outcome.status}`);
+    }
+    cancelled += 1;
+  }
+  return cancelled;
+}
+
 let cardsCreated = 0;
 let cardsReused = 0;
+let cardsCancelled = 0;
 for (const person of identities) {
-  const outcome = await ensureCard(person, {
+  const spec = {
     cardType: person.card,
     intentionType: person.intention,
-    restaurantId: person.card === "restaurant" ? person.restaurant : null
-  });
+    restaurantId: person.card === "restaurant" ? person.restaurant : null,
+    foodContextTagKey: person.context ?? null
+  };
+  cardsCancelled += await reconcileCards(person, [spec]);
+  const outcome = await ensureCard(person, spec);
   if (outcome.created) cardsCreated += 1; else cardsReused += 1;
 }
-const viewerCard = await ensureCard(viewer, { cardType: "general", intentionType: "chat_first" });
-log(`candidate cards: ${cardsCreated} created, ${cardsReused} reused; viewer source card ${viewerCard.created ? "created" : "reused"}`);
+
+// The viewer's card set is the SR-2G-F experiment bench, and it fits the frozen Premium quota
+// exactly (3 general + 2 restaurant) — no cap is raised anywhere to make this work.
+//
+//   three GENERAL cards, one per context: the same-universe causal test. Identical actor, date,
+//   meal period, card type and hard eligibility; only the context differs, so any difference in the
+//   result is attributable to SR-2G-F and to nothing else.
+//   two RESTAURANT cards with NO context: the legacy proof. They are exactly the shape every card
+//   authored before this round has, and they keep the frozen SR-2G-E2 source-card sensitivity QA
+//   working unchanged.
+const VIEWER_CARDS = [
+  { cardType: "general", intentionType: "chat_first", foodContextTagKey: F("taiwanese_chinese.hotpot") },
+  { cardType: "general", intentionType: "chat_first", foodContextTagKey: F("japanese.sushi") },
+  { cardType: "general", intentionType: "chat_first", foodContextTagKey: F("japanese.ramen") },
+  { cardType: "restaurant", intentionType: "chat_first", restaurantId: "dev-restaurant-haochu", foodContextTagKey: null },
+  { cardType: "restaurant", intentionType: "chat_first", restaurantId: "synthetic-fixture-restaurant", foodContextTagKey: null }
+];
+
+const viewerCancelled = await reconcileCards(viewer, VIEWER_CARDS);
+
+let viewerCreated = 0;
+let viewerReused = 0;
+for (const spec of VIEWER_CARDS) {
+  const outcome = await ensureCard(viewer, spec);
+  if (outcome.created) viewerCreated += 1; else viewerReused += 1;
+}
+log(`candidate cards: ${cardsCreated} created, ${cardsReused} reused, ${cardsCancelled} cancelled; viewer cards ${viewerCreated} created, ${viewerReused} reused, ${viewerCancelled} cancelled`);
 
 // ---------------------------------------------------------------------------------------------
 // 8. Verification through the real pipeline, never through table reads.
@@ -420,6 +489,13 @@ const report = {
   authCreated: createdCount,
   cardsCreated,
   cardsReused,
+  cardsCancelled,
+  viewerCreated,
+  viewerReused,
+  viewerCancelled,
+  // The SR-2G-F bench, reported so a reader can see the context matrix without a table read.
+  viewerContexts: VIEWER_CARDS.map((spec) => spec.foodContextTagKey),
+  candidateCardContexts: identities.filter((person) => person.context).length,
   viewerEmail: viewer.email,
   credentialsFile: path.relative(REPO_ROOT, CREDENTIALS_FILE),
   apiStatus: response.status,

@@ -1,10 +1,14 @@
+import type { MealBuddyContextState } from "../meal-buddy-context/types.ts";
+
 // SR-2G-D Meal Buddy candidate API types.
 //
 // The client DTO is deliberately narrow. It carries no user id, no card id, no profile id, no Taste
 // score, no ranking state, no exposure index, no entitlement and no fine-grained interest tag: a
 // candidate is reachable only through its opaque refs.
 
-// One row of the SR-2G-D card projection primitive, which composes the frozen SR-2G-C pool.
+// One row of the SR-2G-F context primitive, which composes the SR-2G-D card projection and through
+// it the frozen SR-2G-C pool. `context_state` is a closed server-side vocabulary and never a score;
+// it is consumed by the bucket composer and never reaches the client DTO.
 export type MealBuddyCandidateCardRow = Readonly<{
   candidate_owner_user_id: string;
   candidate_card_id: string;
@@ -14,6 +18,7 @@ export type MealBuddyCandidateCardRow = Readonly<{
   restaurant_name: string | null;
   dining_date: string;
   meal_period: string;
+  context_state: string;
 }>;
 
 // The owner -> exact selected card binding, established by SR-2G-C before any ranking happens and
@@ -27,6 +32,9 @@ export type MealBuddySelectedCard = Readonly<{
   restaurantName: string | null;
   diningDate: string;
   mealPeriod: string;
+  // SR-2G-F. Server-internal ordering input only: it decides which bucket this candidate ranks in.
+  // Deliberately absent from MealBuddyCandidateCardDto, so no context internal is ever exposed.
+  contextState: MealBuddyContextState;
 }>;
 
 export type MealBuddyCandidateRestaurant = Readonly<{

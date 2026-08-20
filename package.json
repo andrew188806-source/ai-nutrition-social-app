@@ -252,7 +252,11 @@
     "test:restaurant-phase2v-d-smoke": "node scripts/restaurant-web-phase-2v-d-contract-smoke.mjs",
     "test:restaurant-phase2v-e-preflight": "node scripts/restaurant-n4-phase-2v-e-preflight-guard.mjs",
     "test:restaurant-phase2v-e": "node scripts/restaurant-n4-phase-2v-e-guard.mjs",
-    "test:restaurant-phase2v-e-smoke": "node scripts/restaurant-n4-phase-2v-e-contract-smoke.mjs"
+    "test:restaurant-phase2v-e-smoke": "node scripts/restaurant-n4-phase-2v-e-contract-smoke.mjs",
+    "test:social-candidate-sr2g-f": "node scripts/social-candidate-sr2g-f-guard.mjs",
+    "test:social-candidate-sr2g-f-smoke": "node scripts/social-candidate-sr2g-f-smoke.mjs",
+    "test:social-candidate-sr2g-f-mutations": "node scripts/social-candidate-sr2g-f-mutations.mjs",
+    "test:social-candidate-sr2g-f-development-acceptance": "node scripts/social-candidate-sr2g-f-development-acceptance.mjs"
   },
   "workspaces": [
     "apps/*",

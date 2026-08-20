@@ -34,7 +34,10 @@ export type MealBuddyCardComposition = Readonly<{
 
 export type MealBuddyCardCreateOutcome =
   | { ok: true; value: MealBuddyCardCreateResponse }
-  | { ok: false; errorCode: "card_quota_exceeded" };
+  // SR-2G-F adds one more closed product outcome. A context that is well-shaped but is not a
+  // currently selectable, active food tag is a bad REQUEST, not a dependency failure, so it must not
+  // collapse into the opaque 503 every infrastructure fault uses.
+  | { ok: false; errorCode: "card_quota_exceeded" | "invalid_request" };
 
 function requireActor(actorUserId: string): string {
   if (typeof actorUserId !== "string" || actorUserId.length === 0) return mealBuddyCardContractViolation();
@@ -70,7 +73,8 @@ async function toOwnedCardDto(
     mealPeriod: row.meal_period as OwnedMealBuddyCardDto["mealPeriod"],
     preferredTime: row.preferred_time,
     createdAt: row.created_at,
-    expiresAt: row.expires_at
+    expiresAt: row.expires_at,
+    foodContextTagKey: row.food_context_tag_key
   });
 }
 
@@ -105,7 +109,12 @@ export async function composeMealBuddyCardCreate(
   const caps = await resolveCaps(composition);
 
   const outcome = await createOwnedCard(composition.transport, actorUserId, request, caps);
-  if (!outcome.ok) return { ok: false, errorCode: "card_quota_exceeded" };
+  if (!outcome.ok) {
+    return {
+      ok: false,
+      errorCode: outcome.reason === "invalid_food_context" ? "invalid_request" : "card_quota_exceeded"
+    };
+  }
 
   const cipher = createMealBuddyCardRefCipher(composition.cardRefKey);
   return {

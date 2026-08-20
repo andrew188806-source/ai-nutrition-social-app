@@ -41,7 +41,8 @@ import { SR2GCR1_BASELINE, SR2GCR1_SUCCESSOR_PATHS } from "./social-candidate-sr
 import { SR2CR1_BASELINE, SR2CR1_SUCCESSOR_PATHS } from "./social-interest-sr2c-r1-successor-manifest.mjs";
 import { SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d-successor-manifest.mjs";
 import { SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
-import { classifySr2ge2Lifecycle, SR2GE2_BASELINE, SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
+import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 
 const root = process.cwd();
 const successorMigrationSha256 = "e0859f801c040002e855f2b03e27a5f8f95fd037c23210223a1ce29881bbe624";
@@ -127,10 +128,10 @@ function collectLifecycleState() {
     originHead,
     ahead,
     behind,
-    headParent: head === SR2GE2_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
+    headParent: head === SR2GF_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
     worktreePaths: candidatePaths(),
     stagedPaths: sortedLines(git(["diff", "--cached", "--name-only"])),
-    headDeltaEntries: head === SR2GE2_BASELINE ? [] : commitDeltaEntries()
+    headDeltaEntries: head === SR2GF_BASELINE ? [] : commitDeltaEntries()
   });
 }
 
@@ -149,13 +150,13 @@ try {
   const toml = read("supabase/config.toml");
   const packageJson = JSON.parse(read("package.json"));
   const lifecycleState = collectLifecycleState();
-  const lifecycle = classifySr2ge2Lifecycle(lifecycleState);
+  const lifecycle = classifySr2gfLifecycle(lifecycleState);
   const frozenDeltaEntries = commitDeltaEntries(SR2A_BASELINE);
   const frozenDeltaPaths = frozenDeltaEntries.map(({ path: file }) => file).sort();
   const frozenMigrationTracked = git(["ls-tree", "-r", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === SR1D_SUCCESSOR_MIGRATION;
 
   check("1. frozen SR-1D commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2A_BASELINE}^`]).trim() === SR1D_BASELINE && same(frozenDeltaPaths, SR1D_SUCCESSOR_PATHS) && !frozenDeltaEntries.some(({ status }) => status === "D"), { expectedParent: SR1D_BASELINE, expected: SR1D_SUCCESSOR_PATHS, actual: frozenDeltaPaths });
-  check("1a. candidate or frozen SR-2G-E2 successor manifest is exact and contains no unrelated path", same(lifecycle.lifecycleManifest, SR2GE2_SUCCESSOR_PATHS), { expected: SR2GE2_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("1a. candidate or frozen SR-2G-F successor manifest is exact and contains no unrelated path", same(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS), { expected: SR2GF_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
   check("1b2. frozen SR-2B commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && same(commitDeltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
   check("1b. frozen SR-2A commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2B_BASELINE}^`]).trim() === SR2A_BASELINE && same(commitDeltaEntries(SR2B_BASELINE).map(({ path: file }) => file).sort(), SR2A_SUCCESSOR_PATHS));
   check("1c. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0

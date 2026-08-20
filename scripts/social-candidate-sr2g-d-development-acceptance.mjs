@@ -602,8 +602,17 @@ rollback;`);
     JSON.stringify(cardBefore[0].row) === JSON.stringify(cardAfter[0].row));
   check("81 the same candidate card is still the selected card",
     JSON.stringify(subjectAfter.card) === JSON.stringify(subject.card), { before: subject.card, after: subjectAfter.card });
-  check("82 the card carries no interest column and no interest snapshot table exists",
-    !/interest|tag_key|hobby/i.test(JSON.stringify(cardAfter[0].row))
+  // SR-2G-F successor awareness. The invariant this check exists to protect is that a card never
+  // SNAPSHOTS anybody's interest SELECTIONS — candidate presentation must always read live Settings.
+  // That is unchanged. SR-2G-F adds the card owner's OWN declared meal context, which is a catalog
+  // key on their own card, not a copy of any candidate's selections, so the two context columns are
+  // excluded by name and everything else must still be free of interest vocabulary.
+  const cardRowWithoutContext = Object.fromEntries(
+    Object.entries(cardAfter[0].row).filter(([key]) => !key.startsWith("food_context_")));
+  check("82 the card carries no interest snapshot and no interest snapshot table exists",
+    !/interest|tag_key|hobby/i.test(JSON.stringify(cardRowWithoutContext))
+    && Object.keys(cardAfter[0].row).filter((k) => k.startsWith("food_context_")).length === 2
+    && cardAfter[0].row.food_context_tag_key === null
     && Number((await sql(`select count(*)::int as n from information_schema.tables where table_schema = 'public' and (table_name like '%interest%snapshot%' or table_name like '%card%interest%');`))[0].n) === 0);
 
   // ====== THE MANDATORY OVERFLOW TEST ===============================================================
