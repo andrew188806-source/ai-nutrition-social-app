@@ -9,6 +9,17 @@ export type MealBuddyCardType = (typeof MEAL_BUDDY_CARD_TYPES)[number];
 export type MealBuddyIntentionType = (typeof MEAL_BUDDY_INTENTION_TYPES)[number];
 export type MealBuddyMealPeriod = (typeof MEAL_BUDDY_MEAL_PERIODS)[number];
 
+// SR-2G-G's deliberately small handoff. These are the four stable identities carried by the
+// selected live recommendation; no display name, localized category, Profile interest or caller-
+// chosen context can cross this boundary.
+export type SelectedMealRecommendationIdentity = Readonly<{
+  source: "canonical_next_meal";
+  branchMenuItemId: string;
+  menuItemId: string;
+  restaurantId: string;
+  branchId: string;
+}>;
+
 // The exact accepted create body. Every field is product intent; not one names an owner, a tier, a
 // quota, a lifetime or an identifier.
 export type MealBuddyCardCreateRequest = Readonly<{
@@ -23,6 +34,9 @@ export type MealBuddyCardCreateRequest = Readonly<{
   // and never a dish name, a free-text string, a menu item id or a restaurant id. Omitting the key
   // entirely is valid and produces exactly a pre-SR-2G-F card.
   foodContextTagKey: string | null;
+  // Product Mobile uses this instead of foodContextTagKey. The database verifies the complete
+  // restaurant/menu relationship and derives the context atomically with card creation.
+  selectedRecommendation: SelectedMealRecommendationIdentity | null;
 }>;
 
 // The client-visible owned card. `sourceCardRef` replaces the internal uuid entirely; there is no

@@ -4,7 +4,7 @@ import {
   MEAL_BUDDY_MEAL_PERIODS,
   taipeiCalendarDate
 } from "./policy.ts";
-import type { MealBuddyCardCreateRequest } from "./types.ts";
+import type { MealBuddyCardCreateRequest, SelectedMealRecommendationIdentity } from "./types.ts";
 
 // These seven keys are REQUIRED and must all be present. An unknown key is still a rejection rather
 // than something quietly ignored: a request that tried to name an owner, a cap or a lifetime must
@@ -16,7 +16,7 @@ const CREATE_KEYS = Object.freeze([
 // SR-2G-F adds exactly one OPTIONAL key. It is optional rather than required precisely so every
 // pre-SR-2G-F client keeps working unchanged: a seven-key body is still a valid body and produces a
 // card with no context. The key set stays closed — this widens it by one, it does not open it.
-const OPTIONAL_CREATE_KEYS = Object.freeze(["foodContextTagKey"]);
+const OPTIONAL_CREATE_KEYS = Object.freeze(["foodContextTagKey", "selectedRecommendation"]);
 
 // A canonical food tag_key, e.g. food.japanese.sushi. Shape only: EXISTENCE, namespace, selectable
 // and active are decided by the database against the SR-2C-R1 catalog, never here and never by the
@@ -30,6 +30,9 @@ const INTENTION_TYPES = new Set<string>(MEAL_BUDDY_INTENTION_TYPES);
 const MEAL_PERIODS = new Set<string>(MEAL_BUDDY_MEAL_PERIODS);
 
 const MAX_TEXT = 200;
+const RECOMMENDATION_KEYS = Object.freeze([
+  "source", "branchMenuItemId", "menuItemId", "restaurantId", "branchId"
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -41,6 +44,27 @@ function optionalText(value: unknown): { ok: true; value: string | null } | { ok
   const trimmed = value.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_TEXT) return { ok: false };
   return { ok: true, value: trimmed };
+}
+
+function selectedRecommendation(value: unknown): SelectedMealRecommendationIdentity | null | false {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.length !== RECOMMENDATION_KEYS.length || !keys.every((key) => RECOMMENDATION_KEYS.includes(key))) {
+    return false;
+  }
+  if (value.source !== "canonical_next_meal") return false;
+  for (const key of RECOMMENDATION_KEYS.slice(1)) {
+    const entry = value[key];
+    if (typeof entry !== "string" || entry.trim().length === 0 || entry.length > MAX_TEXT) return false;
+  }
+  return Object.freeze({
+    source: "canonical_next_meal",
+    branchMenuItemId: (value.branchMenuItemId as string).trim(),
+    menuItemId: (value.menuItemId as string).trim(),
+    restaurantId: (value.restaurantId as string).trim(),
+    branchId: (value.branchId as string).trim()
+  });
 }
 
 // A real calendar date, not merely a well-shaped string: 2026-02-30 matches the pattern and is not
@@ -116,6 +140,15 @@ export function validateMealBuddyCardCreateRequest(
     foodContextTagKey = trimmed;
   }
 
+  const recommendation = selectedRecommendation(body.selectedRecommendation);
+  if (recommendation === false) return { ok: false };
+  // Product recommendation handoff and the internal explicit-context fixture seam are mutually
+  // exclusive. A caller can never override the context derived from its selected menu identity.
+  if (recommendation && foodContextTagKey !== null) return { ok: false };
+  if (recommendation && (cardType !== "restaurant" || restaurantId.value !== recommendation.restaurantId)) {
+    return { ok: false };
+  }
+
   return {
     ok: true,
     value: Object.freeze({
@@ -126,7 +159,8 @@ export function validateMealBuddyCardCreateRequest(
       diningDate,
       mealPeriod: mealPeriod as MealBuddyCardCreateRequest["mealPeriod"],
       preferredTime,
-      foodContextTagKey
+      foodContextTagKey,
+      selectedRecommendation: recommendation
     })
   };
 }

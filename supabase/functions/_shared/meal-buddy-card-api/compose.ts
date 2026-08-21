@@ -112,7 +112,7 @@ export async function composeMealBuddyCardCreate(
   if (!outcome.ok) {
     return {
       ok: false,
-      errorCode: outcome.reason === "invalid_food_context" ? "invalid_request" : "card_quota_exceeded"
+      errorCode: outcome.reason === "quota_exceeded" ? "card_quota_exceeded" : "invalid_request"
     };
   }
 

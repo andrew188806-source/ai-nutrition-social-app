@@ -16,6 +16,7 @@ import {
 // SR-2G-F baseline is this round's own freeze commit — so every "unchanged since baseline" check
 // below now measures exactly what SR-2G-F changed, and nothing else.
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_BASELINE_SUBJECT, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
+import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -75,6 +76,15 @@ function lifecycleState() {
 try {
   const state = lifecycleState();
   const lifecycle = classifySr2gfLifecycle(state);
+  const successorLifecycle = classifySr2ggLifecycle({
+    ...state,
+    headDeltaPaths: state.headDeltaEntries.map(({ path }) => path),
+    headDeleted: state.headDeltaEntries.some(({ status }) => status === "D")
+  });
+  const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
+    && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
+  const effectivePhase = lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid
+    ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GF_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
@@ -83,6 +93,9 @@ try {
   // Only the successor round's keys are removed before the comparison; check 7 still proves the
   // SR-2G-E2 keys are present and exact.
   for (const key of successorScriptKeys) delete packageWithout.scripts[key];
+  for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) {
+    delete packageWithout.scripts[key];
+  }
 
   const screen = read(SR2GE2_SCREEN);
   const screenExec = tsExec(screen);
@@ -101,9 +114,9 @@ try {
 
   // --- baseline ---------------------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2G-E1 authority",
-    lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-F successor path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
-    { expected: SR2GF_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+    effectivePhase !== "invalid", { phase: effectivePhase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
+  check("2. frozen SR-2G-F authority commit retains its exact successor path set", frozenAuthorityAtHead,
+    { authority: SR2GG_BASELINE, expected: SR2GF_SUCCESSOR_PATHS.length });
   check("3. the pinned predecessor is the exact pushed SR-2G-E1 freeze commit",
     git(["cat-file", "-t", SR2GF_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GF_BASELINE]).trim() === SR2GF_BASELINE_SUBJECT);
@@ -118,10 +131,10 @@ try {
   check("9. no dependency or lockfile is touched",
     JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
-  // SR-2G-E2 itself introduced no server byte, and that stays provable: the ONLY supabase delta
-  // since this round's freeze is the exactly-enumerated SR-2G-F successor set.
-  check("10. no server authority byte is touched outside the enumerated SR-2G-F successor set",
-    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f))
+  // SR-2G-E2 itself introduced no server byte. Later server deltas must remain confined to the
+  // exact, wildcard-free F and G successor manifests; no directory-wide allowance exists.
+  check("10. no server authority byte is touched outside the enumerated SR-2G-F/G successor sets",
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f))
     && !SR2GE2_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("11. every frozen SR-2G-E1 data-layer file is byte-unchanged outside the SR-2G-F successor set",
     lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", ...SR2GE2_FROZEN_E1_PATHS]))
@@ -347,7 +360,7 @@ try {
     SR2GE2_PERSON_REF_PREFIX !== SR2GE2_CARD_REF_PREFIX);
 
   const summary = Object.freeze({
-    round: "SR-2G-E2", baseline: SR2GF_BASELINE, phase: lifecycle.phase,
+    round: "SR-2G-E2", baseline: SR2GF_BASELINE, phase: effectivePhase,
     paths: SR2GE2_SUCCESSOR_PATHS.length, aggregateSha256: fsManifest.aggregateSha256,
     total: checks.length, passed: checks.length - failures.length, failed: failures.length
   });

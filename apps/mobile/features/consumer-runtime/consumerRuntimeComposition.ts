@@ -40,6 +40,17 @@ import type { MealPhotoAnalysisService } from "../meal-photo-analysis/mealPhotoA
 import type { SupabaseMealPhotoAnalysisClientLike } from "../meal-photo-analysis/supabaseMealPhotoAnalysisContracts";
 import { bindSocialCandidateRuntimeDependencies } from "../social-candidates/runtimeBinding";
 import type { SupabaseSocialCandidateClientLike } from "../social-candidates/supabaseSocialCandidateContracts";
+import {
+  bindMealBuddyCardCreateRuntimeDependencies,
+  clearMealBuddyCardCreateRuntimeDependencies
+} from "../meal-buddy-card-create/runtimeBinding";
+import type { SupabaseMealBuddyCardCreateClientLike } from "../meal-buddy-card-create/supabaseContracts";
+import {
+  bindMealBuddyCandidateRuntimeDependencies,
+  clearMealBuddyCandidateRuntimeDependencies
+} from "../meal-buddy-candidates/runtimeBinding";
+import type { SupabaseMealBuddyClientLike } from "../meal-buddy-candidates/supabaseMealBuddyCandidateContracts";
+import type { SupabaseInterestCatalogClientLike } from "../meal-buddy-candidates/interestCatalog";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
@@ -321,6 +332,10 @@ export function getOrCreateConsumerRuntimeComposition() {
 }
 
 export function createConsumerRuntimeComposition(options: ConsumerRuntimeCompositionOptions = {}): ConsumerRuntimeCompositionResult {
+  // Module bindings are availability-only and never carry an actor/session. Clear first so a later
+  // disabled or test composition cannot retain a live dependency graph from an earlier one.
+  clearMealBuddyCardCreateRuntimeDependencies();
+  clearMealBuddyCandidateRuntimeDependencies();
   const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
   const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
   const authFlags = deriveAuthCompositionFlags(capabilityFlags);
@@ -404,6 +419,17 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         authPort,
         candidateClient: client as unknown as SupabaseSocialCandidateClientLike
       });
+      bindMealBuddyCandidateRuntimeDependencies({
+        authPort,
+        mealBuddyClient: client as unknown as SupabaseMealBuddyClientLike,
+        catalogClient: client as unknown as SupabaseInterestCatalogClientLike
+      });
+      if (capabilityFlags.supabaseWritesEnabled) {
+        bindMealBuddyCardCreateRuntimeDependencies({
+          authPort,
+          client: client as unknown as SupabaseMealBuddyCardCreateClientLike
+        });
+      }
       return {
         ok: true,
         value: {

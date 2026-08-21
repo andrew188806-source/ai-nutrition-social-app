@@ -36,6 +36,7 @@ import { SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d
 import { SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
 import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
+import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -158,11 +159,21 @@ function moduleSpecifiers(source) {
 try {
   const state = lifecycleState();
   const lifecycle = classifySr2gfLifecycle(state);
+  const successorLifecycle = classifySr2ggLifecycle({
+    ...state,
+    headDeltaPaths: state.headDeltaEntries.map(({ path: file }) => file),
+    headDeleted: state.headDeltaEntries.some(({ status }) => status === "D")
+  });
+  const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
+    && exact(deltaEntries(SR2GG_BASELINE).map(({ path: file }) => file).sort(), SR2GF_SUCCESSOR_PATHS);
+  const effectivePhase = lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid
+    ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2B_BASELINE}:package.json`]));
   const packageWithoutSr2b = structuredClone(packageJson);
   const successorScriptKeys = ["test:social-profile-sr2c", "test:social-profile-sr2c-smoke", "test:social-profile-sr2c-mutations", "test:social-candidate-sr2d", "test:social-candidate-sr2d-smoke", "test:social-candidate-sr2d-mutations", "test:social-candidate-sr2e", "test:social-candidate-sr2e-smoke", "test:social-candidate-sr2e-mutations", "test:social-candidate-sr2e-development-mobile-smoke", "test:social-candidate-sr2f", "test:social-candidate-sr2f-smoke", "test:social-candidate-sr2f-mutations", "test:social-candidate-sr2f-development-composition-smoke", "test:social-candidate-sr2g-a", "test:social-candidate-sr2g-a-smoke", "test:social-candidate-sr2g-a-mutations", "test:social-candidate-sr2g-a-development-acceptance", "test:social-candidate-sr2g-b", "test:social-candidate-sr2g-b-smoke", "test:social-candidate-sr2g-b-mutations", "test:social-candidate-sr2g-b-development-acceptance", "test:social-candidate-sr2g-c", "test:social-candidate-sr2g-c-smoke", "test:social-candidate-sr2g-c-mutations", "test:social-candidate-sr2g-c-development-acceptance", "test:social-candidate-sr2g-b-r1", "test:social-candidate-sr2g-b-r1-smoke", "test:social-candidate-sr2g-b-r1-mutations", "test:social-candidate-sr2g-b-r1-development-acceptance", "test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance", "test:social-interest-sr2c-r1", "test:social-interest-sr2c-r1-smoke", "test:social-interest-sr2c-r1-mutations", "test:social-interest-sr2c-r1-development-acceptance", "test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance", "test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance", "test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke", "test:social-candidate-sr2g-f", "test:social-candidate-sr2g-f-smoke", "test:social-candidate-sr2g-f-mutations", "test:social-candidate-sr2g-f-development-acceptance"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2b.scripts[key];
+  for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithoutSr2b.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -180,11 +191,10 @@ try {
     .filter((file) => file.endsWith(".sql")).sort();
   const filesystemManifest = createSr2bCanonicalManifest((file) => fs.readFileSync(path.join(root, file)));
   const expectedManifestText = SR2B_SUCCESSOR_PATHS.map((file) => `${sha256(file)}  ${file}\n`).join("");
-  const frozenIndexManifest = lifecycle.candidate ? null : createSr2bCanonicalManifest((file) => gitBytes(["show", `:${file}`]));
-  const frozenTreeManifest = lifecycle.candidate ? null : createSr2bCanonicalManifest((file) => gitBytes(["show", `${state.head}:${file}`]));
+  const sr2bOwnedPaths = SR2B_SUCCESSOR_PATHS.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(file) && !SR2D_SUCCESSOR_PATHS.includes(file) && !SR2E_SUCCESSOR_PATHS.includes(file) && !SR2F_SUCCESSOR_PATHS.includes(file) && !SR2GA_SUCCESSOR_PATHS.includes(file) && !SR2GB_SUCCESSOR_PATHS.includes(file) && !SR2GC_SUCCESSOR_PATHS.includes(file) && !SR2GBR1_SUCCESSOR_PATHS.includes(file) && !SR2GCR1_SUCCESSOR_PATHS.includes(file) && !SR2CR1_SUCCESSOR_PATHS.includes(file) && !SR2GD_SUCCESSOR_PATHS.includes(file) && !SR2GE1_SUCCESSOR_PATHS.includes(file) && !SR2GE2_SUCCESSOR_PATHS.includes(file) && !SR2GF_SUCCESSOR_PATHS.includes(file) && !SR2GG_SUCCESSOR_PATHS.includes(file));
 
-  check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-F successor path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS), { expected: SR2GF_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2C-R1 authority", effectivePhase !== "invalid", { phase: effectivePhase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
+  check("2. frozen SR-2G-F authority commit retains its exact successor path set", frozenAuthorityAtHead, { authority: SR2GG_BASELINE, expected: SR2GF_SUCCESSOR_PATHS });
   check("2a. frozen SR-2B commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && exact(deltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
   check("2b. SR-2C successor paths are wildcard-free and confined to the pure shared profile module plus exactly one projection migration", SR2C_SUCCESSOR_PATHS.length > 0
     && new Set(SR2C_SUCCESSOR_PATHS).size === SR2C_SUCCESSOR_PATHS.length
@@ -242,7 +252,7 @@ try {
   check("45. no randomness can affect exposure", !/Math\.random|crypto\.randomUUID|randomBytes/.test(allExecutable));
 
   check("46. exactly one SR-2B migration is added and it is the only candidate migration", exact(SR2B_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")), [SR2B_SUCCESSOR_MIGRATION]));
-  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`));
+  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`));
   check("47. the SR-2B migration is the newest repository migration outside an enumerated successor", nonSuccessorMigrations[nonSuccessorMigrations.length - 1] === path.basename(SR2B_SUCCESSOR_MIGRATION));
   check("48. the migration executes exactly one grant statement", migrationSql === "grant select on table public.subscription_entitlements to authenticated;");
   check("49. the migration grants SELECT only to authenticated", /grant select on table public\.subscription_entitlements to authenticated;/.test(migrationSql) && !/\bto\s+(anon|public|service_role|social_runtime_executor|social_pair_read_authority|social_authority)\b/i.test(migrationSql));
@@ -273,12 +283,12 @@ try {
   check("62. guard contains no literal-true pass or skip call", !literalPass && !skipCall);
   check("63. canonical manifest is sorted raw-byte SHA-256 serialized as lowercase hash, two spaces, POSIX path and LF", filesystemManifest.text === expectedManifestText && filesystemManifest.paths.every((file, index, files) => index === 0 || files[index - 1] < file) && filesystemManifest.entries.every(({ path: file, sha256: hash }) => /^[0-9a-f]{64}$/.test(hash) && !file.includes("\\")) && filesystemManifest.text.endsWith("\n") && !filesystemManifest.text.includes("\r") && !filesystemManifest.text.includes("\0"));
   check("64. canonical aggregate is SHA-256 over the exact UTF-8 manifest bytes", filesystemManifest.aggregateSha256 === crypto.createHash("sha256").update(Buffer.from(expectedManifestText, "utf8")).digest("hex"));
-  check("65. frozen index and committed tree reproduce filesystem manifest bytes", lifecycle.candidate || (frozenIndexManifest.text === filesystemManifest.text && frozenIndexManifest.aggregateSha256 === filesystemManifest.aggregateSha256 && frozenTreeManifest.text === filesystemManifest.text && frozenTreeManifest.aggregateSha256 === filesystemManifest.aggregateSha256));
+  check("65. every SR-2B-owned path is byte-identical between its freeze commit and the worktree", sr2bOwnedPaths.length > 0 && sr2bOwnedPaths.every((file) => gitBytes(["show", `${SR2C_BASELINE}:${file}`]).equals(fs.readFileSync(path.join(root, file)))), { owned: sr2bOwnedPaths });
 
   console.log(JSON.stringify({
     suite: "social-exposure-sr2b-guard",
     status: failures.length === 0 ? "passed" : "failed",
-    lifecycle: lifecycle.phase,
+    lifecycle: effectivePhase,
     totalChecks: checks.length,
     passed: checks.length - failures.length,
     failed: failures.length,

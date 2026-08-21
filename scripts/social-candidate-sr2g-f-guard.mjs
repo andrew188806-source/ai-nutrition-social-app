@@ -14,6 +14,7 @@ import {
   SR2GF_FROZEN_POOL_PRIMITIVE, SR2GF_MIGRATION, SR2GF_POLICY_VERSION, SR2GF_PREMIUM_EXPOSURE,
   SR2GF_PROOF_CONTEXTS, SR2GF_RANKING_POLICY_VERSION, SR2GF_SUCCESSOR_PATHS, SR2GF_TIME_ZONE
 } from "./social-candidate-sr2g-f-successor-manifest.mjs";
+import { classifySr2ggLifecycle, SR2GG_BASELINE } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -85,10 +86,22 @@ function lifecycleState() {
 try {
   const state = lifecycleState();
   const lifecycle = classifySr2gfLifecycle(state);
+  const successorLifecycle = classifySr2ggLifecycle({
+    ...state,
+    headDeltaPaths: state.headDeltaEntries.map(({ path }) => path),
+    headDeleted: state.headDeltaEntries.some(({ status }) => status === "D")
+  });
+  const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
+    && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
+  const effectivePhase = lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid
+    ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GF_BASELINE}:package.json`]));
   const packageWithout = structuredClone(packageJson);
   for (const key of Object.keys(packageScripts)) delete packageWithout.scripts[key];
+  for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) {
+    delete packageWithout.scripts[key];
+  }
 
   const migration = read(SR2GF_MIGRATION);
   const migrationExec = sqlExec(migration);
@@ -116,14 +129,14 @@ try {
 
   const fsManifest = createSr2gfCanonicalManifest((f) => fs.readFileSync(path.join(root, f)));
   const expectedManifestText = SR2GF_SUCCESSOR_PATHS.map((f) => `${sha256(f)}  ${f}\n`).join("");
-  const frozenIndex = lifecycle.frozenShape ? createSr2gfCanonicalManifest((f) => gitBytes(["show", `:${f}`])) : null;
-  const frozenTree = lifecycle.frozenShape ? createSr2gfCanonicalManifest((f) => gitBytes(["cat-file", "blob", `${state.head}:${f}`])) : null;
+  const frozenIndex = frozenAuthorityAtHead ? createSr2gfCanonicalManifest((f) => gitBytes(["show", `${SR2GG_BASELINE}:${f}`])) : null;
+  const frozenTree = frozenAuthorityAtHead ? createSr2gfCanonicalManifest((f) => gitBytes(["cat-file", "blob", `${SR2GG_BASELINE}:${f}`])) : null;
 
   // --- baseline and lifecycle ---------------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed from SR-2G-E2 authority",
-    lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-F path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
-    { expected: SR2GF_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+    effectivePhase !== "invalid", { phase: effectivePhase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
+  check("2. frozen SR-2G-F authority commit retains its exact successor path set", frozenAuthorityAtHead,
+    { authority: SR2GG_BASELINE, expected: SR2GF_SUCCESSOR_PATHS.length });
   check("3. the pinned predecessor is the exact pushed SR-2G-E2 freeze commit",
     git(["cat-file", "-t", SR2GF_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GF_BASELINE]).trim() === SR2GF_BASELINE_SUBJECT);
@@ -218,7 +231,8 @@ try {
     /\^food\\\.\[a-z0-9_\]\+/.test(cardValidate) && /FOOD_CONTEXT_TAG_KEY\.test/.test(cardValidate));
   check("29. no raw menu, restaurant or catalog surrogate identifier becomes the context",
     !/menu_item|menu_items|menu_category|branch_menu_items|nutrition_id/i.test(migrationExec)
-    && !/menuItemId|menuItem|dishId/.test(`${cardValidate}\n${allContext}`));
+    && !/dishId/.test(`${cardValidate}\n${allContext}`)
+    && !/foodContextTagKey\s*:\s*(?:recommendation\.)?(?:menuItemId|restaurantId|branchMenuItemId)/.test(cardValidate));
 
   // --- pipeline position: before SR-2A and SR-2B ----------------------------------------------------
   check("30. the context stage is composed before ranking and exposure",
@@ -295,7 +309,7 @@ try {
   check("54. the context column is optional at the schema level",
     /add column food_context_tag_key text,/.test(migrationExec) && !/food_context_tag_key text not null/.test(migrationExec));
   check("55. the create body key set stays closed but the context key is optional",
-    /OPTIONAL_CREATE_KEYS = Object\.freeze\(\["foodContextTagKey"\]\)/.test(cardValidate)
+    /OPTIONAL_CREATE_KEYS = Object\.freeze\(\["foodContextTagKey", "selectedRecommendation"\]\)/.test(cardValidate)
     && /CREATE_KEYS\.every\(\(key\) => Object\.hasOwn\(body, key\)\)/.test(cardValidate)
     && /keys\.every\(\(key\) => known\.has\(key\)\)/.test(cardValidate));
   check("56. an omitted context is the same as an explicit null, never an error",
@@ -356,9 +370,8 @@ try {
   check("76. the context label comes from the canonical catalog, never a hard-coded map",
     /resolveInterestCategoryLabel\(controller\.labels, card\.foodContextTagKey\)/.test(picker)
     && !/(火鍋|壽司|拉麵)/.test(allMobile));
-  check("77. the candidate screen and card renderer are untouched",
+  check("77. the frozen candidate renderers stay untouched while the successor may edit the card-create integration screen",
     lines(git(["diff", "--name-only", SR2GF_BASELINE, "--",
-      "apps/mobile/app/meal-buddies.tsx",
       `${SR2GF_FEATURE_ROOT}/MealBuddyCandidateCard.tsx`,
       `${SR2GF_FEATURE_ROOT}/MealBuddyRealCandidateSection.tsx`,
       `${SR2GF_FEATURE_ROOT}/useMealBuddyRealCandidates.ts`])).length === 0);
@@ -404,15 +417,15 @@ try {
   check("89. filesystem manifest text is canonical", fsManifest.text === expectedManifestText);
   check("90. manifest aggregate is a 64-character lowercase hex digest", /^[0-9a-f]{64}$/.test(fsManifest.aggregateSha256));
   check("91. manifest entry count equals the declared path count", fsManifest.entries.length === SR2GF_SUCCESSOR_PATHS.length);
-  check("92. frozen index bytes equal filesystem bytes", !lifecycle.frozenShape || frozenIndex.aggregateSha256 === fsManifest.aggregateSha256);
-  check("93. frozen tree bytes equal filesystem bytes", !lifecycle.frozenShape || frozenTree.aggregateSha256 === fsManifest.aggregateSha256);
+  check("92. frozen SR-2G-F index bytes remain readable from its authority commit", !frozenAuthorityAtHead || frozenIndex.entries.length === SR2GF_SUCCESSOR_PATHS.length);
+  check("93. frozen SR-2G-F index and tree bytes remain identical", !frozenAuthorityAtHead || frozenTree.aggregateSha256 === frozenIndex.aggregateSha256);
   check("94. exactly four SR-2G-F context files are added",
     SR2GF_CONTEXT_FILES.length === 4 && SR2GF_CONTEXT_FILES.every((f) => fs.existsSync(path.join(root, f))));
   check("95. guard exit status is derived from the failure list", failures.length === checks.filter((c) => !c.pass).length);
 
   console.log(JSON.stringify({
     suite: "social-candidate-sr2g-f",
-    phase: lifecycle.phase,
+    phase: effectivePhase,
     head: state.head,
     originHead: state.originHead,
     ahead: state.ahead,

@@ -52,6 +52,10 @@ import {
   type MealBuddyRealCandidatesController
 } from "../features/meal-buddy-candidates/useMealBuddyRealCandidates";
 import { useConsumerRuntime } from "../features/consumer-runtime";
+import {
+  buildRecommendationMealBuddyCardCreateRequest,
+  createRecommendationMealBuddyCard
+} from "../features/meal-buddy-card-create";
 import { resolveCommunityProfileDisplay, type AvatarSource, type CommunityProfileDisplay } from "../features/display-resolvers";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { clearU1NextMealBuddyPrefill, consumeU1NextMealBuddyPrefill, type U1NextMealBuddyPrefillViewModel } from "../features/next-meal-prototype";
@@ -601,13 +605,13 @@ function DiscoverSection({
 
   useEffect(() => {
     if (!u1Prefill) return;
-    const targetUsage = u1Prefill.restaurantName ? cardUsage.restaurant : cardUsage.general;
+    const targetUsage = u1Prefill.selectedRecommendation ? cardUsage.restaurant : cardUsage.general;
     if (targetUsage.count >= targetUsage.limit) {
       setCardQuotaMessage(isPremium ? "目前飯友卡數量已達上限，請先整理既有卡片。" : "目前飯友卡數量已達上限，請先整理既有卡片再繼續。");
       return;
     }
     setCardQuotaMessage("");
-    setFormTarget({ cardType: u1Prefill.restaurantName ? "restaurant" : "general", mode: "create", prefill: u1Prefill });
+    setFormTarget({ cardType: u1Prefill.selectedRecommendation ? "restaurant" : "general", mode: "create", prefill: u1Prefill });
   }, [u1Prefill?.handoffId]);
 
   function requestCreateCard(cardType: MealBuddyCardType) {
@@ -624,18 +628,40 @@ function DiscoverSection({
     setFormTarget({ cardType, mode: "create" });
   }
 
-  function saveInlineCard(input: MealBuddyCardFormValue) {
+  async function saveInlineCard(input: MealBuddyCardFormValue) {
     clearU1NextMealBuddyPrefill();
+
+    if (isRealCandidateMode && formTarget?.mode === "create" && formTarget.prefill?.selectedRecommendation) {
+      const request = buildRecommendationMealBuddyCardCreateRequest(formTarget.prefill);
+      if (!request) {
+        setCardQuotaMessage("這筆推薦缺少可驗證的餐點資料，請重新選擇推薦。");
+        return;
+      }
+      const result = await createRecommendationMealBuddyCard(request);
+      if (!result.ok) {
+        setCardQuotaMessage(result.errorCode === "card_quota_exceeded"
+          ? "目前飯友卡數量已達上限，請先整理既有卡片。"
+          : "飯友卡暫時無法建立，請稍後再試。");
+        return;
+      }
+      setCardQuotaMessage("");
+      setFormTarget(null);
+      await realCandidates.loadSourceCards();
+      return;
+    }
+
     if (formTarget?.mode === "edit" && formTarget.card) {
       deleteMealBuddyCard(formTarget.card);
     }
 
     const nextCard = createMealBuddyCard({
       cardType: formTarget?.cardType ?? "general",
-      sourceType: formTarget?.card?.sourceType ?? (formTarget?.cardType === "restaurant" ? "restaurant_page" : "manual"),
+      sourceType: formTarget?.card?.sourceType ?? (formTarget?.prefill ? "ai_recommendation" : formTarget?.cardType === "restaurant" ? "restaurant_page" : "manual"),
       intentionType: "chat_first",
       preferredFoodName: input.foodName,
       restaurantName: formTarget?.cardType === "restaurant" ? input.restaurantName : "",
+      restaurantId: formTarget?.prefill?.selectedRecommendation?.restaurantId ?? formTarget?.card?.restaurantId ?? "",
+      menuItemId: formTarget?.prefill?.selectedRecommendation?.menuItemId ?? formTarget?.card?.menuItemId,
       foodCategory: input.foodCategory,
       area: input.area,
       preferredTime: input.preferredTime,
@@ -713,7 +739,7 @@ function DiscoverSection({
                       clearU1NextMealBuddyPrefill();
                       setFormTarget(null);
                     }}
-                    onSave={saveInlineCard}
+                    onSave={(value) => { void saveInlineCard(value); }}
                   />
                 ) : null}
                 {activeCards.length === 0 ? (
@@ -888,7 +914,6 @@ function InlineMealBuddyCardForm({
   onSave: (input: MealBuddyCardFormValue) => void;
 }) {
   const [foodName, setFoodName] = useState(card?.preferredFoodName || prefill?.foodName || "");
-  const [foodCategory, setFoodCategory] = useState(card?.foodCategory || prefill?.foodCategory || "");
   const [preferredTime, setPreferredTime] = useState(card?.preferredTime || prefill?.preferredTime || "");
   const [area, setArea] = useState(card?.area || prefill?.area || "");
   const [restaurantName, setRestaurantName] = useState(card?.restaurantName || prefill?.restaurantName || "");
@@ -906,7 +931,6 @@ function InlineMealBuddyCardForm({
         <LabeledInput label="餐點名稱" value={foodName} onChangeText={setFoodName} placeholder="例如：雞胸便當" />
         <LabeledInput label="用餐時間" value={preferredTime} onChangeText={setPreferredTime} placeholder="例如：今天 18:30" />
         <LabeledInput label="地區" value={area} onChangeText={setArea} placeholder="例如：信義區" />
-        <LabeledInput label="餐點類型" value={foodCategory} onChangeText={setFoodCategory} placeholder="例如：日式、高蛋白、火鍋" />
         {isRestaurantCard ? <LabeledInput label="餐廳名稱" value={restaurantName} onChangeText={setRestaurantName} placeholder="例如：小森健康食堂" /> : null}
         <LabeledInput label="營養目標或備註" value={note} onChangeText={setNote} placeholder="例如：清爽一點、補蛋白質" />
       </View>
@@ -924,8 +948,10 @@ function InlineMealBuddyCardForm({
           onPress={() =>
             onSave({
               area,
-              foodCategory,
-              foodName: foodName || foodCategory || (isRestaurantCard ? restaurantName : "想吃的餐點"),
+              // Compatibility display only. There is intentionally no category/context editor;
+              // canonical matching metadata is derived from selectedRecommendation on the server.
+              foodCategory: card?.foodCategory || prefill?.foodName || foodName,
+              foodName: foodName || (isRestaurantCard ? restaurantName : "想吃的餐點"),
               note,
               paymentPreference,
               preferredTime,

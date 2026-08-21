@@ -15,7 +15,7 @@ import {
 type PayloadRow = Readonly<{ payload: unknown }>;
 
 const CREATE_CARD = defineSocialRuntimeExecutorStatement<PayloadRow>`
-  select social_internal.create_meal_buddy_card_with_context($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::date, $7::text, $8::time, $9::integer, $10::integer, $11::text) as payload
+  select social_internal.create_meal_buddy_card_from_recommendation($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::date, $7::text, $8::time, $9::integer, $10::integer, $11::text, $12::text, $13::text, $14::text, $15::text) as payload
 `;
 
 const LIST_CARDS = defineSocialRuntimeExecutorStatement<PayloadRow>`
@@ -81,12 +81,13 @@ function parseCard(value: unknown): InternalMealBuddyCardRow {
 
 export type CreateCardOutcome =
   | { ok: true; card: InternalMealBuddyCardRow; counts: MealBuddyCardCounts }
-  | { ok: false; reason: "quota_exceeded" | "invalid_food_context" };
+  | { ok: false; reason: "quota_exceeded" | "invalid_food_context" | "invalid_recommendation_identity" };
 
 // The database raises this when a submitted context is not a currently selectable, active food tag.
 // Matching the sentinel — never a SQLSTATE table, a message or a column name — is what keeps the
 // distinction between "your request was wrong" and "our dependency failed" without leaking either.
 const INVALID_FOOD_CONTEXT_SENTINEL = "INVALID_FOOD_CONTEXT";
+const INVALID_RECOMMENDATION_IDENTITY_SENTINEL = "INVALID_RECOMMENDATION_IDENTITY";
 
 // One transaction: the advisory lock, the active count and the insert are indivisible inside the
 // frozen function, so two concurrent creates cannot both claim the final slot.
@@ -104,6 +105,9 @@ export async function createOwnedCard(
     // dependency failure can never be mistaken for a rejected request.
     if (error instanceof Error && error.message.includes(INVALID_FOOD_CONTEXT_SENTINEL)) {
       return { ok: false, reason: "invalid_food_context" };
+    }
+    if (error instanceof Error && error.message.includes(INVALID_RECOMMENDATION_IDENTITY_SENTINEL)) {
+      return { ok: false, reason: "invalid_recommendation_identity" };
     }
     throw error;
   }
@@ -133,9 +137,13 @@ async function runCreate(
       request.preferredTime,
       caps.general,
       caps.restaurant,
-      // The context the owner chose for their own card. The DATABASE validates it against the
-      // canonical catalog; this layer only forwards what the request validator already admitted.
-      request.foodContextTagKey
+      // Explicit context is the frozen internal/direct-create seam. Product recommendation creates
+      // leave it null; the database validates the four selected identities and derives context.
+      request.foodContextTagKey,
+      request.selectedRecommendation?.branchMenuItemId ?? null,
+      request.selectedRecommendation?.menuItemId ?? null,
+      request.selectedRecommendation?.restaurantId ?? null,
+      request.selectedRecommendation?.branchId ?? null
     ])
   ));
 }

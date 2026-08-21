@@ -70,9 +70,17 @@ export type U1NextMealBuddyPrefillViewModel = {
   handoffId: string;
   source: "u1_next_meal_prototype";
   foodName: string;
-  foodCategory: string;
   restaurantName: string;
   area: string;
   preferredTime: string;
   note: string;
+  // Stable selected identity only. Display text and recommendation reasons stay outside the
+  // authority object, and no context key is accepted from Mobile.
+  selectedRecommendation: {
+    source: "canonical_next_meal";
+    branchMenuItemId: string;
+    menuItemId: string;
+    restaurantId: string;
+    branchId: string;
+  } | null;
 };

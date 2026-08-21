@@ -16,6 +16,7 @@ import {
 } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
 import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
+import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -74,11 +75,16 @@ function lifecycleState() {
 try {
   const state = lifecycleState();
   const lifecycle = classifySr2gfLifecycle(state);
+  const successorLifecycle = classifySr2ggLifecycle({ ...state, headDeltaPaths: state.headDeltaEntries.map(({ path }) => path), headDeleted: state.headDeltaEntries.some(({ status }) => status === "D") });
+  const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
+    && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
+  const effectivePhase = lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GE1_TOOLING_COMMIT}:package.json`]));
   const packageWithout = structuredClone(packageJson);
   const successorScriptKeys = ["test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke", "test:social-candidate-sr2g-f", "test:social-candidate-sr2g-f-smoke", "test:social-candidate-sr2g-f-mutations", "test:social-candidate-sr2g-f-development-acceptance"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
+  for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithout.scripts[key];
 
   const dtoTypes = read(`${SR2GE1_SHARED_ROOT}/types.ts`);
   const dtoValidate = read(`${SR2GE1_SHARED_ROOT}/validate.ts`);
@@ -104,15 +110,15 @@ try {
 
   // --- baseline and two-commit stack ------------------------------------------------------------
   check("1. lifecycle is exactly candidate, frozen-unpushed or frozen-pushed over the two-commit stack",
-    lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2G-F successor path set", exact(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
-    { expected: SR2GF_SUCCESSOR_PATHS.length, actual: lifecycle.lifecycleManifest });
+    effectivePhase !== "invalid", { phase: effectivePhase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
+  check("2. frozen SR-2G-F authority commit retains its exact successor path set", frozenAuthorityAtHead,
+    { authority: SR2GG_BASELINE, expected: SR2GF_SUCCESSOR_PATHS.length });
   // The SR-2G-D commit is still SR-2G-E1's pinned authority. Origin itself legitimately advances as
   // later rounds are pushed, so it is accepted at either the SR-2G-D or the SR-2G-E1 freeze.
   check("3. the pinned authority is the exact frozen SR-2G-D freeze commit",
     git(["cat-file", "-t", SR2GE1_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_BASELINE]).trim() === SR2GE1_BASELINE_SUBJECT
-    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GF_BASELINE));
+    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GF_BASELINE || state.originHead === SR2GG_BASELINE));
   check("4. the local tooling predecessor is intact, unamended and still the SR-2G-E1 parent",
     git(["cat-file", "-t", SR2GE1_TOOLING_COMMIT]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_TOOLING_COMMIT]).trim() === SR2GE1_TOOLING_SUBJECT
@@ -139,12 +145,12 @@ try {
     JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("14. no migration is added or changed outside the enumerated SR-2G-F successor set",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/migrations/")));
   // SR-2G-E1 itself introduced no server byte, and that stays provable: the ONLY supabase delta
   // since its baseline is the exactly-enumerated SR-2G-F successor set.
   check("15. no server authority byte is touched outside the enumerated SR-2G-F successor set",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("16. every frozen SR-2E predecessor module is byte-unchanged",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", ...SR2GE1_FROZEN_MOBILE_PATHS])).length === 0);
@@ -369,7 +375,7 @@ try {
 
   const summary = Object.freeze({
     round: "SR-2G-E1", baseline: SR2GE1_BASELINE, toolingPredecessor: SR2GE1_TOOLING_COMMIT,
-    phase: lifecycle.phase, paths: SR2GE1_SUCCESSOR_PATHS.length, ownPaths: SR2GE1_OWN_PATHS.length,
+    phase: effectivePhase, paths: SR2GE1_SUCCESSOR_PATHS.length, ownPaths: SR2GE1_OWN_PATHS.length,
     absorbedToolingPaths: SR2GE1_TOOLING_PATHS.length,
     aggregateSha256: fsManifest.aggregateSha256,
     total: checks.length, passed: checks.length - failures.length, failed: failures.length

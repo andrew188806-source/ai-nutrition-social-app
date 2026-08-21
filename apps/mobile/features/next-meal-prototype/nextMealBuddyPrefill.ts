@@ -9,15 +9,28 @@ let pendingPrefill: PendingU1NextMealBuddyPrefill | null = null;
 let nextHandoffSequence = 0;
 
 export function buildU1NextMealBuddyPrefill(recommendation: U1NextMealCandidateViewModel): U1NextMealBuddyPrefillViewModel {
+  const selectedRecommendation = !recommendation.isSampleData
+    && recommendation.branchMenuItemId
+    && recommendation.menuItemId
+    && recommendation.restaurantId
+    && recommendation.branchId
+    ? {
+        source: "canonical_next_meal" as const,
+        branchMenuItemId: recommendation.branchMenuItemId,
+        menuItemId: recommendation.menuItemId,
+        restaurantId: recommendation.restaurantId,
+        branchId: recommendation.branchId
+      }
+    : null;
   return {
     handoffId: `u1-next-meal-${recommendation.prototypeId}`,
     source: "u1_next_meal_prototype",
     foodName: recommendation.mealName,
-    foodCategory: recommendation.tags.slice(0, 2).join("、"),
     restaurantName: recommendation.restaurantName ?? "",
     area: recommendation.areaLabel ?? "",
     preferredTime: "下一餐",
-    note: recommendation.reasonSummary
+    note: recommendation.reasonSummary,
+    selectedRecommendation
   };
 }
 
@@ -70,10 +83,23 @@ function isValidU1NextMealBuddyPrefill(value: unknown): value is U1NextMealBuddy
     candidate.handoffId.startsWith("u1-next-meal-") &&
     typeof candidate.foodName === "string" &&
     candidate.foodName.trim().length > 0 &&
-    typeof candidate.foodCategory === "string" &&
     typeof candidate.restaurantName === "string" &&
     typeof candidate.area === "string" &&
     typeof candidate.preferredTime === "string" &&
-    typeof candidate.note === "string"
+    typeof candidate.note === "string" &&
+    isValidSelectedRecommendation(candidate.selectedRecommendation)
   );
+}
+
+function isValidSelectedRecommendation(value: unknown): boolean {
+  if (value === null) return true;
+  if (!value || typeof value !== "object") return false;
+  const identity = value as Record<string, unknown>;
+  const keys = Object.keys(identity).sort();
+  const expected = ["branchId", "branchMenuItemId", "menuItemId", "restaurantId", "source"].sort();
+  return keys.length === expected.length
+    && keys.every((key, index) => key === expected[index])
+    && identity.source === "canonical_next_meal"
+    && [identity.branchMenuItemId, identity.menuItemId, identity.restaurantId, identity.branchId]
+      .every((entry) => typeof entry === "string" && entry.trim().length > 0);
 }
