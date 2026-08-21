@@ -259,7 +259,10 @@
     "test:social-candidate-sr2g-f-development-acceptance": "node scripts/social-candidate-sr2g-f-development-acceptance.mjs",
     "test:social-candidate-sr2g-g": "node scripts/social-candidate-sr2g-g-guard.mjs",
     "test:social-candidate-sr2g-g-smoke": "node scripts/social-candidate-sr2g-g-smoke.mjs",
-    "test:social-candidate-sr2g-g-mutations": "node scripts/social-candidate-sr2g-g-mutations.mjs"
+    "test:social-candidate-sr2g-g-mutations": "node scripts/social-candidate-sr2g-g-mutations.mjs",
+    "test:social-candidate-sr2h-a": "node scripts/social-candidate-sr2h-a-guard.mjs",
+    "test:social-candidate-sr2h-a-smoke": "node scripts/social-candidate-sr2h-a-smoke.mjs",
+    "test:social-candidate-sr2h-a-mutations": "node scripts/social-candidate-sr2h-a-mutations.mjs"
   },
   "workspaces": [
     "apps/*",

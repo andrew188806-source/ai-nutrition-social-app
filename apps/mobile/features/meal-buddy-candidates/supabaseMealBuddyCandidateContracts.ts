@@ -4,10 +4,11 @@
 // session's Authorization header, so this feature never handles a JWT itself, and returns
 // { data, error } where a non-2xx `error` is a FunctionsHttpError whose `.context` is the raw,
 // not-yet-parsed Response.
-import type { MealBuddyCandidateListRequest } from "@haocu/shared";
+import type { MealBuddyCandidateListRequest, MealBuddyCandidateProfileRequest } from "@haocu/shared";
 
 export const MEAL_BUDDY_CARD_LIST_FUNCTION_NAME = "meal-buddy-card-list" as const;
 export const MEAL_BUDDY_CANDIDATE_LIST_FUNCTION_NAME = "meal-buddy-candidate-list" as const;
+export const MEAL_BUDDY_CANDIDATE_PROFILE_FUNCTION_NAME = "meal-buddy-candidate-profile" as const;
 
 export type SupabaseFunctionsInvokeErrorLike = {
   name?: string;
@@ -32,6 +33,10 @@ export type SupabaseMealBuddyClientLike = {
     invoke<T = unknown>(
       functionName: typeof MEAL_BUDDY_CANDIDATE_LIST_FUNCTION_NAME,
       options: { body: MealBuddyCandidateListRequest }
+    ): Promise<SupabaseFunctionsInvokeResponseLike<T>>;
+    invoke<T = unknown>(
+      functionName: typeof MEAL_BUDDY_CANDIDATE_PROFILE_FUNCTION_NAME,
+      options: { body: MealBuddyCandidateProfileRequest }
     ): Promise<SupabaseFunctionsInvokeResponseLike<T>>;
   };
 };

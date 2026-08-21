@@ -70,6 +70,26 @@ export function resolveInterestCategoryLabel(labels: InterestCategoryLabels, cat
   return labels.get(categoryKey) ?? categoryKey;
 }
 
+export type FullInterestLabelsOutcome =
+  | { ok: true; value: readonly string[] }
+  | { ok: false; reason: "missing_catalog_label" };
+
+// Full profile tags must never fall back to rendering an internal tag key. A catalog gap therefore
+// fails this presentation step explicitly; the screen shows a generic safe error instead of leaking
+// `general.*` or `food.*` as user-facing copy.
+export function resolveFullInterestLabels(
+  labels: InterestCategoryLabels,
+  tagKeys: readonly string[]
+): FullInterestLabelsOutcome {
+  const resolved: string[] = [];
+  for (const tagKey of tagKeys) {
+    const label = labels.get(tagKey);
+    if (!label) return { ok: false, reason: "missing_catalog_label" };
+    resolved.push(label);
+  }
+  return { ok: true, value: Object.freeze(resolved) };
+}
+
 export type CompactInterestLine = Readonly<{
   chips: readonly string[];
   overflowLabel: string | null;

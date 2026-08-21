@@ -1,6 +1,8 @@
 import type {
   MealBuddyCandidateApiResponse,
-  MealBuddyCandidateDto
+  MealBuddyCandidateDto,
+  MealBuddyCandidateProfileApiResponse,
+  MealBuddyCandidateProfileDto
 } from "@haocu/shared";
 
 // SR-2G-E1: the Mobile-facing result of one meal-buddy-candidate-list read.
@@ -11,6 +13,8 @@ import type {
 // a request type would only create a place for one to appear later.
 export type MealBuddyCandidateListResult = MealBuddyCandidateApiResponse;
 export type MealBuddyCandidate = MealBuddyCandidateDto;
+export type MealBuddyCandidateProfile = MealBuddyCandidateProfileDto;
+export type MealBuddyCandidateProfileResult = MealBuddyCandidateProfileApiResponse;
 
 // One of the actor's own active Meal Buddy cards, as the frozen SR-2G-B list endpoint returns it.
 // `sourceCardRef` is opaque and short-lived: it is the ONLY thing this feature carries forward, and
@@ -64,6 +68,10 @@ export type MealBuddySourceCardOutcome =
   | { ok: true; value: readonly MealBuddySourceCard[] }
   | { ok: false; error: MealBuddyCandidateClientError };
 
+export type MealBuddyCandidateProfileOutcome =
+  | { ok: true; value: MealBuddyCandidateProfileResult }
+  | { ok: false; error: MealBuddyCandidateClientError };
+
 export function okCandidates(value: MealBuddyCandidateListResult): MealBuddyCandidateOutcome {
   return { ok: true, value };
 }
@@ -77,5 +85,13 @@ export function okSourceCards(value: readonly MealBuddySourceCard[]): MealBuddyS
 }
 
 export function errSourceCards(error: MealBuddyCandidateClientError): MealBuddySourceCardOutcome {
+  return { ok: false, error };
+}
+
+export function okCandidateProfile(value: MealBuddyCandidateProfileResult): MealBuddyCandidateProfileOutcome {
+  return { ok: true, value };
+}
+
+export function errCandidateProfile(error: MealBuddyCandidateClientError): MealBuddyCandidateProfileOutcome {
   return { ok: false, error };
 }

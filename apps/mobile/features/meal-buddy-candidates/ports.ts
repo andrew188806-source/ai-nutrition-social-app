@@ -1,4 +1,8 @@
-import type { MealBuddyCandidateOutcome, MealBuddySourceCardOutcome } from "./types";
+import type {
+  MealBuddyCandidateOutcome,
+  MealBuddyCandidateProfileOutcome,
+  MealBuddySourceCardOutcome
+} from "./types";
 
 // The whole read surface of SR-2G-E1. Two reads, both server-authoritative.
 //
@@ -16,4 +20,9 @@ export interface MealBuddySourceCardRepository {
 export interface MealBuddyCandidateRepository {
   readonly source: "disabled" | "supabase-live";
   listCandidates(sourceCardRef: string): Promise<MealBuddyCandidateOutcome>;
+}
+
+export interface MealBuddyCandidateProfileRepository {
+  readonly source: "disabled" | "supabase-live";
+  getCandidateProfile(candidateRef: string): Promise<MealBuddyCandidateProfileOutcome>;
 }

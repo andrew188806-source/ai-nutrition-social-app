@@ -123,3 +123,42 @@ export type MealBuddyCandidateApiResponse = Readonly<{
 export type MealBuddyCandidateListRequest = Readonly<{
   sourceCardRef: string;
 }>;
+
+// SR-2H-A candidate profile/home. The opaque person reference is the only request input. The
+// response repeats only the frozen SR-2C public profile fields and the complete CURRENT
+// fine-grained SR-2C-R1 selections. It deliberately carries no card, user/profile id, entitlement,
+// ranking/Taste/context fact or private profile field.
+export const MEAL_BUDDY_CANDIDATE_PROFILE_POLICY_VERSION =
+  "meal-buddy-candidate-profile-v1" as const;
+
+export const MEAL_BUDDY_CANDIDATE_PROFILE_RESPONSE_FIELDS = Object.freeze([
+  "policyVersion",
+  "profile"
+] as const);
+
+export const MEAL_BUDDY_CANDIDATE_PROFILE_FIELDS = Object.freeze([
+  "displayName",
+  "foodInterestTags",
+  "mascotAvatarKey",
+  "publicBio",
+  "publicInterestTags",
+  "willingToChat"
+] as const);
+
+export type MealBuddyCandidateProfileDto = Readonly<{
+  displayName: string;
+  mascotAvatarKey: string;
+  publicBio: string | null;
+  willingToChat: boolean;
+  publicInterestTags: readonly string[];
+  foodInterestTags: readonly string[];
+}>;
+
+export type MealBuddyCandidateProfileApiResponse = Readonly<{
+  policyVersion: typeof MEAL_BUDDY_CANDIDATE_PROFILE_POLICY_VERSION;
+  profile: MealBuddyCandidateProfileDto;
+}>;
+
+export type MealBuddyCandidateProfileRequest = Readonly<{
+  candidateRef: string;
+}>;

@@ -1,5 +1,14 @@
-import type { MealBuddyCandidateRepository, MealBuddySourceCardRepository } from "../ports";
-import { errCandidates, errSourceCards, MealBuddyCandidateClientError } from "../types";
+import type {
+  MealBuddyCandidateProfileRepository,
+  MealBuddyCandidateRepository,
+  MealBuddySourceCardRepository
+} from "../ports";
+import {
+  errCandidateProfile,
+  errCandidates,
+  errSourceCards,
+  MealBuddyCandidateClientError
+} from "../types";
 
 // The safe default. Both disabled repositories fail closed with a typed error rather than
 // impersonating a successful empty result: an unconfigured runtime must never be indistinguishable
@@ -19,5 +28,14 @@ export class DisabledMealBuddyCandidateRepository implements MealBuddyCandidateR
   async listCandidates() {
     return errCandidates(new MealBuddyCandidateClientError(
       "meal_buddy_candidates_disabled", "Live Meal Buddy candidates are not enabled in this runtime."));
+  }
+}
+
+export class DisabledMealBuddyCandidateProfileRepository implements MealBuddyCandidateProfileRepository {
+  readonly source = "disabled" as const;
+
+  async getCandidateProfile() {
+    return errCandidateProfile(new MealBuddyCandidateClientError(
+      "meal_buddy_candidates_disabled", "Live Meal Buddy candidate profiles are not enabled."));
   }
 }

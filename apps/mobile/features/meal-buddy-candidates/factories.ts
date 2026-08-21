@@ -2,16 +2,22 @@ import type { ConsumerAuthPort } from "../consumer-auth/ports";
 import type { ConsumerAuthSourceLike } from "../meal-photo-upload/featureFlags";
 import {
   DisabledMealBuddyCandidateRepository,
+  DisabledMealBuddyCandidateProfileRepository,
   DisabledMealBuddySourceCardRepository
 } from "./adapters/disabledMealBuddyRepositories";
 import { SupabaseMealBuddyCandidateRepository } from "./adapters/supabaseMealBuddyCandidateRepository";
+import { SupabaseMealBuddyCandidateProfileRepository } from "./adapters/supabaseMealBuddyCandidateProfileRepository";
 import { SupabaseMealBuddySourceCardRepository } from "./adapters/supabaseMealBuddySourceCardRepository";
 import {
   getMealBuddyCandidateRuntimeFlags,
   type MealBuddyCandidateRuntimeFlags
 } from "./featureFlags";
 import type { SupabaseInterestCatalogClientLike } from "./interestCatalog";
-import type { MealBuddyCandidateRepository, MealBuddySourceCardRepository } from "./ports";
+import type {
+  MealBuddyCandidateProfileRepository,
+  MealBuddyCandidateRepository,
+  MealBuddySourceCardRepository
+} from "./ports";
 import { MealBuddyCandidateService } from "./mealBuddyCandidateService";
 import type { SupabaseMealBuddyClientLike } from "./supabaseMealBuddyCandidateContracts";
 
@@ -56,6 +62,17 @@ export function createMealBuddyCandidateRepository(
   const resolved = live(flags, dependencies);
   if (!resolved) return new DisabledMealBuddyCandidateRepository();
   return new SupabaseMealBuddyCandidateRepository(resolved);
+}
+
+export function createMealBuddyCandidateProfileRepository(
+  authSource: ConsumerAuthSourceLike,
+  supabaseAuthEnabled: boolean,
+  dependencies: MealBuddyCandidateFactoryDependencies = {},
+  flags: MealBuddyCandidateRuntimeFlags = getMealBuddyCandidateRuntimeFlags(authSource, supabaseAuthEnabled)
+): MealBuddyCandidateProfileRepository {
+  const resolved = live(flags, dependencies);
+  if (!resolved) return new DisabledMealBuddyCandidateProfileRepository();
+  return new SupabaseMealBuddyCandidateProfileRepository(resolved);
 }
 
 export function createMealBuddyCandidateService(

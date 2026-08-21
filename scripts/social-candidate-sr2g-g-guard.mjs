@@ -7,6 +7,7 @@ import {
   classifySr2ggLifecycle, createSr2ggCanonicalManifest, SR2GG_BASELINE,
   SR2GG_BASELINE_SUBJECT, SR2GG_MIGRATION, SR2GG_SUCCESSOR_PATHS
 } from "./social-candidate-sr2g-g-successor-manifest.mjs";
+import { SR2HA_BASELINE } from "./social-candidate-sr2h-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = []; const failures = [];
@@ -36,6 +37,10 @@ const state = Object.freeze({
   headDeleted: delta.some((entry) => entry.startsWith("D\t"))
 });
 const lifecycle = classifySr2ggLifecycle(state);
+const frozenGPaths = lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2HA_BASELINE]));
+const frozenGAuthority = git(["rev-parse", `${SR2HA_BASELINE}^`]).trim() === SR2GG_BASELINE
+  && frozenGPaths.length === SR2GG_SUCCESSOR_PATHS.length
+  && frozenGPaths.every((entry, index) => entry === [...SR2GG_SUCCESSOR_PATHS].sort()[index]);
 const migration = read(SR2GG_MIGRATION);
 const handoff = read("apps/mobile/features/next-meal-prototype/nextMealBuddyPrefill.ts");
 const handoffTypes = read("apps/mobile/features/next-meal-prototype/types.ts");
@@ -47,13 +52,14 @@ const packageJson = JSON.parse(read("package.json"));
 const baselinePackage = JSON.parse(git(["show", `${SR2GG_BASELINE}:package.json`]));
 const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithout.scripts[name];
+for (const name of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exactly candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
-check("02 lifecycle manifest is the exact wildcard-free SR-2G-G inventory", lifecycle.manifest.length === SR2GG_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2GG_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index]));
+check("02 frozen SR-2G-G authority commit retains its exact wildcard-free inventory", frozenGAuthority);
 check("03 predecessor commit and subject are pinned", git(["cat-file", "-t", SR2GG_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2GG_BASELINE]).trim() === SR2GG_BASELINE_SUBJECT);
 check("04 staged bytes are prohibited", state.stagedPaths.length === 0);
 check("05 every successor path exists and none is deleted", SR2GG_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))) && !state.headDeleted);
-check("06 package differs only by the three local SR-2G-G commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+check("06 package differs only by the exact SR-2G-G and successor SR-2H-A commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
 check("07 no dependency or lockfile changes", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies) && !SR2GG_SUCCESSOR_PATHS.some((file) => /lock/.test(file)));
 check("08 exactly one successor migration is added", SR2GG_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1);
 

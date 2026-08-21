@@ -39,3 +39,8 @@ verify_jwt = true
 # the only request input is one source-purpose card reference, and eligibility, ranking, exposure and
 # interests all come from frozen server authority.
 verify_jwt = true
+
+[functions.meal-buddy-candidate-profile]
+# SR-2H-A: authenticated read of one previously exposed candidate through the actor-bound opaque
+# person reference. The reference is opened server-side and current public eligibility is rechecked.
+verify_jwt = true

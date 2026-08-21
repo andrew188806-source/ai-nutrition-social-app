@@ -169,6 +169,7 @@ try {
   const packageWithoutSr2a = structuredClone(packageJson);
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2a.scripts[key];
   for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithoutSr2a.scripts[key];
+  for (const key of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithoutSr2a.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);

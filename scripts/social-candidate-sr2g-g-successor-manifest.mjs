@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import {
+  classifySr2haLifecycle
+} from "./social-candidate-sr2h-a-successor-manifest.mjs";
 
 export const SR2GG_BASELINE = "6dc82815cfd97c2d26f7287e53dd8d4747054917";
 export const SR2GG_BASELINE_SUBJECT = "Add Meal Buddy meal-context matching authority";
@@ -54,8 +57,14 @@ export function classifySr2ggLifecycle(state) {
     && exact(state.headDeltaPaths, SR2GG_SUCCESSOR_PATHS) && !state.headDeleted;
   const frozenUnpushed = frozenShape && state.originHead === SR2GG_BASELINE && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozenShape && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
-  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed" : "invalid";
-  return Object.freeze({ valid: phase !== "invalid", phase, manifest: candidate ? state.worktreePaths : state.headDeltaPaths });
+  const successor = classifySr2haLifecycle(state);
+  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed"
+    : successor.valid ? `successor_${successor.phase}` : "invalid";
+  return Object.freeze({
+    valid: phase !== "invalid",
+    phase,
+    manifest: successor.valid ? successor.manifest : candidate ? state.worktreePaths : state.headDeltaPaths
+  });
 }
 
 export function createSr2ggCanonicalManifest(readRawBytes) {

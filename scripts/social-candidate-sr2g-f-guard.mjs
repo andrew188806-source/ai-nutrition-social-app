@@ -102,6 +102,7 @@ try {
   for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) {
     delete packageWithout.scripts[key];
   }
+  for (const key of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[key];
 
   const migration = read(SR2GF_MIGRATION);
   const migrationExec = sqlExec(migration);

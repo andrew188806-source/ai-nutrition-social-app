@@ -9,6 +9,9 @@ import {
   MEAL_BUDDY_CANDIDATE_MAXIMUM,
   MEAL_BUDDY_CANDIDATE_MEAL_PERIODS,
   MEAL_BUDDY_CANDIDATE_PERSON_REF_PREFIX,
+  MEAL_BUDDY_CANDIDATE_PROFILE_FIELDS,
+  MEAL_BUDDY_CANDIDATE_PROFILE_POLICY_VERSION,
+  MEAL_BUDDY_CANDIDATE_PROFILE_RESPONSE_FIELDS,
   MEAL_BUDDY_CANDIDATE_RESPONSE_FIELDS,
   MEAL_BUDDY_CANDIDATE_RESTAURANT_FIELDS,
   type MealBuddyCandidateApiResponse,
@@ -17,7 +20,9 @@ import {
   type MealBuddyCandidateInterestsDto,
   type MealBuddyCandidateIntentionType,
   type MealBuddyCandidateMealPeriod,
-  type MealBuddyCandidateRestaurantDto
+  type MealBuddyCandidateRestaurantDto,
+  type MealBuddyCandidateProfileApiResponse,
+  type MealBuddyCandidateProfileDto
 } from "./types";
 
 // SR-2G-E1: the single runtime authority validating a meal-buddy-candidate-list response before any
@@ -215,6 +220,79 @@ export function validateMealBuddyCandidateApiResponseV1(value: unknown): MealBud
     value: Object.freeze({
       policyVersion: MEAL_BUDDY_CANDIDATE_API_POLICY_VERSION,
       candidates: Object.freeze(candidates)
+    })
+  };
+}
+
+export type MealBuddyCandidateProfileValidationOutcome =
+  | { ok: true; value: MealBuddyCandidateProfileApiResponse }
+  | { ok: false; reason: string };
+
+function isFineGrainedInterestTag(value: unknown, namespace: "general" | "food"): value is string {
+  if (typeof value !== "string" || value.length === 0) return false;
+  const segments = value.split(".");
+  return segments.length >= 3 && segments[0] === namespace && segments.slice(1).every(Boolean);
+}
+
+function validateFullInterestTags(
+  value: unknown,
+  namespace: "general" | "food",
+  maximum: number
+): readonly string[] | string {
+  if (!Array.isArray(value)) return `${namespace}InterestTags is not an array`;
+  if (value.length > maximum) return `${namespace}InterestTags exceeds the frozen selection limit`;
+  if (!value.every((entry) => isFineGrainedInterestTag(entry, namespace))) {
+    return `${namespace}InterestTags carries a non-canonical fine-grained key`;
+  }
+  if (new Set(value).size !== value.length) return `${namespace}InterestTags repeats a selection`;
+  return Object.freeze([...(value as string[])]);
+}
+
+export function validateMealBuddyCandidateProfileApiResponseV1(
+  value: unknown
+): MealBuddyCandidateProfileValidationOutcome {
+  if (!isRecord(value)) return { ok: false, reason: "response is not an object" };
+  if (!exactKeys(value, MEAL_BUDDY_CANDIDATE_PROFILE_RESPONSE_FIELDS)) {
+    return { ok: false, reason: "response does not carry exactly policyVersion and profile" };
+  }
+  if (value.policyVersion !== MEAL_BUDDY_CANDIDATE_PROFILE_POLICY_VERSION) {
+    return { ok: false, reason: "unexpected policyVersion" };
+  }
+  if (!isRecord(value.profile)) return { ok: false, reason: "profile is not an object" };
+  if (!exactKeys(value.profile, MEAL_BUDDY_CANDIDATE_PROFILE_FIELDS)) {
+    return { ok: false, reason: "profile does not carry exactly the public profile fields" };
+  }
+  const profile = value.profile;
+  if (typeof profile.displayName !== "string" || profile.displayName.length === 0) {
+    return { ok: false, reason: "profile.displayName is not a non-empty string" };
+  }
+  if (typeof profile.mascotAvatarKey !== "string" || profile.mascotAvatarKey.length === 0) {
+    return { ok: false, reason: "profile.mascotAvatarKey is not a non-empty string" };
+  }
+  if (profile.publicBio !== null && typeof profile.publicBio !== "string") {
+    return { ok: false, reason: "profile.publicBio is neither a string nor null" };
+  }
+  if (typeof profile.willingToChat !== "boolean") {
+    return { ok: false, reason: "profile.willingToChat is not a boolean" };
+  }
+  const publicInterestTags = validateFullInterestTags(profile.publicInterestTags, "general", 8);
+  if (typeof publicInterestTags === "string") return { ok: false, reason: publicInterestTags };
+  const foodInterestTags = validateFullInterestTags(profile.foodInterestTags, "food", 5);
+  if (typeof foodInterestTags === "string") return { ok: false, reason: foodInterestTags };
+
+  const admitted: MealBuddyCandidateProfileDto = Object.freeze({
+    displayName: profile.displayName,
+    mascotAvatarKey: profile.mascotAvatarKey,
+    publicBio: profile.publicBio,
+    willingToChat: profile.willingToChat,
+    publicInterestTags,
+    foodInterestTags
+  });
+  return {
+    ok: true,
+    value: Object.freeze({
+      policyVersion: MEAL_BUDDY_CANDIDATE_PROFILE_POLICY_VERSION,
+      profile: admitted
     })
   };
 }

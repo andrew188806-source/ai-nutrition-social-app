@@ -231,6 +231,15 @@ export default function MealBuddyHomeScreen() {
       router.push({ pathname: "/community-profile/[profileId]", params: { profileId } });
     }
   };
+  const openRealCandidateProfile = (candidateRef: string) => {
+    // Expo regenerates its ignored typed-route cache during export/start. This route is new in the
+    // current candidate, so the checked source is cast only across that generated-cache boundary;
+    // the runtime value remains the exact opaque ref and is revalidated by the destination/Edge.
+    router.push({
+      pathname: "/meal-buddy-candidate-profile/[candidateRef]",
+      params: { candidateRef }
+    } as never);
+  };
 
   // Meal Buddy is one shared system: Free/Paid only changes limits, masking, and upgrade prompts.
   // AI/manual/restaurant cards share the same card list; source only controls the small visual label.
@@ -358,6 +367,7 @@ export default function MealBuddyHomeScreen() {
             setSocialVersion((version) => version + 1);
           }}
           onOpenPremium={() => setShowFreeQuotaModal(true)}
+          onOpenRealCandidateProfile={openRealCandidateProfile}
           onViewCandidateCard={() => undefined}
           onUseCard={(card) => {
             setPaidQuotaMessage("");
@@ -555,6 +565,7 @@ function DiscoverSection({
   onInviteTable,
   onOpenChat,
   onOpenPremium,
+  onOpenRealCandidateProfile,
   onOpenProfile,
   onViewCandidateCard,
   onUseCard,
@@ -584,6 +595,7 @@ function DiscoverSection({
   onInviteTable: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenChat: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenPremium: () => void;
+  onOpenRealCandidateProfile: (candidateRef: string) => void;
   onOpenProfile: (profileId?: string) => void;
   onViewCandidateCard: (candidate: RankedMealBuddyCandidate) => void;
   onUseCard: (card: MealBuddyCard) => void;
@@ -778,7 +790,10 @@ function DiscoverSection({
           {isRealCandidateMode ? (
             <View style={styles.cardList}>
               <MealBuddyRealSourceCardPicker controller={realCandidates} />
-              <MealBuddyRealCandidateSection controller={realCandidates} />
+              <MealBuddyRealCandidateSection
+                controller={realCandidates}
+                onOpenCandidate={onOpenRealCandidateProfile}
+              />
             </View>
           ) : null}
 
