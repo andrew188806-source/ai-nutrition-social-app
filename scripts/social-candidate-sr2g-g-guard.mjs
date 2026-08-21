@@ -53,6 +53,7 @@ const baselinePackage = JSON.parse(git(["show", `${SR2GG_BASELINE}:package.json`
 const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithout.scripts[name];
 for (const name of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[name];
+for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exactly candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 frozen SR-2G-G authority commit retains its exact wildcard-free inventory", frozenGAuthority);

@@ -18,6 +18,7 @@ import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-man
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 import { SR2HA_BASELINE, SR2HA_SUCCESSOR_PATHS } from "./social-candidate-sr2h-a-successor-manifest.mjs";
+import { SR2HB_BASELINE, SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -87,6 +88,7 @@ try {
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithout.scripts[key];
   for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithout.scripts[key];
   for (const key of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[key];
+  for (const key of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[key];
 
   const dtoTypes = read(`${SR2GE1_SHARED_ROOT}/types.ts`);
   const dtoValidate = read(`${SR2GE1_SHARED_ROOT}/validate.ts`);
@@ -120,7 +122,7 @@ try {
   check("3. the pinned authority is the exact frozen SR-2G-D freeze commit",
     git(["cat-file", "-t", SR2GE1_BASELINE]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_BASELINE]).trim() === SR2GE1_BASELINE_SUBJECT
-    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GF_BASELINE || state.originHead === SR2GG_BASELINE || state.originHead === SR2HA_BASELINE));
+    && (state.originHead === SR2GE1_BASELINE || state.originHead === SR2GF_BASELINE || state.originHead === SR2GG_BASELINE || state.originHead === SR2HA_BASELINE || state.originHead === SR2HB_BASELINE));
   check("4. the local tooling predecessor is intact, unamended and still the SR-2G-E1 parent",
     git(["cat-file", "-t", SR2GE1_TOOLING_COMMIT]).trim() === "commit"
     && git(["log", "-1", "--format=%s", SR2GE1_TOOLING_COMMIT]).trim() === SR2GE1_TOOLING_SUBJECT
@@ -147,12 +149,12 @@ try {
     JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("14. no migration is added or changed outside the enumerated SR-2G-F successor set",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/migrations/")));
   // SR-2G-E1 itself introduced no server byte, and that stays provable: the ONLY supabase delta
   // since its baseline is the exactly-enumerated SR-2G-F successor set.
   check("15. no server authority byte is touched outside exact enumerated successor sets",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("16. every frozen SR-2E predecessor module is byte-unchanged",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", ...SR2GE1_FROZEN_MOBILE_PATHS])).length === 0);
@@ -335,7 +337,7 @@ try {
   // are excluded rather than the assertion being dropped.
   check("75. SR-2G-E1 itself begins no screen activation",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "apps/mobile/app"]))
-      .filter((f) => !SR2GE2_SUCCESSOR_PATHS.includes(f) && !SR2HA_SUCCESSOR_PATHS.includes(f)).length === 0
+      .filter((f) => !SR2GE2_SUCCESSOR_PATHS.includes(f) && !SR2HA_SUCCESSOR_PATHS.includes(f) && !SR2HB_SUCCESSOR_PATHS.includes(f)).length === 0
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("apps/mobile/app/")));
   check("76. the 116KB Meal Buddy screen and its mock stores are untouched",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "apps/mobile/features/meal-buddy-card"])).length === 0);

@@ -36,6 +36,7 @@ import {
   SR2HA_BASELINE,
   SR2HA_SUCCESSOR_PATHS
 } from "./social-candidate-sr2h-a-successor-manifest.mjs";
+import { SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -159,6 +160,7 @@ try {
   const packageWithoutSr2c = structuredClone(packageJson);
   const successorScriptKeys = ["test:social-candidate-sr2d", "test:social-candidate-sr2d-smoke", "test:social-candidate-sr2d-mutations", "test:social-candidate-sr2e", "test:social-candidate-sr2e-smoke", "test:social-candidate-sr2e-mutations", "test:social-candidate-sr2e-development-mobile-smoke", "test:social-candidate-sr2f", "test:social-candidate-sr2f-smoke", "test:social-candidate-sr2f-mutations", "test:social-candidate-sr2f-development-composition-smoke", "test:social-candidate-sr2g-a", "test:social-candidate-sr2g-a-smoke", "test:social-candidate-sr2g-a-mutations", "test:social-candidate-sr2g-a-development-acceptance", "test:social-candidate-sr2g-b", "test:social-candidate-sr2g-b-smoke", "test:social-candidate-sr2g-b-mutations", "test:social-candidate-sr2g-b-development-acceptance", "test:social-candidate-sr2g-c", "test:social-candidate-sr2g-c-smoke", "test:social-candidate-sr2g-c-mutations", "test:social-candidate-sr2g-c-development-acceptance", "test:social-candidate-sr2g-b-r1", "test:social-candidate-sr2g-b-r1-smoke", "test:social-candidate-sr2g-b-r1-mutations", "test:social-candidate-sr2g-b-r1-development-acceptance", "test:social-candidate-sr2g-c-r1", "test:social-candidate-sr2g-c-r1-smoke", "test:social-candidate-sr2g-c-r1-mutations", "test:social-candidate-sr2g-c-r1-development-acceptance", "test:social-interest-sr2c-r1", "test:social-interest-sr2c-r1-smoke", "test:social-interest-sr2c-r1-mutations", "test:social-interest-sr2c-r1-development-acceptance", "test:social-candidate-sr2g-d", "test:social-candidate-sr2g-d-smoke", "test:social-candidate-sr2g-d-mutations", "test:social-candidate-sr2g-d-development-acceptance", "test:social-candidate-sr2g-e1", "test:social-candidate-sr2g-e1-smoke", "test:social-candidate-sr2g-e1-mutations", "test:social-candidate-sr2g-e1-development-acceptance", "test:social-candidate-sr2g-e2", "test:social-candidate-sr2g-e2-smoke", "test:social-candidate-sr2g-e2-mutations", "test:social-candidate-sr2g-e2-development-mobile-smoke", "test:social-candidate-sr2g-f", "test:social-candidate-sr2g-f-smoke", "test:social-candidate-sr2g-f-mutations", "test:social-candidate-sr2g-f-development-acceptance", "test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations", "test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"];
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2c.scripts[key];
+  for (const key of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithoutSr2c.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -178,7 +180,8 @@ try {
   const frozenTreeManifest = lifecycle.phase === "candidate" ? null : createSr2cCanonicalManifest((file) => gitBytes(["cat-file", "blob", `${state.head}:${file}`]));
 
   check("1. lifecycle is exactly the SR-2H-A candidate, frozen-unpushed or frozen-pushed state", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  check("2. lifecycle manifest is the exact SR-2H-A successor path set", exact([...lifecycle.manifest].sort(), SR2HA_SUCCESSOR_PATHS), { expected: SR2HA_SUCCESSOR_PATHS, actual: lifecycle.manifest });
+  const expectedSuccessorManifest = lifecycle.phase.startsWith("successor_") ? SR2HB_SUCCESSOR_PATHS : SR2HA_SUCCESSOR_PATHS;
+  check("2. lifecycle manifest is the exact enumerated successor path set", exact([...lifecycle.manifest].sort(), expectedSuccessorManifest), { expected: expectedSuccessorManifest, actual: lifecycle.manifest });
   check("3. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });
   check("4. exact module boundary contains only five TypeScript files", exact(directoryFiles, moduleFiles), { expected: moduleFiles, actual: directoryFiles });
   check("5. every exact SR-2C path exists", SR2C_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -259,7 +262,8 @@ try {
   check("66. guard contains no literal-true pass or skip call", !literalPass && !skipCall);
   check("67. canonical manifest is sorted raw-byte SHA-256 serialized as lowercase hash, two spaces, POSIX path and LF", filesystemManifest.text === expectedManifestText && filesystemManifest.paths.every((file, index, files) => index === 0 || files[index - 1] < file) && filesystemManifest.entries.every(({ path: file, sha256: hash }) => /^[0-9a-f]{64}$/.test(hash) && !file.includes("\\")) && filesystemManifest.text.endsWith("\n") && !filesystemManifest.text.includes("\r") && !filesystemManifest.text.includes("\0"));
   check("68. canonical aggregate is SHA-256 over the exact UTF-8 manifest bytes", filesystemManifest.aggregateSha256 === crypto.createHash("sha256").update(Buffer.from(expectedManifestText, "utf8")).digest("hex"));
-  check("69. committed tree reproduces filesystem manifest bytes once frozen", lifecycle.phase === "candidate" || (frozenTreeManifest.text === filesystemManifest.text && frozenTreeManifest.aggregateSha256 === filesystemManifest.aggregateSha256));
+  const frozenSr2cProductionPaths = [...sourcePaths, SR2C_SUCCESSOR_MIGRATION];
+  check("69. committed tree preserves every frozen SR-2C production byte", lifecycle.phase === "candidate" || frozenSr2cProductionPaths.every((file) => git(["diff", "--name-only", state.head, "--", file]).trim() === ""));
 
   console.log(JSON.stringify({
     suite: "social-profile-sr2c-guard",

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { classifySr2hbLifecycle } from "./social-interest-sr2h-b-successor-manifest.mjs";
 
 export const SR2HA_BASELINE = "62aa86f9461870890c94d7bc521aa46640ab6f55";
 export const SR2HA_BASELINE_SUBJECT = "Automate Meal Buddy context from meal recommendations";
@@ -61,8 +62,14 @@ export function classifySr2haLifecycle(state) {
     && exact(state.headDeltaPaths, SR2HA_SUCCESSOR_PATHS) && !state.headDeleted;
   const frozenUnpushed = frozenShape && state.originHead === SR2HA_BASELINE && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozenShape && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
-  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed" : "invalid";
-  return Object.freeze({ valid: phase !== "invalid", phase, manifest: candidate ? state.worktreePaths : state.headDeltaPaths });
+  const successor = classifySr2hbLifecycle(state);
+  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed"
+    : successor.valid ? `successor_${successor.phase}` : "invalid";
+  return Object.freeze({
+    valid: phase !== "invalid",
+    phase,
+    manifest: successor.valid ? successor.manifest : candidate ? state.worktreePaths : state.headDeltaPaths
+  });
 }
 
 export function createSr2haCanonicalManifest(readRawBytes) {

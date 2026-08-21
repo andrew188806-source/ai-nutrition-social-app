@@ -262,7 +262,11 @@
     "test:social-candidate-sr2g-g-mutations": "node scripts/social-candidate-sr2g-g-mutations.mjs",
     "test:social-candidate-sr2h-a": "node scripts/social-candidate-sr2h-a-guard.mjs",
     "test:social-candidate-sr2h-a-smoke": "node scripts/social-candidate-sr2h-a-smoke.mjs",
-    "test:social-candidate-sr2h-a-mutations": "node scripts/social-candidate-sr2h-a-mutations.mjs"
+    "test:social-candidate-sr2h-a-mutations": "node scripts/social-candidate-sr2h-a-mutations.mjs",
+    "test:social-interest-sr2h-b": "node scripts/social-interest-sr2h-b-guard.mjs",
+    "test:social-interest-sr2h-b-smoke": "node scripts/social-interest-sr2h-b-smoke.mjs",
+    "test:social-interest-sr2h-b-mutations": "node scripts/social-interest-sr2h-b-mutations.mjs",
+    "test:social-interest-sr2h-b-concurrency": "node scripts/social-interest-sr2h-b-concurrency.mjs"
   },
   "workspaces": [
     "apps/*",

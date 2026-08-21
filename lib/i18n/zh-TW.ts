@@ -1421,6 +1421,33 @@ export const zhTW = {
         { id: "taste-explorer", name: "嚐鮮探險家", description: "新店、探索、社交", personalityType: "探索社交型", tags: ["新店", "探索", "社交", "餐廳"], avatarType: "system", assetKey: "TE", isPremiumOnly: false, visibilityDefault: "public" }
       ]
     },
+    socialInterestSettings: {
+      title: "社交興趣",
+      entryTitle: "社交興趣",
+      entryBody: "設定公開的一般興趣與愛吃偏好，讓飯友更容易認識你。",
+      disclosure: "這些是你主動公開的個人興趣，會顯示在符合既有曝光規則的飯友檔案中；不會成為健康、過敏或飲食限制資料。",
+      generalTitle: "一般興趣",
+      generalBody: "最多選擇 8 項",
+      foodTitle: "愛吃偏好",
+      foodBody: "最多選擇 5 項",
+      loading: "正在載入你的社交興趣…",
+      loadErrorTitle: "暫時無法載入社交興趣",
+      loadErrorBody: "目前沒有顯示或變更任何興趣，請稍後重新載入。",
+      signedOutTitle: "請重新登入",
+      signedOutBody: "登入後才能查看與儲存你的社交興趣。",
+      retry: "重新載入",
+      save: "儲存一般興趣與愛吃偏好",
+      saving: "正在儲存兩組興趣…",
+      saved: "兩組社交興趣已一起儲存",
+      saveErrorTitle: "社交興趣尚未儲存",
+      saveErrorBody: "兩組興趣都不會被視為成功更新。請確認選擇後再試一次。",
+      retrySave: "重新儲存",
+      generalLimit: "一般興趣最多選擇 8 項。",
+      foodLimit: "愛吃偏好最多選擇 5 項。",
+      unavailableOption: "已停止提供，請取消後再儲存",
+      empty: "目前尚未選擇",
+      back: "返回"
+    },
     plannedDinner: {
       title: "晚餐計畫",
       subtitle: "如果晚上已經約好吃飯，先告訴我們，午餐就能吃得更平衡。",

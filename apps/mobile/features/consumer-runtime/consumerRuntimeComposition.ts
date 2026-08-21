@@ -51,6 +51,11 @@ import {
 } from "../meal-buddy-candidates/runtimeBinding";
 import type { SupabaseMealBuddyClientLike } from "../meal-buddy-candidates/supabaseMealBuddyCandidateContracts";
 import type { SupabaseInterestCatalogClientLike } from "../meal-buddy-candidates/interestCatalog";
+import {
+  bindSocialInterestSettingsRuntimeDependencies,
+  clearSocialInterestSettingsRuntimeDependencies
+} from "../social-interest-settings/runtimeBinding";
+import type { SupabaseSocialInterestSettingsClientLike } from "../social-interest-settings/supabaseContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
@@ -336,6 +341,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   // disabled or test composition cannot retain a live dependency graph from an earlier one.
   clearMealBuddyCardCreateRuntimeDependencies();
   clearMealBuddyCandidateRuntimeDependencies();
+  clearSocialInterestSettingsRuntimeDependencies();
   const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
   const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
   const authFlags = deriveAuthCompositionFlags(capabilityFlags);
@@ -428,6 +434,10 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         bindMealBuddyCardCreateRuntimeDependencies({
           authPort,
           client: client as unknown as SupabaseMealBuddyCardCreateClientLike
+        });
+        bindSocialInterestSettingsRuntimeDependencies({
+          authPort,
+          client: client as unknown as SupabaseSocialInterestSettingsClientLike
         });
       }
       return {

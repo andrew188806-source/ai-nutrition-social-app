@@ -18,6 +18,7 @@ import {
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_BASELINE_SUBJECT, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 import { SR2HA_SUCCESSOR_PATHS } from "./social-candidate-sr2h-a-successor-manifest.mjs";
+import { SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -98,6 +99,7 @@ try {
     delete packageWithout.scripts[key];
   }
   for (const key of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[key];
+  for (const key of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[key];
 
   const screen = read(SR2GE2_SCREEN);
   const screenExec = tsExec(screen);
@@ -136,11 +138,11 @@ try {
   // SR-2G-E2 itself introduced no server byte. Later server deltas must remain confined to the
   // exact, wildcard-free F, G and H-A successor manifests; no directory-wide allowance exists.
   check("10. no server authority byte is touched outside the enumerated SR-2G-F/G/SR-2H-A successor sets",
-    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f))
     && !SR2GE2_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("11. every frozen SR-2G-E1 data-layer file is byte-unchanged outside exact successor sets",
     lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", ...SR2GE2_FROZEN_E1_PATHS]))
-      .every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f)));
+      .every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f)));
   check("12. the predecessor delta outside SR-2G-E2's own files is validation-only successor awareness",
     SR2GE2_SUCCESSOR_PATHS.filter((f) => f.startsWith("scripts/") && !f.includes("sr2g-e2")).every((f) => f.endsWith("-guard.mjs")));
   check("12a. the SR-2G-F successor round adds exactly one migration and no new client role",
@@ -314,7 +316,7 @@ try {
     /catalogClient\?: SupabaseInterestCatalogClientLike/.test(factories)
     && count(factories, "catalogClient") === 1);
   check("69. screen changes are confined to exact E2 and SR-2H-A successor paths",
-    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/app"])).every((f) => SR2GE2_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/app"])).every((f) => SR2GE2_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f))
     && SR2GE2_SUCCESSOR_PATHS.filter((f) => f.startsWith("apps/mobile/app/")).length === 1);
   check("70. the demo Meal Buddy stores are untouched",
     lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/features/meal-buddy-card"])).length === 0);

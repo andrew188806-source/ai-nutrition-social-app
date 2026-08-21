@@ -7,6 +7,7 @@ import {
   classifySr2haLifecycle, createSr2haCanonicalManifest,
   SR2HA_BASELINE, SR2HA_BASELINE_SUBJECT, SR2HA_SUCCESSOR_PATHS
 } from "./social-candidate-sr2h-a-successor-manifest.mjs";
+import { SR2HB_BASELINE, SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -35,6 +36,10 @@ const state = Object.freeze({
   headDeleted: delta.some((entry) => entry.startsWith("D\t"))
 });
 const lifecycle = classifySr2haLifecycle(state);
+const frozenHaDelta = lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2HB_BASELINE]));
+const frozenHaAuthority = git(["rev-parse", `${SR2HB_BASELINE}^`]).trim() === SR2HA_BASELINE
+  && frozenHaDelta.length === SR2HA_SUCCESSOR_PATHS.length
+  && frozenHaDelta.every((entry, index) => entry === [...SR2HA_SUCCESSOR_PATHS].sort()[index]);
 const serverCompose = read("supabase/functions/_shared/meal-buddy-candidate-profile-api/compose.ts");
 const serverRequest = read("supabase/functions/_shared/meal-buddy-candidate-profile-api/request.ts");
 const serverTypes = read("supabase/functions/_shared/meal-buddy-candidate-profile-api/types.ts");
@@ -53,15 +58,18 @@ const packageJson = JSON.parse(read("package.json"));
 const baselinePackage = JSON.parse(git(["show", `${SR2HA_BASELINE}:package.json`]));
 const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[name];
+for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
 
-check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
-check("02 lifecycle manifest is the exact wildcard-free SR-2H-A inventory", lifecycle.manifest.length === SR2HA_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HA_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index]));
+check("01 lifecycle is exact candidate, frozen or exact SR-2H-B successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
+check("02 frozen SR-2H-A authority and any successor manifest remain exact", frozenHaAuthority && (lifecycle.phase.startsWith("successor_")
+  ? lifecycle.manifest.length === SR2HB_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HB_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index])
+  : lifecycle.manifest.length === SR2HA_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HA_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index])));
 check("03 pushed SR-2G-G baseline and subject are pinned", git(["cat-file", "-t", SR2HA_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2HA_BASELINE]).trim() === SR2HA_BASELINE_SUBJECT);
 check("04 staged bytes are prohibited", state.stagedPaths.length === 0);
 check("05 every successor path exists and none is deleted", SR2HA_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))) && !state.headDeleted);
-check("06 package differs only by the three SR-2H-A local commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+check("06 package differs only by the exact SR-2H-A and SR-2H-B local commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
 check("07 no dependency or lockfile change exists", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies) && !SR2HA_SUCCESSOR_PATHS.some((file) => /lock/.test(file)));
-check("08 SR-2H-A creates no migration", !SR2HA_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/migrations/")) && git(["diff", "--name-only", SR2HA_BASELINE, "--", "supabase/migrations"]).trim() === "");
+check("08 frozen SR-2H-A creates no migration", !SR2HA_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/migrations/")) && frozenHaDelta.every((file) => !file.startsWith("supabase/migrations/")));
 
 check("09 request accepts only candidateRef", /Object\.keys\(record\)\.length !== 1/.test(serverRequest) && serverRequest.includes('"candidateRef" in record'));
 check("10 candidateRef remains opaque and actor-bound", handler.includes("createSocialCandidateRefCipher") && handler.includes("authentication.value.userId, parsed.value.candidateRef") && !/atob|base64|candidateRef\.slice/.test(mobileAdapter + mobileHook + screen + home));
