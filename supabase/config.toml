@@ -44,3 +44,8 @@ verify_jwt = true
 # SR-2H-A: authenticated read of one previously exposed candidate through the actor-bound opaque
 # person reference. The reference is opened server-side and current public eligibility is rechecked.
 verify_jwt = true
+
+[functions.meal-buddy-relationship]
+# SR-2I-A: authenticated invite/accept/decline/cancel/read boundary. Person targets arrive only as
+# actor-bound scr1 references and relation actions only as actor-bound mbr1 references.
+verify_jwt = true

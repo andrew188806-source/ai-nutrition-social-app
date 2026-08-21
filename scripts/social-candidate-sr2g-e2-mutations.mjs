@@ -54,12 +54,11 @@ function integrationViolations(s) {
     !/["'`]mbc1\.[A-Za-z0-9_-]{4,}/.test(`${screenExec}\n${feature}`));
   rec("the picker selects by the card's own reference",
     /controller\.selectSourceCard\(card\.sourceCardRef\)/.test(s.picker));
-  // Real mode is driven by the REAL card list alone. The real components are handed the controller
-  // and nothing else, so there is no mock card in scope from which a mock->real mapping could even
-  // be attempted, and the real feature never names the mock card shape.
-  rec("the real components receive the controller only, never a mock card",
-    /<MealBuddyRealSourceCardPicker controller=\{realCandidates\} \/>/.test(screenExec)
-    && /<MealBuddyRealCandidateSection controller=\{realCandidates\} \/>/.test(screenExec));
+  // Real mode is driven by the REAL card list alone. The SR-2H-A successor adds only the canonical
+  // person-ref profile callback; neither component receives a mock card or alternate candidate.
+  rec("the real components receive only canonical controller/profile seams, never a mock card",
+    /<MealBuddyRealSourceCardPicker\s+controller=\{realCandidates\}\s*\/>/.test(screenExec)
+    && /<MealBuddyRealCandidateSection\s+controller=\{realCandidates\}\s+onOpenCandidate=\{onOpenRealCandidateProfile\}\s*\/>/.test(screenExec));
   rec("the real feature never reads the mock card shape",
     !/\bMealBuddyCard\b/.test(feature.replace(/MealBuddyCandidateCard/g, "RealCandidateCard")));
   rec("the section maps the server array in place",

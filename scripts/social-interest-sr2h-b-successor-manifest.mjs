@@ -1,8 +1,13 @@
 import crypto from "node:crypto";
+import {
+  classifySr2iaLifecycle,
+  SR2IA_MIGRATION
+} from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 
 export const SR2HB_BASELINE = "f54f04dbe229470fda08dc6356fb67216f9f0202";
 export const SR2HB_BASELINE_SUBJECT = "Add SR-2H-A candidate public profile authority";
 export const SR2HB_MIGRATION = "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql";
+export const SR2HB_MIGRATION_SHA256 = "cd71997f1c707fc60500d95d18dbf0ff66c23f57a664e1f777ebbc50ec64e312";
 
 // Exact wildcard-free local candidate inventory. Validation-only predecessor-guard repairs remain
 // explicit entries; no directory, migration family or generic successor is whitelisted.
@@ -53,8 +58,31 @@ export function classifySr2hbLifecycle(state) {
     && exact(state.headDeltaPaths, SR2HB_SUCCESSOR_PATHS) && !state.headDeleted;
   const frozenUnpushed = frozenShape && state.originHead === SR2HB_BASELINE && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozenShape && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
-  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed" : "invalid";
-  return Object.freeze({ valid: phase !== "invalid", phase, manifest: candidate ? state.worktreePaths : state.headDeltaPaths });
+  const successor = classifySr2iaLifecycle({
+    ...state, parent: state.headParent, deltaPaths: state.headDeltaPaths, deleted: state.headDeleted
+  });
+  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed"
+    : successor.valid ? `successor_${successor.phase}` : "invalid";
+  return Object.freeze({ valid: phase !== "invalid", phase, manifest: successor.valid ? successor.manifest : candidate ? state.worktreePaths : state.headDeltaPaths });
+}
+
+export function validateSr2hbMigrationAuthority({
+  lifecycle,
+  changedMigrationPaths,
+  predecessorMigrationExists,
+  predecessorMigrationSha256
+}) {
+  if (!lifecycle.valid) return false;
+  const successor = lifecycle.phase.startsWith("successor_");
+  const lifecycleMigrations = lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/"));
+  const expectedLifecycleMigrations = successor ? [SR2IA_MIGRATION] : [SR2HB_MIGRATION];
+  const expectedChangedMigrations = successor && lifecycle.phase !== "successor_candidate"
+    ? [SR2HB_MIGRATION, SR2IA_MIGRATION]
+    : [SR2HB_MIGRATION];
+  return predecessorMigrationExists
+    && predecessorMigrationSha256 === SR2HB_MIGRATION_SHA256
+    && exact(lifecycleMigrations, expectedLifecycleMigrations)
+    && exact(changedMigrationPaths, expectedChangedMigrations);
 }
 
 export function createSr2hbCanonicalManifest(readRawBytes) {

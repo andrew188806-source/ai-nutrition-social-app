@@ -8,6 +8,7 @@ import {
   SR2HA_BASELINE, SR2HA_BASELINE_SUBJECT, SR2HA_SUCCESSOR_PATHS
 } from "./social-candidate-sr2h-a-successor-manifest.mjs";
 import { SR2HB_BASELINE, SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
+import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -59,10 +60,12 @@ const baselinePackage = JSON.parse(git(["show", `${SR2HA_BASELINE}:package.json`
 const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[name];
 for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen or exact SR-2H-B successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
+const expectedSuccessorPaths = lifecycle.phase.startsWith("successor_successor_") ? SR2IA_SUCCESSOR_PATHS : SR2HB_SUCCESSOR_PATHS;
 check("02 frozen SR-2H-A authority and any successor manifest remain exact", frozenHaAuthority && (lifecycle.phase.startsWith("successor_")
-  ? lifecycle.manifest.length === SR2HB_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HB_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index])
+  ? lifecycle.manifest.length === expectedSuccessorPaths.length && lifecycle.manifest.every((entry, index) => [...expectedSuccessorPaths].sort()[index] === [...lifecycle.manifest].sort()[index])
   : lifecycle.manifest.length === SR2HA_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HA_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index])));
 check("03 pushed SR-2G-G baseline and subject are pinned", git(["cat-file", "-t", SR2HA_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2HA_BASELINE]).trim() === SR2HA_BASELINE_SUBJECT);
 check("04 staged bytes are prohibited", state.stagedPaths.length === 0);

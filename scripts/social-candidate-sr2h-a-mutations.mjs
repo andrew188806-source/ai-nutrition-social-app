@@ -32,7 +32,7 @@ function violations(source) {
   require("full food interests are not sliced", !/foodInterestTags[\s\S]{0,100}slice\(0,\s*3\)/.test(source.compose));
   require("response excludes private identity", !/userId|profileId|email|phone|realAvatar/i.test(source.types));
   require("response excludes ranking/context authority", !/taste|score|ranking|contextState|contextScore|food_context_tag_key|entitlement/i.test(source.types));
-  require("endpoint verifies JWT", /\[functions\.meal-buddy-candidate-profile\][\s\S]*verify_jwt = true/.test(source.config));
+  require("endpoint verifies JWT", /\[functions\.meal-buddy-candidate-profile\][^[]*verify_jwt = true/.test(source.config));
   require("Mobile validates exact response", source.mobile.includes("validateMealBuddyCandidateProfileApiResponseV1"));
   require("Mobile does not decode person ref", !/atob|base64|candidateRef\.slice/.test(source.mobile + source.hook + source.screen + source.home));
   require("catalog gap cannot expose raw tag key", source.catalog.includes('reason: "missing_catalog_label"') && source.hook.includes("resolveFullInterestLabels") && !source.catalog.includes("resolved.push(tagKey)"));

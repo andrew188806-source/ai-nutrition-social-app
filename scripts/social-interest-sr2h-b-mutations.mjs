@@ -2,9 +2,23 @@
 // SR-2H-B meaningful local mutation suite. Mutants are in-memory strings/rules; repository bytes
 // are never rewritten.
 import fs from "node:fs";
+import crypto from "node:crypto";
+import {
+  classifySr2hbLifecycle,
+  SR2HB_BASELINE,
+  SR2HB_MIGRATION,
+  SR2HB_SUCCESSOR_PATHS,
+  validateSr2hbMigrationAuthority
+} from "./social-interest-sr2h-b-successor-manifest.mjs";
+import {
+  SR2IA_BASELINE,
+  SR2IA_MIGRATION,
+  SR2IA_SUCCESSOR_PATHS
+} from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 
 const migrationPath = "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql";
 const canonicalSql = fs.readFileSync(migrationPath, "utf8").replace(/(^|\n)\s*--[^\n]*/g, "$1");
+const canonicalMigrationSha256 = crypto.createHash("sha256").update(fs.readFileSync(migrationPath)).digest("hex");
 
 function violations(sql) {
   const failed = [];
@@ -67,5 +81,64 @@ for (const [name, mutate] of mutants) {
   console.log(`${killed ? "KILLED  " : "SURVIVED"} ${name}`);
 }
 const survivors = results.filter((result) => !result.killed);
-console.log(JSON.stringify({ suite: "social-interest-sr2h-b-mutations", total: results.length, killed: results.length - survivors.length, survived: survivors.length, survivors, repositoryBytesModified: false, networkUsed: false, databaseUsed: false }, null, 2));
-if (survivors.length) process.exitCode = 1;
+
+const candidateState = Object.freeze({
+  head: SR2HB_BASELINE,
+  originHead: SR2HB_BASELINE,
+  ahead: 0,
+  behind: 0,
+  headParent: null,
+  worktreePaths: [...SR2HB_SUCCESSOR_PATHS],
+  stagedPaths: [],
+  headDeltaPaths: [],
+  headDeleted: false
+});
+const successorState = Object.freeze({
+  head: "synthetic-sr2ia-head",
+  originHead: SR2IA_BASELINE,
+  ahead: 1,
+  behind: 0,
+  headParent: SR2IA_BASELINE,
+  worktreePaths: [],
+  stagedPaths: [],
+  headDeltaPaths: [...SR2IA_SUCCESSOR_PATHS],
+  headDeleted: false
+});
+const candidateLifecycle = classifySr2hbLifecycle(candidateState);
+const successorCandidateLifecycle = classifySr2hbLifecycle({
+  ...successorState,
+  head: SR2IA_BASELINE,
+  originHead: SR2IA_BASELINE,
+  ahead: 0,
+  headParent: SR2HB_BASELINE,
+  worktreePaths: [...SR2IA_SUCCESSOR_PATHS],
+  headDeltaPaths: [...SR2HB_SUCCESSOR_PATHS]
+});
+const successorUnpushedLifecycle = classifySr2hbLifecycle(successorState);
+const successorPushedLifecycle = classifySr2hbLifecycle({
+  ...successorState,
+  originHead: successorState.head,
+  ahead: 0
+});
+const authorityInput = (lifecycle, overrides = {}) => ({
+  lifecycle,
+  changedMigrationPaths: [SR2HB_MIGRATION, SR2IA_MIGRATION],
+  predecessorMigrationExists: true,
+  predecessorMigrationSha256: canonicalMigrationSha256,
+  ...overrides
+});
+const lifecycleProofs = [
+  ["candidate lifecycle remains exact", candidateLifecycle.phase === "candidate" && validateSr2hbMigrationAuthority(authorityInput(candidateLifecycle, { changedMigrationPaths: [SR2HB_MIGRATION] }))],
+  ["legitimate SR-2I-A successor candidate is accepted", successorCandidateLifecycle.phase === "successor_candidate" && validateSr2hbMigrationAuthority(authorityInput(successorCandidateLifecycle, { changedMigrationPaths: [SR2HB_MIGRATION] }))],
+  ["legitimate SR-2I-A successor frozen-unpushed is accepted", successorUnpushedLifecycle.phase === "successor_frozen_unpushed" && validateSr2hbMigrationAuthority(authorityInput(successorUnpushedLifecycle))],
+  ["legitimate SR-2I-A successor frozen-pushed is accepted", successorPushedLifecycle.phase === "successor_frozen_pushed" && validateSr2hbMigrationAuthority(authorityInput(successorPushedLifecycle))],
+  ["unexpected extra successor migration is rejected", !validateSr2hbMigrationAuthority(authorityInput(successorUnpushedLifecycle, { changedMigrationPaths: [SR2HB_MIGRATION, SR2IA_MIGRATION, "supabase/migrations/99999999999999_fake.sql"] }))],
+  ["predecessor migration mutation is rejected", !validateSr2hbMigrationAuthority(authorityInput(successorUnpushedLifecycle, { predecessorMigrationSha256: "0".repeat(64) }))],
+  ["predecessor migration deletion is rejected", !validateSr2hbMigrationAuthority(authorityInput(successorUnpushedLifecycle, { predecessorMigrationExists: false }))],
+  ["incorrect lifecycle manifest is rejected", !validateSr2hbMigrationAuthority(authorityInput({ ...successorUnpushedLifecycle, manifest: successorUnpushedLifecycle.manifest.filter((file) => file !== SR2IA_MIGRATION) }))],
+  ["invalid lifecycle with fake manifest is rejected", !validateSr2hbMigrationAuthority(authorityInput(classifySr2hbLifecycle({ ...successorState, headDeltaPaths: [...SR2IA_SUCCESSOR_PATHS, "supabase/migrations/99999999999999_fake.sql"] })))]
+];
+const lifecycleFailures = lifecycleProofs.filter(([, passed]) => !passed);
+for (const [name, passed] of lifecycleProofs) console.log(`${passed ? "PASS" : "FAIL"} ${name}`);
+console.log(JSON.stringify({ suite: "social-interest-sr2h-b-mutations", total: results.length, killed: results.length - survivors.length, survived: survivors.length, survivors, lifecycleProofs: lifecycleProofs.length, lifecycleProofsPassed: lifecycleProofs.length - lifecycleFailures.length, lifecycleFailures: lifecycleFailures.map(([name]) => name), repositoryBytesModified: false, networkUsed: false, databaseUsed: false }, null, 2));
+if (survivors.length || lifecycleFailures.length) process.exitCode = 1;

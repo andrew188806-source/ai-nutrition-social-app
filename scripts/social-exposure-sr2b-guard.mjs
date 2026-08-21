@@ -38,6 +38,7 @@ import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-man
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 import { SR2HB_MIGRATION } from "./social-interest-sr2h-b-successor-manifest.mjs";
+import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -177,6 +178,7 @@ try {
   for (const key of ["test:social-candidate-sr2g-g", "test:social-candidate-sr2g-g-smoke", "test:social-candidate-sr2g-g-mutations"]) delete packageWithoutSr2b.scripts[key];
   for (const key of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithoutSr2b.scripts[key];
   for (const key of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithoutSr2b.scripts[key];
+  for (const key of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithoutSr2b.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -255,7 +257,7 @@ try {
   check("45. no randomness can affect exposure", !/Math\.random|crypto\.randomUUID|randomBytes/.test(allExecutable));
 
   check("46. exactly one SR-2B migration is added and it is the only candidate migration", exact(SR2B_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")), [SR2B_SUCCESSOR_MIGRATION]));
-  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`));
+  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`));
   check("47. the SR-2B migration is the newest repository migration outside an enumerated successor", nonSuccessorMigrations.filter((file) => file !== path.basename(SR2HB_MIGRATION)).at(-1) === path.basename(SR2B_SUCCESSOR_MIGRATION));
   check("48. the migration executes exactly one grant statement", migrationSql === "grant select on table public.subscription_entitlements to authenticated;");
   check("49. the migration grants SELECT only to authenticated", /grant select on table public\.subscription_entitlements to authenticated;/.test(migrationSql) && !/\bto\s+(anon|public|service_role|social_runtime_executor|social_pair_read_authority|social_authority)\b/i.test(migrationSql));

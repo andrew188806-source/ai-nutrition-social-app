@@ -11,8 +11,10 @@ import {
   SR2HB_BASELINE,
   SR2HB_BASELINE_SUBJECT,
   SR2HB_MIGRATION,
-  SR2HB_SUCCESSOR_PATHS
+  SR2HB_SUCCESSOR_PATHS,
+  validateSr2hbMigrationAuthority
 } from "./social-interest-sr2h-b-successor-manifest.mjs";
+import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -58,9 +60,11 @@ const packageJson = JSON.parse(read("package.json"));
 const baselinePackage = JSON.parse(git(["show", `${SR2HB_BASELINE}:package.json`]));
 const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
-check("02 lifecycle inventory is exact and wildcard-free", lifecycle.manifest.length === SR2HB_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HB_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index]));
+const expectedLifecyclePaths = lifecycle.phase.startsWith("successor_") ? SR2IA_SUCCESSOR_PATHS : SR2HB_SUCCESSOR_PATHS;
+check("02 lifecycle inventory is exact and wildcard-free", lifecycle.manifest.length === expectedLifecyclePaths.length && lifecycle.manifest.every((entry, index) => [...expectedLifecyclePaths].sort()[index] === [...lifecycle.manifest].sort()[index]));
 check("03 pushed SR-2H-A baseline and subject are pinned", git(["cat-file", "-t", SR2HB_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2HB_BASELINE]).trim() === SR2HB_BASELINE_SUBJECT);
 check("04 no staged or deleted path exists", state.stagedPaths.length === 0 && !state.headDeleted);
 check("05 every exact path exists", SR2HB_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
@@ -126,7 +130,12 @@ const frozenMigrations = Object.freeze({
   "supabase/migrations/20260818030000_social_public_interest_projection.sql": "d34ff29d2a317efad6da6aacc8a36d087b95d4812778e0e0d2a9de5aab70bca1"
 });
 check("42 all three frozen predecessor migration hashes remain exact", Object.entries(frozenMigrations).every(([file, expected]) => sha256(fs.readFileSync(path.join(root, file))) === expected));
-check("43 only the authorised successor migration differs from baseline", lines(git(["diff", "--name-only", SR2HB_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2HB_MIGRATION));
+check("43 frozen SR-2H-B migration and exact lifecycle migration inventory remain authoritative", validateSr2hbMigrationAuthority({
+  lifecycle,
+  changedMigrationPaths: lines(git(["diff", "--name-only", SR2HB_BASELINE, "--", "supabase/migrations"])),
+  predecessorMigrationExists: fs.existsSync(path.join(root, SR2HB_MIGRATION)),
+  predecessorMigrationSha256: sha256(fs.readFileSync(path.join(root, SR2HB_MIGRATION)))
+}));
 check("44 dedicated commands are exact", packageJson.scripts["test:social-interest-sr2h-b"] === "node scripts/social-interest-sr2h-b-guard.mjs" && packageJson.scripts["test:social-interest-sr2h-b-smoke"] === "node scripts/social-interest-sr2h-b-smoke.mjs" && packageJson.scripts["test:social-interest-sr2h-b-mutations"] === "node scripts/social-interest-sr2h-b-mutations.mjs" && packageJson.scripts["test:social-interest-sr2h-b-concurrency"] === "node scripts/social-interest-sr2h-b-concurrency.mjs");
 const implementationSources = SR2HB_SUCCESSOR_PATHS.filter((file) => !file.startsWith("scripts/") && file !== "package.json").map(read).join("\n");
 check("45 no deployment, remote operator or credential command is introduced", !/supabase\s+(db push|functions deploy)|--project-ref|DATABASE_URL|SUPABASE_SERVICE_ROLE/.test(implementationSources));

@@ -266,7 +266,11 @@
     "test:social-interest-sr2h-b": "node scripts/social-interest-sr2h-b-guard.mjs",
     "test:social-interest-sr2h-b-smoke": "node scripts/social-interest-sr2h-b-smoke.mjs",
     "test:social-interest-sr2h-b-mutations": "node scripts/social-interest-sr2h-b-mutations.mjs",
-    "test:social-interest-sr2h-b-concurrency": "node scripts/social-interest-sr2h-b-concurrency.mjs"
+    "test:social-interest-sr2h-b-concurrency": "node scripts/social-interest-sr2h-b-concurrency.mjs",
+    "test:meal-buddy-relationship-sr2i-a": "node scripts/meal-buddy-relationship-sr2i-a-guard.mjs",
+    "test:meal-buddy-relationship-sr2i-a-smoke": "node scripts/meal-buddy-relationship-sr2i-a-smoke.mjs",
+    "test:meal-buddy-relationship-sr2i-a-mutations": "node scripts/meal-buddy-relationship-sr2i-a-mutations.mjs",
+    "test:meal-buddy-relationship-sr2i-a-concurrency": "node scripts/meal-buddy-relationship-sr2i-a-concurrency.mjs"
   },
   "workspaces": [
     "apps/*",
