@@ -785,7 +785,32 @@ export const zhTW = {
       decline: "婉拒",
       declining: "正在婉拒…",
       cancel: "取消邀請",
-      cancelling: "正在取消…"
+      cancelling: "正在取消…",
+      openChat: "聊天"
+    },
+    mealBuddyChat: {
+      screenTitle: "飯友聊天",
+      back: "返回",
+      opening: "正在開啟聊天…",
+      openFailed: "目前無法開啟聊天，請稍後再試。",
+      retry: "重新載入",
+      unavailable: "這個聊天目前無法使用。",
+      unavailableHint: "你們的飯友關係或隱私設定可能已變更。請回到飯友列表確認最新狀態。",
+      emptyHistory: "還沒有訊息，跟對方打聲招呼吧。",
+      loadOlder: "載入較早的訊息",
+      loadingOlder: "正在載入較早的訊息…",
+      olderFailed: "較早的訊息載入失敗，請再試一次。",
+      historyStart: "已經是最開始的訊息了。",
+      refresh: "重新整理",
+      refreshing: "正在重新整理…",
+      composerPlaceholder: "輸入訊息…",
+      send: "傳送",
+      sending: "傳送中…",
+      sendUncertain: "訊息可能沒有送出。",
+      sendRetry: "重新傳送",
+      sendDiscard: "捨棄這則訊息",
+      draftInvalid: "訊息不可以是空白，且最多 2000 字。",
+      draftTooLong: "訊息最多 2000 字。"
     },
     chat: {
       title: "飯友聊天",

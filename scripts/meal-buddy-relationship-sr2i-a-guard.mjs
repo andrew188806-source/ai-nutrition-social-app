@@ -67,6 +67,7 @@ const commandNames = [
 for (const name of commandNames) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-chat-sr2j-a", "test:meal-buddy-chat-sr2j-a-smoke", "test:meal-buddy-chat-sr2j-a-mutations", "test:meal-buddy-chat-sr2j-a-concurrency"]) delete packageWithout.scripts[name];
+for (const key of ["test:meal-buddy-chat-sr2j-b", "test:meal-buddy-chat-sr2j-b-smoke", "test:meal-buddy-chat-sr2j-b-mutations"]) delete packageWithout.scripts[key];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 lifecycle inventory is exact and wildcard-free", exact(lifecycle.manifest, lifecycle.phase.startsWith("successor_") ? SR2IB_SUCCESSOR_PATHS : SR2IA_SUCCESSOR_PATHS));

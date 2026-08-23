@@ -48,6 +48,7 @@ export default function RootLayout() {
           <Stack.Screen name="social-interest-settings" options={{ title: zhTW.mobile.socialInterestSettings.title }} />
           <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
           <Stack.Screen name="meal-buddy-candidate-profile/[candidateRef]" options={{ title: "飯友公開檔案" }} />
+          <Stack.Screen name="meal-buddy-chat/[relationshipRef]" options={{ title: zhTW.mobile.mealBuddyChat.screenTitle }} />
         </Stack>
       </ConsumerRuntimeNavigationGate>
     </ConsumerRuntimeProvider>

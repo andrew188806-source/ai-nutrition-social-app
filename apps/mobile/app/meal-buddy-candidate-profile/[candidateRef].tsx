@@ -56,7 +56,12 @@ export default function MealBuddyCandidateProfileScreen() {
       ) : (
         <>
           <CandidatePublicProfile state={controller.state} />
-          <MealBuddyRelationshipPanel controller={relationshipController} />
+          <MealBuddyRelationshipPanel
+            controller={relationshipController}
+            onOpenChat={(relationshipRef) => {
+              router.push({ pathname: "/meal-buddy-chat/[relationshipRef]", params: { relationshipRef } });
+            }}
+          />
         </>
       )}
     </ScrollView>

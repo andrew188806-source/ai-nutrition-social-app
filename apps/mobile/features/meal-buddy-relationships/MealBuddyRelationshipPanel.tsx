@@ -6,7 +6,10 @@ import type { useMealBuddyRelationshipProfile } from "./useMealBuddyRelationship
 type Controller = ReturnType<typeof useMealBuddyRelationshipProfile>;
 const copy = zhTW.mobile.mealBuddyRelationships;
 
-export function MealBuddyRelationshipPanel({ controller }: { controller: Controller }) {
+export function MealBuddyRelationshipPanel({ controller, onOpenChat }: {
+  controller: Controller;
+  onOpenChat?: (relationshipRef: string) => void;
+}) {
   const state = controller.state;
   if (state.phase === "signed_out") return null;
 
@@ -51,6 +54,12 @@ export function MealBuddyRelationshipPanel({ controller }: { controller: Control
                 onPress={() => { void controller.decline(); }}
               />
             </View>
+          ) : state.relationship.state === "accepted" && onOpenChat && state.relationship.relationshipRef ? (
+            // Accepted only. Rendering this panel performs no chat call; the tap is the intent.
+            <ActionButton
+              label={copy.openChat}
+              onPress={() => { onOpenChat(state.relationship.relationshipRef); }}
+            />
           ) : null}
         </View>
       )}

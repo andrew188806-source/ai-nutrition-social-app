@@ -9,7 +9,10 @@ import type { useMealBuddyRelationships } from "./useMealBuddyRelationships";
 type Controller = ReturnType<typeof useMealBuddyRelationships>;
 const copy = zhTW.mobile.mealBuddyRelationships;
 
-export function MealBuddyRelationshipInbox({ controller }: { controller: Controller }) {
+export function MealBuddyRelationshipInbox({ controller, onOpenChat }: {
+  controller: Controller;
+  onOpenChat?: (relationshipRef: string) => void;
+}) {
   const state = controller.state;
   if (state.phase === "signed_out") return null;
 
@@ -33,6 +36,7 @@ export function MealBuddyRelationshipInbox({ controller }: { controller: Control
               key={relationship.relationshipRef}
               controller={controller}
               relationship={relationship}
+              onOpenChat={onOpenChat}
             />
           ))}
           {state.errorCode ? <Text style={styles.error}>{copy.actionFailed}</Text> : null}
@@ -42,9 +46,10 @@ export function MealBuddyRelationshipInbox({ controller }: { controller: Control
   );
 }
 
-function RelationshipRow({ controller, relationship }: {
+function RelationshipRow({ controller, relationship, onOpenChat }: {
   controller: Controller;
   relationship: MealBuddyRelationshipItem;
+  onOpenChat?: (relationshipRef: string) => void;
 }) {
   const state = controller.state;
   if (state.phase !== "ready") return null;
@@ -80,6 +85,13 @@ function RelationshipRow({ controller, relationship }: {
           label={pending && state.pendingAction === "cancel" ? copy.cancelling : copy.cancel}
           secondary
           onPress={() => { void controller.cancel(relationship.relationshipRef); }}
+        />
+      ) : relationship.state === "accepted" && onOpenChat ? (
+        // Chat is offered only for an accepted buddy, and only a tap navigates. Rendering this row
+        // performs no chat transport call and creates no conversation.
+        <ActionButton
+          label={copy.openChat}
+          onPress={() => { onOpenChat(relationship.relationshipRef); }}
         />
       ) : null}
     </View>

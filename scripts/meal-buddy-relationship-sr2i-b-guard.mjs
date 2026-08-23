@@ -60,6 +60,7 @@ const successorCommands = Object.freeze({
   "test:meal-buddy-chat-sr2j-a-concurrency": "node scripts/meal-buddy-chat-sr2j-a-concurrency.mjs"
 });
 for (const name of [...commands, ...Object.keys(successorCommands)]) delete packageWithout.scripts[name];
+for (const key of ["test:meal-buddy-chat-sr2j-b", "test:meal-buddy-chat-sr2j-b-smoke", "test:meal-buddy-chat-sr2j-b-mutations"]) delete packageWithout.scripts[key];
 const migrationBytes = fs.readFileSync(path.join(root, SR2IB_MIGRATION));
 
 check("01 lifecycle is exact I-B authority or exact SR-2J-A successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
@@ -82,7 +83,13 @@ check("16 response validation is closed at response and item levels", (sources.g
 check("17 malformed wrong-prefix and duplicate refs fail before trust", sources.get("apps/mobile/features/meal-buddy-relationships/repository.ts").includes("refs.has(raw.relationshipRef)"));
 check("18 raw invoke/database/crypto errors never reach Mobile UI", !/error\.message|response\.text|JSON\.stringify\(error\)|error\.stack|database_detail|crypto_detail/i.test(sources.get("apps/mobile/features/meal-buddy-relationships/repository.ts") + sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipPanel.tsx") + sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx")));
 
-check("19 profile exposes one sanctioned relationship panel after public profile", sources.get("apps/mobile/app/meal-buddy-candidate-profile/[candidateRef].tsx").includes("<MealBuddyRelationshipPanel controller={relationshipController} />"));
+check("19 profile exposes one sanctioned relationship panel after public profile", (() => {
+  const profile = sources.get("apps/mobile/app/meal-buddy-candidate-profile/[candidateRef].tsx");
+  // Exactly one panel, still fed by the relationship controller. SR-2J-B additionally hands it the
+  // chat-entry navigation callback, which carries no controller or transport of its own.
+  return (profile.match(/<MealBuddyRelationshipPanel/g) || []).length === 1
+    && profile.includes("controller={relationshipController}");
+})());
 check("20 compact candidate card authority is byte-unchanged", git(["diff", "--name-only", SR2IB_BASELINE, "--", "apps/mobile/features/meal-buddy-candidates/MealBuddyCandidateCard.tsx", "apps/mobile/features/meal-buddy-candidates/MealBuddyRealCandidateSection.tsx"]).trim() === "");
 check("21 real inbox is reachable through the existing friends section", /activeSection === "friends"[\s\S]{0,160}isRealCandidateMode \? \([\s\S]{0,120}<MealBuddyRelationshipInbox/.test(sources.get("apps/mobile/app/meal-buddies.tsx")));
 check("22 incoming outgoing and accepted copy is zh-TW authority", ["incomingInbox", "outgoingInbox", "acceptedInbox"].every((key) => read("lib/i18n/zh-TW.ts").includes(`${key}:`)));
@@ -104,7 +111,16 @@ check("35 relationship mutation binding remains behind canonical writes capabili
 check("36 willingToChat tier interests and contexts do not gate relationship action", !/willingToChat|isPremium|entitlement|publicInterestTags|foodInterestTags|food_context_tag_key/.test([...sources.entries()].filter(([file]) => file.includes("meal-buddy-relationships/")).map(([, source]) => source).join("\n")));
 
 const relationshipUi = sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipPanel.tsx") + sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx");
-check("37 accepted relationship does not activate chat message conversation unread or realtime", !/(chat|message|conversation|unread|realtime|聊天|訊息)/i.test(relationshipUi));
+// SR-2J-B activates exactly one sanctioned chat ENTRY on the accepted row/panel: a navigation
+// callback plus its label. Message, conversation, unread and realtime authority remain forbidden
+// here, and the entry must still perform no chat transport call from these surfaces.
+const relationshipUiWithoutChatEntry = relationshipUi
+  .split(/\r?\n/).filter((line) => !line.trim().startsWith("//")).join("\n")
+  .split("onOpenChat").join("")
+  .split("copy.openChat").join("");
+check("37 accepted relationship does not activate chat message conversation unread or realtime",
+  !/(chat|message|conversation|unread|realtime|聊天|訊息)/i.test(relationshipUiWithoutChatEntry)
+  && !/useMealBuddyChat|repository\.|invoke\(/.test(relationshipUi));
 check("38 ranking exposure context recommendation and interest authority bytes are unchanged", ["supabase/functions/_shared/social-ranking", "supabase/functions/_shared/social-exposure", "supabase/functions/_shared/meal-buddy-context", "apps/mobile/features/social-interest-settings"].every((file) => git(["diff", "--name-only", SR2IB_BASELINE, "--", file]).trim() === ""));
 const allowedBackendDelta = [
   "supabase/functions/_shared/meal-buddy-relationship-api/repository.ts",

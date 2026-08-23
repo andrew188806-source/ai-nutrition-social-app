@@ -57,6 +57,11 @@ import {
 } from "../meal-buddy-relationships/runtimeBinding";
 import type { SupabaseMealBuddyRelationshipClientLike } from "../meal-buddy-relationships/supabaseContracts";
 import {
+  bindMealBuddyChatRuntimeDependencies,
+  clearMealBuddyChatRuntimeDependencies
+} from "../meal-buddy-chat/runtimeBinding";
+import type { SupabaseMealBuddyChatClientLike } from "../meal-buddy-chat/supabaseContracts";
+import {
   bindSocialInterestSettingsRuntimeDependencies,
   clearSocialInterestSettingsRuntimeDependencies
 } from "../social-interest-settings/runtimeBinding";
@@ -347,6 +352,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   clearMealBuddyCardCreateRuntimeDependencies();
   clearMealBuddyCandidateRuntimeDependencies();
   clearMealBuddyRelationshipRuntimeDependencies();
+  clearMealBuddyChatRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
   const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
   const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
@@ -444,6 +450,10 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         bindMealBuddyRelationshipRuntimeDependencies({
           authPort,
           client: client as unknown as SupabaseMealBuddyRelationshipClientLike
+        });
+        bindMealBuddyChatRuntimeDependencies({
+          authPort,
+          client: client as unknown as SupabaseMealBuddyChatClientLike
         });
         bindSocialInterestSettingsRuntimeDependencies({
           authPort,

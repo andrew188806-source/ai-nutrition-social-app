@@ -87,7 +87,16 @@ export function auditSr2ibSources(sources) {
   requireInvariant(violations, profileRoute.includes("MealBuddyRelationshipPanel") && profileRoute.includes("candidateRef"), "candidate profile relationship action placement is missing");
   requireInvariant(violations, home.includes("MealBuddyRelationshipInbox") && /isRealCandidateMode\s*\?\s*\(\s*<MealBuddyRelationshipInbox/.test(home), "real-mode relationship inbox is missing");
   requireInvariant(violations, home.includes('!isRealCandidateMode ? <Chip label="聊天"'), "pre-existing chat chip is not excluded from real relationship mode");
-  requireInvariant(violations, !/(chat|message|conversation|unread|realtime|聊天|訊息)/i.test(profileUi + inboxUi), "chat/message authority or affordance was introduced in relationship UI");
+  // SR-2J-B adds exactly one sanctioned chat entry (navigation callback plus label) to the accepted
+  // row and panel. Everything else about chat remains forbidden in these surfaces, and neither may
+  // perform a chat transport call: entering the Chat route is what opens a conversation.
+  const relationshipUiWithoutChatEntry = (profileUi + inboxUi)
+    .split(/\r?\n/).filter((line) => !line.trim().startsWith("//")).join("\n")
+    .split("onOpenChat").join("")
+    .split("copy.openChat").join("");
+  requireInvariant(violations, !/(chat|message|conversation|unread|realtime|聊天|訊息)/i.test(relationshipUiWithoutChatEntry)
+    && !/useMealBuddyChat|repository\.|invoke\(/.test(profileUi + inboxUi),
+    "chat/message authority or affordance was introduced in relationship UI");
   requireInvariant(violations, !/<Text[^>]*>\s*(?:outgoing_pending|incoming_pending|accepted|\{relationship\.relationshipRef\})/i.test(profileUi + inboxUi), "raw state/ref is rendered");
   requireInvariant(violations, inboxUi.includes("relationship.counterpart.displayName")
     && inboxUi.includes("relationship.counterpart.mascotAvatarKey")

@@ -413,7 +413,12 @@ export default function MealBuddyHomeScreen() {
 
       {activeSection === "friends" ? (
         isRealCandidateMode ? (
-          <MealBuddyRelationshipInbox controller={realRelationships} />
+          <MealBuddyRelationshipInbox
+            controller={realRelationships}
+            onOpenChat={(relationshipRef) => {
+              router.push({ pathname: "/meal-buddy-chat/[relationshipRef]", params: { relationshipRef } });
+            }}
+          />
         ) : (
           <MyFriendsSection
           chats={chats}

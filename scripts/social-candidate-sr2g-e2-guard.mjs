@@ -21,6 +21,7 @@ import { SR2HA_SUCCESSOR_PATHS } from "./social-candidate-sr2h-a-successor-manif
 import { SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 import { SR2JA_PATHS } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
+import { SR2JB_PATHS } from "./meal-buddy-chat-sr2j-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -105,6 +106,7 @@ try {
   for (const key of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[key];
   for (const key of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[key];
   for (const key of ["test:meal-buddy-chat-sr2j-a", "test:meal-buddy-chat-sr2j-a-smoke", "test:meal-buddy-chat-sr2j-a-mutations", "test:meal-buddy-chat-sr2j-a-concurrency"]) delete packageWithout.scripts[key];
+  for (const key of ["test:meal-buddy-chat-sr2j-b", "test:meal-buddy-chat-sr2j-b-smoke", "test:meal-buddy-chat-sr2j-b-mutations"]) delete packageWithout.scripts[key];
 
   const screen = read(SR2GE2_SCREEN);
   const screenExec = tsExec(screen);
@@ -321,7 +323,7 @@ try {
     /catalogClient\?: SupabaseInterestCatalogClientLike/.test(factories)
     && count(factories, "catalogClient") === 1);
   check("69. screen changes are confined to exact E2 and SR-2H-A successor paths",
-    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/app"])).every((f) => SR2GE2_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/app"])).every((f) => SR2GE2_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2JB_PATHS.includes(f))
     && SR2GE2_SUCCESSOR_PATHS.filter((f) => f.startsWith("apps/mobile/app/")).length === 1);
   check("70. the demo Meal Buddy stores are untouched",
     lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "apps/mobile/features/meal-buddy-card"])).length === 0);

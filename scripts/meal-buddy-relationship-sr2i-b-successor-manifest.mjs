@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { SR2JA_PATHS } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
+import { SR2JB_PATHS, matchesCanonicalSr2jbSuccessor } from "./meal-buddy-chat-sr2j-b-successor-manifest.mjs";
 
 export const SR2IB_BASELINE = "a5a8f71b2c38cf665f6f0a1b4fb2753408dcda82";
 export const SR2IB_BASELINE_SUBJECT = "Add SR-2I-A Meal Buddy relationship authority";
@@ -88,12 +89,20 @@ export function classifySr2ibLifecycle(state) {
     && exact(state.deltaPaths, SR2IB_SUCCESSOR_PATHS) && !state.deleted;
   const frozenUnpushed = frozen && state.originHead === SR2IB_BASELINE && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozen && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
+  // A successor round is recognized only as one of the exact canonical successor manifests.
+  // SR-2J-A and SR-2J-B are both enumerated; any other path set remains invalid.
+  // Measured from SR-2I-B own baseline, so a two-round successor stack must equal exactly the
+  // union of the enumerated canonical manifests, never an arbitrary superset.
+  const successorManifests = [SR2JA_PATHS, [...new Set([...SR2JA_PATHS, ...SR2JB_PATHS])]];
   const successorCandidate = state.head !== SR2IB_BASELINE && state.parent === SR2IB_BASELINE
     && state.originHead === state.head && state.ahead === 0 && state.behind === 0
-    && state.stagedPaths.length === 0 && exact(state.worktreePaths, SR2JA_PATHS);
-  const successorFrozenUnpushed = state.parent === state.originHead
-    && state.ahead === 1 && state.behind === 0 && state.worktreePaths.length === 0
-    && state.stagedPaths.length === 0 && exact(state.deltaPaths, SR2JA_PATHS) && !state.deleted;
+    && state.stagedPaths.length === 0 && successorManifests.some((paths) => exact(state.worktreePaths, paths));
+  const successorFrozenUnpushed = (state.parent === state.originHead
+    && state.ahead === 1 && state.behind === 0 && (state.worktreePaths?.length ?? 0) === 0
+    && (state.stagedPaths?.length ?? 0) === 0 && !state.deleted
+    && Array.isArray(state.deltaPaths)
+    && successorManifests.some((paths) => exact(state.deltaPaths, paths)))
+    || matchesCanonicalSr2jbSuccessor(state);
   const phase = candidate ? "candidate" : repairCandidate ? "repair_candidate"
     : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed"
     : successorCandidate ? "successor_candidate" : successorFrozenUnpushed ? "successor_frozen_unpushed" : "invalid";
