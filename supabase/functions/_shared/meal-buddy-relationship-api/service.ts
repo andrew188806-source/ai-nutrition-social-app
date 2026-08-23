@@ -35,7 +35,8 @@ export class MealBuddyRelationshipService {
     for (const row of rows) {
       relationships.push(Object.freeze({
         relationshipRef: await this.relationshipCipher.seal(actorUserId, row.relation_id, now),
-        state: row.relative_state
+        state: row.relative_state,
+        counterpart: row.counterpart
       }));
     }
     return Object.freeze({

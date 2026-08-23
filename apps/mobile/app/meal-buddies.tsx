@@ -52,6 +52,8 @@ import {
   type MealBuddyRealCandidatesController
 } from "../features/meal-buddy-candidates/useMealBuddyRealCandidates";
 import { useConsumerRuntime } from "../features/consumer-runtime";
+import { MealBuddyRelationshipInbox } from "../features/meal-buddy-relationships/MealBuddyRelationshipInbox";
+import { useMealBuddyRelationships } from "../features/meal-buddy-relationships/useMealBuddyRelationships";
 import {
   buildRecommendationMealBuddyCardCreateRequest,
   createRecommendationMealBuddyCard
@@ -215,6 +217,10 @@ export default function MealBuddyHomeScreen() {
   const consumerRuntime = useConsumerRuntime();
   const isRealCandidateMode = consumerRuntime.mode === "supabase";
   const realCandidates = useMealBuddyRealCandidates(isRealCandidateMode);
+  const realRelationships = useMealBuddyRelationships(
+    isRealCandidateMode ? consumerRuntime.state.actorKey : null,
+    consumerRuntime.state.actorGeneration
+  );
   const loadRealSourceCards = realCandidates.loadSourceCards;
   // The actor's own real cards are read once when real mode becomes active. Leaving real mode is
   // handled inside the hook, which resets the cards, the selection and the candidates together.
@@ -324,7 +330,7 @@ export default function MealBuddyHomeScreen() {
       {activeSection !== "discover" && activeSection !== "cards" ? (
         <View style={styles.snowChipRow}>
           <Chip label="飯友" active={activeSection === "friends" && friendInitialTab !== "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("matched"); }} />
-          <Chip label="聊天" active={activeSection === "friends" && friendInitialTab === "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("chats"); setFocusedChatId(""); setFocusedChatName(""); }} />
+          {!isRealCandidateMode ? <Chip label="聊天" active={activeSection === "friends" && friendInitialTab === "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("chats"); setFocusedChatId(""); setFocusedChatName(""); }} /> : null}
           <Chip label="飯局" active={activeSection === "gatherings" || activeSection === "tables"} onPress={() => setActiveSection("gatherings")} />
         </View>
       ) : null}
@@ -406,7 +412,10 @@ export default function MealBuddyHomeScreen() {
       ) : null}
 
       {activeSection === "friends" ? (
-        <MyFriendsSection
+        isRealCandidateMode ? (
+          <MealBuddyRelationshipInbox controller={realRelationships} />
+        ) : (
+          <MyFriendsSection
           chats={chats}
           focusedChatId={focusedChatId}
           focusedChatName={focusedChatName}
@@ -439,7 +448,8 @@ export default function MealBuddyHomeScreen() {
             setSocialVersion((version) => version + 1);
           }}
           onChatUpdated={() => setSocialVersion((version) => version + 1)}
-        />
+          />
+        )
       ) : null}
       {activeSection === "gatherings" ? (
         <GatheringsSection

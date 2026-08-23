@@ -74,8 +74,9 @@ export function validateSr2hbMigrationAuthority({
 }) {
   if (!lifecycle.valid) return false;
   const successor = lifecycle.phase.startsWith("successor_");
+  const relationshipMobileSuccessor = lifecycle.phase.startsWith("successor_successor_");
   const lifecycleMigrations = lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/"));
-  const expectedLifecycleMigrations = successor ? [SR2IA_MIGRATION] : [SR2HB_MIGRATION];
+  const expectedLifecycleMigrations = relationshipMobileSuccessor ? [] : successor ? [SR2IA_MIGRATION] : [SR2HB_MIGRATION];
   const expectedChangedMigrations = successor && lifecycle.phase !== "successor_candidate"
     ? [SR2HB_MIGRATION, SR2IA_MIGRATION]
     : [SR2HB_MIGRATION];

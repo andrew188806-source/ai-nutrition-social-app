@@ -35,11 +35,20 @@ const ids = Object.freeze({ A: "00000000-0000-4000-8000-000000000001", B: "00000
 
 class LocalRepository {
   pairs = new Map(); participants = new Set(Object.values(ids)); blocks = new Set(); sequence = 0;
+  profiles = new Map(Object.values(ids).map((id, index) => [id, Object.freeze({
+    displayName: `飯友 ${index + 1}`,
+    mascotAvatarKey: ["PB", "VG", "TE", "MD"][index % 4]
+  })]));
   pair(a, b) { return [a, b].sort().join("|"); }
   row(record, actor) {
     const counterpart = record.low === actor ? record.high : record.low;
     const relative_state = record.state === "accepted" ? "accepted" : record.invitedBy === actor ? "outgoing_pending" : "incoming_pending";
-    return Object.freeze({ relation_id: record.id, counterpart_user_id: counterpart, relative_state });
+    return Object.freeze({
+      relation_id: record.id,
+      counterpart_user_id: counterpart,
+      relative_state,
+      counterpart: this.profiles.get(counterpart)
+    });
   }
   eligible(a, b) { return a !== b && this.participants.has(a) && this.participants.has(b) && !this.blocks.has(`${a}|${b}`) && !this.blocks.has(`${b}|${a}`); }
   async send(actor, target) {

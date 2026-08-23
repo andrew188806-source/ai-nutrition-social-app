@@ -13,6 +13,8 @@ import {
   SR2IA_MIGRATION,
   SR2IA_SUCCESSOR_PATHS
 } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
+import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
+import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -62,9 +64,10 @@ const commandNames = [
   "test:meal-buddy-relationship-sr2i-a-concurrency"
 ];
 for (const name of commandNames) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
-check("02 lifecycle inventory is exact and wildcard-free", exact(lifecycle.manifest, SR2IA_SUCCESSOR_PATHS));
+check("02 lifecycle inventory is exact and wildcard-free", exact(lifecycle.manifest, lifecycle.phase.startsWith("successor_") ? SR2IB_SUCCESSOR_PATHS : SR2IA_SUCCESSOR_PATHS));
 check("03 pushed SR-2H-B baseline and subject are pinned", git(["cat-file", "-t", SR2IA_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2IA_BASELINE]).trim() === SR2IA_BASELINE_SUBJECT);
 check("04 branch is main and baseline remains ancestor authority", git(["branch", "--show-current"]).trim() === "main" && spawnSync("git", ["merge-base", "--is-ancestor", SR2IA_BASELINE, "HEAD"], { cwd: root }).status === 0);
 check("05 no staged or deleted path exists", state.stagedPaths.length === 0 && !state.deleted);
@@ -115,10 +118,10 @@ check("38 arbitrary raw target and relation UUIDs are not request fields", !/tar
 check("39 list accepts no graph target or scope", request.includes('operation === "list"') && request.includes("Object.keys(record).length === 1"));
 check("40 actions accept only actor-bound mbr1 reference", request.includes("MEAL_BUDDY_RELATIONSHIP_REF_PREFIX") && types.includes('relationshipRef: string'));
 check("41 query and authority headers fail closed", request.includes('url.search !== ""') && request.includes("x-target-user-id") && request.includes("x-relation-id"));
-check("42 response exposes only policy version opaque ref and relative state", /MealBuddyRelationshipItem = Readonly<\{\s*relationshipRef: string;\s*state: MealBuddyRelationshipState;\s*\}>/.test(types) && !/userId|targetId|counterpartId|relationId/.test(types));
+check("42 response exposes only policy version, opaque ref, relative state and the sanctioned minimal counterpart summary", /MealBuddyRelationshipItem = Readonly<\{\s*relationshipRef: string;\s*state: MealBuddyRelationshipState;\s*counterpart: MealBuddyRelationshipCounterpart;\s*\}>/.test(types) && /MealBuddyRelationshipCounterpart = Readonly<\{\s*displayName: string;\s*mascotAvatarKey: string;\s*\}>/.test(types) && !/targetId|counterpartId|relationId|publicBio|willingToChat|email|phone/.test(types));
 check("43 service opens scr1 server-side before send/read", service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId"));
 check("44 service opens mbr1 server-side before action", service.includes("relationshipCipher.open(actorUserId, request.relationshipRef, now)") && service.includes("claims.relationId"));
-check("45 service seals every internal relation id and discards counterpart id", service.includes("relationshipCipher.seal(actorUserId, row.relation_id, now)") && !service.includes("counterpart_user_id:"));
+check("45 service seals every internal relation id, discards counterpart UUID and emits only the composed public summary", service.includes("relationshipCipher.seal(actorUserId, row.relation_id, now)") && service.includes("counterpart: row.counterpart") && !service.includes("counterpart_user_id:"));
 check("46 cardinality failures do not fabricate state", service.includes("meal_buddy_relationship_cardinality_invalid") && service.includes("meal_buddy_relationship_action_unavailable"));
 
 check("47 mbr1 is AES-GCM, actor-bound AAD and finite-lived", refPolicy.includes('"mbr1."') && refCrypto.includes('name: "AES-GCM"') && refCrypto.includes("additionalData: aad(actor)") && refCrypto.includes("nowMs >="));
@@ -130,21 +133,26 @@ check("52 endpoint returns opaque errors without raw database text", !/JSON\.str
 check("53 Edge JWT verification is enabled exactly for endpoint", /\[functions\.meal-buddy-relationship\][\s\S]*?verify_jwt = true/.test(supabaseConfig));
 
 const protectedPaths = [
-  "apps/mobile", "supabase/functions/_shared/social-ranking", "supabase/functions/_shared/social-exposure",
+  "apps/mobile/features/meal-buddy-candidates/MealBuddyCandidateCard.tsx",
+  "apps/mobile/features/meal-buddy-candidates/MealBuddyRealCandidateSection.tsx",
+  "supabase/functions/_shared/social-ranking", "supabase/functions/_shared/social-exposure",
   "supabase/functions/_shared/meal-buddy-context", "supabase/functions/_shared/social-candidate-ref",
   "supabase/functions/meal-buddy-candidate-profile", "supabase/functions/social-candidate-evaluation"
 ];
-check("54 Mobile UI and frozen ranking exposure context candidate-ref authorities are unchanged", protectedPaths.every((file) => git(["diff", "--name-only", SR2IA_BASELINE, "--", file]).trim() === ""));
+const successorMobileContract = lifecycle.phase.startsWith("successor_")
+  ? auditSr2ibSources(new Map(SR2IB_SOURCE_PATHS.map((file) => [file, read(file)]))).length === 0
+  : true;
+check("54 compact discovery and frozen ranking exposure context candidate-ref authorities remain intact while sanctioned Mobile activation is contract-checked", protectedPaths.every((file) => git(["diff", "--name-only", SR2IA_BASELINE, "--", file]).trim() === "") && successorMobileContract);
 check("55 no chat message conversation room or notification authority is introduced", !/create (?:table|function)[^;]*(?:chat|message|conversation|room|notification)/i.test(migration));
 check("56 no ranking exposure context interest or premium authority is introduced", !/(ranking_score|exposure_reason|food_context_tag_key|interest_snapshot|entitlement|premium_tier)/i.test(migration + types + service));
-check("57 only the exact SR-2I-A migration is in candidate inventory", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")), [SR2IA_MIGRATION]));
+check("57 lifecycle migration inventory is exact", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")), lifecycle.phase.startsWith("successor_") ? [] : [SR2IA_MIGRATION]));
 check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION));
 const implementationSources = SR2IA_SUCCESSOR_PATHS.filter((file) => !file.startsWith("scripts/") && file !== "package.json").map(read).join("\n");
 check("59 no deploy remote operator or credential command is introduced", !/supabase\s+(db push|functions deploy)|--project-ref|DATABASE_URL|SUPABASE_SERVICE_ROLE/.test(implementationSources));
 check("60 all candidate source bytes are UTF-8 text without NUL", SR2IA_SUCCESSOR_PATHS.every((file) => { const bytes = fs.readFileSync(path.join(root, file)); return !bytes.includes(0) && !read(file).includes("\uFFFD"); }));
 const manifest = createSr2iaManifest((file) => fs.readFileSync(path.join(root, file)));
 check("61 canonical raw-byte manifest covers every exact sorted path", manifest.entries.length === SR2IA_SUCCESSOR_PATHS.length && manifest.entries.every((entry, index) => entry.path === SR2IA_SUCCESSOR_PATHS[index] && /^[0-9a-f]{64}$/.test(entry.sha256)));
-check("62 repository SQL statements call only four exact internal functions", ["send_meal_buddy_invite", "read_meal_buddy_relationship", "list_meal_buddy_relationships", "resolve_meal_buddy_relationship"].every((name) => repository.includes(`social_internal.${name}`)) && (repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 5);
+check("62 repository calls only the four frozen relationship functions plus the frozen SR-2C projection", ["send_meal_buddy_invite", "read_meal_buddy_relationship", "list_meal_buddy_relationships", "resolve_meal_buddy_relationship", "project_exposed_social_profiles"].every((name) => repository.includes(`social_internal.${name}`)) && (repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 6);
 
 console.log(JSON.stringify({ suite: "meal-buddy-relationship-sr2i-a-guard", lifecycle: lifecycle.phase, total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, canonicalManifestSha256: manifest.aggregateSha256, migrationSha256: sha256(fs.readFileSync(path.join(root, SR2IA_MIGRATION))), networkUsed: false, databaseUsed: false, credentialsUsed: false, developmentTouched: false, productionTouched: false }, null, 2));
 if (failures.length) process.exitCode = 1;

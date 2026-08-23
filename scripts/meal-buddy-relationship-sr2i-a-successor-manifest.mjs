@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { classifySr2ibLifecycle } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
 
 export const SR2IA_BASELINE = "67fc7a02ba1dfe625e6864b93592e25975fbcbb2";
 export const SR2IA_BASELINE_SUBJECT = "Add SR-2H-B atomic social interest settings authority";
@@ -51,8 +52,10 @@ export function classifySr2iaLifecycle(state) {
     && exact(state.deltaPaths, SR2IA_SUCCESSOR_PATHS) && !state.deleted;
   const frozenUnpushed = frozen && state.originHead === SR2IA_BASELINE && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozen && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
-  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed" : "invalid";
-  return Object.freeze({ valid: phase !== "invalid", phase, manifest: candidate ? state.worktreePaths : state.deltaPaths });
+  const successor = classifySr2ibLifecycle(state);
+  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed"
+    : successor.valid ? `successor_${successor.phase}` : "invalid";
+  return Object.freeze({ valid: phase !== "invalid", phase, manifest: successor.valid ? successor.manifest : candidate ? state.worktreePaths : state.deltaPaths });
 }
 export function createSr2iaManifest(readBytes) {
   const entries = SR2IA_SUCCESSOR_PATHS.map((path) => ({

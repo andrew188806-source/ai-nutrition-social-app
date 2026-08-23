@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -126,7 +127,8 @@ const home = fs.readFileSync(path.join(root, "apps/mobile/app/meal-buddies.tsx")
 const screen = fs.readFileSync(path.join(root, "apps/mobile/app/meal-buddy-candidate-profile/[candidateRef].tsx"), "utf8");
 check("24 real card tap carries the candidateRef, never card ref/index/name", compactCard.includes("onPress(candidate.candidateRef)") && home.includes("onOpenRealCandidateProfile={openRealCandidateProfile}"));
 check("25 destination has loading/error/retry/back states", ["ActivityIndicator", "phase === \"failed\"", "controller.retry()", "router.back()"].every((marker) => screen.includes(marker)));
-check("26 destination has no mock profile mapping or later action controls", !/getCommunityProfile|resolveCommunityProfileDisplay|invite|friend|match|chat permission|edit/i.test(screen));
+const successorSources = new Map(SR2IB_SOURCE_PATHS.map((file) => [file, fs.readFileSync(path.join(root, file), "utf8")]));
+check("26 destination has no mock profile mapping and successor relationship controls remain separately contract-bound", !/getCommunityProfile|resolveCommunityProfileDisplay|mealBuddyCardMock|mockMatched|demoProfile|editProfile|editInterest/i.test(screen) && auditSr2ibSources(successorSources).length === 0);
 check("27 full interests remain separated into general and food sections", screen.includes('title="興趣"') && screen.includes('title="愛吃"'));
 check("28 no raw tag key is rendered by the full-profile screen", !/publicInterestTags\.map|foodInterestTags\.map|tagKey/.test(screen));
 

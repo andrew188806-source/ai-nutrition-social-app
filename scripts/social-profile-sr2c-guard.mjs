@@ -38,6 +38,7 @@ import {
 } from "./social-candidate-sr2h-a-successor-manifest.mjs";
 import { SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
+import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const require_ = createRequire(import.meta.url);
@@ -163,6 +164,7 @@ try {
   for (const key of [...Object.keys(packageScripts), ...successorScriptKeys]) delete packageWithoutSr2c.scripts[key];
   for (const key of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithoutSr2c.scripts[key];
   for (const key of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithoutSr2c.scripts[key];
+  for (const key of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithoutSr2c.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -182,7 +184,8 @@ try {
   const frozenTreeManifest = lifecycle.phase === "candidate" ? null : createSr2cCanonicalManifest((file) => gitBytes(["cat-file", "blob", `${state.head}:${file}`]));
 
   check("1. lifecycle is exactly the SR-2H-A candidate, frozen-unpushed or frozen-pushed state", lifecycle.valid, { phase: lifecycle.phase, head: state.head, originHead: state.originHead, ahead: state.ahead, behind: state.behind });
-  const expectedSuccessorManifest = lifecycle.phase.startsWith("successor_successor_") ? SR2IA_SUCCESSOR_PATHS
+  const expectedSuccessorManifest = lifecycle.phase.startsWith("successor_successor_successor_") ? SR2IB_SUCCESSOR_PATHS
+    : lifecycle.phase.startsWith("successor_successor_") ? SR2IA_SUCCESSOR_PATHS
     : lifecycle.phase.startsWith("successor_") ? SR2HB_SUCCESSOR_PATHS : SR2HA_SUCCESSOR_PATHS;
   check("2. lifecycle manifest is the exact enumerated successor path set", exact([...lifecycle.manifest].sort(), expectedSuccessorManifest), { expected: expectedSuccessorManifest, actual: lifecycle.manifest });
   check("3. candidate and frozen lifecycle prohibit staged bytes", state.stagedPaths.length === 0, { staged: state.stagedPaths });

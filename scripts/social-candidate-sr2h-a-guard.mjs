@@ -9,6 +9,8 @@ import {
 } from "./social-candidate-sr2h-a-successor-manifest.mjs";
 import { SR2HB_BASELINE, SR2HB_SUCCESSOR_PATHS } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
+import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
+import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -61,9 +63,12 @@ const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-a-smoke", "test:social-candidate-sr2h-a-mutations"]) delete packageWithout.scripts[name];
 for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen or exact SR-2H-B successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
-const expectedSuccessorPaths = lifecycle.phase.startsWith("successor_successor_") ? SR2IA_SUCCESSOR_PATHS : SR2HB_SUCCESSOR_PATHS;
+const expectedSuccessorPaths = lifecycle.phase.startsWith("successor_successor_successor_")
+  ? SR2IB_SUCCESSOR_PATHS
+  : lifecycle.phase.startsWith("successor_successor_") ? SR2IA_SUCCESSOR_PATHS : SR2HB_SUCCESSOR_PATHS;
 check("02 frozen SR-2H-A authority and any successor manifest remain exact", frozenHaAuthority && (lifecycle.phase.startsWith("successor_")
   ? lifecycle.manifest.length === expectedSuccessorPaths.length && lifecycle.manifest.every((entry, index) => [...expectedSuccessorPaths].sort()[index] === [...lifecycle.manifest].sort()[index])
   : lifecycle.manifest.length === SR2HA_SUCCESSOR_PATHS.length && lifecycle.manifest.every((entry, index) => [...SR2HA_SUCCESSOR_PATHS].sort()[index] === [...lifecycle.manifest].sort()[index])));
@@ -100,7 +105,10 @@ check("28 real candidate card still passes person ref only", compact.includes("o
 check("29 real candidate screen routes that ref to the dedicated profile", home.includes("openRealCandidateProfile") && home.includes('pathname: "/meal-buddy-candidate-profile/[candidateRef]"'));
 check("30 profile route has loading/error/retry/back states", ["ActivityIndicator", 'phase === "failed"', "controller.retry()", "router.back()"].every((marker) => screen.includes(marker)));
 check("31 profile route contains no mock/demo data authority", !/getCommunityProfile|resolveCommunityProfileDisplay|mealBuddyCardMock|mockMatched|demoProfile/i.test(screen + mobileHook + mobileAdapter));
-check("32 profile route is read-only with no later relationship controls", !/createInvite|acceptInvite|friendship|sendMessage|editProfile|editInterest/i.test(screen + mobileHook));
+const successorRelationshipContract = lifecycle.phase.startsWith("successor_successor_successor_")
+  ? auditSr2ibSources(new Map(SR2IB_SOURCE_PATHS.map((file) => [file, read(file)]))).length === 0
+  : !/createInvite|acceptInvite|friendship|sendMessage|editProfile|editInterest/i.test(screen + mobileHook);
+check("32 frozen public profile disclosure remains read-only while sanctioned successor relationship controls stay separately contract-bound", !/editProfile|editInterest|targetUserId|email|phone|rankingScore/i.test(screen + mobileHook) && successorRelationshipContract);
 check("33 candidate server order and compact card bytes remain frozen", git(["diff", "--name-only", SR2HA_BASELINE, "--", "apps/mobile/features/meal-buddy-candidates/MealBuddyCandidateCard.tsx", "apps/mobile/features/meal-buddy-candidates/MealBuddyRealCandidateSection.tsx"]).trim() === "");
 check("34 ranking, exposure, context and recommendation authority bytes remain frozen", git(["diff", "--name-only", SR2HA_BASELINE, "--", "supabase/functions/_shared/social-ranking", "supabase/functions/_shared/social-exposure", "supabase/functions/_shared/meal-buddy-context", "supabase/functions/_shared/meal-buddy-card-api"]).trim() === "");
 check("35 no legacy demo community-profile surface is modified", git(["diff", "--name-only", SR2HA_BASELINE, "--", "apps/mobile/app/community-profile", "apps/mobile/features/display-resolvers"]).trim() === "");

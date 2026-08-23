@@ -15,6 +15,7 @@ import {
   validateSr2hbMigrationAuthority
 } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
+import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -61,9 +62,11 @@ const baselinePackage = JSON.parse(git(["show", `${SR2HB_BASELINE}:package.json`
 const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
-const expectedLifecyclePaths = lifecycle.phase.startsWith("successor_") ? SR2IA_SUCCESSOR_PATHS : SR2HB_SUCCESSOR_PATHS;
+const expectedLifecyclePaths = lifecycle.phase.startsWith("successor_successor_") ? SR2IB_SUCCESSOR_PATHS
+  : lifecycle.phase.startsWith("successor_") ? SR2IA_SUCCESSOR_PATHS : SR2HB_SUCCESSOR_PATHS;
 check("02 lifecycle inventory is exact and wildcard-free", lifecycle.manifest.length === expectedLifecyclePaths.length && lifecycle.manifest.every((entry, index) => [...expectedLifecyclePaths].sort()[index] === [...lifecycle.manifest].sort()[index]));
 check("03 pushed SR-2H-A baseline and subject are pinned", git(["cat-file", "-t", SR2HB_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2HB_BASELINE]).trim() === SR2HB_BASELINE_SUBJECT);
 check("04 no staged or deleted path exists", state.stagedPaths.length === 0 && !state.headDeleted);

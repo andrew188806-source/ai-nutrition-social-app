@@ -762,6 +762,31 @@ export const zhTW = {
         }
       ]
     },
+    mealBuddyRelationships: {
+      profileTitle: "飯友關係",
+      inboxTitle: "我的飯友關係",
+      inboxSubtitle: "顯示對方目前允許公開的名稱與代表角色；邀請狀態仍由伺服器確認。",
+      loading: "正在確認最新關係狀態…",
+      loadFailed: "目前無法確認關係狀態，請稍後再試。",
+      retry: "重新載入",
+      actionFailed: "操作未完成；畫面已保留或更新為可確認的伺服器狀態，請稍後再試。",
+      noneProfile: "你們目前還不是飯友。送出邀請後，可在「我的飯友」查看最新狀態。",
+      outgoingProfile: "飯友邀請已送出，正在等待對方回覆。",
+      incomingProfile: "對方已邀請你成為飯友。",
+      acceptedProfile: "你們已成為飯友。",
+      incomingInbox: "收到一則飯友邀請",
+      outgoingInbox: "等待對方回覆的邀請",
+      acceptedInbox: "已建立飯友關係",
+      emptyInbox: "目前沒有待處理或已成立的飯友關係。",
+      send: "邀請成為飯友",
+      sending: "正在送出…",
+      accept: "接受",
+      accepting: "正在接受…",
+      decline: "婉拒",
+      declining: "正在婉拒…",
+      cancel: "取消邀請",
+      cancelling: "正在取消…"
+    },
     chat: {
       title: "飯友聊天",
       subtitle: "配對後可以用這裡快速討論要吃哪一間、什麼時候出發。",

@@ -4,6 +4,8 @@ import { Card, colors } from "../../components/DemoUi";
 import { useConsumerRuntime } from "../../features/consumer-runtime";
 import { useMealBuddyCandidateProfile } from "../../features/meal-buddy-candidates/useMealBuddyCandidateProfile";
 import { resolveSocialCandidateMascot } from "../../features/social-candidates/mascotAdapter";
+import { MealBuddyRelationshipPanel } from "../../features/meal-buddy-relationships/MealBuddyRelationshipPanel";
+import { useMealBuddyRelationshipProfile } from "../../features/meal-buddy-relationships/useMealBuddyRelationshipProfile";
 import { getMascotSource } from "../../theme/components";
 
 export default function MealBuddyCandidateProfileScreen() {
@@ -14,6 +16,11 @@ export default function MealBuddyCandidateProfileScreen() {
   const runtime = useConsumerRuntime();
   const controller = useMealBuddyCandidateProfile(
     runtime.mode === "supabase",
+    runtime.state.actorGeneration,
+    candidateRef
+  );
+  const relationshipController = useMealBuddyRelationshipProfile(
+    runtime.mode === "supabase" ? runtime.state.actorKey : null,
     runtime.state.actorGeneration,
     candidateRef
   );
@@ -47,7 +54,10 @@ export default function MealBuddyCandidateProfileScreen() {
           </View>
         </Card>
       ) : (
-        <CandidatePublicProfile state={controller.state} />
+        <>
+          <CandidatePublicProfile state={controller.state} />
+          <MealBuddyRelationshipPanel controller={relationshipController} />
+        </>
       )}
     </ScrollView>
   );

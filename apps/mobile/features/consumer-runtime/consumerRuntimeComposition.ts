@@ -52,6 +52,11 @@ import {
 import type { SupabaseMealBuddyClientLike } from "../meal-buddy-candidates/supabaseMealBuddyCandidateContracts";
 import type { SupabaseInterestCatalogClientLike } from "../meal-buddy-candidates/interestCatalog";
 import {
+  bindMealBuddyRelationshipRuntimeDependencies,
+  clearMealBuddyRelationshipRuntimeDependencies
+} from "../meal-buddy-relationships/runtimeBinding";
+import type { SupabaseMealBuddyRelationshipClientLike } from "../meal-buddy-relationships/supabaseContracts";
+import {
   bindSocialInterestSettingsRuntimeDependencies,
   clearSocialInterestSettingsRuntimeDependencies
 } from "../social-interest-settings/runtimeBinding";
@@ -341,6 +346,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   // disabled or test composition cannot retain a live dependency graph from an earlier one.
   clearMealBuddyCardCreateRuntimeDependencies();
   clearMealBuddyCandidateRuntimeDependencies();
+  clearMealBuddyRelationshipRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
   const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
   const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
@@ -434,6 +440,10 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         bindMealBuddyCardCreateRuntimeDependencies({
           authPort,
           client: client as unknown as SupabaseMealBuddyCardCreateClientLike
+        });
+        bindMealBuddyRelationshipRuntimeDependencies({
+          authPort,
+          client: client as unknown as SupabaseMealBuddyRelationshipClientLike
         });
         bindSocialInterestSettingsRuntimeDependencies({
           authPort,

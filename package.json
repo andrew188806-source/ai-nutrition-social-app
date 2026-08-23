@@ -270,7 +270,10 @@
     "test:meal-buddy-relationship-sr2i-a": "node scripts/meal-buddy-relationship-sr2i-a-guard.mjs",
     "test:meal-buddy-relationship-sr2i-a-smoke": "node scripts/meal-buddy-relationship-sr2i-a-smoke.mjs",
     "test:meal-buddy-relationship-sr2i-a-mutations": "node scripts/meal-buddy-relationship-sr2i-a-mutations.mjs",
-    "test:meal-buddy-relationship-sr2i-a-concurrency": "node scripts/meal-buddy-relationship-sr2i-a-concurrency.mjs"
+    "test:meal-buddy-relationship-sr2i-a-concurrency": "node scripts/meal-buddy-relationship-sr2i-a-concurrency.mjs",
+    "test:meal-buddy-relationship-sr2i-b": "node scripts/meal-buddy-relationship-sr2i-b-guard.mjs",
+    "test:meal-buddy-relationship-sr2i-b-smoke": "node scripts/meal-buddy-relationship-sr2i-b-smoke.mjs",
+    "test:meal-buddy-relationship-sr2i-b-mutations": "node scripts/meal-buddy-relationship-sr2i-b-mutations.mjs"
   },
   "workspaces": [
     "apps/*",
