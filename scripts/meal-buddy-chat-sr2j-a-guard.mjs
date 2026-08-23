@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+import fs from "node:fs"; import path from "node:path"; import crypto from "node:crypto"; import child from "node:child_process";
+import { SR2JA_BASELINE, SR2JA_BASELINE_SUBJECT, SR2JA_MIGRATION, SR2JA_PATHS, SR2JA_PREDECESSOR_MIGRATION, SR2JA_PREDECESSOR_MIGRATION_SHA256, classifySr2jaLifecycle, createSr2jaManifest } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
+const root=process.cwd(); const read=(f)=>fs.readFileSync(path.join(root,f),"utf8"); const run=(args)=>{const result=child.spawnSync("git",["-c","core.safecrlf=false",...args],{cwd:root,encoding:"utf8"});if(result.status!==0)throw result.error??new Error(result.stderr||"git_failed");return (result.stdout??"").trim();}; const lines=(v)=>v? v.split(/\r?\n/).filter(Boolean):[]; const sha=(b)=>crypto.createHash("sha256").update(b).digest("hex");
+const candidateRoots=SR2JA_PATHS;
+const unstaged=lines(run(["diff","--name-only","--",...candidateRoots])); const untracked=lines(run(["ls-files","--others","--exclude-standard","--",...candidateRoots])); const worktree=[...new Set([...unstaged,...untracked])].sort(); const staged=lines(run(["diff","--cached","--name-only"])); const head=run(["rev-parse","HEAD"]); const originHead=run(["rev-parse","origin/main"]); const counts=run(["rev-list","--left-right","--count","origin/main...HEAD"]).split(/\s+/).map(Number); const delta=head===SR2JA_BASELINE?[]:lines(run(["diff","--name-only",`${SR2JA_BASELINE}..HEAD`]));
+const lifecycle=classifySr2jaLifecycle({head,parent:head===SR2JA_BASELINE?null:run(["rev-parse","HEAD^"]),originHead,behind:counts[0],ahead:counts[1],worktreePaths:worktree,stagedPaths:staged,deltaPaths:delta,deleted:lines(run(["diff","--name-only","--diff-filter=D","--",...candidateRoots])).length>0});
+const migration=read(SR2JA_MIGRATION), api=SR2JA_PATHS.filter((f)=>f.includes("meal-buddy-chat")&&f.endsWith(".ts")).map(read).join("\n"), ref=read("supabase/functions/_shared/meal-buddy-chat-ref/crypto.ts"), request=read("supabase/functions/_shared/meal-buddy-chat-api/request.ts"), service=read("supabase/functions/_shared/meal-buddy-chat-api/service.ts"), handler=read("supabase/functions/meal-buddy-chat/handler.ts"), config=read("supabase/config.toml");
+const checks=[]; const failures=[]; const check=(name,ok)=>{checks.push(name); console.log(`${ok?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`); if(!ok)failures.push(name);};
+check("lifecycle is exact candidate or frozen-unpushed",lifecycle.valid);
+check("baseline and subject are exact pushed authority",run(["show","-s","--format=%s",SR2JA_BASELINE])===SR2JA_BASELINE_SUBJECT&&run(["merge-base","--is-ancestor",SR2JA_BASELINE,"HEAD"])==="");
+check("exact wildcard-free path inventory",SR2JA_PATHS.length===34&&new Set(SR2JA_PATHS).size===34&&lifecycle.manifest.every((f)=>SR2JA_PATHS.includes(f)));
+check("one narrow additive migration",lifecycle.manifest.filter((f)=>f.startsWith("supabase/migrations/")).join("")===SR2JA_MIGRATION);
+check("one relationship owns at most one conversation",migration.includes("meal_buddy_conversations_relationship_unique")&&migration.includes("unique (relationship_id)"));
+check("conversation creation is lazy and conflict-safe",migration.includes("open_meal_buddy_chat")&&migration.includes("on conflict on constraint meal_buddy_conversations_relationship_unique do nothing"));
+check("accepted relationship is hard gate",migration.includes("v_relation.state <> 'accepted'")&&migration.includes("authorize_meal_buddy_chat"));
+check("current block participation safety is reused",migration.includes("may_evaluate_candidate")&&migration.includes("lock_meal_buddy_relationship_pair"));
+check("open list and send all call common current authorization",(migration.match(/authorize_meal_buddy_chat\(/g)||[]).length>=4);
+check("text only body is server bounded",migration.includes("between 1 and 2000")&&request.includes("MEAL_BUDDY_CHAT_MAX_BODY_LENGTH"));
+check("sender derives only from authenticated actor",migration.includes("sender_user_id, client_message_id, body")&&migration.includes("p_actor_user_id, p_client_message_id")&&!request.includes("senderUserId"));
+check("idempotency is unique per conversation sender and client key",migration.includes("unique (conversation_id, sender_user_id, client_message_id)")&&migration.includes("CHAT_IDEMPOTENCY_KEY_CONFLICT"));
+check("ordering is deterministic",migration.includes("created_at desc, id desc")&&migration.includes("order by message.created_at desc, message.id desc"));
+check("history is bounded and cursor-based",migration.includes("p_limit > 50")&&request.includes("before")&&service.includes("nextCursor"));
+check("chat ref is actor-bound AES-GCM and stable message ref is actor-bound HMAC",ref.includes('name: "AES-GCM"')&&ref.includes("additionalData: aad(kind, actor)")&&ref.includes('name: "HMAC"')&&ref.includes("sealStableMessage")&&ref.includes("MEAL_BUDDY_MESSAGE_REF_VERSION}|${actor}|${id}"));
+check("mbr1 is not overloaded as chat identity",request.includes("MEAL_BUDDY_RELATIONSHIP_REF_PREFIX")&&request.includes("MEAL_BUDDY_CHAT_REF_PREFIX")&&service.includes("relationshipCipher.open")&&service.includes("chatCipher.openConversation"));
+check("public message exposes mine not sender UUID",api.includes("mine: boolean")&&!api.includes("senderUserId")&&!api.includes("pairKey"));
+check("counterpart disclosure is current name and mascot only",api.includes("displayName: string; mascotAvatarKey: string")&&!api.includes("publicBio"));
+check("third-party graph selectors cannot be expressed",request.includes("AUTHORITY_HEADERS")&&!/targetUserId|relationshipId|conversationId/.test(request.split("parseMealBuddyChatRequest")[1]));
+check("endpoint authenticates before transport/service",handler.indexOf("authenticateCaller(")<handler.indexOf("createTransport()")&&handler.includes("authentication.value.userId"));
+check("endpoint JWT verification is enabled",/\[functions\.meal-buddy-chat\][\s\S]*?verify_jwt = true/.test(config));
+check("base tables have RLS and no client privileges",(migration.match(/enable row level security/g)||[]).length===2&&(migration.match(/revoke all on table public\.meal_buddy_/g)||[]).length===2);
+check("functions are SECURITY DEFINER with controlled search_path",(migration.match(/security definer/g)||[]).length===5&&(migration.match(/set search_path = pg_catalog, public, pg_temp/g)||[]).length===5);
+check("only narrow executor functions are granted",(migration.match(/to social_runtime_executor/g)||[]).length===4&&(migration.match(/from public, anon, authenticated, authenticator, service_role, social_runtime_executor/g)||[]).length===5);
+check("no direct service-role mobile authority",!api.includes("service_role")&&!handler.includes("service_role"));
+check("no realtime unread receipt notification or media authority",!/(create table|create function)[^;]*(realtime|unread|receipt|notification|attachment|media|reaction)/i.test(migration));
+check("no ranking exposure context or interest mutation",!/(insert into|update|delete from)[^;]*(ranking|exposure|context|interest)/i.test(migration));
+check("relationship acceptance does not create conversation",!read(SR2JA_PREDECESSOR_MIGRATION).includes("meal_buddy_conversations"));
+check("predecessor relationship migration is byte exact",sha(fs.readFileSync(path.join(root,SR2JA_PREDECESSOR_MIGRATION)))===SR2JA_PREDECESSOR_MIGRATION_SHA256);
+check("no predecessor migration changed",lines(run(["diff","--name-only",SR2JA_BASELINE,"--","supabase/migrations"])).every((f)=>f===SR2JA_MIGRATION));
+check("no Mobile chat screen or route is introduced",lifecycle.manifest.every((f)=>!f.startsWith("apps/mobile/")));
+const implementationPaths=SR2JA_PATHS.filter((file)=>!file.startsWith("scripts/")&&file!=="package.json");
+check("no deployment operator or credential material",!/(supabase\s+(db push|functions deploy)|--project-ref|SUPABASE_SERVICE_ROLE|DATABASE_URL)/.test(implementationPaths.map(read).join("\n")));
+check("all source bytes are UTF-8 text without NUL",SR2JA_PATHS.every((f)=>{const b=fs.readFileSync(path.join(root,f));return !b.includes(0)&&!read(f).includes("\uFFFD");}));
+// SR-2J-A defect-class regression authority. These are static assertions that pin the three defect
+// classes proven live on PostgreSQL 17.10; they supplement but never replace applying this migration
+// to a real PostgreSQL 17 instance, which remains the decisive compile and authority gate.
+const declaredRowVars=[...migration.matchAll(/^\s*(v_[a-z_]+)\s+(?:public\.[a-z_]+%rowtype|record)\s*;/gim)].map((m)=>m[1]);
+const multiIntoTargets=[...migration.matchAll(/\binto\s+([a-z_][a-z0-9_.]*(?:\s*,\s*[a-z_][a-z0-9_.]*)+)/gi)].map((m)=>m[1].split(",").map((v)=>v.trim().split(".")[0]));
+check("no rowtype or record variable is used in a multi-target INTO list",declaredRowVars.length>0&&multiIntoTargets.every((targets)=>targets.every((t)=>!declaredRowVars.includes(t))));
+check("chat authority holds an explicit relationship SELECT RLS policy scoped to itself",/create policy meal_buddy_chat_authority_relationship_select on public\.meal_buddy_relationships\s*\n\s*for select to meal_buddy_chat_authority using \(true\);/.test(migration)&&migration.includes("grant select on table public.meal_buddy_relationships to meal_buddy_chat_authority"));
+check("chat authority receives no relationship UPDATE INSERT DELETE grant or policy",!/grant[^;]*\b(update|insert|delete)\b[^;]*on table public\.meal_buddy_relationships[^;]*to meal_buddy_chat_authority/i.test(migration)&&!/create policy meal_buddy_chat_authority_relationship_(update|insert|delete)/i.test(migration));
+const authorizeBody=(migration.match(/create function social_internal\.authorize_meal_buddy_chat[\s\S]*?\n\$\$;/)||[""])[0];
+const lockAt=authorizeBody.indexOf("lock_meal_buddy_relationship_pair");
+check("canonical pair lock is acquired before the decisive relationship read",lockAt>0&&authorizeBody.indexOf("v_relation.state <> 'accepted'")>lockAt&&authorizeBody.lastIndexOf("select relation.* into v_relation")>lockAt);
+check("decisive relationship read needs no row lock escalation",!/for update/i.test(authorizeBody)&&(authorizeBody.match(/select relation\.\* into v_relation/g)||[]).length===3);
+const manifest=createSr2jaManifest((f)=>fs.readFileSync(path.join(root,f))); check("canonical raw-byte manifest covers exact sorted paths",manifest.entries.length===34&&manifest.entries.every((entry,index)=>entry.path===SR2JA_PATHS[index]&&/^[0-9a-f]{64}$/.test(entry.sha256)));
+console.log(JSON.stringify({suite:"meal-buddy-chat-sr2j-a-guard",lifecycle:lifecycle.phase,total:checks.length,passed:checks.length-failures.length,failed:failures.length,failures,canonicalManifestSha256:manifest.aggregateSha256,migrationSha256:sha(fs.readFileSync(path.join(root,SR2JA_MIGRATION))),predecessorMigrationSha256:sha(fs.readFileSync(path.join(root,SR2JA_PREDECESSOR_MIGRATION))),networkUsed:false,databaseUsed:false,credentialsUsed:false,developmentTouched:false,productionTouched:false},null,2)); if(failures.length)process.exitCode=1;

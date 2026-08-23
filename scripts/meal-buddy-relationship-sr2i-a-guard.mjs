@@ -14,6 +14,7 @@ import {
   SR2IA_SUCCESSOR_PATHS
 } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
+import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
@@ -65,6 +66,7 @@ const commandNames = [
 ];
 for (const name of commandNames) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-chat-sr2j-a", "test:meal-buddy-chat-sr2j-a-smoke", "test:meal-buddy-chat-sr2j-a-mutations", "test:meal-buddy-chat-sr2j-a-concurrency"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 lifecycle inventory is exact and wildcard-free", exact(lifecycle.manifest, lifecycle.phase.startsWith("successor_") ? SR2IB_SUCCESSOR_PATHS : SR2IA_SUCCESSOR_PATHS));
@@ -72,7 +74,7 @@ check("03 pushed SR-2H-B baseline and subject are pinned", git(["cat-file", "-t"
 check("04 branch is main and baseline remains ancestor authority", git(["branch", "--show-current"]).trim() === "main" && spawnSync("git", ["merge-base", "--is-ancestor", SR2IA_BASELINE, "HEAD"], { cwd: root }).status === 0);
 check("05 no staged or deleted path exists", state.stagedPaths.length === 0 && !state.deleted);
 check("06 every exact candidate path exists", SR2IA_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-check("07 package adds only four exact local SR-2I-A commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+check("07 package preserves I-A commands while admitting exact successor validation commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
 check("08 dependencies, workspaces and lockfiles are unchanged", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies) && JSON.stringify(packageJson.workspaces) === JSON.stringify(baselinePackage.workspaces) && !SR2IA_SUCCESSOR_PATHS.some((file) => /lock(?:file)?/i.test(file)));
 check("09 dedicated commands resolve to the four exact scripts", commandNames.every((name) => packageJson.scripts[name] === `node scripts/meal-buddy-relationship-sr2i-a-${name.split("-").at(-1) === "a" ? "guard" : name.split("-").at(-1)}.mjs`));
 check("10 exactly one SR-2I-A migration is present", SR2IA_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1 && SR2IA_SUCCESSOR_PATHS.includes(SR2IA_MIGRATION));
@@ -146,7 +148,7 @@ check("54 compact discovery and frozen ranking exposure context candidate-ref au
 check("55 no chat message conversation room or notification authority is introduced", !/create (?:table|function)[^;]*(?:chat|message|conversation|room|notification)/i.test(migration));
 check("56 no ranking exposure context interest or premium authority is introduced", !/(ranking_score|exposure_reason|food_context_tag_key|interest_snapshot|entitlement|premium_tier)/i.test(migration + types + service));
 check("57 lifecycle migration inventory is exact", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")), lifecycle.phase.startsWith("successor_") ? [] : [SR2IA_MIGRATION]));
-check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION));
+check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION || file === SR2JA_MIGRATION));
 const implementationSources = SR2IA_SUCCESSOR_PATHS.filter((file) => !file.startsWith("scripts/") && file !== "package.json").map(read).join("\n");
 check("59 no deploy remote operator or credential command is introduced", !/supabase\s+(db push|functions deploy)|--project-ref|DATABASE_URL|SUPABASE_SERVICE_ROLE/.test(implementationSources));
 check("60 all candidate source bytes are UTF-8 text without NUL", SR2IA_SUCCESSOR_PATHS.every((file) => { const bytes = fs.readFileSync(path.join(root, file)); return !bytes.includes(0) && !read(file).includes("\uFFFD"); }));

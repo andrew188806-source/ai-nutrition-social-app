@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { SR2JA_PATHS } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 
 export const SR2IB_BASELINE = "a5a8f71b2c38cf665f6f0a1b4fb2753408dcda82";
 export const SR2IB_BASELINE_SUBJECT = "Add SR-2I-A Meal Buddy relationship authority";
@@ -87,12 +88,20 @@ export function classifySr2ibLifecycle(state) {
     && exact(state.deltaPaths, SR2IB_SUCCESSOR_PATHS) && !state.deleted;
   const frozenUnpushed = frozen && state.originHead === SR2IB_BASELINE && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozen && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
+  const successorCandidate = state.head !== SR2IB_BASELINE && state.parent === SR2IB_BASELINE
+    && state.originHead === state.head && state.ahead === 0 && state.behind === 0
+    && state.stagedPaths.length === 0 && exact(state.worktreePaths, SR2JA_PATHS);
+  const successorFrozenUnpushed = state.parent === state.originHead
+    && state.ahead === 1 && state.behind === 0 && state.worktreePaths.length === 0
+    && state.stagedPaths.length === 0 && exact(state.deltaPaths, SR2JA_PATHS) && !state.deleted;
   const phase = candidate ? "candidate" : repairCandidate ? "repair_candidate"
-    : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed" : "invalid";
+    : frozenUnpushed ? "frozen_unpushed" : frozenPushed ? "frozen_pushed"
+    : successorCandidate ? "successor_candidate" : successorFrozenUnpushed ? "successor_frozen_unpushed" : "invalid";
   return Object.freeze({
     valid: phase !== "invalid",
     phase,
-    manifest: repairCandidate ? SR2IB_SUCCESSOR_PATHS : candidate ? state.worktreePaths : state.deltaPaths
+    manifest: phase.startsWith("successor_") ? SR2IB_SUCCESSOR_PATHS
+      : repairCandidate ? SR2IB_SUCCESSOR_PATHS : candidate ? state.worktreePaths : state.deltaPaths
   });
 }
 

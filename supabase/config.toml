@@ -49,3 +49,8 @@ verify_jwt = true
 # SR-2I-A: authenticated invite/accept/decline/cancel/read boundary. Person targets arrive only as
 # actor-bound scr1 references and relation actions only as actor-bound mbr1 references.
 verify_jwt = true
+
+[functions.meal-buddy-chat]
+# SR-2J-A: authenticated accepted-relationship chat boundary. Actor identity is resolved through
+# auth.getUser(); Mobile supplies only opaque actor-bound relationship/conversation/message refs.
+verify_jwt = true

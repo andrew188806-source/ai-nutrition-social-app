@@ -53,16 +53,22 @@ const commands = [
   "test:meal-buddy-relationship-sr2i-b-smoke",
   "test:meal-buddy-relationship-sr2i-b-mutations"
 ];
-for (const name of commands) delete packageWithout.scripts[name];
+const successorCommands = Object.freeze({
+  "test:meal-buddy-chat-sr2j-a": "node scripts/meal-buddy-chat-sr2j-a-guard.mjs",
+  "test:meal-buddy-chat-sr2j-a-smoke": "node scripts/meal-buddy-chat-sr2j-a-smoke.mjs",
+  "test:meal-buddy-chat-sr2j-a-mutations": "node scripts/meal-buddy-chat-sr2j-a-mutations.mjs",
+  "test:meal-buddy-chat-sr2j-a-concurrency": "node scripts/meal-buddy-chat-sr2j-a-concurrency.mjs"
+});
+for (const name of [...commands, ...Object.keys(successorCommands)]) delete packageWithout.scripts[name];
 const migrationBytes = fs.readFileSync(path.join(root, SR2IB_MIGRATION));
 
-check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
+check("01 lifecycle is exact I-B authority or exact SR-2J-A successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 lifecycle inventory is exact, explicit and wildcard-free", exact(lifecycle.manifest, SR2IB_SUCCESSOR_PATHS));
 check("03 pushed SR-2I-A baseline and subject are pinned", git(["cat-file", "-t", SR2IB_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2IB_BASELINE]).trim() === SR2IB_BASELINE_SUBJECT);
 check("04 branch is main and SR-2I-A remains ancestor authority", git(["branch", "--show-current"]).trim() === "main" && spawnSync("git", ["merge-base", "--is-ancestor", SR2IB_BASELINE, "HEAD"], { cwd: root }).status === 0);
 check("05 staged bytes and deleted paths are prohibited", state.stagedPaths.length === 0 && !state.deleted);
 check("06 every exact candidate path exists", SR2IB_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-check("07 package adds only three exact local SR-2I-B commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+check("07 package preserves exact I-B commands and admits only exact J-A successor commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage) && Object.entries(successorCommands).every(([name, command]) => packageJson.scripts[name] === command));
 check("08 dependencies workspaces and lockfiles are unchanged", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies) && JSON.stringify(packageJson.workspaces) === JSON.stringify(baselinePackage.workspaces) && !SR2IB_SUCCESSOR_PATHS.some((file) => /lock(?:file)?/i.test(file)));
 check("09 dedicated commands resolve to exact validation scripts", packageJson.scripts[commands[0]] === "node scripts/meal-buddy-relationship-sr2i-b-guard.mjs" && packageJson.scripts[commands[1]] === "node scripts/meal-buddy-relationship-sr2i-b-smoke.mjs" && packageJson.scripts[commands[2]] === "node scripts/meal-buddy-relationship-sr2i-b-mutations.mjs");
 
@@ -105,8 +111,8 @@ const allowedBackendDelta = [
   "supabase/functions/_shared/meal-buddy-relationship-api/service.ts",
   "supabase/functions/_shared/meal-buddy-relationship-api/types.ts"
 ];
-const actualBackendDelta = lines(git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase"]));
-check("39 SR-2I-A lifecycle SQL RPC ref crypto and Edge handler remain frozen while only three shared contract files evolve", exact(actualBackendDelta, allowedBackendDelta) && git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/meal-buddy-relationship", "supabase/functions/_shared/meal-buddy-relationship-ref", "supabase/migrations"]).trim() === "");
+const actualBackendDelta = lines(git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/_shared/meal-buddy-relationship-api"]));
+check("39 SR-2I-A lifecycle SQL RPC ref crypto and Edge handler remain frozen while successor authority stays separate", exact(actualBackendDelta, allowedBackendDelta) && git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/meal-buddy-relationship", "supabase/functions/_shared/meal-buddy-relationship-ref", SR2IB_MIGRATION]).trim() === "");
 check("40 SR-2I-A migration SHA-256 remains exact", crypto.createHash("sha256").update(migrationBytes).digest("hex") === SR2IB_MIGRATION_SHA256);
 check("41 no migration secret deploy or remote operator delta exists", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/")), allowedBackendDelta) && !lifecycle.manifest.some((file) => file.startsWith("supabase/migrations/") || file.startsWith("supabase/functions/meal-buddy-relationship/")) && !/MEAL_BUDDY_RELATIONSHIP_REF_KEY_V1|supabase\s+(db push|functions deploy)|--project-ref|SUPABASE_SERVICE_ROLE/.test(productionSources));
 check("42 every candidate source is UTF-8 text without NUL", SR2IB_SUCCESSOR_PATHS.every((file) => { const bytes = fs.readFileSync(path.join(root, file)); return !bytes.includes(0) && !read(file).includes("\uFFFD"); }));

@@ -9,6 +9,7 @@ import {
 } from "./social-candidate-sr2g-g-successor-manifest.mjs";
 import { SR2HA_BASELINE } from "./social-candidate-sr2h-a-successor-manifest.mjs";
 import { SR2IA_MIGRATION } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
+import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = []; const failures = [];
@@ -57,6 +58,7 @@ for (const name of ["test:social-candidate-sr2h-a", "test:social-candidate-sr2h-
 for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-chat-sr2j-a", "test:meal-buddy-chat-sr2j-a-smoke", "test:meal-buddy-chat-sr2j-a-mutations", "test:meal-buddy-chat-sr2j-a-concurrency"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exactly candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 frozen SR-2G-G authority commit retains its exact wildcard-free inventory", frozenGAuthority);
@@ -77,7 +79,7 @@ const frozenMatching = [
   "supabase/functions/_shared/social-exposure/applySocialExposure.ts"
 ];
 check("09 frozen SR-2G-F matching, SR-2A and SR-2B bytes are unchanged", frozenMatching.every((file) => git(["diff", "--name-only", SR2GG_BASELINE, "--", file]).trim() === ""));
-check("10 no frozen migration is edited", lines(git(["diff", "--name-only", SR2GG_BASELINE, "--", "supabase/migrations"])).every((file) => [SR2GG_MIGRATION, "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql", SR2IA_MIGRATION].includes(file)));
+check("10 no frozen migration is edited", lines(git(["diff", "--name-only", SR2GG_BASELINE, "--", "supabase/migrations"])).every((file) => [SR2GG_MIGRATION, "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql", SR2IA_MIGRATION, SR2JA_MIGRATION].includes(file)));
 
 check("11 mapping is keyed by canonical menu identity, not display text", /menu_item_id text primary key/.test(migration) && !/ilike|to_tsvector|similar to/i.test(migration));
 check("12 mapping points to the existing food taxonomy", /references public\.social_interest_catalog \(tag_key, namespace\)/.test(migration) && /food_context_namespace = 'food'/.test(migration));

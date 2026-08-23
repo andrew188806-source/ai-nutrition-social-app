@@ -16,6 +16,7 @@ import {
 } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
+import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -63,6 +64,7 @@ const packageWithout = structuredClone(packageJson);
 for (const name of ["test:social-interest-sr2h-b", "test:social-interest-sr2h-b-smoke", "test:social-interest-sr2h-b-mutations", "test:social-interest-sr2h-b-concurrency"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-a", "test:meal-buddy-relationship-sr2i-a-smoke", "test:meal-buddy-relationship-sr2i-a-mutations", "test:meal-buddy-relationship-sr2i-a-concurrency"]) delete packageWithout.scripts[name];
 for (const name of ["test:meal-buddy-relationship-sr2i-b", "test:meal-buddy-relationship-sr2i-b-smoke", "test:meal-buddy-relationship-sr2i-b-mutations"]) delete packageWithout.scripts[name];
+for (const name of ["test:meal-buddy-chat-sr2j-a", "test:meal-buddy-chat-sr2j-a-smoke", "test:meal-buddy-chat-sr2j-a-mutations", "test:meal-buddy-chat-sr2j-a-concurrency"]) delete packageWithout.scripts[name];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 const expectedLifecyclePaths = lifecycle.phase.startsWith("successor_successor_") ? SR2IB_SUCCESSOR_PATHS
@@ -135,7 +137,7 @@ const frozenMigrations = Object.freeze({
 check("42 all three frozen predecessor migration hashes remain exact", Object.entries(frozenMigrations).every(([file, expected]) => sha256(fs.readFileSync(path.join(root, file))) === expected));
 check("43 frozen SR-2H-B migration and exact lifecycle migration inventory remain authoritative", validateSr2hbMigrationAuthority({
   lifecycle,
-  changedMigrationPaths: lines(git(["diff", "--name-only", SR2HB_BASELINE, "--", "supabase/migrations"])),
+  changedMigrationPaths: lines(git(["diff", "--name-only", SR2HB_BASELINE, "--", "supabase/migrations"])).filter((file) => file !== SR2JA_MIGRATION),
   predecessorMigrationExists: fs.existsSync(path.join(root, SR2HB_MIGRATION)),
   predecessorMigrationSha256: sha256(fs.readFileSync(path.join(root, SR2HB_MIGRATION)))
 }));

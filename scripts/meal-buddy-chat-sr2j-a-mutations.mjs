@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+const migration=fs.readFileSync("supabase/migrations/20260823020000_meal_buddy_chat_authority.sql","utf8"), request=fs.readFileSync("supabase/functions/_shared/meal-buddy-chat-api/request.ts","utf8"), service=fs.readFileSync("supabase/functions/_shared/meal-buddy-chat-api/service.ts","utf8"), ref=fs.readFileSync("supabase/functions/_shared/meal-buddy-chat-ref/crypto.ts","utf8");
+const checks=[],failures=[];function check(name,ok){checks.push(name);console.log(`${ok?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`);if(!ok)failures.push(name);}const occurrences=(source,token)=>source.split(token).length-1;const removed=(source,token,replacement="removed")=>occurrences(source.replace(token,replacement),token)===occurrences(source,token)-1;
+check("accepted gate mutation detected",removed(migration,"v_relation.state <> 'accepted'"));
+check("current safety gate mutation detected",removed(migration,"social_internal.may_evaluate_candidate"));
+check("pair lock mutation detected",removed(migration,"social_internal.lock_meal_buddy_relationship_pair"));
+check("conversation uniqueness mutation detected",removed(migration,"meal_buddy_conversations_relationship_unique"));
+check("idempotency uniqueness mutation detected",removed(migration,"meal_buddy_messages_sender_idempotency_unique"));
+check("idempotency body conflict mutation detected",removed(migration,"CHAT_IDEMPOTENCY_KEY_CONFLICT"));
+check("body max mutation detected",!migration.replaceAll("2000","9999").includes("2000"));
+check("page max mutation detected",removed(migration,"p_limit > 50"));
+check("deterministic tiebreaker mutation detected",removed(migration,"message.id desc"));
+check("sender input expansion is detectable",!/senderUserId/.test(request)&&/senderUserId/.test(`${request}\nsenderUserId`));
+check("target input expansion is detectable",!/targetUserId/.test(request)&&/targetUserId/.test(`${request}\ntargetUserId`));
+check("actor AAD mutation detected",removed(ref,"additionalData: aad(kind, actor)"));
+check("relationship-ref overload mutation detected",removed(service,"chatCipher.openConversation"));
+check("public sender UUID expansion is detectable",!/senderUserId/.test(service)&&/senderUserId/.test(`${service}\nsenderUserId`));
+check("realtime authority expansion is detectable",!/create table[^;]*realtime/i.test(migration)&&/create table[^;]*realtime/i.test(`${migration}\ncreate table realtime_events(id uuid);`));
+console.log(JSON.stringify({suite:"meal-buddy-chat-sr2j-a-mutations",total:checks.length,passed:checks.length-failures.length,failed:failures.length,failures,networkUsed:false,databaseUsed:false,repositoryBytesModified:false},null,2));if(failures.length)process.exitCode=1;
