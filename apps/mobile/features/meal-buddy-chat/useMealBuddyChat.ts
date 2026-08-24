@@ -15,7 +15,7 @@ export function useMealBuddyChat(
     const repository = dependencies
       ? new SupabaseMealBuddyChatRepository(dependencies.authPort, dependencies.client)
       : new DisabledMealBuddyChatRepository();
-    return new MealBuddyChatController(repository, generateSecureUuidV4);
+    return new MealBuddyChatController(repository, generateSecureUuidV4, dependencies?.realtime ?? null);
   }, []);
   const [state, setState] = useState<MealBuddyChatState>(() => controller.getState());
 

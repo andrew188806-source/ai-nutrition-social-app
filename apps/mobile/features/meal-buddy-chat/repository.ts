@@ -14,6 +14,7 @@ import {
   MEAL_BUDDY_CHAT_POLICY_VERSION,
   isMealBuddyChatConversationRef,
   isMealBuddyChatMessageRef,
+  isMealBuddyChatRealtimeTopic,
   isMealBuddyChatRelationshipRef,
   type MealBuddyChatConversation,
   type MealBuddyChatCursor,
@@ -135,10 +136,20 @@ function parseMessage(value: unknown): MealBuddyChatMessage | null {
 }
 
 function parseOpen(value: unknown): MealBuddyChatOpenSnapshot | null {
-  if (!isRecord(value) || !exactKeys(value, ["policyVersion", "conversation"])) return null;
+  // The topic is OPTIONAL by design. A Mobile build always outlives one Edge deployment, so during
+  // a rollout it must tolerate the frozen two-key response and simply run without the realtime
+  // supplement. The key set stays closed: those two shapes and nothing else.
+  if (!isRecord(value)) return null;
+  if (!exactKeys(value, ["policyVersion", "conversation"])
+    && !exactKeys(value, ["policyVersion", "conversation", "realtimeTopic"])) return null;
   if (value.policyVersion !== MEAL_BUDDY_CHAT_POLICY_VERSION) return null;
   const conversation = parseConversation(value.conversation);
-  return conversation === null ? null : Object.freeze({ conversation });
+  if (conversation === null) return null;
+  // A malformed topic is refused rather than accepted and used: an absent topic simply means no
+  // realtime supplement this session, which is a legal, fully usable state.
+  const topic = value.realtimeTopic ?? null;
+  if (topic !== null && !isMealBuddyChatRealtimeTopic(topic)) return null;
+  return Object.freeze({ conversation, realtimeTopic: topic });
 }
 
 function parseList(value: unknown): MealBuddyChatPageSnapshot | null {

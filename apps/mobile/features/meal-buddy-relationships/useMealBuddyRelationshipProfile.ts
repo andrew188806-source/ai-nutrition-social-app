@@ -30,6 +30,7 @@ export function useMealBuddyRelationshipProfile(
     send: () => controller.send(),
     accept: () => controller.accept(),
     decline: () => controller.decline(),
-    cancel: () => controller.cancel()
+    cancel: () => controller.cancel(),
+    unfriend: () => controller.unfriend()
   });
 }

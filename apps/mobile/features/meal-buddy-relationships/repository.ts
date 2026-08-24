@@ -54,6 +54,12 @@ export class SupabaseMealBuddyRelationshipRepository implements MealBuddyRelatio
     return this.invoke({ operation: "cancel", relationshipRef }, "cancel");
   }
 
+  // Ending an accepted relationship. Like every other lifecycle action it names the pair only by its
+  // actor-bound mbr1 reference; the server decides whether that pair is currently endable.
+  unfriend(relationshipRef: string) {
+    return this.invoke({ operation: "unfriend", relationshipRef }, "unfriend");
+  }
+
   private async invoke(
     request: MealBuddyRelationshipRequest,
     operation: MealBuddyRelationshipRequest["operation"]
@@ -87,6 +93,7 @@ export class DisabledMealBuddyRelationshipRepository implements MealBuddyRelatio
   accept(_relationshipRef: string) { return Promise.resolve(failure("operation_not_enabled")); }
   decline(_relationshipRef: string) { return Promise.resolve(failure("operation_not_enabled")); }
   cancel(_relationshipRef: string) { return Promise.resolve(failure("operation_not_enabled")); }
+  unfriend(_relationshipRef: string) { return Promise.resolve(failure("operation_not_enabled")); }
 }
 
 function validRequestRef(request: MealBuddyRelationshipRequest): boolean {
@@ -132,8 +139,10 @@ function validateResponse(
     if (items.length > 1 || items.some((item) => item.state === "none")) return null;
   } else {
     if (items.length !== 1) return null;
+    // An unfriend resolves the pair exactly as a decline or a cancel does: the actor-relative state
+    // that comes back must be `none`, never a lingering `accepted`.
     const requiredState = operation === "accept" ? "accepted"
-      : operation === "decline" || operation === "cancel" ? "none" : null;
+      : operation === "decline" || operation === "cancel" || operation === "unfriend" ? "none" : null;
     if ((requiredState && items[0]?.state !== requiredState)
       || (operation === "send" && items[0]?.state === "none")) return null;
   }

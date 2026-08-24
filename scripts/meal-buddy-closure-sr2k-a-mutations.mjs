@@ -9,8 +9,20 @@ import {
 
 const root = process.cwd();
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
+// The successor round's bytes are not this round's bytes. Reading the worktree once a successor
+// exists would attribute the SUCCESSOR's features to this round, so every "did this round author
+// X?" question is answered against this round's own frozen commit.
+const SELF_COMMIT = "8a1da28732dcd88efb87f0c5543fc76fb66bb708";
+const selfExists = child.spawnSync("git", ["cat-file", "-e", `${SELF_COMMIT}^{commit}`], { cwd: root }).status === 0;
+const readSelf = (f) => {
+  if (!selfExists) return read(f);
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SELF_COMMIT}:${f}`],
+    { cwd: root, encoding: "utf8" });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(f);
+};
 function addedLines(file) {
-  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KA_BASELINE, "--", file],
+  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KA_BASELINE,
+    ...(selfExists ? [SELF_COMMIT] : []), "--", file],
     { cwd: root, encoding: "utf8" });
   const body = diff.status === 0 ? (diff.stdout ?? "") : "";
   return body.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1)).join("\n");
@@ -18,17 +30,17 @@ function addedLines(file) {
 
 const REL = "apps/mobile/features/meal-buddy-relationships";
 const pristine = new Map([
-  ["refBoundary", read(`${REL}/refBoundary.ts`)],
-  ["inbox", read(`${REL}/MealBuddyRelationshipInbox.tsx`)],
-  ["panel", read(`${REL}/MealBuddyRelationshipPanel.tsx`)],
-  ["hook", read(`${REL}/useMealBuddyRelationships.ts`)],
-  ["profileRoute", read("apps/mobile/app/meal-buddy-candidate-profile/[candidateRef].tsx")],
-  ["chatRoute", read("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx")],
-  ["chatScreen", read("apps/mobile/features/meal-buddy-chat/MealBuddyChatScreen.tsx")],
-  ["home", read("apps/mobile/app/meal-buddies.tsx")],
-  ["i18n", read("lib/i18n/zh-TW.ts")],
+  ["refBoundary", readSelf(`${REL}/refBoundary.ts`)],
+  ["inbox", readSelf(`${REL}/MealBuddyRelationshipInbox.tsx`)],
+  ["panel", readSelf(`${REL}/MealBuddyRelationshipPanel.tsx`)],
+  ["hook", readSelf(`${REL}/useMealBuddyRelationships.ts`)],
+  ["profileRoute", readSelf("apps/mobile/app/meal-buddy-candidate-profile/[candidateRef].tsx")],
+  ["chatRoute", readSelf("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx")],
+  ["chatScreen", readSelf("apps/mobile/features/meal-buddy-chat/MealBuddyChatScreen.tsx")],
+  ["home", readSelf("apps/mobile/app/meal-buddies.tsx")],
+  ["i18n", readSelf("lib/i18n/zh-TW.ts")],
   ["authoredDelta", [
-    ...SR2KA_NEW_PRODUCTION_PATHS.map(read),
+    ...SR2KA_NEW_PRODUCTION_PATHS.map(readSelf),
     ...SR2KA_PRODUCTION_PATHS.filter((f) => !SR2KA_NEW_PRODUCTION_PATHS.includes(f)).map(addedLines)
   ].join("\n")]
 ]);

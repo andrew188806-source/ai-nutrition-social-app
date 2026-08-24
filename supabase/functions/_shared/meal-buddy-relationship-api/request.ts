@@ -40,7 +40,7 @@ export async function parseMealBuddyRelationshipRequest(request: Request): Promi
       ? { ok: true, value: Object.freeze({ operation, candidateRef: record.candidateRef }) }
       : REJECTED;
   }
-  if (operation === "accept" || operation === "decline" || operation === "cancel") {
+  if (operation === "accept" || operation === "decline" || operation === "cancel" || operation === "unfriend") {
     return Object.keys(record).sort().join(",") === "operation,relationshipRef"
       && validRef(record.relationshipRef, MEAL_BUDDY_RELATIONSHIP_REF_PREFIX)
       ? { ok: true, value: Object.freeze({ operation, relationshipRef: record.relationshipRef }) }

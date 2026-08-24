@@ -22,6 +22,11 @@ import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_MIGRATION, SR2GG_SUCCESSO
 import { SR2HB_MIGRATION } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_MIGRATION, SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
+import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
+// SR-2K-B's enumerated successor migrations. Naming them keeps this guard's inventory EXACT: any
+// migration it has not been told about still fails.
+const SR2KB_MIGRATION_BASENAMES = ["20260824010000_meal_buddy_unfriend_authority.sql", "20260824020000_meal_buddy_chat_realtime_authority.sql", "20260824030000_meal_buddy_push_notification_authority.sql"];
+
 
 // SR-2G-F successor awareness: the one migration that round adds.
 const SR2GF_MIGRATION_BASENAME = "20260820010000_meal_buddy_food_context_authority.sql";
@@ -102,6 +107,9 @@ try {
   // SR-2K-A adds three validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:meal-buddy-closure-sr2k-a", "test:meal-buddy-closure-sr2k-a-smoke", "test:meal-buddy-closure-sr2k-a-mutations"]) delete packageWithout.scripts[key];
+  // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
+  // what it has always measured: that no OTHER package byte moved.
+  for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 
   const migration = sqlExec(read(SR2GD_MIGRATION));
   const policy = read(`${SR2GD_API_ROOT}/policy.ts`);
@@ -141,8 +149,8 @@ try {
   check("8. package.json differs from the frozen predecessor only by the SR-2G-D scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   check("9. no dependency or lockfile is touched", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("10. exactly one migration is added", SR2GD_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 1
-    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION)].sort()));
-  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION).length === 0);
+    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION), ...SR2KB_MIGRATION_BASENAMES].sort()));
+  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e)).length === 0);
   check("12. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MIGRATIONS])).length === 0);
   check("13. every frozen predecessor runtime module is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MODULES])).length === 0);
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
@@ -206,8 +214,15 @@ try {
     /authentication\.value\.userId/.test(handler)
     && !/actorUserId:\s*(body|parsed|request)/.test(allEdge)
     && !/getUser|auth\./.test(allApi));
+  // SR-2K-B registers one deliberately non-JWT endpoint: the push dispatcher is operational
+  // machinery authenticated by a shared secret, not a user endpoint. It is named explicitly, so any
+  // OTHER function registered without JWT verification still fails.
+  const nonJwtFunctions = configToml.split("[functions.").slice(1)
+    .filter((block) => /verify_jwt = false/.test(block))
+    .map((block) => block.split("]")[0].trim());
   check("41. the function is registered with JWT verification and none is registered without it",
-    new RegExp(`\\[functions\\.${SR2GD_FUNCTION}\\][^\\[]*?verify_jwt = true`).test(configToml) && !/verify_jwt = false/.test(configToml));
+    new RegExp(`\\[functions\\.${SR2GD_FUNCTION}\\][^\\[]*?verify_jwt = true`).test(configToml)
+    && nonJwtFunctions.every((name) => name === "meal-buddy-push-dispatch"));
 
   // --- source reference authority ------------------------------------------------------------------
   check("42. the source reference is opened for THIS actor and the SOURCE purpose only",

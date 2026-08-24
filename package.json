@@ -283,7 +283,12 @@
     "test:meal-buddy-chat-sr2j-b-mutations": "node scripts/meal-buddy-chat-sr2j-b-mutations.mjs",
     "test:meal-buddy-closure-sr2k-a": "node scripts/meal-buddy-closure-sr2k-a-guard.mjs",
     "test:meal-buddy-closure-sr2k-a-smoke": "node scripts/meal-buddy-closure-sr2k-a-smoke.mjs",
-    "test:meal-buddy-closure-sr2k-a-mutations": "node scripts/meal-buddy-closure-sr2k-a-mutations.mjs"
+    "test:meal-buddy-closure-sr2k-a-mutations": "node scripts/meal-buddy-closure-sr2k-a-mutations.mjs",
+    "test:social-final-sr2k-b": "node scripts/social-final-sr2k-b-guard.mjs",
+    "test:social-final-sr2k-b-smoke": "node scripts/social-final-sr2k-b-smoke.mjs",
+    "test:social-final-sr2k-b-mutations": "node scripts/social-final-sr2k-b-mutations.mjs",
+    "test:social-final-sr2k-b-concurrency": "node scripts/social-final-sr2k-b-concurrency.mjs",
+    "test:social-final-sr2k-b-postgres": "node scripts/social-final-sr2k-b-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

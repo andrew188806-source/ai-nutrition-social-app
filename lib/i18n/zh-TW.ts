@@ -795,7 +795,14 @@ export const zhTW = {
       declining: "正在婉拒…",
       cancel: "取消邀請",
       cancelling: "正在取消…",
-      openChat: "聊天"
+      openChat: "聊天",
+      unfriendAction: "解除飯友",
+      unfriending: "正在解除…",
+      unfriendConfirmTitle: "確定要解除飯友關係嗎？",
+      unfriendConfirmBody: "解除後，對方會從你的飯友名單移除，你們也不能再用聊天聯絡。這不會封鎖對方，之後仍可以重新邀請。",
+      unfriendConfirm: "解除飯友",
+      unfriendCancel: "保持飯友",
+      unfriendFailed: "目前無法解除飯友關係，請稍後再試。"
     },
     mealBuddyChat: {
       screenTitle: "飯友聊天",
@@ -820,7 +827,18 @@ export const zhTW = {
       sendRetry: "重新傳送",
       sendDiscard: "捨棄這則訊息",
       draftInvalid: "訊息不可以是空白，且最多 2000 字。",
-      draftTooLong: "訊息最多 2000 字。"
+      draftTooLong: "訊息最多 2000 字。",
+      liveConnected: "即時更新中",
+      liveReconnecting: "正在重新連線…",
+      liveUnavailable: "即時更新暫停，下拉可重新整理。"
+    },
+    mealBuddyPush: {
+      permissionTitle: "開啟飯友通知",
+      permissionBody: "有人邀請你、接受邀請或傳訊息時通知你。內容不會顯示在通知裡。",
+      permissionAllow: "開啟通知",
+      permissionLater: "稍後再說",
+      permissionDenied: "通知已關閉。你仍然可以正常使用飯友功能，開啟後才會收到提醒。",
+      registerFailed: "目前無法設定通知，稍後會自動再試一次。"
     },
     chat: {
       title: "飯友聊天",

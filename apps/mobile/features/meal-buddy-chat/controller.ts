@@ -7,6 +7,8 @@ import {
   type MealBuddyChatErrorCode,
   type MealBuddyChatMessage,
   type MealBuddyChatPendingSend,
+  type MealBuddyChatRealtimePort,
+  type MealBuddyChatRealtimeSubscription,
   type MealBuddyChatRepository,
   type MealBuddyChatState
 } from "./types";
@@ -41,9 +43,13 @@ export class MealBuddyChatController {
   private messages: readonly MealBuddyChatMessage[] = [];
   private pendingSend: MealBuddyChatPendingSend | null = null;
 
+  private realtimeSubscription: MealBuddyChatRealtimeSubscription | null = null;
+  private reconciling = false;
+
   constructor(
     private readonly repository: MealBuddyChatRepository,
-    private readonly uuidFactory: () => string
+    private readonly uuidFactory: () => string,
+    private readonly realtime: MealBuddyChatRealtimePort | null = null
   ) {}
 
   getState() { return this.state; }
@@ -97,8 +103,67 @@ export class MealBuddyChatController {
     }
     this.messages = page.value.messages;
     this.cursor = page.value.nextCursor;
+    // Subscribing happens only AFTER the server authorized this open, and only for the topic it
+    // issued. The topic is never persisted and never reused across an actor or a conversation.
+    this.attachRealtime(opened.value.realtimeTopic);
     this.update(this.readyState(page.value.conversation.counterpart, null));
     return true;
+  }
+
+  private attachRealtime(topic: string | null) {
+    this.detachRealtime();
+    if (!this.realtime || !topic) return;
+    // The subscription is scoped to the SESSION — this actor, this generation, this relationship —
+    // and deliberately NOT to a request sequence. A request token is invalidated by the very next
+    // operation, so using one here would silently stop delivery after the first send while leaving
+    // the channel open and the screen looking live.
+    const session = Object.freeze({
+      actorKey: this.actorKey,
+      actorGeneration: this.actorGeneration,
+      relationshipRef: this.relationshipRef
+    });
+    this.realtimeSubscription = this.realtime.subscribe(topic, () => {
+      // A frame is a signal, never message truth. Everything rendered still comes from the frozen
+      // canonical API, so an unvalidated or spoofed frame cannot become chat history.
+      if (this.disposed) return;
+      if (session.actorKey !== this.actorKey || session.actorGeneration !== this.actorGeneration
+        || session.relationshipRef !== this.relationshipRef) return;
+      void this.reconcile();
+    });
+  }
+
+  private detachRealtime() {
+    const subscription = this.realtimeSubscription;
+    this.realtimeSubscription = null;
+    if (subscription) subscription.unsubscribe();
+  }
+
+  // Canonical reconciliation. It re-opens (which re-authorizes under current server truth) and
+  // re-reads the newest page, so a missed frame, a reconnect gap and a duplicate frame all heal the
+  // same way. Unlike refresh() it shows no spinner, because the user did not ask for it.
+  async reconcile(): Promise<boolean> {
+    if (this.disposed || this.state.phase !== "ready" || this.reconciling) return false;
+    if (!isMealBuddyChatRelationshipRef(this.relationshipRef)) return false;
+    this.reconciling = true;
+    const request = this.captureRequest();
+    try {
+      const opened = await this.repository.open(this.relationshipRef);
+      if (!this.isCurrent(request)) return false;
+      if (!opened.ok) { this.failClosed(opened.errorCode); return false; }
+      this.conversationRef = opened.value.conversation.conversationRef;
+      const page = await this.repository.listMessages(this.conversationRef, null, MEAL_BUDDY_CHAT_PAGE_SIZE);
+      if (!this.isCurrent(request)) return false;
+      if (!page.ok) { this.failClosed(page.errorCode); return false; }
+      // The canonical page replaces local history wholesale, so the server's ordering is what is
+      // rendered and a message already shown cannot appear twice.
+      this.messages = page.value.messages;
+      this.cursor = page.value.nextCursor;
+      if (this.state.phase !== "ready") return false;
+      this.update(this.readyState(page.value.conversation.counterpart, null));
+      return true;
+    } finally {
+      this.reconciling = false;
+    }
   }
 
   // Explicit, user-initiated refresh. There is no timer and no polling anywhere in this controller.
@@ -118,6 +183,7 @@ export class MealBuddyChatController {
     if (!page.ok) { this.failClosed(page.errorCode); return false; }
     this.messages = page.value.messages;
     this.cursor = page.value.nextCursor;
+    this.attachRealtime(opened.value.realtimeTopic);
     this.update(this.readyState(page.value.conversation.counterpart, null));
     return true;
   }
@@ -236,6 +302,9 @@ export class MealBuddyChatController {
   }
 
   private resetSessionState() {
+    // Every teardown path funnels through here — actor change, sign-out, dispose and fail-closed —
+    // so a subscription can never leak across actors or outlive its authorization.
+    this.detachRealtime();
     this.conversationRef = null;
     this.cursor = null;
     this.messages = [];
@@ -254,6 +323,7 @@ export class MealBuddyChatController {
       refreshing: false,
       pendingSend: this.pendingSend,
       draftRejected: false,
+      live: this.realtimeSubscription !== null,
       errorCode: null
     });
   }

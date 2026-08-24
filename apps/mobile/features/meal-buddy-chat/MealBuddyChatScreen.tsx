@@ -26,6 +26,11 @@ export function MealBuddyChatScreen({ controller, onBack }: { controller: Contro
           displayName={state.counterpart.displayName}
           mascotAvatarKey={state.counterpart.mascotAvatarKey}
         /> : <Text style={styles.headerTitle}>{copy.screenTitle}</Text>}
+        {/* SR-2K-B: presentation only. Chat stays fully usable through pull-to-refresh when new
+            messages are not arriving on their own, so this never gates anything. */}
+        {state.phase === "ready" ? (
+          <Text style={styles.liveBadge}>{state.live ? copy.liveConnected : copy.liveUnavailable}</Text>
+        ) : null}
       </View>
 
       {state.phase === "signed_out" ? null
@@ -180,6 +185,7 @@ const styles = StyleSheet.create({
   back: { paddingRight: 4, paddingVertical: 6 },
   backText: { color: colors.teal, fontSize: 14, fontWeight: "800" },
   headerTitle: { color: colors.ink, fontSize: 17, fontWeight: "900" },
+  liveBadge: { color: colors.muted, fontSize: 11, marginLeft: "auto" },
   counterpart: { alignItems: "center", flexDirection: "row", gap: 10 },
   avatar: { alignItems: "center", backgroundColor: colors.mint, borderRadius: 20, height: 40, justifyContent: "center", overflow: "hidden", width: 40 },
   avatarImage: { height: 34, width: 34 },

@@ -111,6 +111,9 @@ try {
   // SR-2K-A adds three validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:meal-buddy-closure-sr2k-a", "test:meal-buddy-closure-sr2k-a-smoke", "test:meal-buddy-closure-sr2k-a-mutations"]) delete packageWithout.scripts[key];
+  // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
+  // what it has always measured: that no OTHER package byte moved.
+  for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 
   const migration = read(SR2GF_MIGRATION);
   const migrationExec = sqlExec(migration);

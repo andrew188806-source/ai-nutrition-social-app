@@ -16,6 +16,7 @@ import {
 import { SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-b-successor-manifest.mjs";
 import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
+import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -71,6 +72,9 @@ for (const key of ["test:meal-buddy-chat-sr2j-b", "test:meal-buddy-chat-sr2j-b-s
 // SR-2K-A adds three validation-only command keys. Stripping them keeps this guard measuring
 // what it has always measured: that no OTHER package byte moved.
 for (const key of ["test:meal-buddy-closure-sr2k-a", "test:meal-buddy-closure-sr2k-a-smoke", "test:meal-buddy-closure-sr2k-a-mutations"]) delete packageWithout.scripts[key];
+// SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
+// what it has always measured: that no OTHER package byte moved.
+for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 lifecycle inventory is exact and wildcard-free", exact(lifecycle.manifest, lifecycle.phase.startsWith("successor_") ? SR2IB_SUCCESSOR_PATHS : SR2IA_SUCCESSOR_PATHS));
@@ -152,13 +156,17 @@ check("54 compact discovery and frozen ranking exposure context candidate-ref au
 check("55 no chat message conversation room or notification authority is introduced", !/create (?:table|function)[^;]*(?:chat|message|conversation|room|notification)/i.test(migration));
 check("56 no ranking exposure context interest or premium authority is introduced", !/(ranking_score|exposure_reason|food_context_tag_key|interest_snapshot|entitlement|premium_tier)/i.test(migration + types + service));
 check("57 lifecycle migration inventory is exact", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")), lifecycle.phase.startsWith("successor_") ? [] : [SR2IA_MIGRATION]));
-check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION || file === SR2JA_MIGRATION));
+check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION || file === SR2JA_MIGRATION || SR2KB_PATHS.includes(file)));
 const implementationSources = SR2IA_SUCCESSOR_PATHS.filter((file) => !file.startsWith("scripts/") && file !== "package.json").map(read).join("\n");
 check("59 no deploy remote operator or credential command is introduced", !/supabase\s+(db push|functions deploy)|--project-ref|DATABASE_URL|SUPABASE_SERVICE_ROLE/.test(implementationSources));
 check("60 all candidate source bytes are UTF-8 text without NUL", SR2IA_SUCCESSOR_PATHS.every((file) => { const bytes = fs.readFileSync(path.join(root, file)); return !bytes.includes(0) && !read(file).includes("\uFFFD"); }));
 const manifest = createSr2iaManifest((file) => fs.readFileSync(path.join(root, file)));
 check("61 canonical raw-byte manifest covers every exact sorted path", manifest.entries.length === SR2IA_SUCCESSOR_PATHS.length && manifest.entries.every((entry, index) => entry.path === SR2IA_SUCCESSOR_PATHS[index] && /^[0-9a-f]{64}$/.test(entry.sha256)));
-check("62 repository calls only the four frozen relationship functions plus the frozen SR-2C projection", ["send_meal_buddy_invite", "read_meal_buddy_relationship", "list_meal_buddy_relationships", "resolve_meal_buddy_relationship", "project_exposed_social_profiles"].every((name) => repository.includes(`social_internal.${name}`)) && (repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 6);
+check("62 repository calls only the four frozen relationship functions plus the frozen SR-2C projection", ["send_meal_buddy_invite", "read_meal_buddy_relationship", "list_meal_buddy_relationships", "resolve_meal_buddy_relationship", "project_exposed_social_profiles"].every((name) => repository.includes(`social_internal.${name}`)) && (((repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 6)
+  // SR-2K-B adds exactly one more: the canonical unfriend. Seven statements are acceptable ONLY when
+  // the seventh is that function, so an unnamed extra statement still fails.
+  || ((repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 7
+    && repository.includes("social_internal.end_meal_buddy_relationship"))));
 
 console.log(JSON.stringify({ suite: "meal-buddy-relationship-sr2i-a-guard", lifecycle: lifecycle.phase, total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, canonicalManifestSha256: manifest.aggregateSha256, migrationSha256: sha256(fs.readFileSync(path.join(root, SR2IA_MIGRATION))), networkUsed: false, databaseUsed: false, credentialsUsed: false, developmentTouched: false, productionTouched: false }, null, 2));
 if (failures.length) process.exitCode = 1;

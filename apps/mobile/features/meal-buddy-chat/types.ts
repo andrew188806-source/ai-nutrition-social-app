@@ -19,6 +19,14 @@ export type MealBuddyChatCursor = string & { readonly [cursorBrand]: true };
 export const MEAL_BUDDY_CHAT_RELATIONSHIP_REF_PREFIX = "mbr1." as const;
 export const MEAL_BUDDY_CHAT_CONVERSATION_REF_PREFIX = "mbchat1." as const;
 export const MEAL_BUDDY_CHAT_MESSAGE_REF_PREFIX = "mbmsg1." as const;
+// SR-2K-B. The realtime topic is a FIFTH opaque family. It is a delivery channel, never an identity:
+// it authorizes nothing on its own, and the server re-checks the relationship on every subscribe.
+export const MEAL_BUDDY_CHAT_REALTIME_TOPIC_PREFIX = "mbrt1." as const;
+declare const realtimeTopicBrand: unique symbol;
+export type MealBuddyChatRealtimeTopic = string & { readonly [realtimeTopicBrand]: true };
+export function isMealBuddyChatRealtimeTopic(value: unknown): value is MealBuddyChatRealtimeTopic {
+  return isRef(value, MEAL_BUDDY_CHAT_REALTIME_TOPIC_PREFIX);
+}
 
 export function isMealBuddyChatRelationshipRef(value: unknown): value is MealBuddyChatRelationshipRef {
   return isRef(value, MEAL_BUDDY_CHAT_RELATIONSHIP_REF_PREFIX);
@@ -53,7 +61,18 @@ export type MealBuddyChatConversation = Readonly<{
   counterpart: MealBuddyChatCounterpart;
 }>;
 
-export type MealBuddyChatOpenSnapshot = Readonly<{ conversation: MealBuddyChatConversation }>;
+export type MealBuddyChatOpenSnapshot = Readonly<{
+  conversation: MealBuddyChatConversation;
+  realtimeTopic: MealBuddyChatRealtimeTopic | null;
+}>;
+
+// The realtime transport, behind a port so the controller never imports a client library and can be
+// driven by a deterministic double in tests. The callback carries NO payload on purpose: a frame is
+// a signal that something changed, and canonical history is always re-read through the frozen API.
+export type MealBuddyChatRealtimeSubscription = Readonly<{ unsubscribe(): void }>;
+export interface MealBuddyChatRealtimePort {
+  subscribe(topic: string, onActivity: () => void): MealBuddyChatRealtimeSubscription;
+}
 export type MealBuddyChatPageSnapshot = Readonly<{
   conversation: MealBuddyChatConversation;
   messages: readonly MealBuddyChatMessage[];
@@ -108,6 +127,9 @@ export type MealBuddyChatState =
       refreshing: boolean;
       pendingSend: MealBuddyChatPendingSend | null;
       draftRejected: boolean;
+      // Whether new messages are currently arriving without a manual refresh. It is presentation
+      // only: chat stays fully usable through the canonical API when it is false.
+      live: boolean;
       errorCode: MealBuddyChatErrorCode | null;
     }>;
 

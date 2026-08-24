@@ -30,15 +30,26 @@ const lifecycle = classifySr2jbLifecycle({
   deleted: lines(run(["diff", "--name-only", "--diff-filter=D", "--", ...SR2JB_PATHS])).length > 0
 });
 
-const types = read("apps/mobile/features/meal-buddy-chat/types.ts");
-const contracts = read("apps/mobile/features/meal-buddy-chat/supabaseContracts.ts");
-const repository = read("apps/mobile/features/meal-buddy-chat/repository.ts");
-const controller = read("apps/mobile/features/meal-buddy-chat/controller.ts");
-const screen = read("apps/mobile/features/meal-buddy-chat/MealBuddyChatScreen.tsx");
-const route = read("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx");
-const inbox = read("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx");
-const panel = read("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipPanel.tsx");
-const hook = read("apps/mobile/features/meal-buddy-chat/useMealBuddyChat.ts");
+// SR-2J-B's own frozen commit. Every "did SR-2J-B introduce this?" question is answered against
+// THESE bytes, never the worktree: once a successor round lands, the worktree also contains the
+// successor's features, and attributing those to SR-2J-B would be simply wrong.
+const SR2JB_FROZEN_COMMIT = "8a1da28732dcd88efb87f0c5543fc76fb66bb708";
+const frozenExists = child.spawnSync("git", ["cat-file", "-e", `${SR2JB_FROZEN_COMMIT}^{commit}`], { cwd: root }).status === 0;
+const readSelf = (f) => {
+  if (!frozenExists) return read(f);
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SR2JB_FROZEN_COMMIT}:${f}`],
+    { cwd: root, encoding: "utf8" });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(f);
+};
+const types = readSelf("apps/mobile/features/meal-buddy-chat/types.ts");
+const contracts = readSelf("apps/mobile/features/meal-buddy-chat/supabaseContracts.ts");
+const repository = readSelf("apps/mobile/features/meal-buddy-chat/repository.ts");
+const controller = readSelf("apps/mobile/features/meal-buddy-chat/controller.ts");
+const screen = readSelf("apps/mobile/features/meal-buddy-chat/MealBuddyChatScreen.tsx");
+const route = readSelf("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx");
+const inbox = readSelf("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx");
+const panel = readSelf("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipPanel.tsx");
+const hook = readSelf("apps/mobile/features/meal-buddy-chat/useMealBuddyChat.ts");
 // Forbidden-feature scanning is scoped to what SR-2J-B itself authored: new files in full, and for
 // pre-existing shared files only the lines this round ADDED. Legacy/demo strings that already lived
 // in meal-buddies.tsx, the i18n bundle or the runtime composition must not raise false positives.
@@ -46,7 +57,8 @@ const NEW_PRODUCTION_PATHS = SR2JB_PRODUCTION_PATHS.filter((f) =>
   f.startsWith("apps/mobile/features/meal-buddy-chat/") || f === "apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx");
 const TOUCHED_PRODUCTION_PATHS = SR2JB_PRODUCTION_PATHS.filter((f) => !NEW_PRODUCTION_PATHS.includes(f));
 function addedLines(file) {
-  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2JB_BASELINE, "--", file],
+  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2JB_BASELINE,
+    ...(frozenExists ? [SR2JB_FROZEN_COMMIT] : []), "--", file],
     { cwd: root, encoding: "utf8" });
   const body = diff.status === 0 ? (diff.stdout ?? "") : "";
   return body.split(/\r?\n/)
@@ -55,7 +67,7 @@ function addedLines(file) {
     .join("\n");
 }
 const candidateProduction = [
-  ...NEW_PRODUCTION_PATHS.map(read),
+  ...NEW_PRODUCTION_PATHS.map(readSelf),
   ...TOUCHED_PRODUCTION_PATHS.map(addedLines)
 ].join("\n");
 
@@ -72,6 +84,8 @@ check("baseline is the pushed SR-2J-A authority",
   && run(["merge-base", "--is-ancestor", SR2JB_BASELINE, "HEAD"]) === "");
 // The expected count is derived from the canonical manifest itself, so the inventory check can
 // never drift from the path set. Wildcards, duplicates and unknown paths all still fail.
+// Under a successor phase the lifecycle manifest is SR-2J-B's own path set, so this inventory
+// keeps measuring SR-2J-B rather than the accumulated delta.
 check("exact wildcard-free path inventory",
   SR2JB_PATHS.length > 0
   && new Set(SR2JB_PATHS).size === SR2JB_PATHS.length
@@ -85,8 +99,9 @@ check("zero migrations in the candidate", lifecycle.manifest.every((f) => !f.sta
 check("zero supabase backend paths in the candidate", lifecycle.manifest.every((f) => !f.startsWith("supabase/")));
 check("frozen SR-2J-A migration is byte-unchanged",
   sha(fs.readFileSync(path.join(root, SR2JB_FROZEN_MIGRATION))) === SR2JB_FROZEN_MIGRATION_SHA256);
-check("no supabase path changed since the baseline",
-  lines(run(["diff", "--name-only", SR2JB_BASELINE, "--", "supabase"])).length === 0);
+check("no supabase path changed by SR-2J-B",
+  lines(run(["diff", "--name-only", SR2JB_BASELINE,
+    ...(frozenExists ? [SR2JB_FROZEN_COMMIT] : []), "--", "supabase"])).length === 0);
 check("candidate touches only Mobile, shared i18n, scripts and package.json",
   lifecycle.manifest.every((f) => f.startsWith("apps/mobile/") || f === "lib/i18n/zh-TW.ts"
     || f.startsWith("scripts/") || f === "package.json"));

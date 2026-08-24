@@ -22,9 +22,14 @@ export class MealBuddyRelationshipService {
       rows = request.operation === "send"
         ? await this.repository.send(actorUserId, claims.candidateUserId)
         : await this.repository.read(actorUserId, claims.candidateUserId);
-    } else if (request.operation === "accept" || request.operation === "decline" || request.operation === "cancel") {
+    } else if (request.operation === "accept" || request.operation === "decline"
+      || request.operation === "cancel" || request.operation === "unfriend") {
       const claims = await this.relationshipCipher.open(actorUserId, request.relationshipRef, now);
-      rows = await this.repository.resolve(actorUserId, claims.relationId, request.operation);
+      // The reference is actor-bound, so a member cannot end somebody else's pair by holding a ref,
+      // and the canonical authority refuses anything that is not currently accepted.
+      rows = request.operation === "unfriend"
+        ? await this.repository.unfriend(actorUserId, claims.relationId)
+        : await this.repository.resolve(actorUserId, claims.relationId, request.operation);
       if (rows.length !== 1) throw new Error("meal_buddy_relationship_action_unavailable");
     } else {
       rows = await this.repository.list(actorUserId);

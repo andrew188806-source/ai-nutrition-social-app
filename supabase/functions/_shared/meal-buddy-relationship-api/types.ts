@@ -1,12 +1,15 @@
 export const MEAL_BUDDY_RELATIONSHIP_POLICY_VERSION = "meal-buddy-relationship-v1" as const;
 
 export type MealBuddyRelationshipState = "none" | "outgoing_pending" | "incoming_pending" | "accepted";
-export type MealBuddyRelationshipOperation = "send" | "read" | "list" | "accept" | "decline" | "cancel";
+// SR-2K-B adds `unfriend`. It is a lifecycle action on an existing relationship, so it carries the
+// same actor-bound mbr1 reference as accept/decline/cancel and never a candidate or raw identifier.
+export type MealBuddyRelationshipOperation =
+  "send" | "read" | "list" | "accept" | "decline" | "cancel" | "unfriend";
 
 export type MealBuddyRelationshipRequest =
   | Readonly<{ operation: "send" | "read"; candidateRef: string }>
   | Readonly<{ operation: "list" }>
-  | Readonly<{ operation: "accept" | "decline" | "cancel"; relationshipRef: string }>;
+  | Readonly<{ operation: "accept" | "decline" | "cancel" | "unfriend"; relationshipRef: string }>;
 
 export type MealBuddyRelationshipCounterpart = Readonly<{
   displayName: string;

@@ -6,8 +6,20 @@ import { SR2JB_BASELINE, auditSr2jbAuthoredSources } from "./meal-buddy-chat-sr2
 
 const root = process.cwd();
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
+// The successor round's bytes are not this round's bytes. Reading the worktree once a successor
+// exists would attribute the SUCCESSOR's features to this round, so every "did this round author
+// X?" question is answered against this round's own frozen commit.
+const SELF_COMMIT = "8a1da28732dcd88efb87f0c5543fc76fb66bb708";
+const selfExists = child.spawnSync("git", ["cat-file", "-e", `${SELF_COMMIT}^{commit}`], { cwd: root }).status === 0;
+const readSelf = (f) => {
+  if (!selfExists) return read(f);
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SELF_COMMIT}:${f}`],
+    { cwd: root, encoding: "utf8" });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(f);
+};
 function addedLines(file) {
-  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2JB_BASELINE, "--", file],
+  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2JB_BASELINE,
+    ...(selfExists ? [SELF_COMMIT] : []), "--", file],
     { cwd: root, encoding: "utf8" });
   const body = diff.status === 0 ? (diff.stdout ?? "") : "";
   return body.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1)).join("\n");
@@ -15,13 +27,13 @@ function addedLines(file) {
 
 const FEATURE = "apps/mobile/features/meal-buddy-chat";
 const pristine = new Map([
-  ["types", read(`${FEATURE}/types.ts`)],
-  ["contracts", read(`${FEATURE}/supabaseContracts.ts`)],
-  ["repository", read(`${FEATURE}/repository.ts`)],
-  ["controller", read(`${FEATURE}/controller.ts`)],
-  ["screen", read(`${FEATURE}/MealBuddyChatScreen.tsx`)],
-  ["hook", read(`${FEATURE}/useMealBuddyChat.ts`)],
-  ["route", read("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx")],
+  ["types", readSelf(`${FEATURE}/types.ts`)],
+  ["contracts", readSelf(`${FEATURE}/supabaseContracts.ts`)],
+  ["repository", readSelf(`${FEATURE}/repository.ts`)],
+  ["controller", readSelf(`${FEATURE}/controller.ts`)],
+  ["screen", readSelf(`${FEATURE}/MealBuddyChatScreen.tsx`)],
+  ["hook", readSelf(`${FEATURE}/useMealBuddyChat.ts`)],
+  ["route", readSelf("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx")],
   ["inbox", addedLines("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx")],
   ["panel", addedLines("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipPanel.tsx")],
   ["composition", addedLines("apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts")],

@@ -26,6 +26,12 @@ const RESOLVE = defineSocialRuntimeExecutorStatement<InternalMealBuddyRelationsh
   select relation_id::text, counterpart_user_id::text, relative_state
   from social_internal.resolve_meal_buddy_relationship($1::uuid, $2::uuid, $3::text)
 `;
+// SR-2K-B. Ending an accepted pair is its own canonical authority, not a fourth `resolve` action:
+// resolve owns the PENDING lifecycle and refuses anything else, while this owns the ACCEPTED one.
+const UNFRIEND = defineSocialRuntimeExecutorStatement<InternalMealBuddyRelationshipDatabaseRow>`
+  select relation_id::text, counterpart_user_id::text, relative_state
+  from social_internal.end_meal_buddy_relationship($1::uuid, $2::uuid)
+`;
 const PROJECT_COUNTERPARTS = defineSocialRuntimeExecutorStatement<InternalMealBuddyRelationshipCounterpartRow>`
   select exposure_ordinal, display_name, mascot_avatar_key
   from social_internal.project_exposed_social_profiles($1::uuid, $2::uuid[])
@@ -39,6 +45,7 @@ export interface MealBuddyRelationshipRepository {
   list(actorUserId: string): Promise<readonly InternalMealBuddyRelationshipRow[]>;
   resolve(actorUserId: string, relationId: string, action: "accept" | "decline" | "cancel"):
     Promise<readonly InternalMealBuddyRelationshipRow[]>;
+  unfriend(actorUserId: string, relationId: string): Promise<readonly InternalMealBuddyRelationshipRow[]>;
 }
 
 export class ExecutorMealBuddyRelationshipRepository implements MealBuddyRelationshipRepository {
@@ -49,6 +56,7 @@ export class ExecutorMealBuddyRelationshipRepository implements MealBuddyRelatio
   resolve(actor: string, relation: string, action: "accept" | "decline" | "cancel") {
     return this.query(actor, RESOLVE, [actor, relation, action]);
   }
+  unfriend(actor: string, relation: string) { return this.query(actor, UNFRIEND, [actor, relation]); }
   private async query(
     actorUserId: string,
     statement: SocialRuntimeExecutorStatement<InternalMealBuddyRelationshipDatabaseRow>,

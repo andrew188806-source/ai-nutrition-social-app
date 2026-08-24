@@ -62,6 +62,15 @@ import {
 } from "../meal-buddy-chat/runtimeBinding";
 import type { SupabaseMealBuddyChatClientLike } from "../meal-buddy-chat/supabaseContracts";
 import {
+  createSupabaseMealBuddyChatRealtimePort,
+  type SupabaseRealtimeClientLike
+} from "../meal-buddy-chat/supabaseRealtime";
+import {
+  bindMealBuddyPushRuntimeDependencies,
+  clearMealBuddyPushRuntimeDependencies
+} from "../meal-buddy-push/runtimeBinding";
+import type { SupabaseMealBuddyPushClientLike } from "../meal-buddy-push/supabaseContracts";
+import {
   bindSocialInterestSettingsRuntimeDependencies,
   clearSocialInterestSettingsRuntimeDependencies
 } from "../social-interest-settings/runtimeBinding";
@@ -353,6 +362,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   clearMealBuddyCandidateRuntimeDependencies();
   clearMealBuddyRelationshipRuntimeDependencies();
   clearMealBuddyChatRuntimeDependencies();
+  clearMealBuddyPushRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
   const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
   const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
@@ -453,7 +463,14 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         });
         bindMealBuddyChatRuntimeDependencies({
           authPort,
-          client: client as unknown as SupabaseMealBuddyChatClientLike
+          client: client as unknown as SupabaseMealBuddyChatClientLike,
+          // Realtime rides the SAME authenticated client, so a subscription carries the current
+          // actor's JWT and is authorized by the server's own policy rather than by this binding.
+          realtime: createSupabaseMealBuddyChatRealtimePort(client as unknown as SupabaseRealtimeClientLike)
+        });
+        bindMealBuddyPushRuntimeDependencies({
+          authPort,
+          client: client as unknown as SupabaseMealBuddyPushClientLike
         });
         bindSocialInterestSettingsRuntimeDependencies({
           authPort,

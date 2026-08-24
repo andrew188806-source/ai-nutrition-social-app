@@ -24,6 +24,7 @@ export type MealBuddyChatApiMessage = Readonly<{
 export type MealBuddyChatOpenResponse = Readonly<{
   policyVersion: typeof MEAL_BUDDY_CHAT_POLICY_VERSION;
   conversation: MealBuddyChatApiConversation;
+  realtimeTopic: string | null;
 }>;
 export type MealBuddyChatListResponse = Readonly<{
   policyVersion: typeof MEAL_BUDDY_CHAT_POLICY_VERSION;

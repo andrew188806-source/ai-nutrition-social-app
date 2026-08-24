@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { SR2KB_BASELINE, SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 
 // SR-2K-A — Mobile Meal Buddy closure.
 //
@@ -269,11 +270,33 @@ export function classifySr2kaLifecycle(state) {
     && state.worktreePaths.length === 0 && state.stagedPaths.length === 0
     && exact(state.deltaPaths, SR2KA_PATHS);
   const frozenUnpushed = frozen && state.originHead === SR2KA_BASELINE && state.ahead === 1 && state.behind === 0;
-  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : "invalid";
+  // SR-2K-B is the canonical successor: its frozen commit sits directly on the PUSHED SR-2K-A
+  // authority, so the delta measured from SR-2K-A's own baseline becomes the union of both path
+  // sets. Recognising it keeps this guard measuring SR-2K-A's own invariants instead of reporting
+  // the mere existence of a successor as a lifecycle defect. Under a successor phase the manifest
+  // reports SR-2K-A's OWN path set, so every downstream check keeps measuring its own round.
+  const successorUnion = [...new Set([...SR2KA_PATHS, ...SR2KB_PATHS])];
+  const successorCandidate = state.head === SR2KB_BASELINE && state.originHead === SR2KB_BASELINE
+    && state.ahead === 0 && state.behind === 0 && !state.deleted
+    && (state.stagedPaths?.length ?? 0) === 0
+    && (state.worktreePaths ?? []).every((file) => SR2KB_PATHS.includes(file));
+  const successorFrozenUnpushed = state.head !== SR2KB_BASELINE
+    && state.parent === SR2KB_BASELINE && state.originHead === SR2KB_BASELINE
+    && state.ahead === 1 && state.behind === 0 && !state.deleted
+    && (state.worktreePaths?.length ?? 0) === 0
+    && (state.stagedPaths?.length ?? 0) === 0
+    && exact(state.deltaPaths ?? [], successorUnion);
+
+  const phase = candidate ? "candidate"
+    : frozenUnpushed ? "frozen_unpushed"
+    : successorCandidate ? "successor_candidate"
+    : successorFrozenUnpushed ? "successor_frozen_unpushed"
+    : "invalid";
   return Object.freeze({
     valid: phase !== "invalid",
     phase,
-    manifest: candidate ? state.worktreePaths : state.deltaPaths
+    manifest: phase.startsWith("successor_") ? SR2KA_PATHS
+      : candidate ? state.worktreePaths : state.deltaPaths
   });
 }
 

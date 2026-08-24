@@ -10,13 +10,18 @@ export type MealBuddyChatRequest =
 export type MealBuddyChatCounterpart = Readonly<{ displayName: string; mascotAvatarKey: string }>;
 export type MealBuddyChatConversation = Readonly<{ conversationRef: string; counterpart: MealBuddyChatCounterpart }>;
 export type MealBuddyChatMessage = Readonly<{ messageRef: string; mine: boolean; body: string; createdAt: string }>;
+// SR-2K-B: only the OPEN response gains a field. The realtime topic is a server-minted opaque token
+// that authorizes nothing by itself — the subscribe gate re-checks current relationship, block and
+// participation authority — and it is issued only to a caller that just passed the chat gate. list
+// and send responses are unchanged, so their frozen closed validators keep their exact key sets.
 export type MealBuddyChatResponse =
-  | Readonly<{ policyVersion: typeof MEAL_BUDDY_CHAT_POLICY_VERSION; conversation: MealBuddyChatConversation }>
+  | Readonly<{ policyVersion: typeof MEAL_BUDDY_CHAT_POLICY_VERSION; conversation: MealBuddyChatConversation; realtimeTopic: string | null }>
   | Readonly<{ policyVersion: typeof MEAL_BUDDY_CHAT_POLICY_VERSION; conversation: MealBuddyChatConversation; messages: readonly MealBuddyChatMessage[]; nextCursor: string | null }>
   | Readonly<{ policyVersion: typeof MEAL_BUDDY_CHAT_POLICY_VERSION; conversation: MealBuddyChatConversation; message: MealBuddyChatMessage }>;
 
 export type InternalChatConversationRow = Readonly<{ conversation_id: string; counterpart_user_id: string }>;
 export type InternalChatMessageRow = Readonly<{ message_ref_id: string; counterpart_user_id: string; sender_is_actor: boolean; body: string; created_at: string }>;
 export type InternalChatProfileRow = Readonly<{ exposure_ordinal: number; display_name: string; mascot_avatar_key: string }>;
+export type InternalChatChannelRow = Readonly<{ topic: string }>;
 export type InternalChatConversation = Readonly<{ conversationId: string; counterpartUserId: string; counterpart: MealBuddyChatCounterpart }>;
 export type InternalChatMessage = Readonly<{ messageId: string; mine: boolean; body: string; createdAt: string }>;

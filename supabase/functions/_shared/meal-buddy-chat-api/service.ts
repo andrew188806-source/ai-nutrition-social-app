@@ -8,8 +8,8 @@ export class MealBuddyChatService {
   async execute(actor: string, request: MealBuddyChatRequest, now: Date): Promise<MealBuddyChatResponse> {
     if (request.operation === "open") {
       const relationship = await this.relationshipCipher.open(actor, request.relationshipRef, now);
-      const conversation = await this.repository.open(actor, relationship.relationId);
-      return Object.freeze({ policyVersion: MEAL_BUDDY_CHAT_POLICY_VERSION, conversation: await this.publicConversation(actor, conversation, now) });
+      const opened = await this.repository.open(actor, relationship.relationId);
+      return Object.freeze({ policyVersion: MEAL_BUDDY_CHAT_POLICY_VERSION, conversation: await this.publicConversation(actor, opened.conversation, now), realtimeTopic: opened.realtimeTopic });
     }
     const conversationId = await this.chatCipher.openConversation(actor, request.conversationRef, now);
     if (request.operation === "send") {

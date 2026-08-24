@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, colors } from "../../components/DemoUi";
 import { resolveSocialCandidateMascot } from "../social-candidates/mascotAdapter";
+import { MealBuddyUnfriendConfirm } from "./MealBuddyUnfriendConfirm";
 import { getMascotSource } from "../../theme/components";
 import type { MealBuddyRelationshipItem, MealBuddyRelationshipState } from "./types";
 import type { useMealBuddyRelationships } from "./useMealBuddyRelationships";
@@ -63,7 +65,11 @@ export function MealBuddyRelationshipInbox({ controller, onOpenChat }: {
   onOpenChat?: (relationshipRef: string) => void;
 }) {
   const state = controller.state;
+  // The pair whose end has been requested but not yet confirmed. Holding it here rather than in the
+  // row keeps exactly one confirmation sheet on screen no matter how many buddies are listed.
+  const [endingRef, setEndingRef] = useState<string | null>(null);
   if (state.phase === "signed_out") return null;
+  const pendingUnfriend = state.phase === "ready" && state.pendingAction === "unfriend";
 
   return (
     <Card>
@@ -105,6 +111,7 @@ export function MealBuddyRelationshipInbox({ controller, onOpenChat }: {
                       controller={controller}
                       relationship={relationship}
                       onOpenChat={onOpenChat}
+                      onRequestEnd={setEndingRef}
                     />
                   ))}
                 </View>
@@ -114,14 +121,27 @@ export function MealBuddyRelationshipInbox({ controller, onOpenChat }: {
           {state.errorCode ? <Text style={styles.error}>{copy.actionFailed}</Text> : null}
         </View>
       )}
+      <MealBuddyUnfriendConfirm
+        visible={endingRef !== null}
+        pending={pendingUnfriend}
+        onCancel={() => setEndingRef(null)}
+        onConfirm={() => {
+          const target = endingRef;
+          if (!target) return;
+          // The canonical list is re-read by the controller, so the row disappears because the
+          // server says the pair ended — never because this screen removed it optimistically.
+          void controller.unfriend(target).then(() => setEndingRef(null));
+        }}
+      />
     </Card>
   );
 }
 
-function RelationshipRow({ controller, relationship, onOpenChat }: {
+function RelationshipRow({ controller, relationship, onOpenChat, onRequestEnd }: {
   controller: Controller;
   relationship: MealBuddyRelationshipItem;
   onOpenChat?: (relationshipRef: string) => void;
+  onRequestEnd: (relationshipRef: string) => void;
 }) {
   const state = controller.state;
   if (state.phase !== "ready") return null;
@@ -160,10 +180,27 @@ function RelationshipRow({ controller, relationship, onOpenChat }: {
         />
       ) : relationship.state === "accepted" && onOpenChat ? (
         // Offered only for an established buddy, and only a tap navigates. Rendering this row
-        // performs no transport call and creates nothing on the server.
+        // performs no transport call and creates nothing on the server. Ending the relationship sits
+        // beside it as a secondary action and only opens a confirmation.
+        <View style={styles.actions}>
+          <ActionButton
+            label={copy.openChat}
+            onPress={() => { onOpenChat(relationship.relationshipRef); }}
+          />
+          <ActionButton
+            disabled={state.pendingAction !== null}
+            label={copy.unfriendAction}
+            secondary
+            onPress={() => { onRequestEnd(relationship.relationshipRef); }}
+          />
+        </View>
+      ) : relationship.state === "accepted" ? (
+        // An established buddy on a surface that offers no chat entry can still be ended.
         <ActionButton
-          label={copy.openChat}
-          onPress={() => { onOpenChat(relationship.relationshipRef); }}
+          disabled={state.pendingAction !== null}
+          label={copy.unfriendAction}
+          secondary
+          onPress={() => { onRequestEnd(relationship.relationshipRef); }}
         />
       ) : null}
     </View>

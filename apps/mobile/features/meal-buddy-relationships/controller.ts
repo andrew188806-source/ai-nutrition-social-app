@@ -70,6 +70,8 @@ export class MealBuddyRelationshipProfileController {
   async accept() { return this.mutate("accept", "incoming_pending"); }
   async decline() { return this.mutate("decline", "incoming_pending"); }
   async cancel() { return this.mutate("cancel", "outgoing_pending"); }
+  // Only an ACCEPTED pair can be ended, which is what makes unfriend distinct from cancel/decline.
+  async unfriend() { return this.mutate("unfriend", "accepted"); }
 
   dispose() {
     this.disposed = true;
@@ -177,6 +179,7 @@ export class MealBuddyRelationshipInboxController {
   async accept(relationshipRef: string) { return this.mutate("accept", relationshipRef, "incoming_pending"); }
   async decline(relationshipRef: string) { return this.mutate("decline", relationshipRef, "incoming_pending"); }
   async cancel(relationshipRef: string) { return this.mutate("cancel", relationshipRef, "outgoing_pending"); }
+  async unfriend(relationshipRef: string) { return this.mutate("unfriend", relationshipRef, "accepted"); }
 
   dispose() {
     this.disposed = true;
@@ -186,7 +189,7 @@ export class MealBuddyRelationshipInboxController {
   }
 
   private async mutate(
-    action: "accept" | "decline" | "cancel",
+    action: "accept" | "decline" | "cancel" | "unfriend",
     relationshipRef: string,
     requiredState: MealBuddyRelationshipState
   ) {

@@ -1,7 +1,9 @@
 export const MEAL_BUDDY_RELATIONSHIP_POLICY_VERSION = "meal-buddy-relationship-v1" as const;
 
 export type MealBuddyRelationshipState = "none" | "outgoing_pending" | "incoming_pending" | "accepted";
-export type MealBuddyRelationshipAction = "send" | "accept" | "decline" | "cancel";
+// SR-2K-B adds `unfriend`: the explicit end of an ACCEPTED relationship. It is a lifecycle action on
+// an existing pair, so it carries the same actor-bound mbr1 reference as accept/decline/cancel.
+export type MealBuddyRelationshipAction = "send" | "accept" | "decline" | "cancel" | "unfriend";
 export type MealBuddyRelationshipErrorCode =
   | "authentication_required"
   | "invalid_request"
@@ -43,6 +45,7 @@ export interface MealBuddyRelationshipRepository {
   accept(relationshipRef: string): Promise<MealBuddyRelationshipOutcome>;
   decline(relationshipRef: string): Promise<MealBuddyRelationshipOutcome>;
   cancel(relationshipRef: string): Promise<MealBuddyRelationshipOutcome>;
+  unfriend(relationshipRef: string): Promise<MealBuddyRelationshipOutcome>;
 }
 
 export type MealBuddyRelationshipProfileState =

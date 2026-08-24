@@ -44,7 +44,11 @@ export function auditSr2ibSources(sources) {
   requireInvariant(violations, contracts.includes('"meal-buddy-relationship"'), "frozen relationship endpoint name is missing");
   requireInvariant(violations, contracts.includes('operation: "send" | "read"; candidateRef: string')
     && contracts.includes('operation: "list"')
-    && contracts.includes('operation: "accept" | "decline" | "cancel"; relationshipRef: string'), "exact frozen request union is missing");
+    // SR-2K-B adds `unfriend` to the SAME relationship-ref arm. Either the frozen union or that
+    // exact successor union is acceptable; anything else still fails.
+    && (contracts.includes('operation: "accept" | "decline" | "cancel"; relationshipRef: string')
+      || contracts.includes('operation: "accept" | "decline" | "cancel" | "unfriend"; relationshipRef: string')),
+    "exact frozen request union is missing");
   requireInvariant(violations, repository.includes('? "scr1." : "mbr1."') && repository.includes("ref.startsWith(prefix)"), "opaque ref prefix gates are missing");
   requireInvariant(violations, repository.includes("exactKeys(value")
     && repository.includes('exactKeys(raw, ["counterpart", "relationshipRef", "state"])')

@@ -69,6 +69,9 @@ for (const key of ["test:meal-buddy-chat-sr2j-b", "test:meal-buddy-chat-sr2j-b-s
 // SR-2K-A adds three validation-only command keys. Stripping them keeps this guard measuring
 // what it has always measured: that no OTHER package byte moved.
 for (const key of ["test:meal-buddy-closure-sr2k-a", "test:meal-buddy-closure-sr2k-a-smoke", "test:meal-buddy-closure-sr2k-a-mutations"]) delete packageWithout.scripts[key];
+// SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
+// what it has always measured: that no OTHER package byte moved.
+for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 
 check("01 lifecycle is exact candidate, frozen or exact SR-2H-B successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 const expectedSuccessorPaths = lifecycle.phase.startsWith("successor_successor_successor_")

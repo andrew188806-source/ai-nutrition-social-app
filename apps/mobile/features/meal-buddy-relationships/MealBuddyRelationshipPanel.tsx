@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, colors } from "../../components/DemoUi";
+import { MealBuddyUnfriendConfirm } from "./MealBuddyUnfriendConfirm";
 import type { useMealBuddyRelationshipProfile } from "./useMealBuddyRelationshipProfile";
 
 type Controller = ReturnType<typeof useMealBuddyRelationshipProfile>;
@@ -11,7 +13,9 @@ export function MealBuddyRelationshipPanel({ controller, onOpenChat }: {
   onOpenChat?: (relationshipRef: string) => void;
 }) {
   const state = controller.state;
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
   if (state.phase === "signed_out") return null;
+  const pendingUnfriend = state.phase === "ready" && state.pendingAction === "unfriend";
 
   return (
     <Card>
@@ -55,14 +59,40 @@ export function MealBuddyRelationshipPanel({ controller, onOpenChat }: {
               />
             </View>
           ) : state.relationship.state === "accepted" && onOpenChat && state.relationship.relationshipRef ? (
-            // Accepted only. Rendering this panel performs no chat call; the tap is the intent.
+            // Accepted only. Rendering this panel performs no chat call; the tap is the intent, and
+            // ending the relationship is a secondary action behind its own confirmation.
+            <View style={styles.actions}>
+              <ActionButton
+                label={copy.openChat}
+                onPress={() => { onOpenChat(state.relationship.relationshipRef); }}
+              />
+              <ActionButton
+                disabled={state.pendingAction !== null}
+                label={copy.unfriendAction}
+                secondary
+                onPress={() => { setConfirmingEnd(true); }}
+              />
+            </View>
+          ) : state.relationship.state === "accepted" && state.relationship.relationshipRef ? (
             <ActionButton
-              label={copy.openChat}
-              onPress={() => { onOpenChat(state.relationship.relationshipRef); }}
+              disabled={state.pendingAction !== null}
+              label={copy.unfriendAction}
+              secondary
+              onPress={() => { setConfirmingEnd(true); }}
             />
           ) : null}
         </View>
       )}
+      <MealBuddyUnfriendConfirm
+        visible={confirmingEnd}
+        pending={pendingUnfriend}
+        onCancel={() => setConfirmingEnd(false)}
+        onConfirm={() => {
+          // The panel re-reads canonical relationship state, so what is shown afterwards is the
+          // server's answer rather than this screen's assumption.
+          void controller.unfriend().then(() => setConfirmingEnd(false));
+        }}
+      />
     </Card>
   );
 }

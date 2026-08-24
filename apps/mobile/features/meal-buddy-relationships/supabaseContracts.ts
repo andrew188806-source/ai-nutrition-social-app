@@ -5,7 +5,7 @@ export const MEAL_BUDDY_RELATIONSHIP_FUNCTION_NAME = "meal-buddy-relationship" a
 export type MealBuddyRelationshipRequest =
   | Readonly<{ operation: "send" | "read"; candidateRef: string }>
   | Readonly<{ operation: "list" }>
-  | Readonly<{ operation: "accept" | "decline" | "cancel"; relationshipRef: string }>;
+  | Readonly<{ operation: "accept" | "decline" | "cancel" | "unfriend"; relationshipRef: string }>;
 
 export type MealBuddyRelationshipApiResponse = Readonly<{
   policyVersion: "meal-buddy-relationship-v1";

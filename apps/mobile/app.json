@@ -12,7 +12,8 @@
           "cameraPermission": "好廚需要使用相機，才能拍攝餐點照片進行分析。",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "web": {
       "bundler": "metro"

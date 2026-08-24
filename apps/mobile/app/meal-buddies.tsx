@@ -53,6 +53,9 @@ import {
 } from "../features/meal-buddy-candidates/useMealBuddyRealCandidates";
 import { useConsumerRuntime } from "../features/consumer-runtime";
 import { MealBuddyRelationshipInbox } from "../features/meal-buddy-relationships/MealBuddyRelationshipInbox";
+import { MealBuddyPushPermissionCard } from "../features/meal-buddy-push/MealBuddyPushPermissionCard";
+import { useMealBuddyPush } from "../features/meal-buddy-push/useMealBuddyPush";
+import { useMealBuddyPushRouting } from "../features/meal-buddy-push/useMealBuddyPushRouting";
 import { useMealBuddyRelationships } from "../features/meal-buddy-relationships/useMealBuddyRelationships";
 import {
   buildRecommendationMealBuddyCardCreateRequest,
@@ -221,6 +224,12 @@ export default function MealBuddyHomeScreen() {
     isRealCandidateMode ? consumerRuntime.state.actorKey : null,
     consumerRuntime.state.actorGeneration
   );
+  // SR-2K-B. Push registration is bound to the same actor as everything else, so a sign-out or an
+  // actor switch drops it with the rest of the session. It never prompts on its own.
+  const realPush = useMealBuddyPush(
+    isRealCandidateMode ? consumerRuntime.state.actorKey : null,
+    consumerRuntime.state.actorGeneration
+  );
   const loadRealSourceCards = realCandidates.loadSourceCards;
   // The actor's own real cards are read once when real mode becomes active. Leaving real mode is
   // handled inside the hook, which resets the cards, the selection and the candidates together.
@@ -247,6 +256,14 @@ export default function MealBuddyHomeScreen() {
       void reconcileRealRelationships();
     }, [isRealCandidateMode, reconcileRealRelationships])
   );
+  // A notification tap is navigation intent only. It opens the canonical relationship area, which
+  // then re-reads server truth — so a tap that arrives after a block, an unfriend or a sign-out
+  // resolves to whatever is currently true rather than to whatever the notification implied.
+  const openRelationshipAreaFromNotification = useCallback(() => {
+    setFriendInitialTab("matched");
+    setActiveSection("friends");
+  }, []);
+  useMealBuddyPushRouting(openRelationshipAreaFromNotification);
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
   const chats = getMealBuddyChats();
@@ -430,6 +447,10 @@ export default function MealBuddyHomeScreen() {
           u1Prefill={u1Prefill}
         />
       ) : null}
+
+      {isRealCandidateMode && activeSection === "friends"
+        ? <MealBuddyPushPermissionCard controller={realPush} />
+        : null}
 
       {activeSection === "friends" ? (
         isRealCandidateMode ? (

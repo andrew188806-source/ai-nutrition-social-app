@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { SR2KA_BASELINE, SR2KA_PATHS } from "./meal-buddy-closure-sr2k-a-successor-manifest.mjs";
+import { SR2KB_BASELINE, SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 
 export const SR2JB_BASELINE = "afbc4abd04204788f5b38392758627a6cd2ac2fd";
 export const SR2JB_BASELINE_SUBJECT = "Add SR-2J-A relationship-gated chat authority";
@@ -164,10 +165,26 @@ export function classifySr2jbLifecycle(state) {
     && (state.stagedPaths?.length ?? 0) === 0
     && exact(state.deltaPaths ?? [], successorUnion);
 
+  // SR-2K-B is the next successor. Measured from SR-2J-B's own baseline the delta is now the
+  // union of all three path sets, and the round that is dirty in the worktree is SR-2K-B's.
+  const secondUnion = [...new Set([...SR2JB_PATHS, ...SR2KA_PATHS, ...SR2KB_PATHS])];
+  const secondCandidate = state.head === SR2KB_BASELINE && state.originHead === SR2KB_BASELINE
+    && state.ahead === 0 && state.behind === 0 && !state.deleted
+    && (state.stagedPaths?.length ?? 0) === 0
+    && (state.worktreePaths ?? []).every((file) => SR2KB_PATHS.includes(file));
+  const secondFrozenUnpushed = state.head !== SR2KB_BASELINE
+    && state.parent === SR2KB_BASELINE && state.originHead === SR2KB_BASELINE
+    && state.ahead === 1 && state.behind === 0 && !state.deleted
+    && (state.worktreePaths?.length ?? 0) === 0
+    && (state.stagedPaths?.length ?? 0) === 0
+    && exact(state.deltaPaths ?? [], secondUnion);
+
   const phase = candidate ? "candidate"
     : frozenUnpushed ? "frozen_unpushed"
     : successorCandidate ? "successor_candidate"
     : successorFrozenUnpushed ? "successor_frozen_unpushed"
+    : secondCandidate ? "successor_candidate"
+    : secondFrozenUnpushed ? "successor_frozen_unpushed"
     : "invalid";
   return Object.freeze({
     valid: phase !== "invalid",

@@ -471,7 +471,18 @@ check("visible relationship rows render the current public identity and never an
 // SEPARATION — zero backend delta, no new chat features, frozen authority untouched (§23, §24, §28)
 // ================================================================================================
 const BASELINE = "4f6dc34d52b4aee22081cc00672c8e312c045d3a";
-check("the round changed no supabase byte", git(["diff", "--name-only", BASELINE, "--", "supabase"]) === "");
+// SR-2K-A's own frozen commit. "Did SR-2K-A change this?" is answered between the baseline and
+// THIS commit; a successor round legitimately changes files SR-2K-A left alone.
+const SELF_COMMIT = "8a1da28732dcd88efb87f0c5543fc76fb66bb708";
+const selfExists = child.spawnSync("git", ["cat-file", "-e", `${SELF_COMMIT}^{commit}`], { cwd: root }).status === 0;
+const selfRange = selfExists ? [BASELINE, SELF_COMMIT] : [BASELINE];
+const readSelf = (f) => {
+  if (!selfExists) return read(f);
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SELF_COMMIT}:${f}`],
+    { cwd: root, encoding: "utf8" });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(f);
+};
+check("the round changed no supabase byte", git(["diff", "--name-only", ...selfRange, "--", "supabase"]) === "");
 check("interest and meal-context authority is untouched",
   ["apps/mobile/features/social-interest-settings", "supabase/functions/_shared/meal-buddy-context",
     "supabase/functions/_shared/social-ranking", "supabase/functions/_shared/social-exposure"]
@@ -485,8 +496,12 @@ check("no tier rule reaches relationship, buddy or chat behaviour",
   !/isPremium|entitlement|premium_tier|quota/i.test(`${source.inbox}\n${source.panel}\n${source.chatScreen}\n${source.chatRoute}`));
 // The canonical §28 list is reused verbatim rather than restated, so the smoke and the guard can
 // never disagree about what "no new chat feature" means.
-const closureSurfaces = [source.inbox, source.panel, source.chatRoute, source.profileRoute,
-  read("apps/mobile/features/meal-buddy-relationships/refBoundary.ts")].join("\n");
+const closureSurfaces = [
+  readSelf("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx"),
+  readSelf("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipPanel.tsx"),
+  readSelf("apps/mobile/app/meal-buddy-chat/[relationshipRef].tsx"),
+  readSelf("apps/mobile/app/meal-buddy-candidate-profile/[candidateRef].tsx"),
+  readSelf("apps/mobile/features/meal-buddy-relationships/refBoundary.ts")].join("\n");
 check("no new chat feature is introduced anywhere in the closure surfaces",
   SR2KA_FORBIDDEN_FEATURES.every(([, pattern]) => !pattern.test(closureSurfaces)));
 check("no geo or nearby authority is introduced",

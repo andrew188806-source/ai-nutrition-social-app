@@ -38,8 +38,20 @@ const lifecycle = classifySr2kaLifecycle({
 // Pre-existing files are scanned by the lines THIS round added; files the round authors are scanned
 // whole. Legacy demo bytes that already lived in meal-buddies.tsx or the i18n bundle therefore
 // cannot raise a false positive against an absence rule.
+// SR-2K-A's own frozen commit. "Did SR-2K-A introduce this?" and "did SR-2K-A leave this frozen?"
+// are both answered against THESE bytes. A successor legitimately changes files SR-2K-A left alone,
+// and that is the successor's business, not a regression in this round.
+const SR2KA_FROZEN_COMMIT = "8a1da28732dcd88efb87f0c5543fc76fb66bb708";
+const frozenExists = child.spawnSync("git", ["cat-file", "-e", `${SR2KA_FROZEN_COMMIT}^{commit}`], { cwd: root }).status === 0;
+const selfRange = frozenExists ? [SR2KA_BASELINE, SR2KA_FROZEN_COMMIT] : [SR2KA_BASELINE];
+const readSelf = (f) => {
+  if (!frozenExists) return read(f);
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SR2KA_FROZEN_COMMIT}:${f}`],
+    { cwd: root, encoding: "utf8" });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(f);
+};
 function addedLines(file) {
-  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KA_BASELINE, "--", file],
+  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", ...selfRange, "--", file],
     { cwd: root, encoding: "utf8" });
   const body = diff.status === 0 ? (diff.stdout ?? "") : "";
   return body.split(/\r?\n/)
@@ -49,7 +61,7 @@ function addedLines(file) {
 }
 const TOUCHED_PRODUCTION_PATHS = SR2KA_PRODUCTION_PATHS.filter((f) => !SR2KA_NEW_PRODUCTION_PATHS.includes(f));
 const candidateProduction = [
-  ...SR2KA_NEW_PRODUCTION_PATHS.map(read),
+  ...SR2KA_NEW_PRODUCTION_PATHS.map(readSelf),
   ...TOUCHED_PRODUCTION_PATHS.map(addedLines)
 ].join("\n");
 
@@ -96,15 +108,17 @@ check("no candidate path is deleted or staged", staged.length === 0
 // ---- backend delta is zero (§27) ---------------------------------------------------------------
 check("zero migrations in the candidate", SR2KA_PATHS.every((f) => !f.startsWith("supabase/migrations/")));
 check("zero supabase paths in the candidate", SR2KA_PATHS.every((f) => !f.startsWith("supabase/")));
-check("no supabase byte changed since the baseline",
-  lines(run(["diff", "--name-only", SR2KA_BASELINE, "--", "supabase"])).length === 0);
+check("no supabase byte changed by SR-2K-A",
+  lines(run(["diff", "--name-only", ...selfRange, "--", "supabase"])).length === 0);
 check("the newest frozen migration is byte-unchanged",
   sha(bytes(SR2KA_FROZEN_MIGRATION)) === SR2KA_FROZEN_MIGRATION_SHA256);
 check("candidate touches only Mobile, shared i18n, scripts and package.json",
   SR2KA_PATHS.every((f) => f.startsWith("apps/mobile/") || f === "lib/i18n/zh-TW.ts"
     || f.startsWith("scripts/") || f === "package.json"));
-check("no new Mobile route is introduced",
-  lines(run(["diff", "--name-only", "--diff-filter=A", `${SR2KA_BASELINE}..HEAD`, "--", "apps/mobile/app"])).length === 0);
+check("no new Mobile route is introduced by SR-2K-A",
+  lines(run(["diff", "--name-only", "--diff-filter=A",
+    frozenExists ? `${SR2KA_BASELINE}..${SR2KA_FROZEN_COMMIT}` : `${SR2KA_BASELINE}..HEAD`,
+    "--", "apps/mobile/app"])).length === 0);
 
 // ---- frozen predecessor product authority is untouched (§7, §8, §23, §24) ----------------------
 const frozenProductAuthority = [
@@ -123,8 +137,8 @@ const frozenProductAuthority = [
   "apps/mobile/features/meal-buddy-chat/types.ts",
   "apps/mobile/features/consumer-runtime"
 ];
-check("ranking, exposure, context, interest and lifecycle authority bytes are unchanged",
-  frozenProductAuthority.every((f) => lines(run(["diff", "--name-only", SR2KA_BASELINE, "--", f])).length === 0));
+check("ranking, exposure, context, interest and lifecycle authority bytes are unchanged by SR-2K-A",
+  frozenProductAuthority.every((f) => lines(run(["diff", "--name-only", ...selfRange, "--", f])).length === 0));
 
 // ---- the shared production contract ------------------------------------------------------------
 const violations = auditSr2kaAuthoredSources(sources);
@@ -166,6 +180,9 @@ const packageJson = JSON.parse(read("package.json"));
 const baselinePackage = JSON.parse(run(["show", `${SR2KA_BASELINE}:package.json`]));
 const packageWithout = structuredClone(packageJson);
 for (const key of Object.keys(SR2KA_NPM_COMMANDS)) delete packageWithout.scripts[key];
+// SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring what it
+// has always measured: that no OTHER package byte moved.
+for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 check("package exposes the exact canonical SR-2K-A commands",
   Object.entries(SR2KA_NPM_COMMANDS).every(([name, command]) => packageJson.scripts[name] === command));
 check("package.json differs from the frozen predecessor only by the SR-2K-A commands",

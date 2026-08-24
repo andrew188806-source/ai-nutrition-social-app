@@ -7,3 +7,4 @@ export * from "./supabaseContracts";
 export * from "./types";
 export * from "./useMealBuddyRelationshipProfile";
 export * from "./useMealBuddyRelationships";
+export * from "./MealBuddyUnfriendConfirm";

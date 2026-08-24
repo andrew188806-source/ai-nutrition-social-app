@@ -19,6 +19,11 @@ import { classifySr2ggLifecycle, SR2GG_BASELINE, SR2GG_SUCCESSOR_PATHS } from ".
 import { SR2HB_MIGRATION } from "./social-interest-sr2h-b-successor-manifest.mjs";
 import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
+import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
+// SR-2K-B's enumerated successor migrations. Naming them keeps this guard's inventory EXACT: any
+// migration it has not been told about still fails.
+const SR2KB_MIGRATION_BASENAMES = ["20260824010000_meal_buddy_unfriend_authority.sql", "20260824020000_meal_buddy_chat_realtime_authority.sql", "20260824030000_meal_buddy_push_notification_authority.sql"];
+
 
 // SR-2G-F successor awareness: the one migration that round adds.
 const SR2GF_MIGRATION_BASENAME = "20260820010000_meal_buddy_food_context_authority.sql";
@@ -98,6 +103,9 @@ try {
   // SR-2K-A adds three validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:meal-buddy-closure-sr2k-a", "test:meal-buddy-closure-sr2k-a-smoke", "test:meal-buddy-closure-sr2k-a-mutations"]) delete packageWithout.scripts[key];
+  // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
+  // what it has always measured: that no OTHER package byte moved.
+  for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 
   const schema = sqlExec(read(SR2CR1_SCHEMA_MIGRATION));
   const data = sqlExec(read(SR2CR1_DATA_MIGRATION));
@@ -125,8 +133,8 @@ try {
   check("8. package.json differs from frozen authority only by the SR-2C-R1 scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   const sr2cr1MigrationFiles = migrationFiles.filter((f) => !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE2_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2JA_MIGRATION);
   check("9. exactly three migrations are added", SR2CR1_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 3
-    && exact(sr2cr1MigrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m))].sort()));
-  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e) && !SR2GE1_SUCCESSOR_PATHS.includes(e) && !SR2GE2_SUCCESSOR_PATHS.includes(e) && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION).length === 0);
+    && exact(sr2cr1MigrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m)), ...SR2KB_MIGRATION_BASENAMES].sort()));
+  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e) && !SR2GE1_SUCCESSOR_PATHS.includes(e) && !SR2GE2_SUCCESSOR_PATHS.includes(e) && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e)).length === 0);
   check("11. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", ...SR2CR1_FROZEN_MIGRATIONS])).length === 0);
   check("12. every migration is transactional", [schema, data, projection].every((m) => /^begin;/m.test(m) && /^commit;/m.test(m)));
 

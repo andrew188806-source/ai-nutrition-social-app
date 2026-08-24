@@ -28,7 +28,8 @@ export function useMealBuddyRelationships(actorKey: string | null, actorGenerati
     retry: () => controller.load(),
     accept: (relationshipRef: string) => controller.accept(relationshipRef),
     decline: (relationshipRef: string) => controller.decline(relationshipRef),
-    cancel: (relationshipRef: string) => controller.cancel(relationshipRef)
+    cancel: (relationshipRef: string) => controller.cancel(relationshipRef),
+    unfriend: (relationshipRef: string) => controller.unfriend(relationshipRef)
   }), [controller]);
 
   return useMemo(() => Object.freeze({ state, ...actions }), [actions, state]);

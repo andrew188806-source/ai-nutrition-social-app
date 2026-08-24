@@ -54,3 +54,14 @@ verify_jwt = true
 # SR-2J-A: authenticated accepted-relationship chat boundary. Actor identity is resolved through
 # auth.getUser(); Mobile supplies only opaque actor-bound relationship/conversation/message refs.
 verify_jwt = true
+
+[functions.meal-buddy-push-device]
+# SR-2K-B: authenticated per-installation push registration. The owner is always the verified JWT
+# subject, never a body field, so a caller can only register, rotate or disable their OWN device.
+verify_jwt = true
+
+[functions.meal-buddy-push-dispatch]
+# SR-2K-B: operational outbox dispatcher, not a user endpoint. It is authenticated by a shared
+# secret header instead of a user JWT and refuses to run when that secret is absent, so JWT
+# verification is deliberately off while the endpoint remains closed to anonymous callers.
+verify_jwt = false

@@ -64,6 +64,9 @@ for (const key of ["test:meal-buddy-chat-sr2j-b", "test:meal-buddy-chat-sr2j-b-s
 // SR-2K-A adds three validation-only command keys. Stripping them keeps this guard measuring
 // what it has always measured: that no OTHER package byte moved.
 for (const key of ["test:meal-buddy-closure-sr2k-a", "test:meal-buddy-closure-sr2k-a-smoke", "test:meal-buddy-closure-sr2k-a-mutations"]) delete packageWithout.scripts[key];
+// SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
+// what it has always measured: that no OTHER package byte moved.
+for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
 const migrationBytes = fs.readFileSync(path.join(root, SR2IB_MIGRATION));
 
 check("01 lifecycle is exact I-B authority or exact SR-2J-A successor", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
@@ -128,7 +131,10 @@ check("38 ranking exposure context recommendation and interest authority bytes a
 const allowedBackendDelta = [
   "supabase/functions/_shared/meal-buddy-relationship-api/repository.ts",
   "supabase/functions/_shared/meal-buddy-relationship-api/service.ts",
-  "supabase/functions/_shared/meal-buddy-relationship-api/types.ts"
+  "supabase/functions/_shared/meal-buddy-relationship-api/types.ts",
+  // SR-2K-B teaches the request parser one more lifecycle action. The frozen SQL, the ref crypto and
+  // the Edge handler directory are still asserted untouched immediately below.
+  "supabase/functions/_shared/meal-buddy-relationship-api/request.ts"
 ];
 const actualBackendDelta = lines(git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/_shared/meal-buddy-relationship-api"]));
 check("39 SR-2I-A lifecycle SQL RPC ref crypto and Edge handler remain frozen while successor authority stays separate", exact(actualBackendDelta, allowedBackendDelta) && git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/meal-buddy-relationship", "supabase/functions/_shared/meal-buddy-relationship-ref", SR2IB_MIGRATION]).trim() === "");
