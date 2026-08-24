@@ -83,6 +83,11 @@ function ActionButton({ disabled = false, label, onPress, secondary = false }: {
   return (
     <Pressable
       accessibilityRole="button"
+      // SR-2K-A: the visible label is also the assistive label, and the disabled state is announced
+      // rather than only drawn. A control that is mid-action reads as unavailable instead of silently
+      // ignoring a second tap.
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       style={[styles.button, secondary && styles.secondaryButton, disabled && styles.disabledButton]}
       onPress={onPress}

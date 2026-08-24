@@ -20,11 +20,16 @@ export function useMealBuddyRelationships(actorKey: string | null, actorGenerati
   }, [actorGeneration, actorKey, controller]);
   useEffect(() => () => controller.dispose(), [controller]);
 
-  return Object.freeze({
-    state,
+  // SR-2K-A: the action bindings are memoized on the controller alone, so their identity is stable
+  // across renders. A screen may therefore depend on `retry` from a focus effect to reconcile
+  // against canonical server truth when it is shown again, without the dependency changing on every
+  // render and re-triggering itself. `state` stays outside the memo because it must change.
+  const actions = useMemo(() => Object.freeze({
     retry: () => controller.load(),
     accept: (relationshipRef: string) => controller.accept(relationshipRef),
     decline: (relationshipRef: string) => controller.decline(relationshipRef),
     cancel: (relationshipRef: string) => controller.cancel(relationshipRef)
-  });
+  }), [controller]);
+
+  return useMemo(() => Object.freeze({ state, ...actions }), [actions, state]);
 }

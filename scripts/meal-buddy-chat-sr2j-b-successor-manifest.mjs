@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { SR2KA_BASELINE, SR2KA_PATHS } from "./meal-buddy-closure-sr2k-a-successor-manifest.mjs";
 
 export const SR2JB_BASELINE = "afbc4abd04204788f5b38392758627a6cd2ac2fd";
 export const SR2JB_BASELINE_SUBJECT = "Add SR-2J-A relationship-gated chat authority";
@@ -142,11 +143,37 @@ export function classifySr2jbLifecycle(state) {
     && state.worktreePaths.length === 0 && state.stagedPaths.length === 0
     && exact(state.deltaPaths, SR2JB_PATHS);
   const frozenUnpushed = frozen && state.originHead === SR2JB_BASELINE && state.ahead === 1 && state.behind === 0;
-  const phase = candidate ? "candidate" : frozenUnpushed ? "frozen_unpushed" : "invalid";
+
+  // SR-2K-A is the canonical successor: its frozen commit sits directly on the PUSHED SR-2J-B
+  // authority, which is why the delta measured from SR-2J-B’s own baseline is the union of the two
+  // path sets. Recognising it keeps this guard measuring SR-2J-B’s own invariants instead of
+  // reporting the mere existence of a successor as a lifecycle defect — the same arrangement by
+  // which SR-2J-A’s manifest already recognises SR-2J-B. Recognition stays EXACT: one extra, one
+  // missing or one renamed path still fails, as do deletions, staged bytes, a dirty worktree, a
+  // wrong parent, or any ahead/behind other than 1/0. Under a successor phase this manifest reports
+  // SR-2J-B’s OWN path set, so every downstream check keeps measuring the round it belongs to.
+  const successorUnion = [...new Set([...SR2JB_PATHS, ...SR2KA_PATHS])];
+  const successorCandidate = state.head === SR2KA_BASELINE && state.originHead === SR2KA_BASELINE
+    && state.ahead === 0 && state.behind === 0 && !state.deleted
+    && (state.stagedPaths?.length ?? 0) === 0
+    && (state.worktreePaths ?? []).every((file) => SR2KA_PATHS.includes(file));
+  const successorFrozenUnpushed = state.head !== SR2KA_BASELINE
+    && state.parent === SR2KA_BASELINE && state.originHead === SR2KA_BASELINE
+    && state.ahead === 1 && state.behind === 0 && !state.deleted
+    && (state.worktreePaths?.length ?? 0) === 0
+    && (state.stagedPaths?.length ?? 0) === 0
+    && exact(state.deltaPaths ?? [], successorUnion);
+
+  const phase = candidate ? "candidate"
+    : frozenUnpushed ? "frozen_unpushed"
+    : successorCandidate ? "successor_candidate"
+    : successorFrozenUnpushed ? "successor_frozen_unpushed"
+    : "invalid";
   return Object.freeze({
     valid: phase !== "invalid",
     phase,
-    manifest: candidate ? state.worktreePaths : state.deltaPaths
+    manifest: phase.startsWith("successor_") ? SR2JB_PATHS
+      : candidate ? state.worktreePaths : state.deltaPaths
   });
 }
 

@@ -1,5 +1,5 @@
-﻿import { useEffect, useState } from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { Card, DemoModeToggle, PremiumBadge, SectionTitle, TagRow, UpgradePromptModal, colors } from "../components/DemoUi";
@@ -227,6 +227,26 @@ export default function MealBuddyHomeScreen() {
   useEffect(() => {
     if (isRealCandidateMode) void loadRealSourceCards();
   }, [isRealCandidateMode, loadRealSourceCards]);
+  // SR-2K-A cross-screen reconciliation. Relationship truth can move while the user is on another
+  // screen — an invite sent from a candidate profile, an invite answered from anywhere — so coming
+  // back here re-reads the canonical server list instead of leaving a stale local view in place. The
+  // very first focus is skipped because the actor binding above has already read it once, and the
+  // callback depends only on stable values, so it cannot re-trigger itself.
+  const reconcileRealRelationships = realRelationships.retry;
+  const realRelationshipsSeenOnEntry = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isRealCandidateMode) {
+        realRelationshipsSeenOnEntry.current = false;
+        return;
+      }
+      if (!realRelationshipsSeenOnEntry.current) {
+        realRelationshipsSeenOnEntry.current = true;
+        return;
+      }
+      void reconcileRealRelationships();
+    }, [isRealCandidateMode, reconcileRealRelationships])
+  );
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
   const chats = getMealBuddyChats();

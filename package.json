@@ -280,7 +280,10 @@
     "test:meal-buddy-chat-sr2j-a-concurrency": "node scripts/meal-buddy-chat-sr2j-a-concurrency.mjs",
     "test:meal-buddy-chat-sr2j-b": "node scripts/meal-buddy-chat-sr2j-b-guard.mjs",
     "test:meal-buddy-chat-sr2j-b-smoke": "node scripts/meal-buddy-chat-sr2j-b-smoke.mjs",
-    "test:meal-buddy-chat-sr2j-b-mutations": "node scripts/meal-buddy-chat-sr2j-b-mutations.mjs"
+    "test:meal-buddy-chat-sr2j-b-mutations": "node scripts/meal-buddy-chat-sr2j-b-mutations.mjs",
+    "test:meal-buddy-closure-sr2k-a": "node scripts/meal-buddy-closure-sr2k-a-guard.mjs",
+    "test:meal-buddy-closure-sr2k-a-smoke": "node scripts/meal-buddy-closure-sr2k-a-smoke.mjs",
+    "test:meal-buddy-closure-sr2k-a-mutations": "node scripts/meal-buddy-closure-sr2k-a-mutations.mjs"
   },
   "workspaces": [
     "apps/*",

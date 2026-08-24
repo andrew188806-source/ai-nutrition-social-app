@@ -6,13 +6,17 @@ import { useMealBuddyCandidateProfile } from "../../features/meal-buddy-candidat
 import { resolveSocialCandidateMascot } from "../../features/social-candidates/mascotAdapter";
 import { MealBuddyRelationshipPanel } from "../../features/meal-buddy-relationships/MealBuddyRelationshipPanel";
 import { useMealBuddyRelationshipProfile } from "../../features/meal-buddy-relationships/useMealBuddyRelationshipProfile";
+import { readMealBuddyRouteRef } from "../../features/meal-buddy-relationships/refBoundary";
 import { getMascotSource } from "../../theme/components";
 
 export default function MealBuddyCandidateProfileScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ candidateRef?: string }>();
-  const candidateRefValue = Array.isArray(params.candidateRef) ? params.candidateRef[0] : params.candidateRef;
-  const candidateRef = candidateRefValue?.startsWith("scr1.") ? candidateRefValue : null;
+  // SR-2K-A hardens this dynamic route at its boundary: the segment must be a well-formed candidate
+  // reference of that family alone. A bare prefix, an oversized value, a reference belonging to a
+  // different family and a raw database identifier all resolve to null, and null fails closed below
+  // without any request being made.
+  const candidateRef = readMealBuddyRouteRef(params.candidateRef, "candidate");
   const runtime = useConsumerRuntime();
   const controller = useMealBuddyCandidateProfile(
     runtime.mode === "supabase",
@@ -25,9 +29,20 @@ export default function MealBuddyCandidateProfileScreen() {
     candidateRef
   );
 
+  // SR-2K-A: this route can be entered with nothing behind it, for example on a cold load straight
+  // into a profile. Popping an empty stack would strand the user here, so the fallback returns to
+  // the canonical Meal Buddy relationship area instead of a dead screen.
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace({ pathname: "/meal-buddies", params: { section: "friends" } });
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => router.back()}>
+      <Pressable accessibilityRole="button" style={styles.backButton} onPress={goBack}>
         <Text style={styles.backButtonText}>返回飯友列表</Text>
       </Pressable>
       {controller.state.phase === "loading" || controller.state.phase === "idle" ? (

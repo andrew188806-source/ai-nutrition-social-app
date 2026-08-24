@@ -46,7 +46,8 @@ export function MealBuddyChatScreen({ controller, onBack }: { controller: Contro
             <View style={styles.centered}>
               <Text style={styles.stateTitle}>{copy.unavailable}</Text>
               <Text style={styles.muted}>{copy.unavailableHint}</Text>
-              <ActionButton label={copy.back} secondary onPress={onBack} />
+              {/* SR-2K-A: the only action on a fail-closed screen names where it returns to. */}
+              <ActionButton label={copy.backToBuddies} secondary onPress={onBack} />
             </View>
           </Card>
         ) : (

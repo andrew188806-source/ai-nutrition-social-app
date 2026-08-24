@@ -3,11 +3,60 @@ import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, colors } from "../../components/DemoUi";
 import { resolveSocialCandidateMascot } from "../social-candidates/mascotAdapter";
 import { getMascotSource } from "../../theme/components";
-import type { MealBuddyRelationshipItem } from "./types";
+import type { MealBuddyRelationshipItem, MealBuddyRelationshipState } from "./types";
 import type { useMealBuddyRelationships } from "./useMealBuddyRelationships";
 
 type Controller = ReturnType<typeof useMealBuddyRelationships>;
 const copy = zhTW.mobile.mealBuddyRelationships;
+
+// SR-2K-A closes the real-mode relationship area.
+//
+// The canonical server list is still the ONLY source of truth and its order is preserved inside
+// every band. What changes is that the three actor-relative states are no longer flattened into one
+// undifferentiated history strip: an established buddy is a standing band of its own, so it reads as
+// a lasting relationship rather than as a resolved invitation that happens to still be listed. Each
+// band owns its own honest empty line, so "nothing waiting for you" and "no buddies yet" can never
+// be confused with each other or with a load that has not finished.
+//
+// Nothing here performs a transport call of any kind. Re-reading canonical truth is the controller's
+// single `retry` entry point, and the accepted band's action is a navigation callback.
+type RelationshipBand = Readonly<{
+  key: MealBuddyRelationshipState;
+  title: string;
+  subtitle: string | null;
+  emptyLabel: string;
+  items: readonly MealBuddyRelationshipItem[];
+}>;
+
+function bandsFor(relationships: readonly MealBuddyRelationshipItem[]): readonly RelationshipBand[] {
+  // `filter` keeps the server's ordering inside each band. No sort, no cap and no re-ranking: the
+  // list the server returned is the list the user sees.
+  const withState = (state: MealBuddyRelationshipState) =>
+    relationships.filter((relationship) => relationship.state === state);
+  return Object.freeze([
+    Object.freeze({
+      key: "incoming_pending" as const,
+      title: copy.incomingGroupTitle,
+      subtitle: null,
+      emptyLabel: copy.emptyIncoming,
+      items: withState("incoming_pending")
+    }),
+    Object.freeze({
+      key: "outgoing_pending" as const,
+      title: copy.outgoingGroupTitle,
+      subtitle: null,
+      emptyLabel: copy.emptyOutgoing,
+      items: withState("outgoing_pending")
+    }),
+    Object.freeze({
+      key: "accepted" as const,
+      title: copy.acceptedGroupTitle,
+      subtitle: copy.acceptedGroupSubtitle,
+      emptyLabel: copy.emptyAccepted,
+      items: withState("accepted")
+    })
+  ]);
+}
 
 export function MealBuddyRelationshipInbox({ controller, onOpenChat }: {
   controller: Controller;
@@ -21,23 +70,46 @@ export function MealBuddyRelationshipInbox({ controller, onOpenChat }: {
       <Text style={styles.title}>{copy.inboxTitle}</Text>
       <Text style={styles.subtitle}>{copy.inboxSubtitle}</Text>
       {state.phase === "loading" ? (
+        // A load in progress states only that it is in progress. It never renders an empty band, an
+        // established buddy or an available action before canonical truth is known.
         <View style={styles.loading}><ActivityIndicator /><Text style={styles.muted}>{copy.loading}</Text></View>
       ) : state.phase === "load_failed" ? (
         <View style={styles.stack}>
           <Text style={styles.muted}>{copy.loadFailed}</Text>
           <ActionButton label={copy.retry} onPress={() => { void controller.retry(); }} />
         </View>
-      ) : state.relationships.length === 0 ? (
-        <Text style={[styles.muted, styles.empty]}>{copy.emptyInbox}</Text>
       ) : (
-        <View style={styles.list}>
-          {state.relationships.map((relationship) => (
-            <RelationshipRow
-              key={relationship.relationshipRef}
-              controller={controller}
-              relationship={relationship}
-              onOpenChat={onOpenChat}
-            />
+        <View style={styles.stack}>
+          <ActionButton
+            disabled={state.pendingAction !== null}
+            label={copy.reload}
+            secondary
+            onPress={() => { void controller.retry(); }}
+          />
+          {state.relationships.length === 0 ? (
+            // An honestly empty real result, said once. Repeating it per band would only add noise,
+            // and no demo row is ever substituted for it.
+            <Text style={[styles.muted, styles.empty]}>{copy.emptyInbox}</Text>
+          ) : bandsFor(state.relationships).map((band) => (
+            <View key={band.key} style={styles.band}>
+              <Text style={styles.bandTitle}>{band.title}</Text>
+              {band.subtitle === null ? null : <Text style={styles.muted}>{band.subtitle}</Text>}
+              {band.items.length === 0 ? (
+                // This band alone is empty while others are not, so it says so in its own words.
+                <Text style={styles.muted}>{band.emptyLabel}</Text>
+              ) : (
+                <View style={styles.list}>
+                  {band.items.map((relationship) => (
+                    <RelationshipRow
+                      key={relationship.relationshipRef}
+                      controller={controller}
+                      relationship={relationship}
+                      onOpenChat={onOpenChat}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
           ))}
           {state.errorCode ? <Text style={styles.error}>{copy.actionFailed}</Text> : null}
         </View>
@@ -87,8 +159,8 @@ function RelationshipRow({ controller, relationship, onOpenChat }: {
           onPress={() => { void controller.cancel(relationship.relationshipRef); }}
         />
       ) : relationship.state === "accepted" && onOpenChat ? (
-        // Chat is offered only for an accepted buddy, and only a tap navigates. Rendering this row
-        // performs no chat transport call and creates no conversation.
+        // Offered only for an established buddy, and only a tap navigates. Rendering this row
+        // performs no transport call and creates nothing on the server.
         <ActionButton
           label={copy.openChat}
           onPress={() => { onOpenChat(relationship.relationshipRef); }}
@@ -113,6 +185,8 @@ function ActionButton({ disabled = false, label, onPress, secondary = false }: {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       style={[styles.button, secondary && styles.secondaryButton, disabled && styles.disabledButton]}
       onPress={onPress}
@@ -127,8 +201,10 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 5 },
   loading: { alignItems: "center", flexDirection: "row", gap: 10, marginTop: 16 },
   stack: { gap: 12, marginTop: 16 },
-  empty: { marginTop: 18 },
-  list: { gap: 12, marginTop: 16 },
+  empty: { marginTop: 2 },
+  band: { borderTopColor: colors.line, borderTopWidth: 1, gap: 8, paddingTop: 14 },
+  bandTitle: { color: colors.ink, fontSize: 15, fontWeight: "800" },
+  list: { gap: 12, marginTop: 4 },
   row: { alignItems: "center", borderColor: colors.line, borderRadius: 14, borderWidth: 1, flexDirection: "row", flexWrap: "wrap", gap: 12, padding: 14 },
   avatar: { alignItems: "center", backgroundColor: colors.mint, borderRadius: 24, height: 48, justifyContent: "center", overflow: "hidden", width: 48 },
   avatarImage: { height: 42, width: 42 },
