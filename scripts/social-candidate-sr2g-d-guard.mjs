@@ -23,6 +23,10 @@ import { SR2HB_MIGRATION } from "./social-interest-sr2h-b-successor-manifest.mjs
 import { SR2IA_MIGRATION, SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successor-manifest.mjs";
 import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
+import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+// GEO-1A's migration, named exactly. A pattern here would admit any future migration.
+const GEO1A_MIGRATION_BASENAME = "20260825010000_geo_shared_candidate_authority.sql";
+
 // SR-2K-B's enumerated successor migrations. Naming them keeps this guard's inventory EXACT: any
 // migration it has not been told about still fails.
 const SR2KB_MIGRATION_BASENAMES = ["20260824010000_meal_buddy_unfriend_authority.sql", "20260824020000_meal_buddy_chat_realtime_authority.sql", "20260824030000_meal_buddy_push_notification_authority.sql"];
@@ -110,6 +114,8 @@ try {
   // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
+  // GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
+  for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 
   const migration = sqlExec(read(SR2GD_MIGRATION));
   const policy = read(`${SR2GD_API_ROOT}/policy.ts`);
@@ -149,8 +155,8 @@ try {
   check("8. package.json differs from the frozen predecessor only by the SR-2G-D scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   check("9. no dependency or lockfile is touched", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("10. exactly one migration is added", SR2GD_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 1
-    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION), ...SR2KB_MIGRATION_BASENAMES].sort()));
-  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e)).length === 0);
+    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME].sort()));
+  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e)).length === 0);
   check("12. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MIGRATIONS])).length === 0);
   check("13. every frozen predecessor runtime module is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MODULES])).length === 0);
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));

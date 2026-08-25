@@ -24,6 +24,7 @@ import { SR2IB_BASELINE, SR2IB_SUCCESSOR_PATHS } from "./meal-buddy-relationship
 import { SR2JA_BASELINE, SR2JA_PATHS } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { SR2JB_BASELINE, SR2JB_PATHS } from "./meal-buddy-chat-sr2j-b-successor-manifest.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
+import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -104,6 +105,8 @@ try {
   // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
+  // GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
+  for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 
   const dtoTypes = read(`${SR2GE1_SHARED_ROOT}/types.ts`);
   const dtoValidate = read(`${SR2GE1_SHARED_ROOT}/validate.ts`);
@@ -164,12 +167,12 @@ try {
     JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("14. no migration is added or changed outside the enumerated SR-2G-F successor set",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2IA_SUCCESSOR_PATHS.includes(f) || SR2IB_SUCCESSOR_PATHS.includes(f) || SR2JA_PATHS.includes(f) || SR2KB_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase/migrations"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2IA_SUCCESSOR_PATHS.includes(f) || SR2IB_SUCCESSOR_PATHS.includes(f) || SR2JA_PATHS.includes(f) || SR2KB_PATHS.includes(f) || GEO1A_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/migrations/")));
   // SR-2G-E1 itself introduced no server byte, and that stays provable: the ONLY supabase delta
   // since its baseline is the exactly-enumerated SR-2G-F successor set.
   check("15. no server authority byte is touched outside exact enumerated successor sets",
-    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2IA_SUCCESSOR_PATHS.includes(f) || SR2JA_PATHS.includes(f) || SR2KB_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2IA_SUCCESSOR_PATHS.includes(f) || SR2JA_PATHS.includes(f) || SR2KB_PATHS.includes(f) || GEO1A_PATHS.includes(f))
     && !SR2GE1_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("16. every frozen SR-2E predecessor module is byte-unchanged",
     lines(git(["diff", "--name-only", SR2GE1_BASELINE, "--", ...SR2GE1_FROZEN_MOBILE_PATHS])).length === 0);

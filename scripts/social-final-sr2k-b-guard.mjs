@@ -8,6 +8,7 @@ import {
   SR2KB_FROZEN_MIGRATIONS, SR2KB_MIGRATIONS, SR2KB_NPM_COMMANDS, SR2KB_PATHS, SR2KB_PRODUCTION_PATHS,
   auditSr2kbAuthoredSources, classifySr2kbLifecycle, createSr2kbManifest
 } from "./social-final-sr2k-b-successor-manifest.mjs";
+import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
@@ -107,7 +108,9 @@ check("exact wildcard-free path inventory",
   SR2KB_PATHS.length > 0 && new Set(SR2KB_PATHS).size === SR2KB_PATHS.length
   && SR2KB_PATHS.every((f) => typeof f === "string" && !/[*?]/.test(f) && !f.endsWith("/"))
   && SR2KB_PATHS.every((f) => fs.existsSync(path.join(root, f)))
-  && lifecycle.manifest.every((f) => SR2KB_PATHS.includes(f)));
+  // GEO-1A sits one commit on top of this frozen round, so the cumulative delta legitimately
+  // contains its exactly enumerated path set as well. Anything in neither set still fails.
+  && lifecycle.manifest.every((f) => SR2KB_PATHS.includes(f) || GEO1A_PATHS.includes(f)));
 check("no candidate path is deleted or staged", staged.length === 0
   && lines(run(["diff", "--name-only", "--diff-filter=D", `${SR2KB_BASELINE}..HEAD`])).length === 0);
 
@@ -116,7 +119,7 @@ check("exactly three migrations are added",
   SR2KB_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 3);
 check("no frozen predecessor migration byte is modified",
   lines(run(["diff", "--name-only", SR2KB_BASELINE, "--", "supabase/migrations"]))
-    .every((f) => SR2KB_MIGRATIONS.includes(f))
+    .every((f) => SR2KB_MIGRATIONS.includes(f) || GEO1A_PATHS.includes(f))
   && SR2KB_FROZEN_MIGRATIONS.every((f) =>
     lines(run(["diff", "--name-only", SR2KB_BASELINE, "--", f])).length === 0));
 check("every candidate migration is transactional",
@@ -163,6 +166,8 @@ const packageJson = JSON.parse(read("package.json"));
 const baselinePackage = JSON.parse(run(["show", `${SR2KB_BASELINE}:package.json`]));
 const packageWithout = structuredClone(packageJson);
 for (const key of Object.keys(SR2KB_NPM_COMMANDS)) delete packageWithout.scripts[key];
+// GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
+for (const key of ["test:geo-shared-authority-geo-1a", "test:geo-shared-authority-geo-1a-smoke", "test:geo-shared-authority-geo-1a-mutations", "test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 check("package exposes the exact canonical SR-2K-B commands",
   Object.entries(SR2KB_NPM_COMMANDS).every(([name, command]) => packageJson.scripts[name] === command));
 check("root package.json differs from the frozen predecessor only by the SR-2K-B commands",

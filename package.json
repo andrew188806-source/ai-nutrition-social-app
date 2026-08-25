@@ -288,7 +288,11 @@
     "test:social-final-sr2k-b-smoke": "node scripts/social-final-sr2k-b-smoke.mjs",
     "test:social-final-sr2k-b-mutations": "node scripts/social-final-sr2k-b-mutations.mjs",
     "test:social-final-sr2k-b-concurrency": "node scripts/social-final-sr2k-b-concurrency.mjs",
-    "test:social-final-sr2k-b-postgres": "node scripts/social-final-sr2k-b-postgres-apply.mjs"
+    "test:social-final-sr2k-b-postgres": "node scripts/social-final-sr2k-b-postgres-apply.mjs",
+    "test:geo-shared-authority-geo-1a": "node scripts/geo-shared-authority-geo-1a-guard.mjs",
+    "test:geo-shared-authority-geo-1a-smoke": "node scripts/geo-shared-authority-geo-1a-smoke.mjs",
+    "test:geo-shared-authority-geo-1a-mutations": "node scripts/geo-shared-authority-geo-1a-mutations.mjs",
+    "test:geo-shared-authority-geo-1a-postgres": "node scripts/geo-shared-authority-geo-1a-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

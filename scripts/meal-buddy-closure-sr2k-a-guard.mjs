@@ -183,6 +183,8 @@ for (const key of Object.keys(SR2KA_NPM_COMMANDS)) delete packageWithout.scripts
 // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring what it
 // has always measured: that no OTHER package byte moved.
 for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
+// GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
+for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 check("package exposes the exact canonical SR-2K-A commands",
   Object.entries(SR2KA_NPM_COMMANDS).every(([name, command]) => packageJson.scripts[name] === command));
 check("package.json differs from the frozen predecessor only by the SR-2K-A commands",

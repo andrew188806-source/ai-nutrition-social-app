@@ -23,6 +23,7 @@ import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successo
 import { SR2JA_PATHS } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { SR2JB_PATHS } from "./meal-buddy-chat-sr2j-b-successor-manifest.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
+import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -114,6 +115,8 @@ try {
   // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
+  // GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
+  for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 
   const screen = read(SR2GE2_SCREEN);
   const screenExec = tsExec(screen);
@@ -152,7 +155,7 @@ try {
   // SR-2G-E2 itself introduced no server byte. Later server deltas must remain confined to the
   // exact, wildcard-free F, G and H-A successor manifests; no directory-wide allowance exists.
   check("10. no server authority byte is touched outside the enumerated SR-2G-F/G/SR-2H-A successor sets",
-    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2IA_SUCCESSOR_PATHS.includes(f) || SR2JA_PATHS.includes(f) || SR2KB_PATHS.includes(f))
+    lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", "supabase"])).every((f) => SR2GF_SUCCESSOR_PATHS.includes(f) || SR2GG_SUCCESSOR_PATHS.includes(f) || SR2HA_SUCCESSOR_PATHS.includes(f) || SR2HB_SUCCESSOR_PATHS.includes(f) || SR2IA_SUCCESSOR_PATHS.includes(f) || SR2JA_PATHS.includes(f) || SR2KB_PATHS.includes(f) || GEO1A_PATHS.includes(f))
     && !SR2GE2_SUCCESSOR_PATHS.some((f) => f.startsWith("supabase/")));
   check("11. every frozen SR-2G-E1 data-layer file is byte-unchanged outside exact successor sets",
     lines(git(["diff", "--name-only", SR2GF_BASELINE, "--", ...SR2GE2_FROZEN_E1_PATHS]))

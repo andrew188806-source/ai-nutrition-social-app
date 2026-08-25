@@ -173,6 +173,8 @@ try {
   // SR-2K-B adds five validation-only command keys. Stripping them keeps this guard measuring
   // what it has always measured: that no OTHER package byte moved.
   for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithoutSr2c.scripts[key];
+  // GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
+  for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithoutSr2c.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
