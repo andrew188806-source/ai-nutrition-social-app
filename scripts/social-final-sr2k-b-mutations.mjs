@@ -5,13 +5,14 @@
 // database, no Development.
 import fs from "node:fs"; import path from "node:path"; import child from "node:child_process";
 import {
-  SR2KB_BASELINE, SR2KB_MIGRATIONS, SR2KB_PRODUCTION_PATHS, auditSr2kbAuthoredSources
+  SR2KB_BASELINE, SR2KB_FREEZE_COMMIT, SR2KB_MIGRATIONS, SR2KB_PRODUCTION_PATHS,
+  auditSr2kbAuthoredSources
 } from "./social-final-sr2k-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
 function addedLines(file) {
-  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KB_BASELINE, "--", file],
+  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KB_BASELINE, SR2KB_FREEZE_COMMIT, "--", file],
     { cwd: root, encoding: "utf8" });
   const body = diff.status === 0 ? (diff.stdout ?? "") : "";
   return body.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1)).join("\n");
@@ -26,34 +27,42 @@ const NEW_PRODUCTION = SR2KB_PRODUCTION_PATHS.filter((f) =>
   || f.startsWith("supabase/functions/meal-buddy-push-de") || f.startsWith("supabase/functions/meal-buddy-push-di")
   || f.startsWith(PUSH) || f === `${CHAT}supabaseRealtime.ts` || f === `${REL}MealBuddyUnfriendConfirm.tsx`);
 
+// SR-2K-B's own frozen bytes. Reading the worktree here would let a later round's edits to a
+// shared file — the i18n bundle, the Mobile package — be judged against SR-2K-B's rules.
+const frozenRead = (file) => {
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SR2KB_FREEZE_COMMIT}:${file}`],
+    { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(file);
+};
+
 const pristine = new Map([
-  ["unfriendSql", read(SR2KB_MIGRATIONS[0])],
-  ["realtimeSql", read(SR2KB_MIGRATIONS[1])],
-  ["pushSql", read(SR2KB_MIGRATIONS[2])],
-  ["relationshipApi", read(`${EDGE}meal-buddy-relationship-api/repository.ts`)],
-  ["relationshipRequest", read(`${EDGE}meal-buddy-relationship-api/request.ts`)],
-  ["relationshipTypes", read(`${EDGE}meal-buddy-relationship-api/types.ts`)],
-  ["chatApiTypes", read(`${EDGE}meal-buddy-chat-api/types.ts`)],
-  ["chatApiRepository", read(`${EDGE}meal-buddy-chat-api/repository.ts`)],
-  ["pushApiService", read(`${EDGE}meal-buddy-push-api/service.ts`)],
-  ["pushApiRequest", read(`${EDGE}meal-buddy-push-api/request.ts`)],
-  ["pushDispatchConfig", read("supabase/functions/meal-buddy-push-dispatch/config.ts")],
-  ["pushDispatchHandler", read("supabase/functions/meal-buddy-push-dispatch/handler.ts")],
-  ["pushDeviceHandler", read("supabase/functions/meal-buddy-push-device/handler.ts")],
-  ["mobileRelController", read(`${REL}controller.ts`)],
-  ["mobileRelRepository", read(`${REL}repository.ts`)],
-  ["inbox", read(`${REL}MealBuddyRelationshipInbox.tsx`)],
-  ["panel", read(`${REL}MealBuddyRelationshipPanel.tsx`)],
-  ["confirm", read(`${REL}MealBuddyUnfriendConfirm.tsx`)],
-  ["chatController", read(`${CHAT}controller.ts`)],
-  ["chatRepository", read(`${CHAT}repository.ts`)],
-  ["chatRealtime", read(`${CHAT}supabaseRealtime.ts`)],
-  ["pushController", read(`${PUSH}controller.ts`)],
-  ["pushTypes", read(`${PUSH}types.ts`)],
-  ["pushRouting", read(`${PUSH}useMealBuddyPushRouting.ts`)],
-  ["pushInstallId", read(`${PUSH}installId.ts`)],
-  ["pushHook", read(`${PUSH}useMealBuddyPush.ts`)],
-  ["config", read("supabase/config.toml")],
+  ["unfriendSql", frozenRead(SR2KB_MIGRATIONS[0])],
+  ["realtimeSql", frozenRead(SR2KB_MIGRATIONS[1])],
+  ["pushSql", frozenRead(SR2KB_MIGRATIONS[2])],
+  ["relationshipApi", frozenRead(`${EDGE}meal-buddy-relationship-api/repository.ts`)],
+  ["relationshipRequest", frozenRead(`${EDGE}meal-buddy-relationship-api/request.ts`)],
+  ["relationshipTypes", frozenRead(`${EDGE}meal-buddy-relationship-api/types.ts`)],
+  ["chatApiTypes", frozenRead(`${EDGE}meal-buddy-chat-api/types.ts`)],
+  ["chatApiRepository", frozenRead(`${EDGE}meal-buddy-chat-api/repository.ts`)],
+  ["pushApiService", frozenRead(`${EDGE}meal-buddy-push-api/service.ts`)],
+  ["pushApiRequest", frozenRead(`${EDGE}meal-buddy-push-api/request.ts`)],
+  ["pushDispatchConfig", frozenRead("supabase/functions/meal-buddy-push-dispatch/config.ts")],
+  ["pushDispatchHandler", frozenRead("supabase/functions/meal-buddy-push-dispatch/handler.ts")],
+  ["pushDeviceHandler", frozenRead("supabase/functions/meal-buddy-push-device/handler.ts")],
+  ["mobileRelController", frozenRead(`${REL}controller.ts`)],
+  ["mobileRelRepository", frozenRead(`${REL}repository.ts`)],
+  ["inbox", frozenRead(`${REL}MealBuddyRelationshipInbox.tsx`)],
+  ["panel", frozenRead(`${REL}MealBuddyRelationshipPanel.tsx`)],
+  ["confirm", frozenRead(`${REL}MealBuddyUnfriendConfirm.tsx`)],
+  ["chatController", frozenRead(`${CHAT}controller.ts`)],
+  ["chatRepository", frozenRead(`${CHAT}repository.ts`)],
+  ["chatRealtime", frozenRead(`${CHAT}supabaseRealtime.ts`)],
+  ["pushController", frozenRead(`${PUSH}controller.ts`)],
+  ["pushTypes", frozenRead(`${PUSH}types.ts`)],
+  ["pushRouting", frozenRead(`${PUSH}useMealBuddyPushRouting.ts`)],
+  ["pushInstallId", frozenRead(`${PUSH}installId.ts`)],
+  ["pushHook", frozenRead(`${PUSH}useMealBuddyPush.ts`)],
+  ["config", frozenRead("supabase/config.toml")],
   ["authoredDelta", [
     ...NEW_PRODUCTION.map(read),
     ...SR2KB_PRODUCTION_PATHS.filter((f) => !NEW_PRODUCTION.includes(f)).map(addedLines)

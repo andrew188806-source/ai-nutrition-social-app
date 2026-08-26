@@ -107,6 +107,8 @@ try {
   for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke", "test:social-final-sr2k-b-mutations", "test:social-final-sr2k-b-concurrency", "test:social-final-sr2k-b-postgres"]) delete packageWithout.scripts[key];
   // GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
   for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
+  // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
+  for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
 
   const dtoTypes = read(`${SR2GE1_SHARED_ROOT}/types.ts`);
   const dtoValidate = read(`${SR2GE1_SHARED_ROOT}/validate.ts`);

@@ -3,6 +3,7 @@
 // One definition shared by the guard (which reads the real tree) and the mutation suite (which reads
 // mutated text), so the two can never drift apart and quietly disagree about what GEO-1A is.
 import crypto from "node:crypto";
+import { GEO1B_PATHS } from "./geo-mobile-location-geo-1b-successor-manifest.mjs";
 
 export const GEO1A_BASELINE = "5df2fd85a0d35abfd73d51e247374607c2eab0ca";
 export const GEO1A_BASELINE_SUBJECT = "Close Social MVP with unfriend realtime and push";
@@ -231,6 +232,31 @@ export function matchesCanonicalGeo1aSuccessor(state) {
 }
 
 export function classifyGeo1aLifecycle(state) {
+  // GEO-1A is frozen AND PUSHED, so its own commit is HEAD and origin/main. A GEO-1B candidate
+  // therefore appears as that same pushed commit with a worktree containing GEO-1B paths, and a
+  // GEO-1B freeze as one commit beyond it. Both are recognised by GEO-1B's EXACT path set: a
+  // worktree or delta holding anything else is still invalid.
+  const geo1aIsFrozenHere = state.head !== GEO1A_BASELINE && state.parent === GEO1A_BASELINE
+    && !state.deleted && (state.stagedPaths?.length ?? 0) === 0
+    && exact(state.deltaPaths, GEO1A_PATHS);
+  const successorWorktree = (state.worktreePaths ?? []).length > 0
+    && (state.worktreePaths ?? []).every((file) => GEO1B_PATHS.includes(file));
+  const successorCandidate = geo1aIsFrozenHere && state.originHead === state.head
+    && state.ahead === 0 && state.behind === 0 && successorWorktree;
+  // Once the successor is FROZEN, HEAD is the successor's commit and origin/main is still GEO-1A's
+  // own pushed commit — which is exactly HEAD's parent. The cumulative delta from GEO-1A's baseline
+  // is then GEO-1A's own set plus the successor's, and GEO-1A's set must be wholly present: a commit
+  // that dropped part of this round is not a successor to it.
+  // The worktree is either clean or holds successor work in progress — a successor-awareness repair
+  // necessarily edits files inside THIS round's path set, so it cannot be validated while insisting
+  // the worktree be empty. Either way every touched path must be in the successor's exact manifest.
+  const successorWorktreeSettled = (state.worktreePaths ?? []).length === 0 || successorWorktree;
+  const successorFrozen = state.parent === state.originHead
+    && state.ahead === 1 && state.behind === 0 && !state.deleted
+    && successorWorktreeSettled && (state.stagedPaths?.length ?? 0) === 0
+    && Array.isArray(state.deltaPaths)
+    && state.deltaPaths.every((file) => GEO1A_PATHS.includes(file) || GEO1B_PATHS.includes(file))
+    && GEO1A_PATHS.every((file) => state.deltaPaths.includes(file));
   // The GEO-1A baseline is itself PUSHED, so a clean candidate sits exactly on origin/main.
   const candidate = state.head === GEO1A_BASELINE && state.originHead === GEO1A_BASELINE
     && state.ahead === 0 && state.behind === 0 && !state.deleted
@@ -245,11 +271,16 @@ export function classifyGeo1aLifecycle(state) {
   const phase = candidate ? "candidate"
     : frozenUnpushed ? "frozen_unpushed"
     : frozenPushed ? "frozen_pushed"
+    : successorCandidate ? "successor_candidate"
+    : successorFrozen ? "successor_frozen_unpushed"
     : "invalid";
   return Object.freeze({
     valid: phase !== "invalid",
     phase,
-    manifest: candidate ? state.worktreePaths : state.deltaPaths
+    // Under a successor phase the reported manifest is GEO-1A's OWN frozen inventory, so this
+    // round's checks keep measuring this round.
+    manifest: phase.startsWith("successor_") ? GEO1A_PATHS
+      : candidate ? state.worktreePaths : state.deltaPaths
   });
 }
 

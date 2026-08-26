@@ -13,7 +13,17 @@
           "microphonePermission": false
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "好廚需要你的位置，才能推薦附近的餐廳與適合一起吃飯的飯友。只有在你使用這項功能時才會取得位置。",
+          "locationAlwaysPermission": false,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "web": {
       "bundler": "metro"

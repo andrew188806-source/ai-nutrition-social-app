@@ -5,10 +5,12 @@
 import fs from "node:fs"; import path from "node:path"; import crypto from "node:crypto"; import child from "node:child_process";
 import {
   SR2KB_BASELINE, SR2KB_BASELINE_SUBJECT, SR2KB_DEMO_AUTHORITY, SR2KB_FORBIDDEN_FEATURES,
+  SR2KB_FREEZE_COMMIT,
   SR2KB_FROZEN_MIGRATIONS, SR2KB_MIGRATIONS, SR2KB_NPM_COMMANDS, SR2KB_PATHS, SR2KB_PRODUCTION_PATHS,
   auditSr2kbAuthoredSources, classifySr2kbLifecycle, createSr2kbManifest
 } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+import { GEO1B_PATHS } from "./geo-mobile-location-geo-1b-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
@@ -38,7 +40,7 @@ const lifecycle = classifySr2kbLifecycle({
 
 // Pre-existing files are scanned by the lines THIS round added; files it authors are scanned whole.
 function addedLines(file) {
-  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KB_BASELINE, "--", file],
+  const diff = child.spawnSync("git", ["-c", "core.safecrlf=false", "diff", "-U0", SR2KB_BASELINE, SR2KB_FREEZE_COMMIT, "--", file],
     { cwd: root, encoding: "utf8" });
   const body = diff.status === 0 ? (diff.stdout ?? "") : "";
   return body.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).map((l) => l.slice(1)).join("\n");
@@ -52,7 +54,12 @@ const NEW_PRODUCTION = SR2KB_PRODUCTION_PATHS.filter((f) =>
   || f === "apps/mobile/features/meal-buddy-chat/supabaseRealtime.ts"
   || f === "apps/mobile/features/meal-buddy-relationships/MealBuddyUnfriendConfirm.tsx");
 const TOUCHED_PRODUCTION = SR2KB_PRODUCTION_PATHS.filter((f) => !NEW_PRODUCTION.includes(f));
-const candidateProduction = [...NEW_PRODUCTION.map(read), ...TOUCHED_PRODUCTION.map(addedLines)].join("\n");
+const frozenBytes = (file) => {
+  const shown = child.spawnSync("git", ["-c", "core.safecrlf=false", "show", `${SR2KB_FREEZE_COMMIT}:${file}`],
+    { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return shown.status === 0 ? (shown.stdout ?? "") : read(file);
+};
+const candidateProduction = [...NEW_PRODUCTION.map(frozenBytes), ...TOUCHED_PRODUCTION.map(addedLines)].join("\n");
 
 const REL = "apps/mobile/features/meal-buddy-relationships/";
 const CHAT = "apps/mobile/features/meal-buddy-chat/";
@@ -108,9 +115,10 @@ check("exact wildcard-free path inventory",
   SR2KB_PATHS.length > 0 && new Set(SR2KB_PATHS).size === SR2KB_PATHS.length
   && SR2KB_PATHS.every((f) => typeof f === "string" && !/[*?]/.test(f) && !f.endsWith("/"))
   && SR2KB_PATHS.every((f) => fs.existsSync(path.join(root, f)))
-  // GEO-1A sits one commit on top of this frozen round, so the cumulative delta legitimately
-  // contains its exactly enumerated path set as well. Anything in neither set still fails.
-  && lifecycle.manifest.every((f) => SR2KB_PATHS.includes(f) || GEO1A_PATHS.includes(f)));
+  // GEO-1A and then GEO-1B sit on top of this frozen round, so the cumulative delta legitimately
+  // contains their exactly enumerated path sets as well. Anything in none of the three still fails.
+  && lifecycle.manifest.every((f) =>
+    SR2KB_PATHS.includes(f) || GEO1A_PATHS.includes(f) || GEO1B_PATHS.includes(f)));
 check("no candidate path is deleted or staged", staged.length === 0
   && lines(run(["diff", "--name-only", "--diff-filter=D", `${SR2KB_BASELINE}..HEAD`])).length === 0);
 
@@ -168,11 +176,13 @@ const packageWithout = structuredClone(packageJson);
 for (const key of Object.keys(SR2KB_NPM_COMMANDS)) delete packageWithout.scripts[key];
 // GEO-1A registers the shared Geo authority's four command keys. Named exactly, never by pattern.
 for (const key of ["test:geo-shared-authority-geo-1a", "test:geo-shared-authority-geo-1a-smoke", "test:geo-shared-authority-geo-1a-mutations", "test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
+// GEO-1B registers the Mobile location authority's three command keys. Named exactly.
+for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
 check("package exposes the exact canonical SR-2K-B commands",
   Object.entries(SR2KB_NPM_COMMANDS).every(([name, command]) => packageJson.scripts[name] === command));
 check("root package.json differs from the frozen predecessor only by the SR-2K-B commands",
   JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
-const mobilePackage = JSON.parse(read("apps/mobile/package.json"));
+const mobilePackage = JSON.parse(run(["show", `${SR2KB_FREEZE_COMMIT}:apps/mobile/package.json`]));
 const baselineMobile = JSON.parse(run(["show", `${SR2KB_BASELINE}:apps/mobile/package.json`]));
 const mobileWithout = structuredClone(mobilePackage);
 delete mobileWithout.dependencies["expo-notifications"];

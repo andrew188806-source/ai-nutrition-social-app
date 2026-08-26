@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 
 // SR-2K-B — Social MVP final closure: unfriend, realtime chat delivery and push notifications.
+// SR-2K-B's OWN freeze commit. Its authored delta is measured against this fixed point rather
+// than against the worktree, so a later round editing the same shared files can never be attributed
+// to SR-2K-B. Pinned, never derived.
+export const SR2KB_FREEZE_COMMIT = "5df2fd85a0d35abfd73d51e247374607c2eab0ca";
+
 export const SR2KB_BASELINE = "8a1da28732dcd88efb87f0c5543fc76fb66bb708";
 export const SR2KB_BASELINE_SUBJECT = "Close SR-2K-A mobile Meal Buddy journey";
 
