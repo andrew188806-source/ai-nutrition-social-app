@@ -17,6 +17,7 @@ import {
   classifyGeo1aLifecycle,
   createGeo1aManifest
 } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+import { GEO1CP0_NPM_KEYS, GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 
 const SUITE = "geo-shared-authority-geo-1a-guard";
 const root = process.cwd();
@@ -68,17 +69,19 @@ check("exact wildcard-free path inventory",
   && lifecycle.manifest.every((file) => GEO1A_PATHS.includes(file)), lifecycle.manifest);
 check("every declared path exists on disk", GEO1A_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("exactly one narrow additive migration",
-  lifecycle.manifest.filter((f) => f.startsWith("supabase/migrations/")).join("") === GEO1A_MIGRATION
+  lifecycle.manifest.filter((f) => f.startsWith("supabase/migrations/") && !GEO1CP0_PATHS.includes(f))
+    .join("") === GEO1A_MIGRATION
   || lifecycle.manifest.length === 0);
 check("no predecessor migration byte is modified",
   lines(git(["diff", "--name-only", GEO1A_BASELINE, "--", "supabase/migrations"]))
-    .every((file) => file === GEO1A_MIGRATION));
+    .every((file) => file === GEO1A_MIGRATION || GEO1CP0_PATHS.includes(file)));
 
 // The Geo authority is a new, isolated surface: it may not edit any frozen Social, Taste, Mobile or
 // restaurant byte. Everything it contributes is additive.
 check("no byte outside the GEO-1A manifest is touched",
   lines(git(["diff", "--name-only", GEO1A_BASELINE, "--"]))
-    .every((file) => GEO1A_PATHS.includes(file) || GEO1B_PATHS.includes(file)));
+    .every((file) => GEO1A_PATHS.includes(file) || GEO1B_PATHS.includes(file)
+      || GEO1CP0_PATHS.includes(file)));
 check("no Mobile byte is touched at all",
   !lifecycle.manifest.some((file) => file.startsWith("apps/")));
 // The product surface is exactly the authority and the shared contract. Everything else GEO-1A
@@ -90,7 +93,8 @@ check("the only product bytes are the Geo authority and the shared contract",
 check("every predecessor byte touched is a validation-only successor-awareness amendment",
   GEO1A_PREDECESSOR_GUARDS.every((file) => file.endsWith("-guard.mjs"))
   && lines(git(["diff", "--name-only", GEO1A_BASELINE, "--", "supabase", "apps", "packages", "lib"]))
-    .every((file) => GEO1A_PRODUCT_PATHS.includes(file) || GEO1B_PATHS.includes(file)));
+    .every((file) => GEO1A_PRODUCT_PATHS.includes(file) || GEO1B_PATHS.includes(file)
+      || GEO1CP0_PATHS.includes(file)));
 
 const sources = Object.fromEntries(
   GEO1A_PATHS.filter((file) => file !== "package.json").map((file) => [file, read(file)])
@@ -108,7 +112,8 @@ check("package.json gains only the GEO-1A command keys",
     const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
     const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
     return removed.length === 0
-      && added.every((key) => GEO1A_NPM_KEYS.includes(key) || GEO1B_NPM_KEYS.includes(key));
+      && added.every((key) => GEO1A_NPM_KEYS.includes(key) || GEO1B_NPM_KEYS.includes(key)
+        || GEO1CP0_NPM_KEYS.includes(key));
   })());
 
 // The replacement character is written as an escape, not as itself: a literal here would be found in

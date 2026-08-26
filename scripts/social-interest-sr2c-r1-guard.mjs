@@ -21,8 +21,10 @@ import { SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationship-sr2i-a-successo
 import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 // GEO-1A's migration, named exactly. A pattern here would admit any future migration.
 const GEO1A_MIGRATION_BASENAME = "20260825010000_geo_shared_candidate_authority.sql";
+const GEO1CP0_MIGRATION_BASENAME = "20260826010000_restaurant_geocode_source_authority.sql";
 
 // SR-2K-B's enumerated successor migrations. Naming them keeps this guard's inventory EXACT: any
 // migration it has not been told about still fails.
@@ -114,6 +116,8 @@ try {
   for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
   // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
   for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
+  // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
+  for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
 
   const schema = sqlExec(read(SR2CR1_SCHEMA_MIGRATION));
   const data = sqlExec(read(SR2CR1_DATA_MIGRATION));
@@ -141,8 +145,8 @@ try {
   check("8. package.json differs from frozen authority only by the SR-2C-R1 scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   const sr2cr1MigrationFiles = migrationFiles.filter((f) => !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE2_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2JA_MIGRATION);
   check("9. exactly three migrations are added", SR2CR1_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 3
-    && exact(sr2cr1MigrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m)), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME].sort()));
-  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e) && !SR2GE1_SUCCESSOR_PATHS.includes(e) && !SR2GE2_SUCCESSOR_PATHS.includes(e) && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e)).length === 0);
+    && exact(sr2cr1MigrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m)), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME, GEO1CP0_MIGRATION_BASENAME].sort()));
+  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e) && !SR2GE1_SUCCESSOR_PATHS.includes(e) && !SR2GE2_SUCCESSOR_PATHS.includes(e) && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e) && !GEO1CP0_PATHS.includes(e)).length === 0);
   check("11. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", ...SR2CR1_FROZEN_MIGRATIONS])).length === 0);
   check("12. every migration is transactional", [schema, data, projection].every((m) => /^begin;/m.test(m) && /^commit;/m.test(m)));
 

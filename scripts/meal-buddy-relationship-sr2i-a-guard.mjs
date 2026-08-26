@@ -18,6 +18,7 @@ import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs
 import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 
 const root = process.cwd(); const checks = []; const failures = [];
 function check(name, condition, detail) {
@@ -80,6 +81,8 @@ for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke",
 for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
 for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
+// GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
+for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 check("02 lifecycle inventory is exact and wildcard-free", exact(lifecycle.manifest, lifecycle.phase.startsWith("successor_") ? SR2IB_SUCCESSOR_PATHS : SR2IA_SUCCESSOR_PATHS));
@@ -161,7 +164,7 @@ check("54 compact discovery and frozen ranking exposure context candidate-ref au
 check("55 no chat message conversation room or notification authority is introduced", !/create (?:table|function)[^;]*(?:chat|message|conversation|room|notification)/i.test(migration));
 check("56 no ranking exposure context interest or premium authority is introduced", !/(ranking_score|exposure_reason|food_context_tag_key|interest_snapshot|entitlement|premium_tier)/i.test(migration + types + service));
 check("57 lifecycle migration inventory is exact", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")), lifecycle.phase.startsWith("successor_") ? [] : [SR2IA_MIGRATION]));
-check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION || file === SR2JA_MIGRATION || SR2KB_PATHS.includes(file) || GEO1A_PATHS.includes(file)));
+check("58 existing migration bytes are unchanged", lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", "supabase/migrations"])).every((file) => file === SR2IA_MIGRATION || file === SR2JA_MIGRATION || SR2KB_PATHS.includes(file) || GEO1A_PATHS.includes(file) || GEO1CP0_PATHS.includes(file)));
 const implementationSources = SR2IA_SUCCESSOR_PATHS.filter((file) => !file.startsWith("scripts/") && file !== "package.json").map(read).join("\n");
 check("59 no deploy remote operator or credential command is introduced", !/supabase\s+(db push|functions deploy)|--project-ref|DATABASE_URL|SUPABASE_SERVICE_ROLE/.test(implementationSources));
 check("60 all candidate source bytes are UTF-8 text without NUL", SR2IA_SUCCESSOR_PATHS.every((file) => { const bytes = fs.readFileSync(path.join(root, file)); return !bytes.includes(0) && !read(file).includes("\uFFFD"); }));

@@ -15,6 +15,7 @@ import {
   classifyGeo1bLifecycle,
   createGeo1bManifest
 } from "./geo-mobile-location-geo-1b-successor-manifest.mjs";
+import { GEO1CP0_NPM_KEYS, GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 
 const SUITE = "geo-mobile-location-geo-1b-guard";
 const root = process.cwd();
@@ -63,18 +64,25 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free path inventory",
   new Set(GEO1B_PATHS).size === GEO1B_PATHS.length
   && GEO1B_PATHS.every((file) => !file.includes("*") && !file.includes("?") && !file.endsWith("/"))
-  && lifecycle.manifest.every((file) => GEO1B_PATHS.includes(file)), lifecycle.manifest);
+  && lifecycle.manifest.every((file) => GEO1B_PATHS.includes(file)
+    || GEO1CP0_PATHS.includes(file)), lifecycle.manifest);
 check("every declared path exists on disk", GEO1B_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 
 // GEO-1B is a Mobile phase. It adds no migration and touches no server authority at all.
+// GEO-1C-P0 is a server round that sits on top of this Mobile one, so the cumulative supabase
+// delta legitimately contains its exactly enumerated path set. GEO-1B itself still contributes none.
 check("GEO-1B adds no migration and touches no server byte",
-  lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase"])).length === 0
+  lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase"]))
+    .every((file) => GEO1CP0_PATHS.includes(file))
   && !GEO1B_PATHS.some((file) => file.startsWith("supabase/")));
 check("the frozen GEO-1A shared contract is byte-unchanged",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--",
-    "supabase/functions/_shared/geo-api", "supabase/migrations"])).length === 0);
+    "supabase/functions/_shared/geo-api"])).length === 0
+  && lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase/migrations"]))
+    .every((file) => GEO1CP0_PATHS.includes(file)));
 check("no byte outside the GEO-1B manifest is touched",
-  lines(git(["diff", "--name-only", GEO1B_BASELINE, "--"])).every((file) => GEO1B_PATHS.includes(file)));
+  lines(git(["diff", "--name-only", GEO1B_BASELINE, "--"]))
+    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file)));
 check("the only product bytes are the consumer-location feature",
   GEO1B_PATHS.filter((file) => file.startsWith("apps/") && !file.endsWith("app.json") && !file.endsWith("package.json"))
     .every((file) => GEO1B_PRODUCT_PATHS.includes(file)));
@@ -140,7 +148,8 @@ check("root package.json gains only the GEO-1B command keys",
     const before = JSON.parse(git(["show", `${GEO1B_BASELINE}:package.json`]));
     const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
     const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
-    return removed.length === 0 && added.every((key) => GEO1B_NPM_KEYS.includes(key))
+    return removed.length === 0
+      && added.every((key) => GEO1B_NPM_KEYS.includes(key) || GEO1CP0_NPM_KEYS.includes(key))
       && JSON.stringify(packageJson.dependencies) === JSON.stringify(before.dependencies)
       && JSON.stringify(packageJson.devDependencies) === JSON.stringify(before.devDependencies);
   })());

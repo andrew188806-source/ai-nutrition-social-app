@@ -295,7 +295,11 @@
     "test:geo-shared-authority-geo-1a-postgres": "node scripts/geo-shared-authority-geo-1a-postgres-apply.mjs",
     "test:geo-mobile-location-geo-1b": "node scripts/geo-mobile-location-geo-1b-guard.mjs",
     "test:geo-mobile-location-geo-1b-smoke": "node scripts/geo-mobile-location-geo-1b-smoke.mjs",
-    "test:geo-mobile-location-geo-1b-mutations": "node scripts/geo-mobile-location-geo-1b-mutations.mjs"
+    "test:geo-mobile-location-geo-1b-mutations": "node scripts/geo-mobile-location-geo-1b-mutations.mjs",
+    "test:geo-coordinate-source-geo-1c-p0": "node scripts/geo-coordinate-source-geo-1c-p0-guard.mjs",
+    "test:geo-coordinate-source-geo-1c-p0-smoke": "node scripts/geo-coordinate-source-geo-1c-p0-smoke.mjs",
+    "test:geo-coordinate-source-geo-1c-p0-mutations": "node scripts/geo-coordinate-source-geo-1c-p0-mutations.mjs",
+    "test:geo-coordinate-source-geo-1c-p0-postgres": "node scripts/geo-coordinate-source-geo-1c-p0-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

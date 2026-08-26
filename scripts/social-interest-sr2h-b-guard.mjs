@@ -76,6 +76,8 @@ for (const key of ["test:social-final-sr2k-b", "test:social-final-sr2k-b-smoke",
 for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
 // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
 for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
+// GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
+for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
 
 check("01 lifecycle is exact candidate, frozen-unpushed or frozen-pushed", lifecycle.valid, { phase: lifecycle.phase, head, originHead, ahead, behind });
 const expectedLifecyclePaths = lifecycle.phase.startsWith("successor_successor_") ? SR2IB_SUCCESSOR_PATHS

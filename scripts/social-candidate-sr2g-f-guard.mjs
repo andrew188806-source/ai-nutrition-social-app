@@ -118,6 +118,8 @@ try {
   for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
   // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
   for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
+  // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
+  for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
 
   const migration = read(SR2GF_MIGRATION);
   const migrationExec = sqlExec(migration);

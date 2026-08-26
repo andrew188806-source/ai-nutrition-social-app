@@ -45,6 +45,7 @@ const require_ = createRequire(import.meta.url);
 const ts = require_("typescript");
 // GEO-1A's migration, named exactly. A pattern here would admit any future migration.
 const GEO1A_MIGRATION_BASENAME = "20260825010000_geo_shared_candidate_authority.sql";
+const GEO1CP0_MIGRATION_BASENAME = "20260826010000_restaurant_geocode_source_authority.sql";
 
 // SR-2K-B's enumerated successor migrations. Naming them keeps this guard's inventory EXACT: any
 // migration it has not been told about still fails.
@@ -199,6 +200,8 @@ try {
   for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithoutSr2b.scripts[key];
   // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
   for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithoutSr2b.scripts[key];
+  // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
+  for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithoutSr2b.scripts[key];
   const sources = new Map(sourcePaths.map((file) => [file, read(file)]));
   const parsed = new Map(sourcePaths.map((file) => [file, parse(file)]));
   const typesSource = parsed.get(`${moduleRoot}/types.ts`);
@@ -277,7 +280,7 @@ try {
   check("45. no randomness can affect exposure", !/Math\.random|crypto\.randomUUID|randomBytes/.test(allExecutable));
 
   check("46. exactly one SR-2B migration is added and it is the only candidate migration", exact(SR2B_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")), [SR2B_SUCCESSOR_MIGRATION]));
-  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && file !== "20260823020000_meal_buddy_chat_authority.sql" && !SR2KB_MIGRATION_BASENAMES.includes(file) && file !== GEO1A_MIGRATION_BASENAME);
+  const nonSuccessorMigrations = repositoryMigrations.filter((file) => !SR2C_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${file}`) && file !== "20260823020000_meal_buddy_chat_authority.sql" && !SR2KB_MIGRATION_BASENAMES.includes(file) && file !== GEO1A_MIGRATION_BASENAME && file !== GEO1CP0_MIGRATION_BASENAME);
   check("47. the SR-2B migration is the newest repository migration outside an enumerated successor", nonSuccessorMigrations.filter((file) => file !== path.basename(SR2HB_MIGRATION)).at(-1) === path.basename(SR2B_SUCCESSOR_MIGRATION));
   check("48. the migration executes exactly one grant statement", migrationSql === "grant select on table public.subscription_entitlements to authenticated;");
   check("49. the migration grants SELECT only to authenticated", /grant select on table public\.subscription_entitlements to authenticated;/.test(migrationSql) && !/\bto\s+(anon|public|service_role|social_runtime_executor|social_pair_read_authority|social_authority)\b/i.test(migrationSql));

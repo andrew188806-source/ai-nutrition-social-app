@@ -3,6 +3,7 @@
 // One definition shared by the guard (which reads the real tree) and the mutation suite (which reads
 // mutated text), so the two can never drift apart and quietly disagree about what GEO-1B is.
 import crypto from "node:crypto";
+import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 
 export const GEO1B_BASELINE = "1e8e881ec74f5e9a70fcd0806867f9639e47b709";
 export const GEO1B_BASELINE_SUBJECT = "Add shared Geo candidate authority";
@@ -242,9 +243,33 @@ export function classifyGeo1bLifecycle(state) {
   const frozenUnpushed = frozen && state.originHead === GEO1B_BASELINE
     && state.ahead === 1 && state.behind === 0;
   const frozenPushed = frozen && state.originHead === state.head && state.ahead === 0 && state.behind === 0;
+  // GEO-1B is frozen AND PUSHED, so its own commit is HEAD and origin/main. A GEO-1C-P0 candidate
+  // therefore appears as that same pushed commit with a worktree holding GEO-1C-P0 paths — some of
+  // which (package.json, this round's own guard and manifest) are legitimately inside GEO-1B's set.
+  // Recognised by GEO-1C-P0's EXACT path list: a worktree holding anything else is still invalid.
+  const geo1bIsFrozenHere = state.head !== GEO1B_BASELINE && state.parent === GEO1B_BASELINE
+    && !state.deleted && (state.stagedPaths?.length ?? 0) === 0
+    && exact(state.deltaPaths, GEO1B_PATHS);
+  const successorWorktree = (state.worktreePaths ?? []).length > 0
+    && (state.worktreePaths ?? []).every((file) => GEO1CP0_PATHS.includes(file));
+  const successorCandidate = geo1bIsFrozenHere && state.originHead === state.head
+    && state.ahead === 0 && state.behind === 0 && successorWorktree;
+  // Once the successor is FROZEN, HEAD is the successor's commit and origin/main is still GEO-1B's
+  // own pushed commit — which is exactly HEAD's parent. The cumulative delta from GEO-1B's baseline
+  // is then GEO-1B's own set plus the successor's, and GEO-1B's set must be wholly present: a commit
+  // that dropped part of this round is not a successor to it.
+  const successorWorktreeSettled = (state.worktreePaths ?? []).length === 0 || successorWorktree;
+  const successorFrozenUnpushed = state.parent === state.originHead
+    && state.ahead === 1 && state.behind === 0 && !state.deleted
+    && successorWorktreeSettled && (state.stagedPaths?.length ?? 0) === 0
+    && Array.isArray(state.deltaPaths)
+    && state.deltaPaths.every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file))
+    && GEO1B_PATHS.every((file) => state.deltaPaths.includes(file));
   const phase = candidate ? "candidate"
     : frozenUnpushed ? "frozen_unpushed"
     : frozenPushed ? "frozen_pushed"
+    : successorCandidate ? "successor_candidate"
+    : successorFrozenUnpushed ? "successor_frozen_unpushed"
     : "invalid";
   return Object.freeze({
     valid: phase !== "invalid",

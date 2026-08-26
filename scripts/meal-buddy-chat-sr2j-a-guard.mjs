@@ -3,6 +3,7 @@ import fs from "node:fs"; import path from "node:path"; import crypto from "node
 import { SR2JA_BASELINE, SR2JA_BASELINE_SUBJECT, SR2JA_MIGRATION, SR2JA_PATHS, SR2JA_PREDECESSOR_MIGRATION, SR2JA_PREDECESSOR_MIGRATION_SHA256, classifySr2jaLifecycle, createSr2jaManifest } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 const root=process.cwd(); const read=(f)=>fs.readFileSync(path.join(root,f),"utf8"); const run=(args)=>{const result=child.spawnSync("git",["-c","core.safecrlf=false",...args],{cwd:root,encoding:"utf8"});if(result.status!==0)throw result.error??new Error(result.stderr||"git_failed");return (result.stdout??"").trim();}; const lines=(v)=>v? v.split(/\r?\n/).filter(Boolean):[]; const sha=(b)=>crypto.createHash("sha256").update(b).digest("hex");
 const candidateRoots=SR2JA_PATHS;
 const unstaged=lines(run(["diff","--name-only","--",...candidateRoots])); const untracked=lines(run(["ls-files","--others","--exclude-standard","--",...candidateRoots])); const worktree=[...new Set([...unstaged,...untracked])].sort(); const staged=lines(run(["diff","--cached","--name-only"])); const head=run(["rev-parse","HEAD"]); const originHead=run(["rev-parse","origin/main"]); const counts=run(["rev-list","--left-right","--count","origin/main...HEAD"]).split(/\s+/).map(Number); const delta=head===SR2JA_BASELINE?[]:lines(run(["diff","--name-only",`${SR2JA_BASELINE}..HEAD`]));
@@ -12,7 +13,7 @@ const checks=[]; const failures=[]; const check=(name,ok)=>{checks.push(name); c
 check("lifecycle is exact candidate or frozen-unpushed",lifecycle.valid);
 check("baseline and subject are exact pushed authority",run(["show","-s","--format=%s",SR2JA_BASELINE])===SR2JA_BASELINE_SUBJECT&&run(["merge-base","--is-ancestor",SR2JA_BASELINE,"HEAD"])==="");
 check("exact wildcard-free path inventory",SR2JA_PATHS.length===34&&new Set(SR2JA_PATHS).size===34&&lifecycle.manifest.every((f)=>SR2JA_PATHS.includes(f)));
-check("one narrow additive migration",lifecycle.manifest.filter((f)=>f.startsWith("supabase/migrations/")&&!SR2KB_PATHS.includes(f)&&!GEO1A_PATHS.includes(f)).join("")===SR2JA_MIGRATION);
+check("one narrow additive migration",lifecycle.manifest.filter((f)=>f.startsWith("supabase/migrations/")&&!SR2KB_PATHS.includes(f)&&!GEO1A_PATHS.includes(f)&&!GEO1CP0_PATHS.includes(f)).join("")===SR2JA_MIGRATION);
 check("one relationship owns at most one conversation",migration.includes("meal_buddy_conversations_relationship_unique")&&migration.includes("unique (relationship_id)"));
 check("conversation creation is lazy and conflict-safe",migration.includes("open_meal_buddy_chat")&&migration.includes("on conflict on constraint meal_buddy_conversations_relationship_unique do nothing"));
 check("accepted relationship is hard gate",migration.includes("v_relation.state <> 'accepted'")&&migration.includes("authorize_meal_buddy_chat"));
@@ -38,7 +39,7 @@ check("no realtime unread receipt notification or media authority",!/(create tab
 check("no ranking exposure context or interest mutation",!/(insert into|update|delete from)[^;]*(ranking|exposure|context|interest)/i.test(migration));
 check("relationship acceptance does not create conversation",!read(SR2JA_PREDECESSOR_MIGRATION).includes("meal_buddy_conversations"));
 check("predecessor relationship migration is byte exact",sha(fs.readFileSync(path.join(root,SR2JA_PREDECESSOR_MIGRATION)))===SR2JA_PREDECESSOR_MIGRATION_SHA256);
-check("no predecessor migration changed",lines(run(["diff","--name-only",SR2JA_BASELINE,"--","supabase/migrations"])).every((f)=>f===SR2JA_MIGRATION||SR2KB_PATHS.includes(f)||GEO1A_PATHS.includes(f)));
+check("no predecessor migration changed",lines(run(["diff","--name-only",SR2JA_BASELINE,"--","supabase/migrations"])).every((f)=>f===SR2JA_MIGRATION||SR2KB_PATHS.includes(f)||GEO1A_PATHS.includes(f)||GEO1CP0_PATHS.includes(f)));
 check("no Mobile chat screen or route is introduced",lifecycle.manifest.every((f)=>!f.startsWith("apps/mobile/")));
 const implementationPaths=SR2JA_PATHS.filter((file)=>!file.startsWith("scripts/")&&file!=="package.json");
 check("no deployment operator or credential material",!/(supabase\s+(db push|functions deploy)|--project-ref|SUPABASE_SERVICE_ROLE|DATABASE_URL)/.test(implementationPaths.map(read).join("\n")));

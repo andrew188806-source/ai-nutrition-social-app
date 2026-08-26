@@ -24,8 +24,10 @@ import { SR2IA_MIGRATION, SR2IA_SUCCESSOR_PATHS } from "./meal-buddy-relationshi
 import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs";
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
+import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 // GEO-1A's migration, named exactly. A pattern here would admit any future migration.
 const GEO1A_MIGRATION_BASENAME = "20260825010000_geo_shared_candidate_authority.sql";
+const GEO1CP0_MIGRATION_BASENAME = "20260826010000_restaurant_geocode_source_authority.sql";
 
 // SR-2K-B's enumerated successor migrations. Naming them keeps this guard's inventory EXACT: any
 // migration it has not been told about still fails.
@@ -118,6 +120,8 @@ try {
   for (const key of ["test:geo-shared-authority-geo-1a","test:geo-shared-authority-geo-1a-smoke","test:geo-shared-authority-geo-1a-mutations","test:geo-shared-authority-geo-1a-postgres"]) delete packageWithout.scripts[key];
   // GEO-1B registers the Mobile location authority's three command keys. Named exactly.
   for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
+  // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
+  for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
 
   const migration = sqlExec(read(SR2GD_MIGRATION));
   const policy = read(`${SR2GD_API_ROOT}/policy.ts`);
@@ -157,8 +161,8 @@ try {
   check("8. package.json differs from the frozen predecessor only by the SR-2G-D scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   check("9. no dependency or lockfile is touched", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies));
   check("10. exactly one migration is added", SR2GD_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 1
-    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME].sort()));
-  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e)).length === 0);
+    && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME, GEO1CP0_MIGRATION_BASENAME].sort()));
+  check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e) && !GEO1CP0_PATHS.includes(e)).length === 0);
   check("12. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MIGRATIONS])).length === 0);
   check("13. every frozen predecessor runtime module is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MODULES])).length === 0);
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
@@ -230,7 +234,8 @@ try {
     .map((block) => block.split("]")[0].trim());
   check("41. the function is registered with JWT verification and none is registered without it",
     new RegExp(`\\[functions\\.${SR2GD_FUNCTION}\\][^\\[]*?verify_jwt = true`).test(configToml)
-    && nonJwtFunctions.every((name) => name === "meal-buddy-push-dispatch"));
+    && nonJwtFunctions.every((name) =>
+      name === "meal-buddy-push-dispatch" || name === "restaurant-geocode-dispatch"));
 
   // --- source reference authority ------------------------------------------------------------------
   check("42. the source reference is opened for THIS actor and the SOURCE purpose only",

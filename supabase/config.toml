@@ -65,3 +65,9 @@ verify_jwt = true
 # secret header instead of a user JWT and refuses to run when that secret is absent, so JWT
 # verification is deliberately off while the endpoint remains closed to anonymous callers.
 verify_jwt = false
+
+[functions.restaurant-geocode-dispatch]
+# GEO-1C-P0: operational coordinate resolver, not a user endpoint. It is authenticated by a shared
+# secret header instead of a user JWT and refuses to run when that secret is absent, so JWT
+# verification is deliberately off while the endpoint remains closed to anonymous callers.
+verify_jwt = false
