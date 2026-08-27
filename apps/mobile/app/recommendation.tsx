@@ -34,7 +34,7 @@ const canonicalProvider = createCanonicalNextMealPrototypeProvider(
 
 export default function RecommendationScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ prototypeId?: string; previewState?: string }>();
+  const params = useLocalSearchParams<{ preferredMenuItemId?: string; previewState?: string }>();
   const [demoMode] = useDemoUserPlan();
   const runtime = useConsumerRuntime();
   const geoRuntimeEnabled = getConsumerMealRuntimeFlags().nextMealRecommendationSource === "supabase";
@@ -82,7 +82,7 @@ export default function RecommendationScreen() {
         entitlement={demoMode}
         onReturnHome={() => router.replace("/")}
         onUseForMealBuddy={openMealBuddyPrefill}
-        preferredPrototypeId={typeof params.prototypeId === "string" ? params.prototypeId : undefined}
+        preferredMenuItemId={typeof params.preferredMenuItemId === "string" ? params.preferredMenuItemId : undefined}
         provider={canonicalProvider}
         scenario={scenario}
         currentLocation={location.state.phase === "available" ? location.state.position : undefined}

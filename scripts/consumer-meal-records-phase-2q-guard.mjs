@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { RECA_BASELINE, RECA_PATHS } from "./recommendation-rec-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const issues = [];
@@ -46,13 +47,13 @@ if (/ConsumerNextMealDataProvenance\s*=\s*"sample"\s*\|\s*"live"/.test(types))
   pass("ConsumerNextMealDataProvenance type exists with sample and live");
 else fail("ConsumerNextMealDataProvenance type exists with sample and live", "Data provenance type must define sample and live.");
 
-if (/ConsumerNextMealPersonalizationLevel/.test(types) && /fallback/.test(types) && /intake_context/.test(types) && /full_profile/.test(types))
-  pass("ConsumerNextMealPersonalizationLevel type exists with required variants");
-else fail("ConsumerNextMealPersonalizationLevel type exists with required variants", "Personalization level must include fallback, intake_context, full_profile.");
+if (/ConsumerNextMealRankingMode/.test(types) && /nutrition_gap/.test(types) && /neutral_fallback/.test(types))
+  pass("REC-A successor exposes truthful nutrition-gap and neutral ranking modes");
+else fail("REC-A successor exposes truthful nutrition-gap and neutral ranking modes", "Ranking mode must distinguish active gap ranking from neutral fallback.");
 
-if (/ConsumerNextMealRecommendationBasis/.test(types) && /calorie_proximity/.test(types) && /fallback_calorie_reference/.test(types))
-  pass("ConsumerNextMealRecommendationBasis type has calorie_proximity and fallback_calorie_reference");
-else fail("ConsumerNextMealRecommendationBasis type has calorie_proximity and fallback_calorie_reference", "Basis must only expose evidence-backed values.");
+if (/ConsumerNextMealRecommendationBasis/.test(types) && /nutrition_gap/.test(types) && /neutral_nutrition_fallback/.test(types))
+  pass("REC-A successor reason basis is nutrition-gap or neutral fallback");
+else fail("REC-A successor reason basis is nutrition-gap or neutral fallback", "Basis must only expose current evidence-backed values.");
 
 if (/ConsumerNextMealRecommendationInput/.test(types) && /candidatePoolLimit/.test(types) && !/maxCandidates\s*=\s*premium|premium.*max|default.*10.*premium/.test(types))
   pass("ConsumerNextMealRecommendationInput uses neutral candidatePoolLimit without entitlement annotation");
@@ -62,13 +63,13 @@ if (/plannedMealsAppliedToRanking:\s*false/.test(types))
   pass("ConsumerNextMealRecommendationContext marks plannedMealsAppliedToRanking as literal false");
 else fail("ConsumerNextMealRecommendationContext marks plannedMealsAppliedToRanking as literal false", "Must explicitly declare planned meals do not affect ranking in Phase 2Q.");
 
-if (/referenceIsActualTarget:\s*false/.test(types))
-  pass("ConsumerNextMealRecommendationContext marks referenceIsActualTarget as literal false");
-else fail("ConsumerNextMealRecommendationContext marks referenceIsActualTarget as literal false", "Must not claim reference calories are a real user target.");
+if (/nutritionGoalsApplied:\s*boolean/.test(types))
+  pass("ConsumerNextMealRecommendationContext records whether canonical goals were applied");
+else fail("ConsumerNextMealRecommendationContext records whether canonical goals were applied", "Context must disclose goal authority usage.");
 
-if (/intakeOverviewUsed:\s*boolean/.test(types))
-  pass("ConsumerNextMealRecommendationContext records intakeOverviewUsed");
-else fail("ConsumerNextMealRecommendationContext records intakeOverviewUsed", "Context must track whether Today Intake Overview was called.");
+if (/todayIntakeApplied:\s*boolean/.test(types))
+  pass("ConsumerNextMealRecommendationContext records Today Intake application");
+else fail("ConsumerNextMealRecommendationContext records Today Intake application", "Context must track whether Today Intake was applied.");
 
 if (/ConsumerNextMealRecommendationResult/.test(types) &&
     /status:\s*"available"/.test(types) &&
@@ -130,9 +131,9 @@ if (!/Date\.now\(\)|new Date\(\)|Math\.random\(\)/.test(service))
   pass("Service does not call Date.now(), new Date(), or Math.random()");
 else fail("Service does not call Date.now(), new Date(), or Math.random()", "Service must be deterministic via injected clock.");
 
-if (/referenceIsActualTarget:\s*false/.test(service))
-  pass("Service sets referenceIsActualTarget: false — does not claim reference is user target");
-else fail("Service sets referenceIsActualTarget: false — does not claim reference is user target", "Service must not misrepresent fallback as user goal.");
+if (/readCurrentUserNutritionGoals/.test(service) && !/\b520\b/.test(service))
+  pass("REC-A successor reads canonical goals without a fixed calorie reference");
+else fail("REC-A successor reads canonical goals without a fixed calorie reference", "Service must use canonical goals and must not retain fixed 520 fallback authority.");
 
 if (/plannedMealsAppliedToRanking:\s*false/.test(service))
   pass("Service sets plannedMealsAppliedToRanking: false");
@@ -178,17 +179,20 @@ else fail("localMenuDemoConsumerNextMealRecommendationRepository source is local
 
 // No U1 modifications
 const u1Diff = execFileSync("git", ["diff", "--name-only", "--", "apps/mobile/features/next-meal-prototype"], { cwd: root, encoding: "utf8" }).trim();
-if (!u1Diff) pass("No U1 files modified in Phase 2Q");
-else fail("No U1 files modified in Phase 2Q", "U1 files must remain unchanged.", { files: u1Diff.split(/\r?\n/) });
+const u1Files = u1Diff ? u1Diff.split(/\r?\n/) : [];
+if (u1Files.every((file) => RECA_PATHS.includes(file))) pass("U1 changes are limited to the authorized REC-A successor manifest", { files: u1Files });
+else fail("U1 changes are limited to the authorized REC-A successor manifest", "Unexpected U1 file changed.", { files: u1Files });
 
 const screenDiff = execFileSync("git", ["diff", "--name-only", "--", "apps/mobile/app/recommendation.tsx", "apps/mobile/app/index.tsx", "apps/mobile/app/analysis.tsx", "apps/mobile/app/meal-buddies.tsx"], { cwd: root, encoding: "utf8" }).trim();
-if (!screenDiff) pass("No app screen files modified in Phase 2Q");
-else fail("No app screen files modified in Phase 2Q", "App screens must remain unchanged.", { files: screenDiff.split(/\r?\n/) });
+const screenFiles = screenDiff ? screenDiff.split(/\r?\n/) : [];
+if (screenFiles.every((file) => RECA_PATHS.includes(file))) pass("App-screen changes are limited to the authorized REC-A successor manifest", { files: screenFiles });
+else fail("App-screen changes are limited to the authorized REC-A successor manifest", "Unexpected app screen changed.", { files: screenFiles });
 
 // Migration count
 const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((n) => n.endsWith(".sql")).sort();
-if (migrations.length === 21) pass("Migration count remains at 21 (Phase 2P frozen baseline)", { count: migrations.length });
-else fail("Migration count remains at 21 (Phase 2P frozen baseline)", "Phase 2Q must not add migrations.", { count: migrations.length });
+const migrationDiff = execFileSync("git", ["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations"], { cwd: root, encoding: "utf8" }).trim();
+if (!migrationDiff) pass("REC-A successor adds or modifies no migration", { count: migrations.length });
+else fail("REC-A successor adds or modifies no migration", "Migration scope changed.", { files: migrationDiff.split(/\r?\n/) });
 
 // Documentation
 const docPath = "docs/consumer-runtime-integration/phase-2q-next-meal-recommendation-canonical-read-architecture.md";

@@ -592,14 +592,64 @@ export type ConsumerTodayIntakeOverview = {
 
 export type ConsumerNextMealDataProvenance = "sample" | "live";
 
-export type ConsumerNextMealPersonalizationLevel =
-  | "fallback"
-  | "intake_context"
-  | "full_profile";
-
 export type ConsumerNextMealRecommendationBasis =
-  | "calorie_proximity"
-  | "fallback_calorie_reference";
+  | "nutrition_gap"
+  | "neutral_nutrition_fallback";
+
+export const CONSUMER_NEXT_MEAL_NUTRITION_DIMENSIONS = [
+  "calories",
+  "protein",
+  "carbohydrates",
+  "fat",
+  "fiber"
+] as const;
+
+export type ConsumerNextMealNutritionDimension =
+  typeof CONSUMER_NEXT_MEAL_NUTRITION_DIMENSIONS[number];
+
+export type ConsumerNextMealNutritionValues = Partial<
+  Record<ConsumerNextMealNutritionDimension, number>
+>;
+
+export type ConsumerNextMealNutritionRankingInput = Readonly<{
+  dailyGoals: ConsumerNextMealNutritionValues;
+  consumedTotals: ConsumerNextMealNutritionValues;
+}>;
+
+/**
+ * The replaceable nutrition ranking policy contract. Which dimensions participate, how strongly
+ * each contributes, and how hard a new overage is penalised are POLICY, not Mobile law — a future
+ * backend or nutritionist-facing admin selects and versions these without touching this app.
+ */
+export type NutritionRankingDimensionPolicy = Readonly<{
+  dimension: ConsumerNextMealNutritionDimension;
+  weight: number;
+  overagePenaltyWeight: number;
+}>;
+
+export type NutritionRankingTargetStrategy = "remaining_daily_gap";
+
+export type NutritionRankingPolicy = Readonly<{
+  policyId: string;
+  policyVersion: number;
+  targetStrategy: NutritionRankingTargetStrategy;
+  dimensions: readonly NutritionRankingDimensionPolicy[];
+}>;
+
+export type ConsumerNextMealRankingMode =
+  | "nutrition_gap"
+  | "neutral_fallback";
+
+export type ConsumerNextMealRankingSummary = Readonly<{
+  rankingMode: ConsumerNextMealRankingMode;
+  nutritionGoalsApplied: boolean;
+  todayIntakeApplied: boolean;
+  usableNutritionDimensions: readonly ConsumerNextMealNutritionDimension[];
+  // Identity of the policy actually applied, so a basis or debug surface can say WHICH ranking rule
+  // produced an order. Identity only: no weights, no goals and no consumed values leave here.
+  appliedPolicyId: string;
+  appliedPolicyVersion: number;
+}>;
 
 export type ConsumerNextMealGeoInput = Readonly<{
   latitude: number;
@@ -644,16 +694,18 @@ export type ConsumerNextMealRecommendationContext = {
   date: string;
   timezone: string;
   generatedAt: string;
-  alreadyConsumedCalories: number;
-  alreadyConsumedProtein: number;
-  referenceCaloriesPerMeal: number;
-  referenceIsActualTarget: false;
+  rankingMode: ConsumerNextMealRankingMode;
+  nutritionGoalsApplied: boolean;
+  todayIntakeApplied: boolean;
+  usableNutritionDimensions: readonly ConsumerNextMealNutritionDimension[];
+  // Which ranking rule produced this order. Identity only — never weights or private nutrition.
+  appliedPolicyId: string;
+  appliedPolicyVersion: number;
   plannedMealCount: number;
   plannedMealsAvailable: boolean;
   plannedMealsAppliedToRanking: false;
-  personalizationLevel: ConsumerNextMealPersonalizationLevel;
-  intakeOverviewUsed: boolean;
   geoStatus: ConsumerNextMealGeoStatus;
+  geoApplied: boolean;
 };
 
 export type ConsumerNextMealRecommendation = {
@@ -665,13 +717,21 @@ export type ConsumerNextMealRecommendation = {
 };
 
 export type ConsumerNextMealRecommendationRepositoryInput = {
-  referenceCaloriesPerMeal: number;
+  nutritionRanking: ConsumerNextMealNutritionRankingInput | null;
+  // Supplied by the service from its policy provider. Absent means "use the shipped default",
+  // which is what keeps every adapter free of formula authority.
+  nutritionRankingPolicy?: NutritionRankingPolicy;
   candidatePoolLimit?: number;
   currentLocation?: ConsumerNextMealGeoInput;
 };
 
 export type ConsumerNextMealRecommendationRepositoryResult =
-  | { status: "available"; candidates: readonly ConsumerNextMealCandidate[]; totalCandidateCount: number }
+  | {
+      status: "available";
+      candidates: readonly ConsumerNextMealCandidate[];
+      totalCandidateCount: number;
+      ranking: ConsumerNextMealRankingSummary;
+    }
   | { status: "empty" }
   | { status: "disabled" }
   | { status: "read_failed"; errorCode: string };

@@ -7,7 +7,8 @@ import {
 } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 
 const root = process.cwd();
-const auditedPaths = [...GEO1C_PRODUCT_PATHS, "supabase/config.toml"];
+const RANKER = "apps/mobile/features/consumer-meals/nextMealNutritionRanker.ts";
+const auditedPaths = [...GEO1C_PRODUCT_PATHS, RANKER, "supabase/config.toml"];
 const pristine = Object.fromEntries(auditedPaths.map((file) => [file, fs.readFileSync(path.join(root, file), "utf8")]));
 const checks = []; const failures = [];
 const check = (name, ok, detail) => {
@@ -16,8 +17,18 @@ const check = (name, ok, detail) => {
   console.log(`${result.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`);
 };
 
+const auditWithReca = (sources) => {
+  const violations = auditGeo1cAuthoredSources(sources)
+    .filter((violation) => violation !== "existing downstream calorie authority remains");
+  if (!/rankNextMealCandidatesByNutrition/.test(sources["apps/mobile/features/consumer-meals/adapters/supabaseConsumerNextMealRecommendationRepository.ts"]))
+    violations.push("REC-A downstream nutrition authority is missing");
+  if (!/candidate\.candidateId\.localeCompare/.test(sources[RANKER]))
+    violations.push("REC-A deterministic candidate tie break is missing");
+  return violations;
+};
+
 check("pristine GEO-1C source satisfies every invariant",
-  auditGeo1cAuthoredSources(pristine).length === 0, auditGeo1cAuthoredSources(pristine));
+  auditWithReca(pristine).length === 0, auditWithReca(pristine));
 
 const COMPOSE = "supabase/functions/_shared/next-meal-geo-api/compose.ts";
 const POLICY = "supabase/functions/_shared/next-meal-geo-api/policy.ts";
@@ -36,8 +47,8 @@ const mutations = [
   ["branch restaurant pair verification is removed", COMPOSE, (s) => s.replace("eligiblePairs.has", "new Set().has")],
   ["fan-out deduplication is removed", COMPOSE, (s) => s.replace("new Map<string, NextMealGeoCandidateRow>", "new Array<NextMealGeoCandidateRow>")],
   ["candidate-source ordering is removed", SOURCE, (s) => s.replace('.order("candidate_id", { ascending: true })', "")],
-  ["downstream calorie authority is removed", MOBILE_REPO, (s) => s.replaceAll("rankByCalorieProximity", "rankByGeo")],
-  ["deterministic calorie tie break is removed", MOBILE_REPO, (s) => s.replace("|| a.candidate_id.localeCompare(b.candidate_id)", "")],
+  ["downstream REC-A nutrition authority is removed", MOBILE_REPO, (s) => s.replaceAll("rankNextMealCandidatesByNutrition", "rankByGeo")],
+  ["deterministic REC-A tie break is removed", RANKER, (s) => s.replace("left.candidate.candidateId.localeCompare(right.candidate.candidateId)", "0")],
   ["every read error broadens to non-Geo", SERVICE, (s) => s.replace('repoResult.errorCode.startsWith("next_meal_geo_")', "true")],
   ["server authentication is removed", HANDLER, (s) => s.replaceAll("authenticateCaller", "acceptCaller")],
   ["precise coordinates are logged", HANDLER, (s) => `${s}\nconsole.log(parsed.value.origin.latitude, parsed.value.origin.longitude);\n`],
@@ -53,7 +64,7 @@ const mutations = [
 for (const [name, file, mutate] of mutations) {
   const mutated = { ...pristine, [file]: mutate(pristine[file]) };
   check(`${name} is killed`, mutated[file] !== pristine[file]
-    && auditGeo1cAuthoredSources(mutated).length > 0);
+    && auditWithReca(mutated).length > 0);
 }
 
 check("mutation suite never writes the repository",

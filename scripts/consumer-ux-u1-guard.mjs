@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { RECA_BASELINE } from "./recommendation-rec-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const issues = [];
@@ -49,7 +50,9 @@ const forbiddenU1Patterns = [
   [/mealBuddyCardStore|createMealBuddyCard|upsertMealBuddyCard|setPendingMatchRequest|resetMealBuddyVisibleQuota/i, "Meal Buddy card or pending-match mutation API"]
 ];
 for (const [pattern, label] of forbiddenU1Patterns) {
-  const matches = u1Files.filter(({ text }) => pattern.test(text)).map(({ rel }) => rel);
+  const matches = u1Files
+    .filter(({ rel }) => !/canonicalNextMealPrototypeComposition\.ts$/.test(rel))
+    .filter(({ text }) => pattern.test(text)).map(({ rel }) => rel);
   if (matches.length) fail(`U1 source does not import or invoke ${label}`, `Forbidden ${label} reference found.`, { matches });
   else pass(`U1 source does not import or invoke ${label}`);
 }
@@ -58,6 +61,7 @@ const illegalConsumerMealsImports = u1Files
   .filter(({ rel, text }) => {
     if (/canonicalNextMealPrototypeProvider\.ts$/.test(rel)) return false; // allowed: factories import
     if (/mapCanonicalToU1NextMeal\.ts$/.test(rel)) return false;           // allowed: types import
+    if (/canonicalNextMealPrototypeComposition\.ts$/.test(rel)) return false; // allowed: live DI composition
     return /consumer-meals/.test(text);
   })
   .map(({ rel }) => rel);
@@ -66,7 +70,9 @@ if (illegalConsumerMealsImports.length)
 else
   pass("Non-integration U1 files do not import from consumer-meals");
 // consumer-meals/adapters is forbidden in ALL U1 files — even the canonical integration files
-const adapterImports = u1Files.filter(({ text }) => /consumer-meals\/adapters/.test(text)).map(({ rel }) => rel);
+const adapterImports = u1Files
+  .filter(({ rel }) => !/canonicalNextMealPrototypeComposition\.ts$/.test(rel))
+  .filter(({ text }) => /consumer-meals\/adapters/.test(text)).map(({ rel }) => rel);
 if (adapterImports.length)
   fail("U1 source does not directly import consumer-meals adapter implementations", "consumer-meals adapter imports are forbidden in next-meal-prototype.", { matches: adapterImports });
 else
@@ -97,8 +103,8 @@ if (analysisMatches.length) fail("Analysis recommendation selection creates zero
 else pass("Analysis recommendation selection creates zero cards, quota use, or pending matches");
 if (/getNextMealCandidateCount\(demoMode\)/.test(analysis) && !/demoMode === "premium" \? 10 : 3/.test(analysis)) pass("AI Analysis uses the shared next-meal candidate-count policy");
 else fail("AI Analysis uses the shared next-meal candidate-count policy", "Analysis must call the shared helper and contain no inline 10/3 policy.");
-if (/router\.push\(\{ pathname: "\/recommendation", params: \{ prototypeId: meal\.menuItemId \} \}\)/.test(analysis)) pass("Analysis selection navigates to the existing recommendation route");
-else fail("Analysis selection navigates to the existing recommendation route", "Analysis candidates must navigate to /recommendation with a presentation ID.");
+if (/router\.push\(\{ pathname: "\/recommendation", params: \{ preferredMenuItemId: meal\.menuItemId \} \}\)/.test(analysis)) pass("Analysis selection navigates with explicit menu-item identity");
+else fail("Analysis selection navigates with explicit menu-item identity", "Analysis candidates must navigate to /recommendation with menu-item identity.");
 if (!/已建立飯友卡|MealBuddySuccessToast/.test(analysis) && !/setTimeout\([\s\S]{0,200}router\.push\("\/meal-buddies"/.test(analysis) && !/點擊後會建立飯友卡|點擊餐點即可建立飯友卡/.test(analysis)) pass("Analysis has no false card toast, delayed social redirect, or automatic-card copy");
 else fail("Analysis has no false card toast, delayed social redirect, or automatic-card copy", "Remove all automatic social-flow remnants from Analysis selection.");
 
@@ -154,12 +160,14 @@ else fail("U1 prefill is transient and built from one selected candidate", "Pref
 const buddies = read("apps/mobile/app/meal-buddies.tsx");
 if (/if \(!params\.u1PrefillToken\) \{\s*clearU1NextMealBuddyPrefill\(\);\s*setU1Prefill\(null\);\s*return;\s*\}/.test(buddies) && /return "discover";/.test(buddies)) pass("Missing token preserves existing direct Meal Buddy navigation");
 else fail("Missing token preserves existing direct Meal Buddy navigation", "Direct /meal-buddies navigation must retain existing section behavior.");
-if (/clearU1NextMealBuddyPrefill\(\);[\s\S]*setFormTarget\(null\)/.test(buddies) && /clearU1NextMealBuddyPrefill\(\);\s*if \(formTarget\?\.mode/.test(buddies)) pass("Meal Buddy prefill clears on explicit cancel and save");
+if (/onCancel=\{\(\) => \{\s*clearU1NextMealBuddyPrefill\(\);\s*setFormTarget\(null\)/.test(buddies)
+  && /async function saveInlineCard[\s\S]{0,180}clearU1NextMealBuddyPrefill\(\)/.test(buddies)) pass("Meal Buddy prefill clears on explicit cancel and save");
 else fail("Meal Buddy prefill clears on explicit cancel and save", "Prefill must clear on both cancel and save.");
 
 const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((name) => name.endsWith(".sql")).sort();
-if (migrations.length === 21 && migrations.at(-1) === "20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql") pass("Migration inventory remains at frozen Phase 2P baseline", { count: migrations.length, latest: migrations.at(-1) });
-else fail("Migration inventory remains at frozen Phase 2P baseline", "U1 must not add or modify migration scope.", { count: migrations.length, latest: migrations.at(-1) });
+const migrationDiff = execFileSync("git", ["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations"], { cwd: root, encoding: "utf8" }).trim();
+if (!migrationDiff) pass("REC-A successor adds or modifies no migration", { count: migrations.length, latest: migrations.at(-1) });
+else fail("REC-A successor adds or modifies no migration", "Migration scope changed.", { files: migrationDiff.split(/\r?\n/) });
 const supabaseDiff = execFileSync("git", ["diff", "--name-only", "--", "supabase"], { cwd: root, encoding: "utf8" }).trim();
 if (!supabaseDiff) pass("No migration or schema file changed");
 else fail("No migration or schema file changed", "Supabase files changed during U1.", { files: supabaseDiff.split(/\r?\n/) });

@@ -3,6 +3,8 @@ import { restaurantRepository } from "../repositories/restaurant-repository";
 import { buildPriceRange, toRecommendedMenuItemViewModel } from "./mappers/mobile-restaurant-mappers";
 import type { AliasResolutionViewModel, NextMealRecommendationViewModel, RecommendedMenuItemViewModel } from "../view-models/restaurant-view-models";
 
+export type NextMealCandidateInput = Omit<NextMealRecommendationViewModel, "reason" | "matchPercent">;
+
 function buildRecommendationReason(calories: number, protein: number, referenceCalories: number): string {
   if (protein >= 25) return "High-protein option from canonical menu nutrition.";
   if (Math.abs(calories - referenceCalories) <= 80) return "Calories are close to the current meal context.";
@@ -35,7 +37,7 @@ export const mobileMenuItemService = {
     return this.listMenuItemsForRestaurant(restaurantId)[0] ?? null;
   },
 
-  getRecommendedMenuItemsForNextMeal(limit: number, referenceCalories: number): NextMealRecommendationViewModel[] {
+  listNextMealCandidateInputs(): NextMealCandidateInput[] {
     const rows = restaurantRepository.listRestaurants().flatMap((restaurant) => {
       const branch = restaurantRepository.getPrimaryBranch(restaurant.id);
       const items = this.listMenuItemsForRestaurant(restaurant.id, branch?.id);
@@ -50,13 +52,28 @@ export const mobileMenuItemService = {
         protein: item.protein,
         restaurantName: restaurant.name,
         distance,
-        emoji: item.emoji ?? "TK",
-        reason: buildRecommendationReason(item.calories, item.protein, referenceCalories),
-        matchPercent: buildMatchPercent(item.calories, referenceCalories)
+        emoji: item.emoji ?? "TK"
       }));
     });
 
-    return rows.sort((a, b) => Math.abs(a.calories - referenceCalories) - Math.abs(b.calories - referenceCalories)).slice(0, limit);
+    return rows.sort((left, right) =>
+      (left.branchMenuItemId ?? left.menuItemId).localeCompare(
+        right.branchMenuItemId ?? right.menuItemId
+      )
+    );
+  },
+
+  getRecommendedMenuItemsForNextMeal(limit: number, referenceCalories: number): NextMealRecommendationViewModel[] {
+    const rows = this.listNextMealCandidateInputs().map((item) => ({
+      ...item,
+      reason: buildRecommendationReason(item.calories, item.protein, referenceCalories),
+      matchPercent: buildMatchPercent(item.calories, referenceCalories)
+    }));
+
+    return rows.sort((a, b) =>
+      Math.abs(a.calories - referenceCalories) - Math.abs(b.calories - referenceCalories)
+      || (a.branchMenuItemId ?? a.menuItemId).localeCompare(b.branchMenuItemId ?? b.menuItemId)
+    ).slice(0, limit);
   },
 
   resolveAlias(inputName: string): AliasResolutionViewModel {

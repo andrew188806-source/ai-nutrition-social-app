@@ -18,15 +18,16 @@ function toU1Source(source: ConsumerNextMealRecommendationSource): U1NextMealPre
 }
 
 function toBasisDetails(basis: ConsumerNextMealRecommendationBasis): readonly string[] {
-  if (basis === "calorie_proximity") {
+  if (basis === "nutrition_gap") {
     return [
-      "按與今日參考熱量的接近程度排序。",
-      "今日已記錄飲食已納入參考計算。"
+      "依每日營養目標與今日已記錄攝取量的剩餘缺口排序。",
+      "僅計入目標、今日攝取與餐點資料都可用的熱量、蛋白質、碳水、脂肪與纖維。",
+      "超過已滿足的目標會降低排序分數。"
     ];
   }
   return [
-    "使用預設參考熱量排序，今日尚未記錄飲食。",
-    "完整偏好個人化將於後續提供。"
+    "目前沒有可共同計算的每日目標與餐點營養資料。",
+    "結果使用穩定中性排序，未宣稱套用個人化營養計算。"
   ];
 }
 
@@ -63,7 +64,7 @@ export function mapCanonicalToU1NextMeal(
   result: ConsumerNextMealRecommendationResult,
   entitlement: NextMealCandidateEntitlement,
   visibleLimit: number,
-  preferredCandidateId?: string
+  preferredMenuItemId?: string
 ): U1NextMealProviderResult {
   if (result.status === "disabled") {
     return { status: "disabled", message: "下一餐推薦目前未啟用。" };
@@ -93,9 +94,9 @@ export function mapCanonicalToU1NextMeal(
   const allCandidates = Array.from(recommendation.candidates);
 
   let orderedCandidates: ConsumerNextMealCandidate[];
-  if (preferredCandidateId) {
+  if (preferredMenuItemId) {
     const preferredIndex = allCandidates.findIndex(
-      (c) => c.candidateId === preferredCandidateId
+      (c) => c.menuItemId === preferredMenuItemId
     );
     if (preferredIndex > 0) {
       const preferred = allCandidates[preferredIndex];
@@ -122,6 +123,9 @@ export function mapCanonicalToU1NextMeal(
     headline: "這是你的下一餐",
     entitlement,
     visibleCandidateCount: candidates.length,
+    contextNote: recommendation.context.rankingMode === "nutrition_gap"
+      ? "本次排序已使用每日營養目標與今天已記錄的攝取量；未使用 Taste、飲食限制或社交情境。"
+      : "本次缺少可共同計算的營養目標與餐點資料，因此使用穩定中性排序，未宣稱個人化。",
     candidates
   };
 

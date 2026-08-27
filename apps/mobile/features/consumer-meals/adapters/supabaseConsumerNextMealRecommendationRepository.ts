@@ -17,6 +17,11 @@ import {
   parseSupabaseNextMealGeoResponse,
   SUPABASE_NEXT_MEAL_GEO_FUNCTION
 } from "./supabaseNextMealGeoRows";
+import { rankNextMealCandidatesByNutrition } from "../nextMealNutritionRanker";
+
+const DEFAULT_CANDIDATE_OUTPUT_LIMIT = 50;
+const MAX_CANDIDATE_OUTPUT_LIMIT = 50;
+const CANDIDATE_READ_PAGE_SIZE = 100;
 
 export type SupabaseConsumerNextMealRecommendationRepositoryOptions = {
   authPort: ConsumerAuthPort;
@@ -44,26 +49,25 @@ export class SupabaseConsumerNextMealRecommendationRepository
       return { status: "read_failed", errorCode: "next_meal_supabase_no_session" };
     }
 
-    const limit =
-      input.candidatePoolLimit != null && input.candidatePoolLimit > 0
-        ? input.candidatePoolLimit
-        : 50;
+    const outputLimit = normalizeOutputLimit(input.candidatePoolLimit);
 
     try {
       const rowsResult = input.currentLocation
-        ? await this.readGeoRows(input.currentLocation, limit)
-        : await this.readAllRows(limit);
+        ? await this.readGeoRows(input.currentLocation, MAX_CANDIDATE_OUTPUT_LIMIT)
+        : await this.readAllRows();
       if (!rowsResult.ok) return { status: "read_failed", errorCode: rowsResult.errorCode };
       const rows = rowsResult.rows;
       if (rows.length === 0) return { status: "empty" };
 
-      const ranked = rankByCalorieProximity(rows, input.referenceCaloriesPerMeal);
-      const candidates = ranked.map(mapRowToCandidate);
+      const mapped = rows.map(mapRowToCandidate);
+      const ranked = rankNextMealCandidatesByNutrition(mapped, input.nutritionRanking, input.nutritionRankingPolicy);
+      const candidates = ranked.candidates.slice(0, outputLimit);
 
       return {
         status: "available",
         candidates,
-        totalCandidateCount: candidates.length
+        totalCandidateCount: ranked.candidates.length,
+        ranking: ranked.ranking
       };
     } catch {
       return { status: "read_failed", errorCode: input.currentLocation
@@ -71,22 +75,30 @@ export class SupabaseConsumerNextMealRecommendationRepository
     }
   }
 
-  private async readAllRows(limit: number): Promise<
+  private async readAllRows(): Promise<
     { ok: true; rows: SupabaseConsumerNextMealCandidateRow[] }
     | { ok: false; errorCode: string }
   > {
-    const response = await this.options.restaurantMenuClient
-      .from(SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW)
-      .select("*").limit(limit);
+    const rows: SupabaseConsumerNextMealCandidateRow[] = [];
+    for (let from = 0; ; from += CANDIDATE_READ_PAGE_SIZE) {
+      const response = await this.options.restaurantMenuClient
+        .from(SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW)
+        .select("*")
+        .order("candidate_id", { ascending: true })
+        .range(from, from + CANDIDATE_READ_PAGE_SIZE - 1);
 
-    if (response.error) {
-      const status = response.error.status ?? 0;
-      if (status === 401 || status === 403) {
-        return { ok: false, errorCode: "next_meal_supabase_unauthorized" };
+      if (response.error) {
+        const status = response.error.status ?? 0;
+        if (status === 401 || status === 403) {
+          return { ok: false, errorCode: "next_meal_supabase_unauthorized" };
+        }
+        return { ok: false, errorCode: "next_meal_supabase_query_error" };
       }
-      return { ok: false, errorCode: "next_meal_supabase_query_error" };
+      const page = response.data ?? [];
+      rows.push(...page);
+      if (page.length < CANDIDATE_READ_PAGE_SIZE) break;
     }
-    return { ok: true, rows: response.data ?? [] };
+    return { ok: true, rows };
   }
 
   private async readGeoRows(currentLocation: { latitude: number; longitude: number }, limit: number): Promise<
@@ -102,17 +114,6 @@ export class SupabaseConsumerNextMealRecommendationRepository
     if (!parsed) return { ok: false, errorCode: "next_meal_geo_invalid_response" };
     return { ok: true, rows: parsed.candidates };
   }
-}
-
-function rankByCalorieProximity(
-  rows: SupabaseConsumerNextMealCandidateRow[],
-  referenceCalories: number
-): SupabaseConsumerNextMealCandidateRow[] {
-  return [...rows].sort(
-    (a, b) =>
-      Math.abs(a.calories - referenceCalories) - Math.abs(b.calories - referenceCalories)
-      || a.candidate_id.localeCompare(b.candidate_id)
-  );
 }
 
 function mapRowToCandidate(
@@ -142,12 +143,16 @@ function mapRowToCandidate(
     nutrition,
     tags: [],
     reason: {
-      reasonSummary:
-        index === 0
-          ? "與目前熱量參考值最接近的菜單選項（即時資料）。"
-          : "符合熱量參考值的替代菜單選項（即時資料）。",
-      reasonBasis: "calorie_proximity"
+      reasonSummary: "尚未套用營養排序。",
+      reasonBasis: "neutral_nutrition_fallback"
     },
     rankOrdinal: index
   };
+}
+
+function normalizeOutputLimit(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_CANDIDATE_OUTPUT_LIMIT;
+  }
+  return Math.min(Math.floor(value), MAX_CANDIDATE_OUTPUT_LIMIT);
 }

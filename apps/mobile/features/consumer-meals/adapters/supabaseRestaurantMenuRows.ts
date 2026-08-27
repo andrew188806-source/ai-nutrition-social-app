@@ -31,7 +31,9 @@ export type SupabaseRestaurantMenuClientLike = {
     view: typeof SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW
   ): {
     select(columns: string): {
-      limit(count: number): Promise<SupabaseRestaurantMenuQueryResponse>;
+      order(column: "candidate_id", options: { ascending: true }): {
+        range(from: number, to: number): Promise<SupabaseRestaurantMenuQueryResponse>;
+      };
     };
   };
 } & import("./supabaseNextMealGeoRows").SupabaseNextMealGeoClientLike;

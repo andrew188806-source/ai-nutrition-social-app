@@ -35,6 +35,7 @@ export type U1NextMealRecommendationViewModel = {
   headline: string;
   entitlement: NextMealCandidateEntitlement;
   visibleCandidateCount: number;
+  contextNote?: string;
   candidates: readonly U1NextMealCandidateViewModel[];
 };
 
@@ -59,6 +60,7 @@ export type U1NextMealScreenViewModel =
 export type U1NextMealPrototypeRequest = {
   entitlement?: unknown;
   preferredPrototypeId?: string;
+  preferredMenuItemId?: string;
   scenario?: U1NextMealPrototypeScenario;
   currentLocation?: Readonly<{ latitude: number; longitude: number }>;
 };

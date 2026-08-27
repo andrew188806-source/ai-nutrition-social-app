@@ -17,6 +17,7 @@ export function NextMealPrototypeContent({
   entitlement,
   onReturnHome,
   onUseForMealBuddy,
+  preferredMenuItemId,
   preferredPrototypeId,
   provider,
   scenario,
@@ -26,6 +27,7 @@ export function NextMealPrototypeContent({
   entitlement?: unknown;
   onReturnHome: () => void;
   onUseForMealBuddy: (candidate: U1NextMealCandidateViewModel) => void;
+  preferredMenuItemId?: string;
   preferredPrototypeId?: string;
   provider: U1NextMealPrototypeProvider;
   scenario?: U1NextMealPrototypeScenario;
@@ -74,7 +76,7 @@ export function NextMealPrototypeContent({
     let active = true;
     setModel({ status: "loading" });
     provider
-      .getRecommendation({ entitlement, preferredPrototypeId, scenario, currentLocation })
+      .getRecommendation({ entitlement, preferredMenuItemId, preferredPrototypeId, scenario, currentLocation })
       .then((result) => {
         if (active) setModel(presentU1NextMealResult(result));
       })
@@ -84,7 +86,7 @@ export function NextMealPrototypeContent({
     return () => {
       active = false;
     };
-  }, [copy.errorBody, currentLocation, entitlement, preferredPrototypeId, provider, retryCount, scenario]);
+  }, [copy.errorBody, currentLocation, entitlement, preferredMenuItemId, preferredPrototypeId, provider, retryCount, scenario]);
 
   useEffect(load, [load]);
 
@@ -173,7 +175,9 @@ export function NextMealPrototypeContent({
         <Text style={styles.sourceText}>{copy.presentationOnly}</Text>
       </View>
       {model.recommendation.source !== "u1_mock" ? (
-        <Text style={styles.canonicalContextNote}>{copy.canonicalContextNote}</Text>
+        <Text style={styles.canonicalContextNote}>
+          {model.recommendation.contextNote ?? copy.canonicalContextNote}
+        </Text>
       ) : null}
       <SectionHeader title={model.recommendation.headline} subtitle={copy.successSubtitle} />
       <Text style={styles.entitlementText}>{candidateCountLabel}</Text>

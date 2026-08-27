@@ -19,6 +19,7 @@ import {
 } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 import { GEO1CP0_NPM_KEYS, GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 import { GEO1C_BASELINE, GEO1C_NPM_KEYS, GEO1C_PATHS, classifyGeo1cLifecycle } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
+import { RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle } from "./recommendation-rec-a-successor-manifest.mjs";
 
 const SUITE = "geo-shared-authority-geo-1a-guard";
 const root = process.cwd();
@@ -68,10 +69,20 @@ const geo1cLifecycle = classifyGeo1cLifecycle({
   deltaPaths: head === GEO1C_BASELINE ? [] : lines(git(["diff", "--name-only", `${GEO1C_BASELINE}..HEAD`])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D", "--", ...GEO1C_PATHS])).length > 0
 });
-const validationManifest = geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
+const recaWorktreePaths = [...new Set([
+  ...lines(git(["diff", "--name-only"])),
+  ...lines(git(["ls-files", "--others", "--exclude-standard"]))
+])].sort();
+const recaLifecycle = classifyRecaLifecycle({
+  head, parent: head === RECA_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths: recaWorktreePaths, stagedPaths,
+  deltaPaths: head === RECA_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECA_BASELINE}..HEAD`])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const validationManifest = recaLifecycle.valid ? recaLifecycle.manifest : geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
 
-check("lifecycle is exact candidate or frozen-unpushed", lifecycle.valid || geo1cLifecycle.valid,
-  geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase);
+check("lifecycle is exact candidate or frozen-unpushed", lifecycle.valid || geo1cLifecycle.valid || recaLifecycle.valid,
+  recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase);
 check("the baseline is the pushed Social MVP closure commit",
   git(["log", "-1", "--pretty=%s", GEO1A_BASELINE]) === GEO1A_BASELINE_SUBJECT);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
@@ -80,7 +91,7 @@ check("exact wildcard-free path inventory",
   new Set(GEO1A_PATHS).size === GEO1A_PATHS.length
   && GEO1A_PATHS.every((file) => !file.includes("*") && !file.includes("?"))
   && validationManifest.every((file) => GEO1A_PATHS.includes(file) || GEO1B_PATHS.includes(file)
-    || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)), validationManifest);
+    || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)), validationManifest);
 check("every declared path exists on disk", GEO1A_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("exactly one narrow additive migration",
   lifecycle.manifest.filter((f) => f.startsWith("supabase/migrations/") && !GEO1CP0_PATHS.includes(f))
@@ -95,10 +106,10 @@ check("no predecessor migration byte is modified",
 check("no byte outside the GEO-1A manifest is touched",
   lines(git(["diff", "--name-only", GEO1A_BASELINE, "--"]))
     .every((file) => GEO1A_PATHS.includes(file) || GEO1B_PATHS.includes(file)
-      || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)));
+      || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)));
 check("no Mobile byte is touched at all",
   validationManifest.filter((file) => file.startsWith("apps/"))
-    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)));
+    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)));
 // The product surface is exactly the authority and the shared contract. Everything else GEO-1A
 // contributes is validation, and every predecessor file it touches is a GUARD taught to recognise
 // this round — never a frozen Social, Taste or restaurant implementation byte.
@@ -109,7 +120,7 @@ check("every predecessor byte touched is a validation-only successor-awareness a
   GEO1A_PREDECESSOR_GUARDS.every((file) => file.endsWith("-guard.mjs"))
   && lines(git(["diff", "--name-only", GEO1A_BASELINE, "--", "supabase", "apps", "packages", "lib"]))
     .every((file) => GEO1A_PRODUCT_PATHS.includes(file) || GEO1B_PATHS.includes(file)
-      || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)));
+      || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)));
 
 const sources = Object.fromEntries(
   GEO1A_PATHS.filter((file) => file !== "package.json").map((file) => [file, read(file)])
@@ -128,7 +139,7 @@ check("package.json gains only the GEO-1A command keys",
     const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
     return removed.length === 0
       && added.every((key) => GEO1A_NPM_KEYS.includes(key) || GEO1B_NPM_KEYS.includes(key)
-        || GEO1CP0_NPM_KEYS.includes(key) || GEO1C_NPM_KEYS.includes(key));
+        || GEO1CP0_NPM_KEYS.includes(key) || GEO1C_NPM_KEYS.includes(key) || RECA_NPM_KEYS.includes(key));
   })());
 
 // The replacement character is written as an escape, not as itself: a literal here would be found in
@@ -157,7 +168,7 @@ check("canonical raw-byte manifest covers the exact sorted paths",
 
 console.log("\n" + JSON.stringify({
   suite: SUITE,
-  lifecycle: geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase,
+  lifecycle: recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase,
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

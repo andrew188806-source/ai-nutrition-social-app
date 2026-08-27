@@ -1,20 +1,37 @@
 import type { ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOverviewService";
 import type { ConsumerTodayIntakeOverviewService } from "./consumerTodayIntakeOverviewService";
 import type {
-  ConsumerNextMealPersonalizationLevel,
+  ConsumerNutritionGoalRow,
+  ConsumerTasteFoundationReadResult
+} from "../consumer-taste-profile/types";
+import { resolveActiveDailyNutritionGoals } from "./nextMealNutritionRanker";
+import {
+  createDefaultNutritionRankingPolicyProvider,
+  type NutritionRankingPolicyProvider
+} from "./nutritionRankingPolicy";
+import type {
   ConsumerNextMealGeoStatus,
-  ConsumerNextMealRecommendationContext,
   ConsumerNextMealRecommendationInput,
+  ConsumerNextMealNutritionValues,
   ConsumerNextMealRecommendationRepository,
   ConsumerNextMealRecommendationResult
 } from "./types";
 
 const DEFAULT_TIMEZONE = "Asia/Taipei";
-const FALLBACK_REFERENCE_CALORIES_PER_MEAL = 520;
+
+export type ConsumerNutritionGoalsReader = Readonly<{
+  readCurrentUserNutritionGoals(): Promise<
+    ConsumerTasteFoundationReadResult<ConsumerNutritionGoalRow>
+  >;
+}>;
 
 export type ConsumerNextMealRecommendationServiceOptions = {
   repository: ConsumerNextMealRecommendationRepository;
   intakeOverviewService: ConsumerTodayIntakeOverviewService;
+  nutritionGoalsReader?: ConsumerNutritionGoalsReader;
+  // The seam a future TastKind backend or nutritionist-facing admin attaches to. Omitted here means
+  // the shipped default policy; nothing in this app hard-codes which policy is canonical.
+  nutritionRankingPolicyProvider?: NutritionRankingPolicyProvider;
   clock: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -39,13 +56,8 @@ export class ConsumerNextMealRecommendationService {
     // Step 1: obtain Today Intake Overview for current-user nutrition context
     const intakeResult = await intakeOverviewService.getCurrentUserTodayIntakeOverview({ date });
 
-    let alreadyConsumedCalories = 0;
-    let alreadyConsumedProtein = 0;
     let plannedMealCount = 0;
     let plannedMealsAvailable = false;
-    let intakeOverviewUsed = false;
-    let personalizationLevel: ConsumerNextMealPersonalizationLevel = "fallback";
-    let referenceCaloriesPerMeal = FALLBACK_REFERENCE_CALORIES_PER_MEAL;
 
     if (!intakeResult.ok) {
       // Intake read failed or unauthenticated — fail closed
@@ -57,16 +69,11 @@ export class ConsumerNextMealRecommendationService {
     }
 
     const intake = intakeResult.value;
-    alreadyConsumedCalories = intake.calculatedNutrition.calories;
-    alreadyConsumedProtein = intake.calculatedNutrition.protein;
-    intakeOverviewUsed = true;
-
-    // Personalization level: intake_context when we have today's consumed nutrition
-    // No daily calorie target adapter exists in Phase 2Q — cannot compute true remaining calories
-    if (intake.mealCount > 0 || intake.actualConsumedStatus === "available") {
-      personalizationLevel = "intake_context";
-      // Without a user daily target, we use fallback reference — clearly labeled below
-    }
+    const consumedTotals = toNutritionValues(intake.calculatedNutrition);
+    const dailyGoals = await readDailyGoals(this.options.nutritionGoalsReader, date);
+    const nutritionRanking = dailyGoals
+      ? Object.freeze({ dailyGoals, consumedTotals })
+      : null;
 
     if (intake.plannedMealsStatus === "available" || intake.plannedMealsStatus === "empty") {
       plannedMealsAvailable = true;
@@ -75,25 +82,17 @@ export class ConsumerNextMealRecommendationService {
 
     let geoStatus: ConsumerNextMealGeoStatus = input.currentLocation ? "applied" : "not_requested";
 
-    const context: ConsumerNextMealRecommendationContext = {
-      date,
-      timezone,
-      generatedAt,
-      alreadyConsumedCalories,
-      alreadyConsumedProtein,
-      referenceCaloriesPerMeal,
-      referenceIsActualTarget: false,
-      plannedMealCount,
-      plannedMealsAvailable,
-      plannedMealsAppliedToRanking: false,
-      personalizationLevel,
-      intakeOverviewUsed,
-      geoStatus
-    };
+    // The policy is resolved ONCE per recommendation, so the Geo attempt and any non-Geo fallback
+    // are ranked by the same rule. A provider that changed answer mid-request would otherwise make
+    // the fallback ordering incomparable with the attempt it replaced.
+    const nutritionRankingPolicy = (
+      this.options.nutritionRankingPolicyProvider ?? createDefaultNutritionRankingPolicyProvider()
+    ).getActiveNutritionRankingPolicy();
 
     // Step 2: obtain ranked candidates from repository using deterministic context
     let repoResult = await repository.getRankedNextMealCandidates({
-      referenceCaloriesPerMeal,
+      nutritionRanking,
+      nutritionRankingPolicy,
       candidatePoolLimit: input.candidatePoolLimit,
       currentLocation: input.currentLocation
     });
@@ -103,9 +102,9 @@ export class ConsumerNextMealRecommendationService {
     if (repoResult.status === "read_failed" && input.currentLocation
       && repoResult.errorCode.startsWith("next_meal_geo_")) {
       geoStatus = "unavailable";
-      context.geoStatus = geoStatus;
       repoResult = await repository.getRankedNextMealCandidates({
-        referenceCaloriesPerMeal,
+        nutritionRanking,
+        nutritionRankingPolicy,
         candidatePoolLimit: input.candidatePoolLimit
       });
     }
@@ -127,10 +126,55 @@ export class ConsumerNextMealRecommendationService {
         totalCandidateCount: repoResult.totalCandidateCount,
         source: repository.source,
         dataProvenance: repository.dataProvenance,
-        context
+        context: {
+          date,
+          timezone,
+          generatedAt,
+          rankingMode: repoResult.ranking.rankingMode,
+          nutritionGoalsApplied: repoResult.ranking.nutritionGoalsApplied,
+          todayIntakeApplied: repoResult.ranking.todayIntakeApplied,
+          usableNutritionDimensions: repoResult.ranking.usableNutritionDimensions,
+          appliedPolicyId: repoResult.ranking.appliedPolicyId,
+          appliedPolicyVersion: repoResult.ranking.appliedPolicyVersion,
+          plannedMealCount,
+          plannedMealsAvailable,
+          plannedMealsAppliedToRanking: false,
+          geoStatus,
+          geoApplied: geoStatus === "applied"
+        }
       }
     };
   }
+}
+
+async function readDailyGoals(
+  reader: ConsumerNutritionGoalsReader | undefined,
+  date: string
+): Promise<ConsumerNextMealNutritionValues | null> {
+  if (!reader) return null;
+  try {
+    const result = await reader.readCurrentUserNutritionGoals();
+    if (result.status !== "available") return null;
+    return resolveActiveDailyNutritionGoals(result.rows, date);
+  } catch {
+    return null;
+  }
+}
+
+function toNutritionValues(input: {
+  calories: number;
+  protein: number;
+  carbohydrates: number;
+  fat: number;
+  fiber: number | null;
+}): ConsumerNextMealNutritionValues {
+  return Object.freeze({
+    calories: input.calories,
+    protein: input.protein,
+    carbohydrates: input.carbohydrates,
+    fat: input.fat,
+    ...(input.fiber === null ? {} : { fiber: input.fiber })
+  });
 }
 
 function toDateKeyInTimeZone(date: Date, timezone: string): string {

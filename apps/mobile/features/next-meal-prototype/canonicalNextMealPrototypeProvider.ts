@@ -8,7 +8,7 @@ import type { U1NextMealPrototypeProvider, U1NextMealPrototypeRequest, U1NextMea
 
 export type CanonicalNextMealPrototypeProviderDependencies = Pick<
   ConsumerMealFactoryDependencies,
-  "authPort" | "mealClient" | "restaurantMenuClient"
+  "authPort" | "mealClient" | "nutritionGoalsReader" | "restaurantMenuClient"
 >;
 
 export function createCanonicalNextMealPrototypeProvider(
@@ -38,7 +38,7 @@ export function createCanonicalNextMealPrototypeProvider(
   return {
     async getRecommendation({
       entitlement: entitlementInput,
-      preferredPrototypeId,
+      preferredMenuItemId,
       currentLocation
     }: U1NextMealPrototypeRequest): Promise<U1NextMealProviderResult> {
       const entitlement = normalizeNextMealCandidateEntitlement(entitlementInput);
@@ -50,7 +50,7 @@ export function createCanonicalNextMealPrototypeProvider(
           result,
           entitlement,
           visibleLimit,
-          preferredPrototypeId
+          preferredMenuItemId
         );
 
         if (

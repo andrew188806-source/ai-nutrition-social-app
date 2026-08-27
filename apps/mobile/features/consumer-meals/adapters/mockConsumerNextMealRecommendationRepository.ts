@@ -7,6 +7,7 @@ import type {
   ConsumerNextMealRecommendationSource,
   ConsumerNutritionSnapshot
 } from "../types";
+import { rankNextMealCandidatesByNutrition } from "../nextMealNutritionRanker";
 
 export const MOCK_NEXT_MEAL_RECOMMENDATION_CANDIDATES_COUNT = 5;
 
@@ -20,7 +21,6 @@ type MockCandidateSeed = {
   emoji: string;
   nutrition: ConsumerNutritionSnapshot;
   tags: readonly string[];
-  calorieProximityDelta: number;
 };
 
 const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
@@ -34,7 +34,6 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     emoji: "🥢",
     nutrition: { calories: 510, protein: 28, carbohydrates: 62, fat: 14, fiber: 6 },
     tags: ["高蛋白", "含纖維", "均衡選擇"],
-    calorieProximityDelta: 10
   },
   {
     candidateId: "mock-branch-offer-phase2q-salad-bowl",
@@ -46,7 +45,6 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     emoji: "🥗",
     nutrition: { calories: 380, protein: 18, carbohydrates: 42, fat: 10, fiber: 9 },
     tags: ["低卡", "含纖維", "清爽搭配"],
-    calorieProximityDelta: 140
   },
   {
     candidateId: "mock-branch-offer-phase2q-noodle-soup",
@@ -58,7 +56,6 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     emoji: "🍜",
     nutrition: { calories: 560, protein: 32, carbohydrates: 72, fat: 12, fiber: 3 },
     tags: ["高蛋白", "均衡選擇"],
-    calorieProximityDelta: 40
   },
   {
     candidateId: "mock-branch-offer-phase2q-rice-box",
@@ -70,7 +67,6 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     emoji: "🍱",
     nutrition: { calories: 620, protein: 35, carbohydrates: 80, fat: 16, fiber: 4 },
     tags: ["高蛋白", "飽足感"],
-    calorieProximityDelta: 100
   },
   {
     candidateId: "mock-branch-offer-phase2q-veggie-plate",
@@ -82,20 +78,8 @@ const MOCK_CANDIDATE_SEEDS: readonly MockCandidateSeed[] = [
     emoji: "🥦",
     nutrition: { calories: 290, protein: 12, carbohydrates: 48, fat: 6, fiber: 11 },
     tags: ["低卡", "高纖", "蔬食"],
-    calorieProximityDelta: 230
   }
 ];
-
-function rankByCalorieProximity(
-  seeds: readonly MockCandidateSeed[],
-  referenceCaloriesPerMeal: number
-): MockCandidateSeed[] {
-  return [...seeds].sort(
-    (a, b) =>
-      Math.abs((a.nutrition.calories ?? 0) - referenceCaloriesPerMeal) -
-      Math.abs((b.nutrition.calories ?? 0) - referenceCaloriesPerMeal)
-  );
-}
 
 export class MockConsumerNextMealRecommendationRepository implements ConsumerNextMealRecommendationRepository {
   readonly source: ConsumerNextMealRecommendationSource = "mock";
@@ -104,15 +88,7 @@ export class MockConsumerNextMealRecommendationRepository implements ConsumerNex
   async getRankedNextMealCandidates(
     input: ConsumerNextMealRecommendationRepositoryInput
   ): Promise<ConsumerNextMealRecommendationRepositoryResult> {
-    const ranked = rankByCalorieProximity(MOCK_CANDIDATE_SEEDS, input.referenceCaloriesPerMeal);
-    const limit = input.candidatePoolLimit != null && input.candidatePoolLimit > 0
-      ? Math.min(input.candidatePoolLimit, ranked.length)
-      : ranked.length;
-    const sliced = ranked.slice(0, limit);
-
-    if (!sliced.length) return { status: "empty" };
-
-    const candidates: ConsumerNextMealCandidate[] = sliced.map((seed, index) => ({
+    const mapped: ConsumerNextMealCandidate[] = MOCK_CANDIDATE_SEEDS.map((seed, index) => ({
       candidateId: seed.candidateId,
       branchMenuItemId: seed.candidateId,
       menuItemId: seed.menuItemId,
@@ -124,14 +100,24 @@ export class MockConsumerNextMealRecommendationRepository implements ConsumerNex
       nutrition: seed.nutrition,
       tags: seed.tags,
       reason: {
-        reasonSummary: index === 0
-          ? "與目前熱量參考值最接近的 Phase 2Q 示範選項。"
-          : "同一 deterministic mock 排序中的替代示範選項。",
-        reasonBasis: "calorie_proximity"
+        reasonSummary: "尚未套用營養排序。",
+        reasonBasis: "neutral_nutrition_fallback"
       },
       rankOrdinal: index
     }));
+    const ranked = rankNextMealCandidatesByNutrition(mapped, input.nutritionRanking, input.nutritionRankingPolicy);
+    const limit = input.candidatePoolLimit != null && input.candidatePoolLimit > 0
+      ? Math.min(Math.floor(input.candidatePoolLimit), ranked.candidates.length)
+      : ranked.candidates.length;
+    const candidates = ranked.candidates.slice(0, limit);
 
-    return { status: "available", candidates, totalCandidateCount: candidates.length };
+    if (!candidates.length) return { status: "empty" };
+
+    return {
+      status: "available",
+      candidates,
+      totalCandidateCount: ranked.candidates.length,
+      ranking: ranked.ranking
+    };
   }
 }

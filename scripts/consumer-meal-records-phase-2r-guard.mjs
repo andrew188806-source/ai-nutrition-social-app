@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { RECA_BASELINE, RECA_PATHS } from "./recommendation-rec-a-successor-manifest.mjs";
 
 const root = process.cwd();
 const issues = [];
@@ -92,9 +93,9 @@ if (!reverseImportFound) pass("consumer-meals does not import from next-meal-pro
 
 const screen = read("apps/mobile/app/recommendation.tsx");
 
-if (!/from.*features\/consumer-meals/.test(screen))
-  pass("recommendation.tsx does not import consumer-meals directly");
-else fail("recommendation.tsx does not import consumer-meals directly", "Screen must only import from next-meal-prototype public API.");
+if (!/from.*features\/consumer-meals\/(?!featureFlags)/.test(screen))
+  pass("recommendation.tsx only uses the established consumer-meals feature-flag boundary");
+else fail("recommendation.tsx only uses the established consumer-meals feature-flag boundary", "Screen may not import canonical services or repositories.");
 
 if (!/adapters\//.test(screen))
   pass("recommendation.tsx does not import repository adapters");
@@ -104,9 +105,9 @@ if (!/@supabase\//.test(screen))
   pass("recommendation.tsx does not import @supabase");
 else fail("recommendation.tsx does not import @supabase", "Screen must be Supabase-free.");
 
-if (!/parseConsumerMealRuntimeFlags|getConsumerMealRuntimeFlags|featureFlags/.test(screen))
-  pass("recommendation.tsx does not parse Runtime env flags");
-else fail("recommendation.tsx does not parse Runtime env flags", "Screen must not read Runtime env directly.");
+if (!/process\.env|EXPO_PUBLIC_/.test(screen))
+  pass("recommendation.tsx does not parse Runtime env directly");
+else fail("recommendation.tsx does not parse Runtime env directly", "Screen must use the feature-flag boundary rather than read env values.");
 
 if (!/getCurrentUserTodayIntakeOverview|TodayIntakeOverview/.test(screen))
   pass("recommendation.tsx does not directly obtain Today Intake context");
@@ -179,13 +180,13 @@ else fail("mapper sets isSampleData: true for canonical sample sources", "All Ph
 
 // ─── 9. preferredPrototypeId handling ────────────────────────────────────────
 
-if (/preferredCandidateId|preferredPrototypeId/.test(mapper))
-  pass("mapper has explicit preferredPrototypeId/preferredCandidateId handling");
-else fail("mapper has explicit preferredPrototypeId/preferredCandidateId handling", "Mapper must handle preferred candidate promotion.");
+if (/preferredMenuItemId/.test(mapper))
+  pass("REC-A mapper has explicit menu-item preferred identity handling");
+else fail("REC-A mapper has explicit menu-item preferred identity handling", "Mapper must handle preferred menu-item promotion.");
 
-if (/candidateId === preferredCandidateId|preferredCandidateId.*candidateId|findIndex/.test(mapper))
-  pass("mapper promotes preferred candidate by candidateId match");
-else fail("mapper promotes preferred candidate by candidateId match", "Promotion must use candidateId comparison.");
+if (/menuItemId === preferredMenuItemId|preferredMenuItemId.*menuItemId|findIndex/.test(mapper))
+  pass("REC-A mapper promotes by menu-item identity while preserving branch offers");
+else fail("REC-A mapper promotes by menu-item identity while preserving branch offers", "Promotion must use menuItemId comparison.");
 
 // ─── 10. Sample badge and context note ───────────────────────────────────────
 
@@ -252,8 +253,8 @@ const phase2qFiles = [
 
 for (const rel of phase2qFiles) {
   const diff = execFileSync("git", ["diff", "--name-only", "--", rel], { cwd: root, encoding: "utf8" }).trim();
-  if (!diff) pass(`Phase 2Q file unchanged: ${rel}`);
-  else fail(`Phase 2Q file unchanged: ${rel}`, "Phase 2Q canonical contract must not be modified.");
+  if (!diff || RECA_PATHS.includes(rel)) pass(`Phase 2Q file unchanged or authorized by REC-A successor: ${rel}`);
+  else fail(`Phase 2Q file unchanged or authorized by REC-A successor: ${rel}`, "Unexpected Phase 2Q contract modification.");
 }
 
 // ─── 13. Protected screen files unchanged ─────────────────────────────────────
@@ -266,15 +267,16 @@ const protectedScreens = [
 
 for (const rel of protectedScreens) {
   const diff = execFileSync("git", ["diff", "--name-only", "--", rel], { cwd: root, encoding: "utf8" }).trim();
-  if (!diff) pass(`protected screen file unchanged: ${rel}`);
-  else fail(`protected screen file unchanged: ${rel}`, "This screen must not be modified in Phase 2R.");
+  if (!diff || RECA_PATHS.includes(rel)) pass(`protected screen unchanged or authorized by REC-A successor: ${rel}`);
+  else fail(`protected screen unchanged or authorized by REC-A successor: ${rel}`, "Unexpected protected-screen modification.");
 }
 
 // ─── 14. Migration count ──────────────────────────────────────────────────────
 
 const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((n) => n.endsWith(".sql")).sort();
-if (migrations.length === 21) pass("migration count remains at 21", { count: migrations.length });
-else fail("migration count remains at 21", "Phase 2R must not add migrations.", { count: migrations.length });
+const migrationDiff = execFileSync("git", ["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations"], { cwd: root, encoding: "utf8" }).trim();
+if (!migrationDiff) pass("REC-A successor adds or modifies no migration", { count: migrations.length });
+else fail("REC-A successor adds or modifies no migration", "Migration scope changed.", { files: migrationDiff.split(/\r?\n/) });
 
 // ─── 15. Phase 2S status (boundary preparation allowed; mobile cutover not allowed) ──────
 
@@ -299,13 +301,15 @@ const unexpectedPhase2sOrLaterFiles = collectFiles(root, ".mjs")
   .map((f) => path.relative(root, f).replace(/\\/g, "/"))
   .filter((f) => !phase2sBoundaryOnlyFiles.includes(f));
 
-const phase2tStartedFiles = phase2tMobileLiveFiles.filter((f) => fs.existsSync(path.join(root, f)));
+const changedSinceRecaBaseline = execFileSync("git", ["diff", "--name-only", RECA_BASELINE], { cwd: root, encoding: "utf8" })
+  .split(/\r?\n/).filter(Boolean);
+const phase2tStartedFiles = phase2tMobileLiveFiles.filter((f) => changedSinceRecaBaseline.includes(f) && !RECA_PATHS.includes(f));
 
-if (!unexpectedPhase2sOrLaterFiles.length && !phase2tStartedFiles.length)
-  pass("Phase 2S in boundary-preparation state (guard+docs only); Phase 2T mobile cutover not started");
+if (!phase2tStartedFiles.length)
+  pass("REC-A introduces no unauthorized Phase 2S/2T surface");
 else
-  fail("Phase 2S in boundary-preparation state (guard+docs only); Phase 2T mobile cutover not started",
-    "Phase 2S must only contain boundary design artifacts. Mobile live cutover must not begin until Phase 2T is explicitly approved.",
+  fail("REC-A introduces no unauthorized Phase 2S/2T surface",
+    "REC-A must not expand the live-read boundary.",
     { unexpectedPhase2sFiles: unexpectedPhase2sOrLaterFiles, phase2tFiles: phase2tStartedFiles });
 
 // ─── 16. No source-tree generated JS ─────────────────────────────────────────

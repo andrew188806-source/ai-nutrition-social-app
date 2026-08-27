@@ -279,11 +279,13 @@ if (mockContractMode || liveMode) {
         queriedResources.push(resource);
         return {
           select: () => ({
-            limit: async () => {
-              readCount += 1;
-              observedTokens.push(clientSessionToken);
-              return { data: [rowWithNullableMacros], error: null };
-            }
+            order: () => ({
+              range: async () => {
+                readCount += 1;
+                observedTokens.push(clientSessionToken);
+                return { data: [rowWithNullableMacros], error: null };
+              }
+            })
           })
         };
       }

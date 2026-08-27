@@ -9,6 +9,7 @@ import type {
   ConsumerNextMealRecommendationSource,
   ConsumerNutritionSnapshot
 } from "../types";
+import { rankNextMealCandidatesByNutrition } from "../nextMealNutritionRanker";
 
 export class LocalMenuDemoConsumerNextMealRecommendationRepository implements ConsumerNextMealRecommendationRepository {
   readonly source: ConsumerNextMealRecommendationSource = "local-menu-demo";
@@ -18,18 +19,10 @@ export class LocalMenuDemoConsumerNextMealRecommendationRepository implements Co
     input: ConsumerNextMealRecommendationRepositoryInput
   ): Promise<ConsumerNextMealRecommendationRepositoryResult> {
     try {
-      const fetchLimit = input.candidatePoolLimit != null && input.candidatePoolLimit > 0
-        ? input.candidatePoolLimit
-        : 20;
+      const rows = mobileMenuItemService.listNextMealCandidateInputs();
+      if (!rows.length) return { status: "empty" };
 
-      const ranked = mobileMenuItemService.getRecommendedMenuItemsForNextMeal(
-        fetchLimit,
-        input.referenceCaloriesPerMeal
-      );
-
-      if (!ranked.length) return { status: "empty" };
-
-      const candidates: ConsumerNextMealCandidate[] = ranked
+      const mapped: ConsumerNextMealCandidate[] = rows
         .map((item, index): ConsumerNextMealCandidate | null => {
           const restaurant = mobileRestaurantService.findRestaurantById(item.restaurantId);
           if (!restaurant || !item.branchMenuItemId) return null;
@@ -50,19 +43,28 @@ export class LocalMenuDemoConsumerNextMealRecommendationRepository implements Co
             nutrition,
             tags: buildDemoTags(item.protein, restaurant.tags),
             reason: {
-              reasonSummary: index === 0
-                ? "與目前熱量參考值最接近的示範菜單選項（本地示範資料）。"
-                : "同一 demo 排序中的替代示範選項（本地示範資料）。",
-              reasonBasis: "calorie_proximity"
+              reasonSummary: "尚未套用營養排序。",
+              reasonBasis: "neutral_nutrition_fallback"
             },
             rankOrdinal: index
           };
         })
         .filter((c): c is ConsumerNextMealCandidate => c !== null);
 
-      if (!candidates.length) return { status: "empty" };
+      if (!mapped.length) return { status: "empty" };
 
-      return { status: "available", candidates, totalCandidateCount: candidates.length };
+      const ranked = rankNextMealCandidatesByNutrition(mapped, input.nutritionRanking, input.nutritionRankingPolicy);
+      const limit = input.candidatePoolLimit != null && input.candidatePoolLimit > 0
+        ? Math.min(Math.floor(input.candidatePoolLimit), ranked.candidates.length)
+        : ranked.candidates.length;
+      const candidates = ranked.candidates.slice(0, limit);
+
+      return {
+        status: "available",
+        candidates,
+        totalCandidateCount: ranked.candidates.length,
+        ranking: ranked.ranking
+      };
     } catch {
       return { status: "read_failed", errorCode: "next_meal_local_demo_data_error" };
     }

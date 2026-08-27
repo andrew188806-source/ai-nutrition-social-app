@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import child from "node:child_process";
 import ts from "typescript";
 
 const root = process.cwd();
@@ -36,6 +37,18 @@ const result = {
 if (!mockContract) {
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
+}
+
+// REC-A replaces Phase 2R's branch-offer preferred identity and fixed-reference
+// assumptions. Retain the historical harness for older checkouts and route the
+// authorized successor through its stricter canonical contract suite.
+if (fs.existsSync(path.join(root, "apps/mobile/features/consumer-meals/nextMealNutritionRanker.ts"))) {
+  const successor = child.spawnSync(process.execPath, ["scripts/recommendation-rec-a-smoke.mjs"], {
+    cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024
+  });
+  if (successor.stdout) process.stdout.write(successor.stdout);
+  if (successor.stderr) process.stderr.write(successor.stderr);
+  process.exit(successor.status ?? 1);
 }
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "consumer-meal-phase2r-"));

@@ -7,6 +7,8 @@ import { createOfficialSupabaseConsumerSdkLoader } from "../consumer-auth/supaba
 import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseMealContracts";
 import type { SupabaseRestaurantMenuClientLike } from "../consumer-meals/adapters/supabaseRestaurantMenuRows";
 import { getConsumerMealRuntimeFlags } from "../consumer-meals/featureFlags";
+import { SupabaseConsumerTasteFoundationRepository } from "../consumer-taste-profile/adapters/supabaseConsumerTasteFoundationRepository";
+import type { SupabaseConsumerTasteFoundationClientLike } from "../consumer-taste-profile/supabaseTasteFoundationContracts";
 import type { CanonicalNextMealPrototypeProviderDependencies } from "./canonicalNextMealPrototypeProvider";
 
 type RuntimeEnv = Record<string, string | undefined>;
@@ -36,6 +38,11 @@ export function createCanonicalNextMealPrototypeRuntimeDependencies(): Canonical
         transportEnabled: true
       }),
       mealClient: client as unknown as SupabaseConsumerMealClientLike,
+      // REC-A consumes only the canonical current-user nutrition-goal read. It does not construct
+      // the Taste service or invoke Taste, restriction, favourite, rating or Social authorities.
+      nutritionGoalsReader: new SupabaseConsumerTasteFoundationRepository(
+        client as unknown as SupabaseConsumerTasteFoundationClientLike
+      ),
       restaurantMenuClient: client as unknown as SupabaseRestaurantMenuClientLike
     };
   } catch {

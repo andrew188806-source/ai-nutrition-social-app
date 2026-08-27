@@ -700,7 +700,7 @@ export default function AnalysisScreen() {
   }
 
   function openNextMealRecommendation(meal: NextMealRecommendationCard) {
-    router.push({ pathname: "/recommendation", params: { prototypeId: meal.menuItemId } });
+    router.push({ pathname: "/recommendation", params: { preferredMenuItemId: meal.menuItemId } });
   }
 
   // Explicit "retake/replace photo" gesture (MI-E-C3 §九): best-effort delete the current

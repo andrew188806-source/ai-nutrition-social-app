@@ -23,7 +23,10 @@ import { DisabledConsumerNextMealRecommendationRepository } from "./adapters/dis
 import { MockConsumerNextMealRecommendationRepository } from "./adapters/mockConsumerNextMealRecommendationRepository";
 import { LocalMenuDemoConsumerNextMealRecommendationRepository } from "./adapters/localMenuDemoConsumerNextMealRecommendationRepository";
 import { SupabaseConsumerNextMealRecommendationRepository } from "./adapters/supabaseConsumerNextMealRecommendationRepository";
-import { ConsumerNextMealRecommendationService } from "./consumerNextMealRecommendationService";
+import {
+  ConsumerNextMealRecommendationService,
+  type ConsumerNutritionGoalsReader
+} from "./consumerNextMealRecommendationService";
 import type { SupabaseRestaurantMenuClientLike } from "./adapters/supabaseRestaurantMenuRows";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
@@ -62,6 +65,7 @@ export type ConsumerMealFactoryDependencies = {
   plannedMealV2Repository?: ConsumerPlannedMealV2Repository;
   correctionRepository?: ConsumerMealCorrectionRepository;
   nextMealRecommendationRepository?: ConsumerNextMealRecommendationRepository;
+  nutritionGoalsReader?: ConsumerNutritionGoalsReader;
   restaurantMenuClient?: SupabaseRestaurantMenuClientLike;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
@@ -399,6 +403,7 @@ export function createConsumerNextMealRecommendationService(
   return new ConsumerNextMealRecommendationService({
     repository: dependencies.nextMealRecommendationRepository ?? createConsumerNextMealRecommendationRepository(flags, dependencies),
     intakeOverviewService: createConsumerTodayIntakeOverviewService(flags, dependencies),
+    nutritionGoalsReader: dependencies.nutritionGoalsReader,
     clock: dependencies.clock ?? systemClock,
     timezone: dependencies.timezone
   });

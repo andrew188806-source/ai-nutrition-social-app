@@ -20,7 +20,7 @@ type PrototypeCandidateRow = {
 
 export function createU1MockNextMealPrototypeProvider({ enabled }: { enabled: boolean }): U1NextMealPrototypeProvider {
   return {
-    async getRecommendation({ entitlement: entitlementInput, preferredPrototypeId, scenario = "success" }) {
+    async getRecommendation({ entitlement: entitlementInput, preferredMenuItemId, preferredPrototypeId, scenario = "success" }) {
       if (!enabled) {
         return {
           status: "disabled",
@@ -67,7 +67,7 @@ export function createU1MockNextMealPrototypeProvider({ enabled }: { enabled: bo
         })
         .filter((item): item is PrototypeCandidateRow => item !== null);
 
-      const preferredRow = buildPreferredCandidateRow(preferredPrototypeId);
+      const preferredRow = buildPreferredCandidateRow(preferredMenuItemId ?? preferredPrototypeId);
       const orderedRows = uniqueCandidates(preferredRow ? [preferredRow, ...rankedRows] : rankedRows).slice(0, visibleLimit);
       if (!orderedRows.length) {
         return {

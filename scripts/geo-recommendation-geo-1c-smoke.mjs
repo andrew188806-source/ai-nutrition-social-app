@@ -167,11 +167,12 @@ const request = Object.freeze({ origin: Object.freeze({ latitude: 25.033, longit
     restaurantMenuClient: client
   });
   const result = await repository.getRankedNextMealCandidates({
-    referenceCaloriesPerMeal: 520, currentLocation: { latitude: 25.03, longitude: 121.56 }
+    nutritionRanking: { dailyGoals: { calories: 520 }, consumedTotals: { calories: 0 } },
+    currentLocation: { latitude: 25.03, longitude: 121.56 }
   });
   check("Geo-enabled Mobile uses the authenticated Edge boundary only",
     calls.length === 1 && calls[0].kind === "function" && calls[0].name === "next-meal-geo-candidates", calls);
-  check("existing calorie ranking remains downstream of Geo",
+  check("REC-A nutrition-gap ranking remains downstream of Geo",
     result.status === "available" && result.candidates.map((item) => item.candidateId).join(",") === "offer-a,offer-z");
 }
 
@@ -181,12 +182,14 @@ const request = Object.freeze({ origin: Object.freeze({ latitude: 25.033, longit
     authPort: { async getCurrentSession() { return { ok: true, value: { user: { userId: "actor" } } }; } },
     restaurantMenuClient: {
       functions: { async invoke() { calls.push("function"); return { data: null, error: {} }; } },
-      from() { calls.push("view"); return { select() { return { async limit() {
+      from() { calls.push("view"); return { select() { return { order() { return { async range() {
         return { data: [row("offer-direct", "branch-direct", "restaurant-direct")], error: null };
-      } }; } }; }
+      } }; } }; } }; }
     }
   });
-  const result = await repository.getRankedNextMealCandidates({ referenceCaloriesPerMeal: 520 });
+  const result = await repository.getRankedNextMealCandidates({
+    nutritionRanking: { dailyGoals: { calories: 520 }, consumedTotals: { calories: 0 } }
+  });
   check("location-unavailable path preserves the existing non-Geo view read",
     result.status === "available" && calls.join(",") === "view", calls);
 }
@@ -198,8 +201,10 @@ const intakeService = { async getCurrentUserTodayIntakeOverview() { return { ok:
 const candidate = {
   candidateId: "offer", branchMenuItemId: "offer", menuItemId: "menu", restaurantId: "restaurant",
   branchId: "branch", mealName: "Meal", restaurantName: "Restaurant", nutrition: { calories: 500 },
-  tags: [], reason: { reasonSummary: "reason", reasonBasis: "calorie_proximity" }, rankOrdinal: 0
+  tags: [], reason: { reasonSummary: "reason", reasonBasis: "neutral_nutrition_fallback" }, rankOrdinal: 0
 };
+const neutralRanking = { rankingMode: "neutral_fallback", nutritionGoalsApplied: false,
+  todayIntakeApplied: false, usableNutritionDimensions: [] };
 
 {
   const calls = [];
@@ -208,8 +213,10 @@ const candidate = {
       calls.push(input);
       return input.currentLocation
         ? { status: "read_failed", errorCode: "next_meal_geo_service_unavailable" }
-        : { status: "available", candidates: [candidate], totalCandidateCount: 1 };
-    } }, intakeOverviewService: intakeService, clock: { now: () => new Date("2026-08-27T00:00:00.000Z") }
+        : { status: "available", candidates: [candidate], totalCandidateCount: 1, ranking: neutralRanking };
+    } }, intakeOverviewService: intakeService,
+    nutritionGoalsReader: { async readCurrentUserNutritionGoals() { return { status: "empty", rows: [] }; } },
+    clock: { now: () => new Date("2026-08-27T00:00:00.000Z") }
   });
   const result = await service.getCurrentUserNextMealRecommendation({ currentLocation: { latitude: 25, longitude: 121 } });
   check("Geo backend failure falls back once to the existing recommendation path",
@@ -223,7 +230,9 @@ const candidate = {
   const service = new ConsumerNextMealRecommendationService({
     repository: { source: "supabase", dataProvenance: "live", async getRankedNextMealCandidates() {
       calls += 1; return { status: "empty" };
-    } }, intakeOverviewService: intakeService, clock: { now: () => new Date("2026-08-27T00:00:00.000Z") }
+    } }, intakeOverviewService: intakeService,
+    nutritionGoalsReader: { async readCurrentUserNutritionGoals() { return { status: "empty", rows: [] }; } },
+    clock: { now: () => new Date("2026-08-27T00:00:00.000Z") }
   });
   const result = await service.getCurrentUserNextMealRecommendation({ currentLocation: { latitude: 25, longitude: 121 } });
   check("zero nearby candidates remains a clean Geo empty result without broadening",
