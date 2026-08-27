@@ -276,6 +276,8 @@ try {
   }
   check("the frozen predecessor schema and the GEO-1C-P0 migration apply through COMMIT",
     applied === files.length, { applied, total: files.length });
+  const RECBP0_MIGRATION_BASENAME = "20260828010000_candidate_taste_data_authority.sql";
+  candidates = candidates.filter((file) => file !== RECBP0_MIGRATION_BASENAME);
   check("the round contributes exactly one GEO-1C-P0 migration",
     candidates.length === 1 && candidates[0].includes("restaurant_geocode_source_authority"), candidates);
 

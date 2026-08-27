@@ -19,6 +19,7 @@ import {
 } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 import { GEO1C_BASELINE, GEO1C_NPM_KEYS, GEO1C_PATHS, classifyGeo1cLifecycle } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 import { RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle } from "./recommendation-rec-a-successor-manifest.mjs";
+import { RECBP0_MIGRATION, RECBP0_NPM_KEYS, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 
 const SUITE = "geo-coordinate-source-geo-1c-p0-guard";
 const root = process.cwd();
@@ -90,28 +91,29 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free path inventory",
   new Set(GEO1CP0_PATHS).size === GEO1CP0_PATHS.length
   && GEO1CP0_PATHS.every((file) => !file.includes("*") && !file.includes("?") && !file.endsWith("/"))
-  && validationManifest.every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)), validationManifest);
+  && validationManifest.every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)), validationManifest);
 check("every declared path exists on disk", GEO1CP0_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("exactly one narrow additive migration",
-  lifecycle.manifest.filter((f) => f.startsWith("supabase/migrations/")).join("") === GEO1CP0_MIGRATION
+  lifecycle.manifest.filter((f) => f.startsWith("supabase/migrations/") && f !== RECBP0_MIGRATION)
+    .join("") === GEO1CP0_MIGRATION
   || lifecycle.manifest.length === 0);
 check("no predecessor migration byte is modified",
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--", "supabase/migrations"]))
-    .every((file) => file === GEO1CP0_MIGRATION));
+    .every((file) => file === GEO1CP0_MIGRATION || file === RECBP0_MIGRATION));
 
 // GEO-1C-P0 is a server round. It touches no Mobile byte at all, so the GEO-1B acquisition
 // authority and every Social surface stay exactly where they were frozen.
 check("no Mobile byte is touched at all",
-  validationManifest.filter((file) => file.startsWith("apps/")).every((file) => GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file))
+  validationManifest.filter((file) => file.startsWith("apps/")).every((file) => GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file))
   && lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--", "apps", "lib", "packages"]))
-    .every((file) => GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)));
+    .every((file) => GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));
 check("the frozen GEO-1A shared contract and authority are byte-unchanged",
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--",
     "supabase/functions/_shared/geo-api",
     "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql"])).length === 0);
 check("no byte outside the GEO-1C-P0 manifest is touched",
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--"]))
-    .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)));
+    .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));
 check("the only product bytes are the geocoding authority and its dispatcher",
   GEO1CP0_PATHS.filter((file) => !file.startsWith("scripts/") && file !== "package.json"
     && file !== "supabase/config.toml")
@@ -156,7 +158,7 @@ check("root package.json gains only the GEO-1C-P0 command keys and no dependency
     const before = JSON.parse(git(["show", `${GEO1CP0_BASELINE}:package.json`]));
     const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
     const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
-    return removed.length === 0 && added.every((key) => GEO1CP0_NPM_KEYS.includes(key) || GEO1C_NPM_KEYS.includes(key) || RECA_NPM_KEYS.includes(key))
+    return removed.length === 0 && added.every((key) => GEO1CP0_NPM_KEYS.includes(key) || GEO1C_NPM_KEYS.includes(key) || RECA_NPM_KEYS.includes(key) || RECBP0_NPM_KEYS.includes(key))
       && JSON.stringify(packageJson.dependencies) === JSON.stringify(before.dependencies)
       && JSON.stringify(packageJson.devDependencies) === JSON.stringify(before.devDependencies);
   })());

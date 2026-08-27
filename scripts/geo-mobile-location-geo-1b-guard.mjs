@@ -18,6 +18,7 @@ import {
 import { GEO1CP0_NPM_KEYS, GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 import { GEO1C_BASELINE, GEO1C_NPM_KEYS, GEO1C_PATHS, classifyGeo1cLifecycle } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 import { RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle } from "./recommendation-rec-a-successor-manifest.mjs";
+import { RECBP0_MIGRATION, RECBP0_NPM_KEYS, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 
 const SUITE = "geo-mobile-location-geo-1b-guard";
 const root = process.cwd();
@@ -89,24 +90,26 @@ check("exact wildcard-free path inventory",
   new Set(GEO1B_PATHS).size === GEO1B_PATHS.length
   && GEO1B_PATHS.every((file) => !file.includes("*") && !file.includes("?") && !file.endsWith("/"))
   && validationManifest.every((file) => GEO1B_PATHS.includes(file)
-    || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)), validationManifest);
+    || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)), validationManifest);
 check("every declared path exists on disk", GEO1B_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 
 // GEO-1B is a Mobile phase. It adds no migration and touches no server authority at all.
-// GEO-1C-P0 is a server round that sits on top of this Mobile one, so the cumulative supabase
-// delta legitimately contains its exactly enumerated path set. GEO-1B itself still contributes none.
+// GEO-1C-P0 and then REC-B-P0 are server rounds sitting on top of this Mobile one, so the cumulative
+// supabase delta legitimately contains their exactly enumerated path sets. GEO-1B itself still
+// contributes none, which is what the second half of this check keeps proving.
 check("GEO-1B adds no migration and touches no server byte",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase"]))
-    .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file))
+    .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)
+      || RECBP0_PATHS.includes(file))
   && !GEO1B_PATHS.some((file) => file.startsWith("supabase/")));
 check("the frozen GEO-1A shared contract is byte-unchanged",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--",
     "supabase/functions/_shared/geo-api"])).length === 0
   && lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase/migrations"]))
-    .every((file) => GEO1CP0_PATHS.includes(file)));
+    .every((file) => GEO1CP0_PATHS.includes(file) || file === RECBP0_MIGRATION));
 check("no byte outside the GEO-1B manifest is touched",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--"]))
-    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file)));
+    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));
 check("the only product bytes are the consumer-location feature",
   GEO1B_PATHS.filter((file) => file.startsWith("apps/") && !file.endsWith("app.json") && !file.endsWith("package.json"))
     .every((file) => GEO1B_PRODUCT_PATHS.includes(file)));
@@ -174,7 +177,7 @@ check("root package.json gains only the GEO-1B command keys",
     const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
     return removed.length === 0
       && added.every((key) => GEO1B_NPM_KEYS.includes(key) || GEO1CP0_NPM_KEYS.includes(key)
-        || GEO1C_NPM_KEYS.includes(key) || RECA_NPM_KEYS.includes(key))
+        || GEO1C_NPM_KEYS.includes(key) || RECA_NPM_KEYS.includes(key) || RECBP0_NPM_KEYS.includes(key))
       && JSON.stringify(packageJson.dependencies) === JSON.stringify(before.dependencies)
       && JSON.stringify(packageJson.devDependencies) === JSON.stringify(before.devDependencies);
   })());

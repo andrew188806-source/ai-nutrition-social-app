@@ -43,6 +43,7 @@ import { SR2GD_BASELINE, SR2GD_SUCCESSOR_PATHS } from "./social-candidate-sr2g-d
 import { SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e1-successor-manifest.mjs";
 import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
+import { classifyRecbp0Lifecycle, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const successorMigrationSha256 = "e0859f801c040002e855f2b03e27a5f8f95fd037c23210223a1ce29881bbe624";
@@ -151,12 +152,21 @@ try {
   const packageJson = JSON.parse(read("package.json"));
   const lifecycleState = collectLifecycleState();
   const lifecycle = classifySr2gfLifecycle(lifecycleState);
+  const recbp0Lifecycle = classifyRecbp0Lifecycle({
+    ...lifecycleState,
+    parent: lifecycleState.headParent,
+    deltaPaths: lifecycleState.headDeltaEntries.map(({ path: file }) => file),
+    deleted: lifecycleState.headDeltaEntries.some(({ status }) => status === "D")
+  });
+  const effectiveLifecycle = recbp0Lifecycle.valid ? recbp0Lifecycle : lifecycle;
   const frozenDeltaEntries = commitDeltaEntries(SR2A_BASELINE);
   const frozenDeltaPaths = frozenDeltaEntries.map(({ path: file }) => file).sort();
   const frozenMigrationTracked = git(["ls-tree", "-r", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === SR1D_SUCCESSOR_MIGRATION;
 
   check("1. frozen SR-1D commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2A_BASELINE}^`]).trim() === SR1D_BASELINE && same(frozenDeltaPaths, SR1D_SUCCESSOR_PATHS) && !frozenDeltaEntries.some(({ status }) => status === "D"), { expectedParent: SR1D_BASELINE, expected: SR1D_SUCCESSOR_PATHS, actual: frozenDeltaPaths });
-  check("1a. candidate or frozen SR-2G-F successor manifest is exact and contains no unrelated path", same(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS), { expected: SR2GF_SUCCESSOR_PATHS, actual: lifecycle.lifecycleManifest });
+  check("1a. candidate or frozen successor manifest is exact and contains no unrelated path",
+    recbp0Lifecycle.valid ? same(recbp0Lifecycle.manifest, RECBP0_PATHS) : same(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
+    { expected: recbp0Lifecycle.valid ? RECBP0_PATHS : SR2GF_SUCCESSOR_PATHS, actual: recbp0Lifecycle.valid ? recbp0Lifecycle.manifest : lifecycle.lifecycleManifest });
   check("1b2. frozen SR-2B commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && same(commitDeltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
   check("1b. frozen SR-2A commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2B_BASELINE}^`]).trim() === SR2A_BASELINE && same(commitDeltaEntries(SR2B_BASELINE).map(({ path: file }) => file).sort(), SR2A_SUCCESSOR_PATHS));
   check("1c. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0
@@ -172,7 +182,7 @@ try {
     && SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
     && !SR2C_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/[^_]/.test(entry)));
   check("2. every exact candidate path exists", SR1D_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-  check("3. lifecycle is exactly an authorized SR-2A successor state rooted at the frozen SR-1D authority", lifecycle.valid, { phase: lifecycle.phase, head: lifecycleState.head, originHead: lifecycleState.originHead, ahead: lifecycleState.ahead, behind: lifecycleState.behind, headParent: lifecycleState.headParent });
+  check("3. lifecycle is exactly an authorized successor state rooted at the frozen SR-1D authority", effectiveLifecycle.valid, { phase: effectiveLifecycle.phase, head: lifecycleState.head, originHead: lifecycleState.originHead, ahead: lifecycleState.ahead, behind: lifecycleState.behind, headParent: lifecycleState.headParent });
   check("4. candidate and frozen lifecycle both prohibit staged bytes", lifecycleState.stagedPaths.length === 0, { stagedPaths: lifecycleState.stagedPaths });
   check("5. package exposes the three exact SR-1D local suites", ["test:social-taste-sr1d", "test:social-taste-sr1d-smoke", "test:social-taste-sr1d-mutations"].every((key) => typeof packageJson.scripts[key] === "string" && packageJson.scripts[key].includes("social-taste-sr1d-")));
   check("6. frozen SR-1D successor migration remains tracked at its exact immutable path", frozenMigrationTracked && fs.existsSync(path.join(root, SR1D_SUCCESSOR_MIGRATION)) && git(["diff", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === "");
@@ -252,7 +262,7 @@ try {
   check("55. frozen SR-1C ingress remains count-only", /JSON\.stringify\(\{ candidate_count: candidateCount \}\)/.test(read("supabase/functions/social-candidate-provenance/handler.ts")) && !/taste|adapted_count|unsupported_count/i.test(read("supabase/functions/social-candidate-provenance/handler.ts")));
   check("56. no Mobile, product DTO, ranking, entitlement or pagination path is introduced", SR1D_SUCCESSOR_PATHS.every((file) => !file.startsWith("apps/")) && !/ranking|recommendation|premium|entitlement|pagination/i.test(`${provider}\n${handler}`));
 
-  console.log(JSON.stringify({ suite: "social-taste-sr1d-guard", status: failures.length ? "failed" : "passed", lifecycle: lifecycle.phase, totalChecks: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, networkUsed: false, databaseUsed: false, credentialsUsed: false, productionTouched: false }, null, 2));
+  console.log(JSON.stringify({ suite: "social-taste-sr1d-guard", status: failures.length ? "failed" : "passed", lifecycle: effectiveLifecycle.phase, totalChecks: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, networkUsed: false, databaseUsed: false, credentialsUsed: false, productionTouched: false }, null, 2));
   process.exit(failures.length ? 1 : 0);
 } catch (error) {
   console.error(JSON.stringify({ suite: "social-taste-sr1d-guard", status: "crashed", error: error instanceof Error ? error.message : String(error), networkUsed: false, databaseUsed: false, credentialsUsed: false, productionTouched: false }, null, 2));

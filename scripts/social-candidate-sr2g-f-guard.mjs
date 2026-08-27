@@ -15,6 +15,9 @@ import {
   SR2GF_PROOF_CONTEXTS, SR2GF_RANKING_POLICY_VERSION, SR2GF_SUCCESSOR_PATHS, SR2GF_TIME_ZONE
 } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 import { classifySr2ggLifecycle, SR2GG_BASELINE } from "./social-candidate-sr2g-g-successor-manifest.mjs";
+import { classifyRecbp0Lifecycle, RECBP0_NPM_KEYS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
+import { RECA_NPM_KEYS } from "./recommendation-rec-a-successor-manifest.mjs";
+import { GEO1C_NPM_KEYS } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -91,9 +94,13 @@ try {
     headDeltaPaths: state.headDeltaEntries.map(({ path }) => path),
     headDeleted: state.headDeltaEntries.some(({ status }) => status === "D")
   });
+  const recbp0Lifecycle = classifyRecbp0Lifecycle({ ...state, parent: state.headParent,
+    deltaPaths: state.headDeltaEntries.map(({ path }) => path),
+    deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
   const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
     && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
-  const effectivePhase = lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid
+  const effectivePhase = recbp0Lifecycle.valid ? `successor_${recbp0Lifecycle.phase}`
+    : lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid
     ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2GF_BASELINE}:package.json`]));
@@ -120,6 +127,9 @@ try {
   for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-geo-1b-smoke","test:geo-mobile-location-geo-1b-mutations"]) delete packageWithout.scripts[key];
   // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
   for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
+  for (const key of RECBP0_NPM_KEYS) delete packageWithout.scripts[key];
+  for (const key of RECA_NPM_KEYS) delete packageWithout.scripts[key];
+  for (const key of GEO1C_NPM_KEYS) delete packageWithout.scripts[key];
 
   const migration = read(SR2GF_MIGRATION);
   const migrationExec = sqlExec(migration);

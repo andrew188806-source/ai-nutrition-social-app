@@ -7,3 +7,4 @@ export * from "./consumer-consent";
 export * from "./social-candidate";
 export * from "./meal-buddy-candidate";
 export * as TasteSimilarityDomain from "./taste-similarity";
+export * as CandidateTasteAuthority from "./candidate-taste";

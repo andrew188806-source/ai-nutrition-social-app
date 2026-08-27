@@ -17,6 +17,7 @@ import {
 import {
   RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle
 } from "./recommendation-rec-a-successor-manifest.mjs";
+import { RECBP0_MIGRATION, RECBP0_NPM_KEYS, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -65,6 +66,7 @@ const recaLifecycle = classifyRecaLifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const isRecaSuccessor = recaLifecycle.valid;
+const isRecbp0Successor = recaLifecycle.phase.startsWith("rec_b_p0_");
 const lifecycle = isRecaSuccessor ? recaLifecycle : geoLifecycle;
 
 check("lifecycle is exact candidate or frozen local", lifecycle.valid, lifecycle);
@@ -75,10 +77,11 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free manifest",
   new Set(GEO1C_PATHS).size === GEO1C_PATHS.length
   && GEO1C_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/"))
-  && lifecycle.manifest.every((file) => (isRecaSuccessor ? RECA_PATHS : GEO1C_PATHS).includes(file)), lifecycle.manifest);
+  && lifecycle.manifest.every((file) => (isRecbp0Successor ? RECBP0_PATHS : isRecaSuccessor ? RECA_PATHS : GEO1C_PATHS).includes(file)), lifecycle.manifest);
 check("every manifest path exists", GEO1C_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-check("no migration is added or modified",
-  lines(git(["diff", "--name-only", GEO1C_BASELINE, "--", "supabase/migrations"])).length === 0);
+const migrationDelta = lines(git(["diff", "--name-only", GEO1C_BASELINE, "--", "supabase/migrations"]));
+check("no frozen migration is modified",
+  isRecbp0Successor ? migrationDelta.every((file) => file === RECBP0_MIGRATION) : migrationDelta.length === 0);
 check("dependency and lock bytes are unchanged",
   lines(git(["diff", "--name-only", GEO1C_BASELINE, "--", "apps/mobile/package.json", "package-lock.json"])).length === 0);
 check("Production and deployment paths are untouched",
@@ -106,7 +109,7 @@ check("package gains only GEO-1C commands and no dependency", (() => {
   const before = JSON.parse(git(["show", `${GEO1C_BASELINE}:package.json`]));
   const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
   const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
-  return removed.length === 0 && added.every((key) => GEO1C_NPM_KEYS.includes(key) || (isRecaSuccessor && RECA_NPM_KEYS.includes(key)))
+  return removed.length === 0 && added.every((key) => GEO1C_NPM_KEYS.includes(key) || (isRecaSuccessor && RECA_NPM_KEYS.includes(key)) || (isRecbp0Successor && RECBP0_NPM_KEYS.includes(key)))
     && JSON.stringify(packageJson.dependencies) === JSON.stringify(before.dependencies)
     && JSON.stringify(packageJson.devDependencies) === JSON.stringify(before.devDependencies);
 })());

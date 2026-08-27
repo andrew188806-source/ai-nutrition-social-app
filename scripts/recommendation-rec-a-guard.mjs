@@ -7,6 +7,7 @@ import {
   RECA_PREDECESSOR_VALIDATION_PATHS, RECA_PRODUCT_PATHS,
   classifyRecaLifecycle, createRecaManifest
 } from "./recommendation-rec-a-successor-manifest.mjs";
+import { RECBP0_BASELINE, RECBP0_MIGRATION } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -42,11 +43,17 @@ const lifecycle = classifyRecaLifecycle({
 check("lifecycle is exact REC-A candidate or frozen local", lifecycle.valid, lifecycle);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
-check("origin/main remains the frozen authority", originHead === RECA_BASELINE, originHead);
+check("origin/main remains the frozen REC-A/REC-B predecessor authority",
+  originHead === RECA_BASELINE || originHead === RECBP0_BASELINE, originHead);
 check("exact wildcard-free manifest", new Set(RECA_PATHS).size === RECA_PATHS.length
   && RECA_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every manifest path exists", RECA_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-check("no migration or schema path changed", lines(git(["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations", "supabase/schema"])).length === 0);
+const schemaDelta = lines(git(["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations", "supabase/schema"]));
+check("REC-B-P0 successor adds only its one migration; REC-A itself changed none",
+  lifecycle.phase.startsWith("rec_b_p0_")
+    ? schemaDelta.length <= 1 && schemaDelta.every((file) => file === RECBP0_MIGRATION)
+    : schemaDelta.length === 0,
+  schemaDelta);
 check("no dependency or lock bytes changed", lines(git(["diff", "--name-only", RECA_BASELINE, "--", "apps/mobile/package.json", "package-lock.json"])).length === 0);
 check("Production and deployment paths are untouched", !lifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file)));
 check("predecessor edits are validation-only", RECA_PREDECESSOR_VALIDATION_PATHS.every((file) =>

@@ -280,8 +280,18 @@ try {
   }
   check("the frozen predecessor schema and the GEO-1A migration apply through COMMIT on real PostgreSQL",
     applied === files.length, { applied, total: files.length });
+  const SUCCESSOR_MIGRATIONS = [
+    "20260826010000_restaurant_geocode_source_authority.sql",
+    "20260828010000_candidate_taste_data_authority.sql"
+  ];
+  const geo1aCandidates = candidates.filter((file) => !SUCCESSOR_MIGRATIONS.includes(file));
   check("the round contributes exactly one GEO-1A migration",
-    candidates.length === 1 && candidates[0].includes("geo_shared_candidate_authority"), candidates);
+    geo1aCandidates.length === 1 && geo1aCandidates[0].includes("geo_shared_candidate_authority"),
+    { geo1aCandidates, candidates });
+  // Cross-successor invariant: every later migration applied here is one this repository knows about.
+  check("every later migration in the applied set is a known enumerated successor",
+    candidates.filter((file) => !file.includes("geo_shared_candidate_authority"))
+      .every((file) => SUCCESSOR_MIGRATIONS.includes(file)), candidates);
 
   // --- schema shape ---------------------------------------------------------------------------
   const columns = await q(`
@@ -306,12 +316,38 @@ try {
     `insert into public.restaurant_branches (id, restaurant_id, name, status, latitude, longitude)
      values ('${id}', 'geo1a-r', '${id}', 'active', ${lat}, ${lng})`;
 
+  // Coordinates are written by UPDATE, which the GEO-1C-P0 invalidation trigger does not fire on
+  // (it watches address, district and restaurant_id). This is the only way the value still reaches
+  // GEO-1A's CHECK constraints, so the frozen proof survives the successor intact.
+  // The branch is inserted WITH a street address so the successor trigger composes a fingerprint and
+  // leaves it `pending`; without one it would stay `unknown` and the successor's own
+  // resolution-attributable constraint, not GEO-1A's range constraint, would be the thing rejecting.
+  const insertAddressedBranch = (id, status = "active") =>
+    `insert into public.restaurant_branches (id, restaurant_id, name, status, district, address)
+     values ('${id}', 'geo1a-r', '${id}', '${status}', 'Fixture District', '${id} Fixture Road 1')`;
+  const setCoordinate = (id, lat, lng) =>
+    `update public.restaurant_branches set latitude = ${lat}, longitude = ${lng},
+       geocode_status = 'resolved', geocode_provider = 'geo1a-fixture',
+       geocode_resolved_at = pg_catalog.clock_timestamp() where id = '${id}'`;
+  const withCoordinate = async (id, lat, lng, status) => {
+    await q(insertAddressedBranch(id, status));
+    await q(setCoordinate(id, lat, lng));
+  };
+
+  await q(insertAddressedBranch("geo1a-bad-lat"));
   check("an out-of-range latitude is rejected at rest",
-    await rejects(insertBranch("geo1a-bad-lat", "90.000001", "121.5")));
+    await rejects(setCoordinate("geo1a-bad-lat", "90.000001", "121.5")));
+  await q(insertAddressedBranch("geo1a-bad-lng"));
   check("an out-of-range longitude is rejected at rest",
-    await rejects(insertBranch("geo1a-bad-lng", "25.0", "180.000001")));
+    await rejects(setCoordinate("geo1a-bad-lng", "25.0", "180.000001")));
+  await q(insertAddressedBranch("geo1a-half"));
   check("a half-known coordinate is rejected at rest",
-    await rejects(insertBranch("geo1a-half", "25.0", "null")));
+    await rejects(setCoordinate("geo1a-half", "25.0", "null")));
+  // The successor trigger must not be a way to smuggle a bad coordinate past GEO-1A either.
+  check("the successor invalidation trigger never leaves a coordinate behind on insert",
+    (await q(`select count(*)::int as n from public.restaurant_branches
+              where id in ('geo1a-bad-lat','geo1a-bad-lng','geo1a-half')
+                and (latitude is not null or longitude is not null)`))[0].n === 0);
 
   // --- distance authority ---------------------------------------------------------------------
   const d = async (a, b) => Number((await q(
@@ -369,13 +405,18 @@ try {
     (await q(`select geo_internal.within_radius(25.0,121.5,null,null,1000000) as ok`))[0].ok === false);
 
   // --- candidate narrowing ------------------------------------------------------------------------
-  await q(insertBranch("geo1a-b-near", T101.lat, T101.lng));
-  await q(insertBranch("geo1a-b-mid", TMAIN.lat, TMAIN.lng));
+  await withCoordinate("geo1a-b-near", T101.lat, T101.lng);
+  await withCoordinate("geo1a-b-mid", TMAIN.lat, TMAIN.lng);
   await q(`insert into public.restaurant_branches (id, restaurant_id, name, status, latitude, longitude)
            values ('geo1a-b-unknown', 'geo1a-r', 'unknown', 'active', null, null)`);
-  await q(insertBranch("geo1a-b-far", "35.681236", "139.767125"));
-  await q(`insert into public.restaurant_branches (id, restaurant_id, name, status, latitude, longitude)
-           values ('geo1a-b-inactive', 'geo1a-r', 'inactive', 'inactive', ${T101.lat}, ${T101.lng})`);
+  await withCoordinate("geo1a-b-far", "35.681236", "139.767125");
+  await withCoordinate("geo1a-b-inactive", T101.lat, T101.lng, "inactive");
+  // The fixtures must genuinely hold coordinates, or every narrowing assertion below would pass
+  // vacuously on an empty result.
+  check("the narrowing fixtures actually carry coordinates after the successor trigger",
+    (await q(`select count(*)::int as n from public.restaurant_branches
+              where id in ('geo1a-b-near','geo1a-b-mid','geo1a-b-far','geo1a-b-inactive')
+                and latitude is not null`))[0].n === 4);
 
   const narrow = async (point, radius, limit) => await q(
     `select branch_id, distance_meters from geo_internal.narrow_branch_candidates($1,$2,$3,$4)`,
@@ -427,8 +468,20 @@ try {
     select p.proname, pg_get_userbyid(p.proowner) as owner
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'geo_internal' order by 1`);
+  // GEO-1A froze exactly three geo_internal functions and they must still be owned by its sealed
+  // role. GEO-1C-P0 later added its own, deliberately splitting ownership: the four resolution
+  // entry points belong to geo_geocode_authority, while the two pure address helpers stay
+  // postgres-owned so the definer functions can execute them. That is successor authority, not
+  // GEO-1A drift.
+  const GEO1A_FUNCTIONS = ["distance_meters", "narrow_branch_candidates", "within_radius"];
+  const geo1aOwners = owners.filter((r) => GEO1A_FUNCTIONS.includes(r.proname));
   check("every Geo function is owned by the sealed authority role, not by the migration runner",
-    owners.length === 3 && owners.every((r) => r.owner === "geo_authority"), owners);
+    geo1aOwners.length === 3 && geo1aOwners.every((r) => r.owner === "geo_authority"), geo1aOwners);
+  // Cross-successor invariant: no geo_internal function, GEO-1A's or a successor's, may ever be
+  // owned by a client or runtime role.
+  check("no Geo function is owned by a client or runtime role",
+    owners.every((r) => !["anon", "authenticated", "service_role", "authenticator",
+      "social_runtime_executor"].includes(r.owner)), owners);
 
   const roleShape = (await q(`select rolcanlogin, rolbypassrls, rolinherit, rolsuper
                               from pg_roles where rolname='geo_authority'`))[0];

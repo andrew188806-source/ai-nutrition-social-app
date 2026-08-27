@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import {
+  RECBP0_BASELINE, RECBP0_PATHS, classifyRecbp0Lifecycle
+} from "./recommendation-rec-b-p0-successor-manifest.mjs";
 
 export const RECA_BASELINE = "5a0533028bc3e28481404234cc57dcdf2e58f830";
 export const RECA_COMMIT_SUBJECT = "Activate gap-aware next-meal nutrition ranking";
@@ -69,6 +72,21 @@ export function classifyRecaLifecycle(input) {
     && input.behind === 0 && input.ahead === 1 && input.worktreePaths.length === 0
     && input.stagedPaths.length === 0 && same(delta, RECA_PATHS)) {
     return { valid: true, phase: "frozen_local", manifest: delta };
+  }
+  if (input.head === RECBP0_BASELINE && input.originHead === RECBP0_BASELINE
+    && input.behind === 0 && input.ahead === 0 && input.worktreePaths.length === 0
+    && input.stagedPaths.length === 0 && same(delta, RECA_PATHS)) {
+    return { valid: true, phase: "frozen_pushed", manifest: delta };
+  }
+  const recbp0Delta = input.head === RECBP0_BASELINE
+    ? []
+    : delta.filter((file) => !RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file));
+  const successor = classifyRecbp0Lifecycle({
+    ...input,
+    deltaPaths: recbp0Delta
+  });
+  if (successor.valid) {
+    return { valid: true, phase: `rec_b_p0_${successor.phase}`, manifest: successor.manifest };
   }
   return { valid: false, phase: "invalid", manifest: input.head === RECA_BASELINE ? worktree : delta };
 }
