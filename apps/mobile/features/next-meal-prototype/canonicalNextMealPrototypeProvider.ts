@@ -38,13 +38,14 @@ export function createCanonicalNextMealPrototypeProvider(
   return {
     async getRecommendation({
       entitlement: entitlementInput,
-      preferredPrototypeId
+      preferredPrototypeId,
+      currentLocation
     }: U1NextMealPrototypeRequest): Promise<U1NextMealProviderResult> {
       const entitlement = normalizeNextMealCandidateEntitlement(entitlementInput);
       const visibleLimit = getNextMealCandidateCount(entitlement);
 
       try {
-        const result = await capturedService.getCurrentUserNextMealRecommendation();
+        const result = await capturedService.getCurrentUserNextMealRecommendation({ currentLocation });
         const mapped = mapCanonicalToU1NextMeal(
           result,
           entitlement,

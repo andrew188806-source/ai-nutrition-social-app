@@ -601,6 +601,13 @@ export type ConsumerNextMealRecommendationBasis =
   | "calorie_proximity"
   | "fallback_calorie_reference";
 
+export type ConsumerNextMealGeoInput = Readonly<{
+  latitude: number;
+  longitude: number;
+}>;
+
+export type ConsumerNextMealGeoStatus = "not_requested" | "applied" | "unavailable";
+
 export type ConsumerNextMealCandidateReason = {
   reasonSummary: string;
   reasonBasis: ConsumerNextMealRecommendationBasis;
@@ -630,6 +637,7 @@ export type ConsumerNextMealRecommendationInput = {
   date?: string;
   timezone?: string;
   candidatePoolLimit?: number;
+  currentLocation?: ConsumerNextMealGeoInput;
 };
 
 export type ConsumerNextMealRecommendationContext = {
@@ -645,6 +653,7 @@ export type ConsumerNextMealRecommendationContext = {
   plannedMealsAppliedToRanking: false;
   personalizationLevel: ConsumerNextMealPersonalizationLevel;
   intakeOverviewUsed: boolean;
+  geoStatus: ConsumerNextMealGeoStatus;
 };
 
 export type ConsumerNextMealRecommendation = {
@@ -658,6 +667,7 @@ export type ConsumerNextMealRecommendation = {
 export type ConsumerNextMealRecommendationRepositoryInput = {
   referenceCaloriesPerMeal: number;
   candidatePoolLimit?: number;
+  currentLocation?: ConsumerNextMealGeoInput;
 };
 
 export type ConsumerNextMealRecommendationRepositoryResult =
@@ -676,7 +686,7 @@ export interface ConsumerNextMealRecommendationRepository {
 
 export type ConsumerNextMealRecommendationResult =
   | { status: "available"; recommendation: ConsumerNextMealRecommendation }
-  | { status: "empty"; source: ConsumerNextMealRecommendationSource; date: string }
+  | { status: "empty"; source: ConsumerNextMealRecommendationSource; date: string; geoStatus: ConsumerNextMealGeoStatus }
   | { status: "disabled"; source: ConsumerNextMealRecommendationSource }
   | { status: "intake_unavailable"; source: ConsumerNextMealRecommendationSource; errorCode: string }
   | { status: "read_failed"; source: ConsumerNextMealRecommendationSource; errorCode: string };

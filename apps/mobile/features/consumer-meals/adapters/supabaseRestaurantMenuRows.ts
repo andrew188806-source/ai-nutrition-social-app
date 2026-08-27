@@ -34,4 +34,4 @@ export type SupabaseRestaurantMenuClientLike = {
       limit(count: number): Promise<SupabaseRestaurantMenuQueryResponse>;
     };
   };
-};
+} & import("./supabaseNextMealGeoRows").SupabaseNextMealGeoClientLike;

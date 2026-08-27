@@ -71,3 +71,8 @@ verify_jwt = false
 # secret header instead of a user JWT and refuses to run when that secret is absent, so JWT
 # verification is deliberately off while the endpoint remains closed to anonymous callers.
 verify_jwt = false
+
+[functions.next-meal-geo-candidates]
+# GEO-1C: authenticated request-scoped current-location narrowing for next-meal candidates. Actor
+# identity is verified again through auth.getUser(); precise coordinates are neither logged nor stored.
+verify_jwt = true

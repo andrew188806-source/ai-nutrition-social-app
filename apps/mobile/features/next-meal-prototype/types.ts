@@ -60,6 +60,7 @@ export type U1NextMealPrototypeRequest = {
   entitlement?: unknown;
   preferredPrototypeId?: string;
   scenario?: U1NextMealPrototypeScenario;
+  currentLocation?: Readonly<{ latitude: number; longitude: number }>;
 };
 
 export interface U1NextMealPrototypeProvider {

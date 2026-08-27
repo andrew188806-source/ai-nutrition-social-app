@@ -20,7 +20,8 @@ export function NextMealPrototypeContent({
   preferredPrototypeId,
   provider,
   scenario,
-  feedbackCompositionOptions
+  feedbackCompositionOptions,
+  currentLocation
 }: {
   entitlement?: unknown;
   onReturnHome: () => void;
@@ -29,6 +30,7 @@ export function NextMealPrototypeContent({
   provider: U1NextMealPrototypeProvider;
   scenario?: U1NextMealPrototypeScenario;
   feedbackCompositionOptions?: MobileConsumerRecommendationFeedbackCompositionOptions;
+  currentLocation?: Readonly<{ latitude: number; longitude: number }>;
 }) {
   const copy = zhTW.mobile.nextMealPrototype;
   const [retryCount, setRetryCount] = useState(0);
@@ -72,7 +74,7 @@ export function NextMealPrototypeContent({
     let active = true;
     setModel({ status: "loading" });
     provider
-      .getRecommendation({ entitlement, preferredPrototypeId, scenario })
+      .getRecommendation({ entitlement, preferredPrototypeId, scenario, currentLocation })
       .then((result) => {
         if (active) setModel(presentU1NextMealResult(result));
       })
@@ -82,7 +84,7 @@ export function NextMealPrototypeContent({
     return () => {
       active = false;
     };
-  }, [copy.errorBody, entitlement, preferredPrototypeId, provider, retryCount, scenario]);
+  }, [copy.errorBody, currentLocation, entitlement, preferredPrototypeId, provider, retryCount, scenario]);
 
   useEffect(load, [load]);
 

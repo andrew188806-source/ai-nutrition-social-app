@@ -299,7 +299,10 @@
     "test:geo-coordinate-source-geo-1c-p0": "node scripts/geo-coordinate-source-geo-1c-p0-guard.mjs",
     "test:geo-coordinate-source-geo-1c-p0-smoke": "node scripts/geo-coordinate-source-geo-1c-p0-smoke.mjs",
     "test:geo-coordinate-source-geo-1c-p0-mutations": "node scripts/geo-coordinate-source-geo-1c-p0-mutations.mjs",
-    "test:geo-coordinate-source-geo-1c-p0-postgres": "node scripts/geo-coordinate-source-geo-1c-p0-postgres-apply.mjs"
+    "test:geo-coordinate-source-geo-1c-p0-postgres": "node scripts/geo-coordinate-source-geo-1c-p0-postgres-apply.mjs",
+    "test:geo-recommendation-geo-1c": "node scripts/geo-recommendation-geo-1c-guard.mjs",
+    "test:geo-recommendation-geo-1c-smoke": "node scripts/geo-recommendation-geo-1c-smoke.mjs",
+    "test:geo-recommendation-geo-1c-mutations": "node scripts/geo-recommendation-geo-1c-mutations.mjs"
   },
   "workspaces": [
     "apps/*",

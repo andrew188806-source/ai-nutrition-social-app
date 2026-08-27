@@ -2,6 +2,7 @@ import type { ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOver
 import type { ConsumerTodayIntakeOverviewService } from "./consumerTodayIntakeOverviewService";
 import type {
   ConsumerNextMealPersonalizationLevel,
+  ConsumerNextMealGeoStatus,
   ConsumerNextMealRecommendationContext,
   ConsumerNextMealRecommendationInput,
   ConsumerNextMealRecommendationRepository,
@@ -72,6 +73,8 @@ export class ConsumerNextMealRecommendationService {
       plannedMealCount = intake.plannedMeals.length;
     }
 
+    let geoStatus: ConsumerNextMealGeoStatus = input.currentLocation ? "applied" : "not_requested";
+
     const context: ConsumerNextMealRecommendationContext = {
       date,
       timezone,
@@ -84,14 +87,28 @@ export class ConsumerNextMealRecommendationService {
       plannedMealsAvailable,
       plannedMealsAppliedToRanking: false,
       personalizationLevel,
-      intakeOverviewUsed
+      intakeOverviewUsed,
+      geoStatus
     };
 
     // Step 2: obtain ranked candidates from repository using deterministic context
-    const repoResult = await repository.getRankedNextMealCandidates({
+    let repoResult = await repository.getRankedNextMealCandidates({
       referenceCaloriesPerMeal,
-      candidatePoolLimit: input.candidatePoolLimit
+      candidatePoolLimit: input.candidatePoolLimit,
+      currentLocation: input.currentLocation
     });
+
+    // Infrastructure failure in the optional Geo boundary degrades to the already-valid non-Geo
+    // recommendation path. A legitimate zero-nearby result never broadens silently.
+    if (repoResult.status === "read_failed" && input.currentLocation
+      && repoResult.errorCode.startsWith("next_meal_geo_")) {
+      geoStatus = "unavailable";
+      context.geoStatus = geoStatus;
+      repoResult = await repository.getRankedNextMealCandidates({
+        referenceCaloriesPerMeal,
+        candidatePoolLimit: input.candidatePoolLimit
+      });
+    }
 
     if (repoResult.status === "disabled") {
       return { status: "disabled", source: repository.source };
@@ -100,7 +117,7 @@ export class ConsumerNextMealRecommendationService {
       return { status: "read_failed", source: repository.source, errorCode: repoResult.errorCode };
     }
     if (repoResult.status === "empty") {
-      return { status: "empty", source: repository.source, date };
+      return { status: "empty", source: repository.source, date, geoStatus };
     }
 
     return {

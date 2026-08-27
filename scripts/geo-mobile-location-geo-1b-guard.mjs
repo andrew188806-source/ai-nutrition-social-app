@@ -16,6 +16,7 @@ import {
   createGeo1bManifest
 } from "./geo-mobile-location-geo-1b-successor-manifest.mjs";
 import { GEO1CP0_NPM_KEYS, GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
+import { GEO1C_BASELINE, GEO1C_NPM_KEYS, GEO1C_PATHS, classifyGeo1cLifecycle } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 
 const SUITE = "geo-mobile-location-geo-1b-guard";
 const root = process.cwd();
@@ -55,8 +56,20 @@ const lifecycle = classifyGeo1bLifecycle({
   deltaPaths,
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D", "--", ...GEO1B_PATHS])).length > 0
 });
+const geo1cWorktreePaths = [...new Set([
+  ...lines(git(["diff", "--name-only", "--", ...GEO1C_PATHS])),
+  ...lines(git(["ls-files", "--others", "--exclude-standard", "--", ...GEO1C_PATHS]))
+])].sort();
+const geo1cLifecycle = classifyGeo1cLifecycle({
+  head, parent: head === GEO1C_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths: geo1cWorktreePaths, stagedPaths,
+  deltaPaths: head === GEO1C_BASELINE ? [] : lines(git(["diff", "--name-only", `${GEO1C_BASELINE}..HEAD`])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D", "--", ...GEO1C_PATHS])).length > 0
+});
+const validationManifest = geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
 
-check("lifecycle is exact candidate or frozen-unpushed", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact candidate or frozen-unpushed", lifecycle.valid || geo1cLifecycle.valid,
+  geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase);
 check("the baseline is the pushed GEO-1A authority",
   git(["log", "-1", "--pretty=%s", GEO1B_BASELINE]) === GEO1B_BASELINE_SUBJECT);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
@@ -64,8 +77,8 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free path inventory",
   new Set(GEO1B_PATHS).size === GEO1B_PATHS.length
   && GEO1B_PATHS.every((file) => !file.includes("*") && !file.includes("?") && !file.endsWith("/"))
-  && lifecycle.manifest.every((file) => GEO1B_PATHS.includes(file)
-    || GEO1CP0_PATHS.includes(file)), lifecycle.manifest);
+  && validationManifest.every((file) => GEO1B_PATHS.includes(file)
+    || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)), validationManifest);
 check("every declared path exists on disk", GEO1B_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 
 // GEO-1B is a Mobile phase. It adds no migration and touches no server authority at all.
@@ -73,7 +86,7 @@ check("every declared path exists on disk", GEO1B_PATHS.every((file) => fs.exist
 // delta legitimately contains its exactly enumerated path set. GEO-1B itself still contributes none.
 check("GEO-1B adds no migration and touches no server byte",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase"]))
-    .every((file) => GEO1CP0_PATHS.includes(file))
+    .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file))
   && !GEO1B_PATHS.some((file) => file.startsWith("supabase/")));
 check("the frozen GEO-1A shared contract is byte-unchanged",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--",
@@ -82,7 +95,7 @@ check("the frozen GEO-1A shared contract is byte-unchanged",
     .every((file) => GEO1CP0_PATHS.includes(file)));
 check("no byte outside the GEO-1B manifest is touched",
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--"]))
-    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file)));
+    .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)));
 check("the only product bytes are the consumer-location feature",
   GEO1B_PATHS.filter((file) => file.startsWith("apps/") && !file.endsWith("app.json") && !file.endsWith("package.json"))
     .every((file) => GEO1B_PRODUCT_PATHS.includes(file)));
@@ -149,7 +162,8 @@ check("root package.json gains only the GEO-1B command keys",
     const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
     const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
     return removed.length === 0
-      && added.every((key) => GEO1B_NPM_KEYS.includes(key) || GEO1CP0_NPM_KEYS.includes(key))
+      && added.every((key) => GEO1B_NPM_KEYS.includes(key) || GEO1CP0_NPM_KEYS.includes(key)
+        || GEO1C_NPM_KEYS.includes(key))
       && JSON.stringify(packageJson.dependencies) === JSON.stringify(before.dependencies)
       && JSON.stringify(packageJson.devDependencies) === JSON.stringify(before.devDependencies);
   })());
@@ -185,7 +199,7 @@ check("canonical raw-byte manifest covers the exact sorted paths",
 
 console.log("\n" + JSON.stringify({
   suite: SUITE,
-  lifecycle: lifecycle.phase,
+  lifecycle: geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase,
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

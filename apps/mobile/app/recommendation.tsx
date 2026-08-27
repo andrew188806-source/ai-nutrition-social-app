@@ -22,6 +22,9 @@ import {
   type PlannedMeal
 } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
+import { ConsumerLocationPermissionCard } from "../features/consumer-location/ConsumerLocationPermissionCard";
+import { useConsumerLocation } from "../features/consumer-location";
+import { getConsumerMealRuntimeFlags } from "../features/consumer-meals/featureFlags";
 
 // Canonical provider: wires Phase 2Q service behind the U1 presentation layer.
 // Fails closed on config error; never falls back to U1 mock on service failure.
@@ -34,6 +37,11 @@ export default function RecommendationScreen() {
   const params = useLocalSearchParams<{ prototypeId?: string; previewState?: string }>();
   const [demoMode] = useDemoUserPlan();
   const runtime = useConsumerRuntime();
+  const geoRuntimeEnabled = getConsumerMealRuntimeFlags().nextMealRecommendationSource === "supabase";
+  const location = useConsumerLocation(
+    geoRuntimeEnabled ? runtime.state.actorKey : null,
+    runtime.state.actorGeneration
+  );
   const actorTimezone = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile.timezone : runtime.mode === "mock" ? "Asia/Taipei" : "";
   const [planExpanded, setPlanExpanded] = useState(false);
   const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(null);
@@ -69,6 +77,7 @@ export default function RecommendationScreen() {
 
   return (
     <PlaceholderScreen title={zhTW.mobile.nextMealTitle} subtitle={zhTW.mobile.nextMealSubtitle}>
+      {geoRuntimeEnabled ? <ConsumerLocationPermissionCard controller={location} /> : null}
       <NextMealPrototypeContent
         entitlement={demoMode}
         onReturnHome={() => router.replace("/")}
@@ -76,6 +85,7 @@ export default function RecommendationScreen() {
         preferredPrototypeId={typeof params.prototypeId === "string" ? params.prototypeId : undefined}
         provider={canonicalProvider}
         scenario={scenario}
+        currentLocation={location.state.phase === "available" ? location.state.position : undefined}
       />
 
       <Card tone="sky">

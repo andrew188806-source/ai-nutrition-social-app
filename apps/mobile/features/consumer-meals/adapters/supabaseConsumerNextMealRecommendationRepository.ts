@@ -13,6 +13,10 @@ import {
   type SupabaseConsumerNextMealCandidateRow,
   type SupabaseRestaurantMenuClientLike
 } from "./supabaseRestaurantMenuRows";
+import {
+  parseSupabaseNextMealGeoResponse,
+  SUPABASE_NEXT_MEAL_GEO_FUNCTION
+} from "./supabaseNextMealGeoRows";
 
 export type SupabaseConsumerNextMealRecommendationRepositoryOptions = {
   authPort: ConsumerAuthPort;
@@ -46,20 +50,11 @@ export class SupabaseConsumerNextMealRecommendationRepository
         : 50;
 
     try {
-      const response = await this.options.restaurantMenuClient
-        .from(SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW)
-        .select("*")
-        .limit(limit);
-
-      if (response.error) {
-        const status = response.error.status ?? 0;
-        if (status === 401 || status === 403) {
-          return { status: "read_failed", errorCode: "next_meal_supabase_unauthorized" };
-        }
-        return { status: "read_failed", errorCode: "next_meal_supabase_query_error" };
-      }
-
-      const rows = response.data ?? [];
+      const rowsResult = input.currentLocation
+        ? await this.readGeoRows(input.currentLocation, limit)
+        : await this.readAllRows(limit);
+      if (!rowsResult.ok) return { status: "read_failed", errorCode: rowsResult.errorCode };
+      const rows = rowsResult.rows;
       if (rows.length === 0) return { status: "empty" };
 
       const ranked = rankByCalorieProximity(rows, input.referenceCaloriesPerMeal);
@@ -71,8 +66,41 @@ export class SupabaseConsumerNextMealRecommendationRepository
         totalCandidateCount: candidates.length
       };
     } catch {
-      return { status: "read_failed", errorCode: "next_meal_supabase_fetch_error" };
+      return { status: "read_failed", errorCode: input.currentLocation
+        ? "next_meal_geo_fetch_error" : "next_meal_supabase_fetch_error" };
     }
+  }
+
+  private async readAllRows(limit: number): Promise<
+    { ok: true; rows: SupabaseConsumerNextMealCandidateRow[] }
+    | { ok: false; errorCode: string }
+  > {
+    const response = await this.options.restaurantMenuClient
+      .from(SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW)
+      .select("*").limit(limit);
+
+    if (response.error) {
+      const status = response.error.status ?? 0;
+      if (status === 401 || status === 403) {
+        return { ok: false, errorCode: "next_meal_supabase_unauthorized" };
+      }
+      return { ok: false, errorCode: "next_meal_supabase_query_error" };
+    }
+    return { ok: true, rows: response.data ?? [] };
+  }
+
+  private async readGeoRows(currentLocation: { latitude: number; longitude: number }, limit: number): Promise<
+    { ok: true; rows: SupabaseConsumerNextMealCandidateRow[] }
+    | { ok: false; errorCode: string }
+  > {
+    const response = await this.options.restaurantMenuClient.functions.invoke(
+      SUPABASE_NEXT_MEAL_GEO_FUNCTION,
+      { body: { ...currentLocation, candidatePoolLimit: limit } }
+    );
+    if (response.error) return { ok: false, errorCode: "next_meal_geo_service_unavailable" };
+    const parsed = parseSupabaseNextMealGeoResponse(response.data);
+    if (!parsed) return { ok: false, errorCode: "next_meal_geo_invalid_response" };
+    return { ok: true, rows: parsed.candidates };
   }
 }
 
@@ -83,6 +111,7 @@ function rankByCalorieProximity(
   return [...rows].sort(
     (a, b) =>
       Math.abs(a.calories - referenceCalories) - Math.abs(b.calories - referenceCalories)
+      || a.candidate_id.localeCompare(b.candidate_id)
   );
 }
 

@@ -69,7 +69,9 @@ export function mapCanonicalToU1NextMeal(
     return { status: "disabled", message: "下一餐推薦目前未啟用。" };
   }
   if (result.status === "empty") {
-    return { status: "empty", message: "目前沒有符合條件的下一餐候選選項。" };
+    return { status: "empty", message: result.geoStatus === "applied"
+      ? "目前附近沒有可用的下一餐候選選項。"
+      : "目前沒有符合條件的下一餐候選選項。" };
   }
   if (result.status === "intake_unavailable") {
     return {
