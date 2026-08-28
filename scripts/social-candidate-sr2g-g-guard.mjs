@@ -14,6 +14,7 @@ import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 import { classifyRecbp0Lifecycle, RECBP0_MIGRATION, RECBP0_NPM_KEYS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
+import { classifyRecbp1Lifecycle, RECBP1_MIGRATION, RECBP1_NPM_KEYS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECA_NPM_KEYS } from "./recommendation-rec-a-successor-manifest.mjs";
 import { GEO1C_NPM_KEYS } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 
@@ -47,7 +48,10 @@ const state = Object.freeze({
 const lifecycle = classifySr2ggLifecycle(state);
 const recbp0Lifecycle = classifyRecbp0Lifecycle({ ...state, parent: state.headParent,
   deltaPaths: state.headDeltaPaths, deleted: state.headDeleted });
-const effectiveLifecycle = recbp0Lifecycle.valid ? recbp0Lifecycle : lifecycle;
+const recbp1Lifecycle = classifyRecbp1Lifecycle({ ...state, parent: state.headParent,
+  deltaPaths: state.headDeltaPaths, deleted: state.headDeleted });
+const effectiveLifecycle = recbp1Lifecycle.valid ? recbp1Lifecycle
+  : recbp0Lifecycle.valid ? recbp0Lifecycle : lifecycle;
 const frozenGPaths = lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2HA_BASELINE]));
 const frozenGAuthority = git(["rev-parse", `${SR2HA_BASELINE}^`]).trim() === SR2GG_BASELINE
   && frozenGPaths.length === SR2GG_SUCCESSOR_PATHS.length
@@ -82,6 +86,7 @@ for (const key of ["test:geo-mobile-location-geo-1b","test:geo-mobile-location-g
 // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
 for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
 for (const key of RECBP0_NPM_KEYS) delete packageWithout.scripts[key];
+for (const key of RECBP1_NPM_KEYS) delete packageWithout.scripts[key];
 for (const key of RECA_NPM_KEYS) delete packageWithout.scripts[key];
 for (const key of GEO1C_NPM_KEYS) delete packageWithout.scripts[key];
 
@@ -104,7 +109,7 @@ const frozenMatching = [
   "supabase/functions/_shared/social-exposure/applySocialExposure.ts"
 ];
 check("09 frozen SR-2G-F matching, SR-2A and SR-2B bytes are unchanged", frozenMatching.every((file) => git(["diff", "--name-only", SR2GG_BASELINE, "--", file]).trim() === ""));
-check("10 no frozen migration is edited", lines(git(["diff", "--name-only", SR2GG_BASELINE, "--", "supabase/migrations"])).every((file) => [SR2GG_MIGRATION, "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql", SR2IA_MIGRATION, SR2JA_MIGRATION, RECBP0_MIGRATION].includes(file) || SR2KB_PATHS.includes(file) || GEO1A_PATHS.includes(file) || GEO1CP0_PATHS.includes(file)));
+check("10 no frozen migration is edited", lines(git(["diff", "--name-only", SR2GG_BASELINE, "--", "supabase/migrations"])).every((file) => [SR2GG_MIGRATION, "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql", SR2IA_MIGRATION, SR2JA_MIGRATION, RECBP0_MIGRATION, RECBP1_MIGRATION].includes(file) || SR2KB_PATHS.includes(file) || GEO1A_PATHS.includes(file) || GEO1CP0_PATHS.includes(file)));
 
 check("11 mapping is keyed by canonical menu identity, not display text", /menu_item_id text primary key/.test(migration) && !/ilike|to_tsvector|similar to/i.test(migration));
 check("12 mapping points to the existing food taxonomy", /references public\.social_interest_catalog \(tag_key, namespace\)/.test(migration) && /food_context_namespace = 'food'/.test(migration));

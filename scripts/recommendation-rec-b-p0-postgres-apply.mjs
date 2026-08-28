@@ -192,8 +192,11 @@ try {
     catch (error) { check(`migration applies through COMMIT: ${file}`, false, { code: error.code, message: error.message }); throw error; }
   }
   check("the frozen schema and REC-B-P0 apply through COMMIT", applied === files.length, { applied, total: files.length });
-  check("the round contributes exactly one candidate Taste migration",
-    candidates.length === 1 && candidates[0] === "20260828010000_candidate_taste_data_authority.sql", candidates);
+  check("P0 and its exact P1 successor contribute only their declared Taste migrations",
+    JSON.stringify(candidates) === JSON.stringify([
+      "20260828010000_candidate_taste_data_authority.sql",
+      "20260829010000_private_taste_normalization_authority.sql"
+    ]), candidates);
 
   await q(`insert into public.restaurants (id,name,status) values
     ('recbp0-r-a','REC-B fixture A','active'),('recbp0-r-b','REC-B fixture B','active')`);

@@ -11,6 +11,12 @@ import {
   classifyRecbp0Lifecycle,
   createRecbp0Manifest
 } from "./recommendation-rec-b-p0-successor-manifest.mjs";
+import {
+  RECBP1_BASELINE,
+  RECBP1_COMMIT_SUBJECT,
+  RECBP1_MIGRATION,
+  classifyRecbp1Lifecycle
+} from "./recommendation-rec-b-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -51,19 +57,39 @@ const lifecycle = classifyRecbp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
     || deltaStatuses.some((line) => line.startsWith("D\t"))
 });
+const recbp1DeltaPaths = head === RECBP1_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECBP1_BASELINE}..HEAD`]));
+const recbp1DeltaStatuses = head === RECBP1_BASELINE ? [] : lines(git(["diff", "--name-status", `${RECBP1_BASELINE}..HEAD`]));
+const recbp1Lifecycle = classifyRecbp1Lifecycle({
+  head,
+  parent: head === RECBP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  originHead,
+  behind,
+  ahead,
+  worktreePaths,
+  stagedPaths,
+  deltaPaths: recbp1DeltaPaths,
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+    || recbp1DeltaStatuses.some((line) => line.startsWith("D\t"))
+});
+const activeLifecycle = recbp1Lifecycle.valid
+  ? Object.freeze({ ...recbp1Lifecycle, phase: `rec_b_p1_${recbp1Lifecycle.phase}` })
+  : lifecycle;
 
-check("lifecycle is the exact REC-B-P0 candidate/freeze", lifecycle.valid, lifecycle);
+check("lifecycle is the exact REC-B-P0 freeze or REC-B-P1 successor", activeLifecycle.valid, activeLifecycle);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
-check("origin/main remains the frozen REC-A authority", originHead === RECBP0_BASELINE, originHead);
+check("origin/main remains the expected frozen predecessor authority",
+  originHead === (recbp1Lifecycle.valid ? RECBP1_BASELINE : RECBP0_BASELINE), originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free manifest", new Set(RECBP0_PATHS).size === RECBP0_PATHS.length
   && RECBP0_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every manifest path exists", RECBP0_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-check("the round adds exactly one migration and mutates no frozen migration",
-  worktreePaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECBP0_MIGRATION)
-  && deltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECBP0_MIGRATION));
-check("Production/deploy/workflow surfaces are absent", !lifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file)));
-check("Mobile product surfaces are unchanged", !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/")));
+const activeMigration = recbp1Lifecycle.valid ? RECBP1_MIGRATION : RECBP0_MIGRATION;
+const activeDeltaPaths = recbp1Lifecycle.valid ? recbp1DeltaPaths : deltaPaths;
+check("the active round adds exactly its declared migration and mutates no frozen migration",
+  worktreePaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === activeMigration)
+  && activeDeltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === activeMigration));
+check("Production/deploy/workflow surfaces are absent", !activeLifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file)));
+check("Mobile product surfaces are unchanged", !activeLifecycle.manifest.some((file) => file.startsWith("apps/mobile/")));
 
 const frozenPaths = [
   "supabase/migrations/20260715020000_consumer_public_next_meal_candidates_v1.sql",
@@ -162,8 +188,10 @@ check("reconnaissance and Development cleanup handoff are recorded",
 check("all four dedicated commands are registered",
   RECBP0_NPM_KEYS.every((key) => packageJson.scripts[key]?.includes("recommendation-rec-b-p0")));
 
-if (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed") {
+if (["frozen_local", "frozen_pushed"].includes(lifecycle.phase)) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECBP0_COMMIT_SUBJECT);
+} else if (["frozen_local", "frozen_pushed"].includes(recbp1Lifecycle.phase)) {
+  check("successor freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECBP1_COMMIT_SUBJECT);
 }
 const manifest = createRecbp0Manifest((file) => fs.readFileSync(path.join(root, file)));
 check("raw-byte manifest covers exact sorted paths", manifest.entries.length === RECBP0_PATHS.length
@@ -172,7 +200,7 @@ check("raw-byte manifest covers exact sorted paths", manifest.entries.length ===
 
 console.log("\n" + JSON.stringify({
   suite: "recommendation-rec-b-p0-guard",
-  lifecycle: lifecycle.phase,
+  lifecycle: activeLifecycle.phase,
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

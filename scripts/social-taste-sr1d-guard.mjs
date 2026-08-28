@@ -44,6 +44,7 @@ import { SR2GE1_TOOLING_COMMIT, SR2GE1_SUCCESSOR_PATHS } from "./social-candidat
 import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-manifest.mjs";
 import { classifySr2gfLifecycle, SR2GF_BASELINE, SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 import { classifyRecbp0Lifecycle, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
+import { classifyRecbp1Lifecycle, RECBP1_PATHS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const successorMigrationSha256 = "e0859f801c040002e855f2b03e27a5f8f95fd037c23210223a1ce29881bbe624";
@@ -158,15 +159,24 @@ try {
     deltaPaths: lifecycleState.headDeltaEntries.map(({ path: file }) => file),
     deleted: lifecycleState.headDeltaEntries.some(({ status }) => status === "D")
   });
-  const effectiveLifecycle = recbp0Lifecycle.valid ? recbp0Lifecycle : lifecycle;
+  const recbp1Lifecycle = classifyRecbp1Lifecycle({
+    ...lifecycleState,
+    parent: lifecycleState.headParent,
+    deltaPaths: lifecycleState.headDeltaEntries.map(({ path: file }) => file),
+    deleted: lifecycleState.headDeltaEntries.some(({ status }) => status === "D")
+  });
+  const effectiveLifecycle = recbp1Lifecycle.valid ? recbp1Lifecycle
+    : recbp0Lifecycle.valid ? recbp0Lifecycle : lifecycle;
   const frozenDeltaEntries = commitDeltaEntries(SR2A_BASELINE);
   const frozenDeltaPaths = frozenDeltaEntries.map(({ path: file }) => file).sort();
   const frozenMigrationTracked = git(["ls-tree", "-r", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === SR1D_SUCCESSOR_MIGRATION;
 
   check("1. frozen SR-1D commit has the exact predecessor parent and immutable manifest", git(["rev-parse", `${SR2A_BASELINE}^`]).trim() === SR1D_BASELINE && same(frozenDeltaPaths, SR1D_SUCCESSOR_PATHS) && !frozenDeltaEntries.some(({ status }) => status === "D"), { expectedParent: SR1D_BASELINE, expected: SR1D_SUCCESSOR_PATHS, actual: frozenDeltaPaths });
   check("1a. candidate or frozen successor manifest is exact and contains no unrelated path",
-    recbp0Lifecycle.valid ? same(recbp0Lifecycle.manifest, RECBP0_PATHS) : same(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
-    { expected: recbp0Lifecycle.valid ? RECBP0_PATHS : SR2GF_SUCCESSOR_PATHS, actual: recbp0Lifecycle.valid ? recbp0Lifecycle.manifest : lifecycle.lifecycleManifest });
+    recbp1Lifecycle.valid ? same(recbp1Lifecycle.manifest, RECBP1_PATHS)
+      : recbp0Lifecycle.valid ? same(recbp0Lifecycle.manifest, RECBP0_PATHS) : same(lifecycle.lifecycleManifest, SR2GF_SUCCESSOR_PATHS),
+    { expected: recbp1Lifecycle.valid ? RECBP1_PATHS : recbp0Lifecycle.valid ? RECBP0_PATHS : SR2GF_SUCCESSOR_PATHS,
+      actual: recbp1Lifecycle.valid ? recbp1Lifecycle.manifest : recbp0Lifecycle.valid ? recbp0Lifecycle.manifest : lifecycle.lifecycleManifest });
   check("1b2. frozen SR-2B commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2C_BASELINE}^`]).trim() === SR2B_BASELINE && same(commitDeltaEntries(SR2C_BASELINE).map(({ path: file }) => file).sort(), SR2B_SUCCESSOR_PATHS));
   check("1b. frozen SR-2A commit remains the exact immutable predecessor of this successor round", git(["rev-parse", `${SR2B_BASELINE}^`]).trim() === SR2A_BASELINE && same(commitDeltaEntries(SR2B_BASELINE).map(({ path: file }) => file).sort(), SR2A_SUCCESSOR_PATHS));
   check("1c. SR-2B successor paths are wildcard-free and confined to the pure shared exposure module plus exactly one grant migration", SR2B_SUCCESSOR_PATHS.length > 0

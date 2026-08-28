@@ -23,6 +23,7 @@ import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 import { classifyRecbp0Lifecycle, RECBP0_MIGRATION, RECBP0_NPM_KEYS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
+import { classifyRecbp1Lifecycle, RECBP1_MIGRATION, RECBP1_NPM_KEYS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECA_NPM_KEYS } from "./recommendation-rec-a-successor-manifest.mjs";
 import { GEO1C_NPM_KEYS } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 // GEO-1A's migration, named exactly. A pattern here would admit any future migration.
@@ -97,9 +98,13 @@ try {
   const recbp0Lifecycle = classifyRecbp0Lifecycle({ ...state, parent: state.headParent,
     deltaPaths: state.headDeltaEntries.map(({ path }) => path),
     deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
+  const recbp1Lifecycle = classifyRecbp1Lifecycle({ ...state, parent: state.headParent,
+    deltaPaths: state.headDeltaEntries.map(({ path }) => path),
+    deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
   const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
     && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
-  const effectivePhase = recbp0Lifecycle.valid ? `successor_${recbp0Lifecycle.phase}`
+  const effectivePhase = recbp1Lifecycle.valid ? `successor_${recbp1Lifecycle.phase}`
+    : recbp0Lifecycle.valid ? `successor_${recbp0Lifecycle.phase}`
     : lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
   const baselinePackage = JSON.parse(git(["show", `${SR2CR1_BASELINE}:package.json`]));
@@ -126,6 +131,7 @@ try {
   // GEO-1C-P0 registers the coordinate-source authority's four command keys. Named exactly.
   for (const key of ["test:geo-coordinate-source-geo-1c-p0","test:geo-coordinate-source-geo-1c-p0-smoke","test:geo-coordinate-source-geo-1c-p0-mutations","test:geo-coordinate-source-geo-1c-p0-postgres"]) delete packageWithout.scripts[key];
   for (const key of RECBP0_NPM_KEYS) delete packageWithout.scripts[key];
+  for (const key of RECBP1_NPM_KEYS) delete packageWithout.scripts[key];
   for (const key of RECA_NPM_KEYS) delete packageWithout.scripts[key];
   for (const key of GEO1C_NPM_KEYS) delete packageWithout.scripts[key];
 
@@ -153,10 +159,10 @@ try {
   check("6. candidate paths are wildcard-free and unique", new Set(SR2CR1_SUCCESSOR_PATHS).size === SR2CR1_SUCCESSOR_PATHS.length && SR2CR1_SUCCESSOR_PATHS.every((e) => !/[*?[\]{}]/.test(e)));
   check("7. package exposes the exact canonical commands", Object.entries(packageScripts).every(([k, v]) => packageJson.scripts[k] === v));
   check("8. package.json differs from frozen authority only by the SR-2C-R1 scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
-  const sr2cr1MigrationFiles = migrationFiles.filter((f) => !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE2_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2JA_MIGRATION && `supabase/migrations/${f}` !== RECBP0_MIGRATION);
+  const sr2cr1MigrationFiles = migrationFiles.filter((f) => !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE2_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2JA_MIGRATION && `supabase/migrations/${f}` !== RECBP0_MIGRATION && `supabase/migrations/${f}` !== RECBP1_MIGRATION);
   check("9. exactly three migrations are added", SR2CR1_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 3
     && exact(sr2cr1MigrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m)), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME, GEO1CP0_MIGRATION_BASENAME].sort()));
-  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e) && !SR2GE1_SUCCESSOR_PATHS.includes(e) && !SR2GE2_SUCCESSOR_PATHS.includes(e) && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e) && !GEO1CP0_PATHS.includes(e) && e !== RECBP0_MIGRATION).length === 0);
+  check("10. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", "supabase/migrations"])).filter((e) => !SR2CR1_MIGRATIONS.includes(e) && !SR2GD_SUCCESSOR_PATHS.includes(e) && !SR2GE1_SUCCESSOR_PATHS.includes(e) && !SR2GE2_SUCCESSOR_PATHS.includes(e) && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e) && !GEO1CP0_PATHS.includes(e) && e !== RECBP0_MIGRATION && e !== RECBP1_MIGRATION).length === 0);
   check("11. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2CR1_BASELINE, "--", ...SR2CR1_FROZEN_MIGRATIONS])).length === 0);
   check("12. every migration is transactional", [schema, data, projection].every((m) => /^begin;/m.test(m) && /^commit;/m.test(m)));
 
