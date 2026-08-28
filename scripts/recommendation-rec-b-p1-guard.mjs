@@ -12,6 +12,7 @@ import {
   createRecbp1Manifest
 } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECB_BASELINE, classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
+import { RECCP0_BASELINE, RECCP0_MIGRATION, RECCP0_PATHS, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -67,25 +68,41 @@ const recbLifecycle = classifyRecbLifecycle({
   deltaPaths: head === RECB_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECB_BASELINE}..HEAD`])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
-const lifecycle = recbLifecycle.valid ? recbLifecycle : recbp1Lifecycle;
+// REC-C-P0 is the next successor in flight on top of the pushed REC-B freeze. It is recognised on
+// exactly the same terms as the REC-B successor already was: by its own exact path set, nothing else.
+const reccp0Lifecycle = classifyReccp0Lifecycle({
+  head, parent: head === RECCP0_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind, ahead, worktreePaths, stagedPaths,
+  deltaPaths: head === RECCP0_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccp0Successor = reccp0Lifecycle.valid;
+const lifecycle = recbLifecycle.valid ? recbLifecycle
+  : reccp0Successor ? reccp0Lifecycle : recbp1Lifecycle;
 
-check("lifecycle is the exact REC-B-P1 candidate/freeze", lifecycle.valid, lifecycle);
+check("lifecycle is the exact REC-B-P1 candidate/freeze",
+  lifecycle.valid || reccp0Successor, { active: lifecycle, reccp0: reccp0Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main is the frozen REC-B-P0 predecessor or the exact pushed P1 freeze",
   originHead === RECBP1_BASELINE || originHead === RECB_BASELINE
-    || (lifecycle.phase === "frozen_pushed" && originHead === head), originHead);
+    || (lifecycle.phase === "frozen_pushed" && originHead === head)
+    || (reccp0Successor && originHead === RECCP0_BASELINE), originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free manifest", new Set(RECBP1_PATHS).size === RECBP1_PATHS.length
   && RECBP1_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every manifest path exists", RECBP1_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("the round adds exactly one migration and mutates no frozen migration",
-  recbLifecycle.valid
+  reccp0Successor
+    ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"]))
+        .every((file) => file === RECCP0_MIGRATION)
+    : recbLifecycle.valid
     ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"])).length === 0
     : worktreePaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECBP1_MIGRATION)
       && deltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECBP1_MIGRATION));
 check("Production/deploy/workflow and Mobile product surfaces are absent",
   !lifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file))
-    && (recbLifecycle.valid || !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/"))));
+    && (recbLifecycle.valid || reccp0Successor
+      || !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/"))));
 
 const frozenPaths = [
   "supabase/migrations/20260828010000_candidate_taste_data_authority.sql",
@@ -99,7 +116,7 @@ const frozenPaths = [
   "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql"
 ];
 check("frozen P0, Taste, REC-A, Social, Meal Context, and GEO bytes are unchanged",
-  recbLifecycle.valid
+  recbLifecycle.valid || reccp0Successor
     ? [RECBP1_MIGRATION, "packages/shared/src/domain/user-taste-normalization/privateTasteNormalization.ts"]
       .every((file) => git(["diff", "--name-only", RECB_BASELINE, "--", file]) === "")
     : frozenPaths.every((file) => git(["diff", "--name-only", RECBP1_BASELINE, "--", file]) === ""));
@@ -173,7 +190,8 @@ check("new-write validator accepts stable keys only while legacy labels remain r
   && /entry\.sourceValueKey === normalized/.test(contract)
   && /Display labels remain readable legacy aliases/.test(contract));
 check("no live profile write UI is invented and the recon conclusion is recorded",
-  (recbLifecycle.valid || !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/")))
+  (recbLifecycle.valid || reccp0Successor
+    || !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/")))
   && /no live private Taste profile write UI/.test(docs));
 check("normalization base authority contains no private-user or behavioral columns",
   !/\buser_id\b|\bprofile_id\b|favorite|rating|meal_history|nutrition_goal|latitude|longitude/i.test(
@@ -215,7 +233,10 @@ check("manifest bytes contain no credential-shaped secret, CRLF, UTF-8 BOM, or N
       && !(bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
   }));
 
-if (!recbLifecycle.valid && (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")) {
+// A successor round's own freeze commit carries that round's subject, not this one's. REC-B was
+// already excluded here for that reason; REC-C-P0 is excluded on identical terms.
+if (!recbLifecycle.valid && !reccp0Successor
+  && (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECBP1_COMMIT_SUBJECT);
 }
 const manifest = createRecbp1Manifest((file) => fs.readFileSync(path.join(root, file)));

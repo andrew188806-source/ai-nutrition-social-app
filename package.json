@@ -314,6 +314,10 @@
     "test:recommendation-rec-b-p1-smoke": "node scripts/recommendation-rec-b-p1-smoke.mjs",
     "test:recommendation-rec-b-p1-mutations": "node scripts/recommendation-rec-b-p1-mutations.mjs",
     "test:recommendation-rec-b-p1-postgres": "node scripts/recommendation-rec-b-p1-postgres-apply.mjs",
+    "test:recommendation-rec-c-p0": "node scripts/recommendation-rec-c-p0-guard.mjs",
+    "test:recommendation-rec-c-p0-smoke": "node scripts/recommendation-rec-c-p0-smoke.mjs",
+    "test:recommendation-rec-c-p0-mutations": "node scripts/recommendation-rec-c-p0-mutations.mjs",
+    "test:recommendation-rec-c-p0-postgres": "node scripts/recommendation-rec-c-p0-postgres-apply.mjs",
     "test:recommendation-rec-b": "node scripts/recommendation-rec-b-guard.mjs",
     "test:recommendation-rec-b-smoke": "node scripts/recommendation-rec-b-smoke.mjs",
     "test:recommendation-rec-b-mutations": "node scripts/recommendation-rec-b-mutations.mjs"

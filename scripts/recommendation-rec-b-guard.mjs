@@ -7,6 +7,7 @@ import {
   RECB_BASELINE, RECB_COMMIT_SUBJECT, RECB_MIGRATIONS, RECB_NPM_KEYS, RECB_PATHS,
   classifyRecbLifecycle, createRecbManifest
 } from "./recommendation-rec-b-successor-manifest.mjs";
+import { RECCP0_BASELINE, RECCP0_MIGRATION, RECCP0_NPM_KEYS, RECCP0_PATHS, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -41,10 +42,27 @@ const lifecycle = classifyRecbLifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 
-check("lifecycle is exact REC-B candidate or freeze", lifecycle.valid, lifecycle);
+
+// REC-C-P0 is the uncommitted/frozen successor sitting on this round's pushed freeze. Recognising it
+// here keeps this guard meaningful while that round is in flight; every other state still fails.
+const reccp0WorktreePaths = [...new Set([
+  ...lines(git(["diff", "--name-only"])),
+  ...lines(git(["ls-files", "--others", "--exclude-standard"]))
+])].sort();
+const reccp0Lifecycle = classifyReccp0Lifecycle({
+  head, parent: head === RECCP0_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind, ahead, worktreePaths: reccp0WorktreePaths, stagedPaths,
+  deltaPaths: head === RECCP0_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccp0Successor = reccp0Lifecycle.valid;
+
+check("lifecycle is exact REC-B candidate or freeze",
+  lifecycle.valid || reccp0Successor, { recb: lifecycle, reccp0: reccp0Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the exact pushed predecessor or REC-B pushed freeze",
-  originHead === RECB_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head), originHead);
+  originHead === RECB_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
+  || (reccp0Successor && originHead === RECCP0_BASELINE), originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is exact, unique, sorted, and wildcard-free",
   JSON.stringify(RECB_PATHS) === JSON.stringify([...RECB_PATHS].sort())
@@ -52,7 +70,8 @@ check("manifest is exact, unique, sorted, and wildcard-free",
   && RECB_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every exact manifest path exists", RECB_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("REC-B creates no migration", RECB_MIGRATIONS.length === 0
-  && lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations", "supabase/schema"])).length === 0);
+  && lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations", "supabase/schema"]))
+    .every((file) => file === RECCP0_MIGRATION));
 check("dependency and lock bytes are unchanged",
   lines(git(["diff", "--name-only", RECB_BASELINE, "--", "apps/mobile/package.json", "package-lock.json"])).length === 0);
 check("Production, deployment, and workflow paths are untouched",

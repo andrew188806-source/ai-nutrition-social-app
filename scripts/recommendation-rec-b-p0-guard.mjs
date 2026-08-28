@@ -18,6 +18,7 @@ import {
   classifyRecbp1Lifecycle
 } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECB_BASELINE, classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
+import { RECCP0_BASELINE, RECCP0_MIGRATION, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -78,10 +79,21 @@ const recbLifecycle = classifyRecbLifecycle({
   deltaPaths: head === RECB_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECB_BASELINE}..HEAD`])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+// REC-C-P0 successor seam ONLY. Recognising the next round's exact state stops this guard reporting
+// work that is not its own. The origin/main assertion below is deliberately NOT relaxed.
+const reccp0Lifecycle = classifyReccp0Lifecycle({
+  head, parent: head === RECCP0_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind, ahead, worktreePaths, stagedPaths,
+  deltaPaths: head === RECCP0_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccp0Successor = reccp0Lifecycle.valid;
 const activeLifecycle = recbLifecycle.valid
   ? Object.freeze({ ...recbLifecycle, phase: `rec_b_${recbLifecycle.phase}` })
   : recbp1Lifecycle.valid
   ? Object.freeze({ ...recbp1Lifecycle, phase: `rec_b_p1_${recbp1Lifecycle.phase}` })
+  : reccp0Successor
+  ? Object.freeze({ ...reccp0Lifecycle, phase: `rec_c_p0_${reccp0Lifecycle.phase}` })
   : lifecycle;
 
 check("lifecycle is the exact REC-B-P0 freeze or REC-B-P1 successor", activeLifecycle.valid, activeLifecycle);
@@ -95,7 +107,12 @@ check("every manifest path exists", RECBP0_PATHS.every((file) => fs.existsSync(p
 const activeMigration = recbp1Lifecycle.valid ? RECBP1_MIGRATION : RECBP0_MIGRATION;
 const activeDeltaPaths = recbp1Lifecycle.valid ? recbp1DeltaPaths : deltaPaths;
 check("the active round adds exactly its declared migration and mutates no frozen migration",
-  recbLifecycle.valid
+  reccp0Successor
+    ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"]))
+        .every((file) => file === RECCP0_MIGRATION)
+      && worktreePaths.filter((file) => file.startsWith("supabase/migrations/"))
+        .every((file) => file === RECCP0_MIGRATION)
+    : recbLifecycle.valid
     ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"])).length === 0
     : worktreePaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === activeMigration)
       && activeDeltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === activeMigration));
@@ -115,7 +132,7 @@ const frozenPaths = [
   "apps/mobile/features/consumer-meals/nutritionRankingPolicy.ts"
 ];
 check("frozen Taste, Social, Meal Context, candidate, and REC-A product bytes are unchanged",
-  recbLifecycle.valid
+  recbLifecycle.valid || reccp0Successor
     ? [RECBP0_MIGRATION, "packages/shared/src/domain/candidate-taste/candidateTasteAuthority.ts"]
       .every((file) => git(["diff", "--name-only", RECB_BASELINE, "--", file]) === "")
     : frozenPaths.every((file) => git(["diff", "--name-only", RECBP0_BASELINE, "--", file]) === ""));

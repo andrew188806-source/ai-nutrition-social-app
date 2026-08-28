@@ -21,6 +21,7 @@ import { GEO1C_BASELINE, GEO1C_NPM_KEYS, GEO1C_PATHS, classifyGeo1cLifecycle } f
 import { RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle } from "./recommendation-rec-a-successor-manifest.mjs";
 import { RECBP0_MIGRATION, RECBP0_NPM_KEYS, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 import { classifyRecbLifecycle, RECB_PATHS } from "./recommendation-rec-b-successor-manifest.mjs";
+import { RECCP0_BASELINE, RECCP0_PATHS, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 
 const SUITE = "geo-coordinate-source-geo-1c-p0-guard";
 const root = process.cwd();
@@ -87,9 +88,18 @@ const recbLifecycle = classifyRecbLifecycle({
   deltaPaths: head === RECA_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
-const validationManifest = recbLifecycle.valid ? recbLifecycle.manifest : recaLifecycle.valid ? recaLifecycle.manifest : geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
+// REC-C-P0 is the next successor in flight on top of the pushed REC-B freeze, recognised by its own
+// exact path set. Widening only: on GEO-1C-P0's own commit that set is absent and nothing changes.
+const reccp0Lifecycle = classifyReccp0Lifecycle({
+  head, parent: head === RECCP0_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths: recaWorktreePaths, stagedPaths,
+  deltaPaths: head === RECCP0_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccp0Successor = reccp0Lifecycle.valid;
+const validationManifest = recbLifecycle.valid ? recbLifecycle.manifest : reccp0Successor ? reccp0Lifecycle.manifest : recaLifecycle.valid ? recaLifecycle.manifest : geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
 
-check("lifecycle is exact candidate or frozen-unpushed", recbLifecycle.valid || lifecycle.valid || geo1cLifecycle.valid || recaLifecycle.valid,
+check("lifecycle is exact candidate or frozen-unpushed", recbLifecycle.valid || lifecycle.valid || geo1cLifecycle.valid || recaLifecycle.valid || reccp0Successor,
   recbLifecycle.valid ? recbLifecycle.phase : recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase);
 check("the baseline is the pushed GEO-1B authority",
   git(["log", "-1", "--pretty=%s", GEO1CP0_BASELINE]) === GEO1CP0_BASELINE_SUBJECT);
@@ -98,19 +108,19 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free path inventory",
   new Set(GEO1CP0_PATHS).size === GEO1CP0_PATHS.length
   && GEO1CP0_PATHS.every((file) => !file.includes("*") && !file.includes("?") && !file.endsWith("/"))
-  && validationManifest.every((file) => RECB_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)), validationManifest);
+  && validationManifest.every((file) => RECB_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file) || RECCP0_PATHS.includes(file)), validationManifest);
 check("every declared path exists on disk", GEO1CP0_PATHS.every((file) => fs.existsSync(path.join(root, file))));
-check("exactly one narrow additive migration", recbLifecycle.valid ||
+check("exactly one narrow additive migration", recbLifecycle.valid || reccp0Successor ||
   lifecycle.manifest.filter((f) => f.startsWith("supabase/migrations/") && f !== RECBP0_MIGRATION)
     .join("") === GEO1CP0_MIGRATION
   || lifecycle.manifest.length === 0);
-check("no predecessor migration byte is modified", recbLifecycle.valid ||
+check("no predecessor migration byte is modified", recbLifecycle.valid || reccp0Successor ||
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--", "supabase/migrations"]))
     .every((file) => file === GEO1CP0_MIGRATION || file === RECBP0_MIGRATION));
 
 // GEO-1C-P0 is a server round. It touches no Mobile byte at all, so the GEO-1B acquisition
 // authority and every Social surface stay exactly where they were frozen.
-check("no Mobile byte is touched at all", recbLifecycle.valid ||
+check("no Mobile byte is touched at all", recbLifecycle.valid || reccp0Successor ||
   validationManifest.filter((file) => file.startsWith("apps/")).every((file) => GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file))
   && lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--", "apps", "lib", "packages"]))
     .every((file) => GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));
@@ -118,7 +128,7 @@ check("the frozen GEO-1A shared contract and authority are byte-unchanged",
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--",
     "supabase/functions/_shared/geo-api",
     "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql"])).length === 0);
-check("no byte outside the GEO-1C-P0 manifest is touched", recbLifecycle.valid ||
+check("no byte outside the GEO-1C-P0 manifest is touched", recbLifecycle.valid || reccp0Successor ||
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--"]))
     .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));
 check("the only product bytes are the geocoding authority and its dispatcher",
@@ -160,7 +170,7 @@ const packageJson = JSON.parse(read("package.json"));
 check("every GEO-1C-P0 command key is registered",
   GEO1CP0_NPM_KEYS.every((key) => typeof packageJson.scripts[key] === "string"
     && packageJson.scripts[key].includes("geo-coordinate-source-geo-1c-p0")));
-check("root package.json gains only authorized successor command keys and no dependency", recbLifecycle.valid ||
+check("root package.json gains only authorized successor command keys and no dependency", recbLifecycle.valid || reccp0Successor ||
   (() => {
     const before = JSON.parse(git(["show", `${GEO1CP0_BASELINE}:package.json`]));
     const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
