@@ -45,13 +45,19 @@ export class SupabaseConsumerTasteFoundationRepository implements ConsumerTasteF
   async readCurrentUserDietaryRestrictions(): Promise<ConsumerTasteFoundationReadResult<ConsumerDietaryRestrictionRow>> {
     return this.read<ConsumerDietaryRestrictionRow>(
       SUPABASE_DIETARY_RESTRICTIONS_TABLE,
-      SUPABASE_DIETARY_RESTRICTION_SELECT_COLUMNS
+      SUPABASE_DIETARY_RESTRICTION_SELECT_COLUMNS,
+      (query) => query.is("source_vocabulary_id", null)
     );
   }
 
-  private async read<TRow>(table: string, columns: string): Promise<ConsumerTasteFoundationReadResult<TRow>> {
+  private async read<TRow>(
+    table: string,
+    columns: string,
+    configure: (query: import("../supabaseTasteFoundationContracts").SupabaseTasteFoundationQueryBuilderLike<TRow>)
+      => import("../supabaseTasteFoundationContracts").SupabaseTasteFoundationQueryBuilderLike<TRow> = (query) => query
+  ): Promise<ConsumerTasteFoundationReadResult<TRow>> {
     try {
-      const response = await this.client.from<TRow>(table).select(columns);
+      const response = await configure(this.client.from<TRow>(table).select(columns));
       // Any transport, privilege or query error is a FAILED read. Permission denied (42501) must
       // never be flattened into "this user has no rows".
       if (response.error) return { status: "failed", failureCode: "source_read_failed" };

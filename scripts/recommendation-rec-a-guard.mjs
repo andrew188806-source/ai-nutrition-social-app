@@ -11,6 +11,7 @@ import { RECBP0_BASELINE, RECBP0_MIGRATION } from "./recommendation-rec-b-p0-suc
 import { classifyRecbp1Lifecycle, RECBP1_BASELINE, RECBP1_MIGRATION } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECB_BASELINE, classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
 import { RECCP0_BASELINE, RECCP0_MIGRATION, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
+import { RECCP1_BASELINE, RECCP1_MIGRATION, classifyReccp1Lifecycle } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -63,12 +64,21 @@ const reccp0Lifecycle = classifyReccp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const reccp0Successor = reccp0Lifecycle.valid;
+const reccp1Lifecycle = classifyReccp1Lifecycle({
+  head, parent: head === RECCP1_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths, stagedPaths,
+  deltaPaths: head === RECCP1_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccp1Successor = reccp1Lifecycle.valid;
 const lifecycle = recbLifecycle.valid ? recbLifecycle
+  : reccp1Successor ? reccp1Lifecycle
   : reccp0Successor ? reccp0Lifecycle
   : recbp1Lifecycle.valid ? recbp1Lifecycle : recaLifecycle;
 
 check("lifecycle is exact REC-A candidate or frozen local",
-  lifecycle.valid || reccp0Successor, { active: lifecycle, reccp0: reccp0Lifecycle.phase });
+  lifecycle.valid || reccp0Successor || reccp1Successor,
+  { active: lifecycle, reccp0: reccp0Lifecycle.phase, reccp1: reccp1Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("origin/main remains the frozen REC-A/REC-B predecessor authority",
@@ -79,7 +89,10 @@ check("exact wildcard-free manifest", new Set(RECA_PATHS).size === RECA_PATHS.le
 check("every manifest path exists", RECA_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 const schemaDelta = lines(git(["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations", "supabase/schema"]));
 check("REC-B-P0 successor adds only its one migration; REC-A itself changed none",
-  reccp0Successor
+  reccp1Successor
+    ? schemaDelta.length <= 4 && schemaDelta.every((file) => file === RECBP0_MIGRATION
+        || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION || file === RECCP1_MIGRATION)
+    : reccp0Successor
     ? schemaDelta.length <= 3 && schemaDelta.every((file) => file === RECBP0_MIGRATION
         || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION)
     : recbLifecycle.valid
@@ -160,7 +173,7 @@ check("non-Geo candidates are ordered and paged before ranking", /order\(column:
   && /\.order\("candidate_id"/.test(repository) && /\.range\(/.test(repository)
   && /rankNextMealCandidatesByNutrition/.test(repository));
 check("preferred identity does not collapse branch offers or override REC-B exposure",
-  recbLifecycle.valid || reccp0Successor
+  recbLifecycle.valid || reccp0Successor || reccp1Successor
     ? /void preferredMenuItemId/.test(mapper) && !/preferredIndex/.test(mapper) && /candidate\.candidateId/.test(product)
     : /preferredMenuItemId/.test(mapper) && /c\.menuItemId === preferredMenuItemId/.test(mapper));
 check("neutral fallback is explicit and fixed 520 is absent", /neutral_fallback/.test(ranker + service) && !/\b520\b/.test(ranker + service + repository));

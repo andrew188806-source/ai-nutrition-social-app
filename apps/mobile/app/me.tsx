@@ -43,6 +43,12 @@ export default function MeScreen() {
   const settingsItems: ProfileRowItem[] = [
     { icon: "target", title: profile.healthGoalTitle, subtitle: profile.healthGoalBody, onPress: () => router.push("/health-goal-plan") },
     {
+      icon: "shield",
+      title: zhTW.mobile.allergySettings.entryTitle,
+      subtitle: zhTW.mobile.allergySettings.entryBody,
+      onPress: () => router.push("/allergy-settings" as never)
+    },
+    {
       icon: "buddies",
       title: zhTW.mobile.socialInterestSettings.entryTitle,
       subtitle: zhTW.mobile.socialInterestSettings.entryBody,

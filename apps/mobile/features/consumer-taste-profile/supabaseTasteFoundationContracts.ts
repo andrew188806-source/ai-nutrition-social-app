@@ -74,6 +74,7 @@ export type SupabaseTasteFoundationQueryResponseLike<TRow> = {
 export interface SupabaseTasteFoundationQueryBuilderLike<TRow>
   extends PromiseLike<SupabaseTasteFoundationQueryResponseLike<TRow>> {
   select(columns: string): this;
+  is(column: string, value: null): this;
 }
 
 // Structural only — the live repository accepts the ALREADY CONSTRUCTED consumer Supabase client

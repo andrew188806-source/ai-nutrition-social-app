@@ -39,6 +39,7 @@ import { SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manif
 import { RECBP0_MIGRATION, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 import { RECBP1_MIGRATION, RECBP1_PATHS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECB_PATHS } from "./recommendation-rec-b-successor-manifest.mjs";
+import { RECCP1_MIGRATION, RECCP1_PATHS } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -301,6 +302,8 @@ const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=al
   .map((entry) => entry.slice(3).replaceAll("\\", "/"));
 const versusHead = git(["diff", "--name-only", "HEAD"]).split("\n").map((entry) => entry.trim()).filter(Boolean);
 const touched = [...new Set([...worktree, ...versusHead])];
+const exactReccp1Candidate = touched.length === RECCP1_PATHS.length
+  && [...touched].sort().every((entry, index) => entry === RECCP1_PATHS[index]);
 // TS-3 successor amendment. Check 26 was written as a whole-worktree subset assertion. That was
 // correct while TS-2D was the open round, but it becomes false the moment ANY successor round opens
 // an implementation candidate: a TS-3 file would be reported as a TS-2D scope violation, which is
@@ -456,7 +459,7 @@ const ALLOWED_PATHS = new Set([
   ...SR2B_SUCCESSOR_PATHS,
   ...SR2C_SUCCESSOR_PATHS,
     ...SR2D_SUCCESSOR_PATHS,
-    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS
+    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS, ...RECCP1_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -469,8 +472,9 @@ const ts2dIsCommitted = spawnSync("git", ["ls-files", "--error-unmatch", MIGRATI
 const frozenPathsTouched = touched.filter((entry) => TS2D_IMPLEMENTATION_PATHS.includes(entry));
 check(
   "26a. once TS-2D is committed, no TS-2D implementation path is left modified by a successor round",
-  !ts2dIsCommitted || frozenPathsTouched.length === 0,
-  { ts2dIsCommitted, frozenPathsTouched }
+  !ts2dIsCommitted || frozenPathsTouched.length === 0
+    || (exactReccp1Candidate && frozenPathsTouched.every((entry) => RECCP1_PATHS.includes(entry))),
+  { ts2dIsCommitted, frozenPathsTouched, exactReccp1Candidate }
 );
 check(
   "26b. the successor allowance is enumerated, not a wildcard or prefix escape",
@@ -549,6 +553,15 @@ check(
     SR2C_SUCCESSOR_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1 &&
     !SR2C_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
 );
+check(
+  "26k. REC-C-P1 successor awareness is exact and owns one additive migration with no deployable function",
+  RECCP1_PATHS.length > 0
+    && new Set(RECCP1_PATHS).size === RECCP1_PATHS.length
+    && RECCP1_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && RECCP1_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && RECCP1_PATHS.includes(RECCP1_MIGRATION)
+    && !RECCP1_PATHS.some((entry) => entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
+);
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated
 // SR-1B-B successor. TS-2D still owns exactly one migration; that invariant is unchanged.
@@ -561,7 +574,7 @@ const otherMigrations = touchedSupabase.filter(
     !SR1D_SUCCESSOR_PATHS.includes(entry) &&
     !SR2A_SUCCESSOR_PATHS.includes(entry) &&
     !SR2B_SUCCESSOR_PATHS.includes(entry) &&
-    !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && entry !== RECBP0_MIGRATION && entry !== RECBP1_MIGRATION
+    !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && entry !== RECBP0_MIGRATION && entry !== RECBP1_MIGRATION && entry !== RECCP1_MIGRATION
 );
 const deployableFunctionPaths = touchedSupabase.filter(
   (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry)
@@ -581,7 +594,7 @@ check(
       SR2D_SUCCESSOR_PATHS.includes(entry) ||
       SR2E_SUCCESSOR_PATHS.includes(entry) ||
       SR2F_SUCCESSOR_PATHS.includes(entry) ||
-      SR2GA_SUCCESSOR_PATHS.includes(entry) || SR2GB_SUCCESSOR_PATHS.includes(entry) || SR2GC_SUCCESSOR_PATHS.includes(entry) || SR2GBR1_SUCCESSOR_PATHS.includes(entry) || SR2GCR1_SUCCESSOR_PATHS.includes(entry) || SR2CR1_SUCCESSOR_PATHS.includes(entry) || SR2GD_SUCCESSOR_PATHS.includes(entry) || SR2GE1_SUCCESSOR_PATHS.includes(entry) || SR2GE2_SUCCESSOR_PATHS.includes(entry) || SR2GF_SUCCESSOR_PATHS.includes(entry) || RECBP0_PATHS.includes(entry) || RECBP1_PATHS.includes(entry)
+      SR2GA_SUCCESSOR_PATHS.includes(entry) || SR2GB_SUCCESSOR_PATHS.includes(entry) || SR2GC_SUCCESSOR_PATHS.includes(entry) || SR2GBR1_SUCCESSOR_PATHS.includes(entry) || SR2GCR1_SUCCESSOR_PATHS.includes(entry) || SR2CR1_SUCCESSOR_PATHS.includes(entry) || SR2GD_SUCCESSOR_PATHS.includes(entry) || SR2GE1_SUCCESSOR_PATHS.includes(entry) || SR2GE2_SUCCESSOR_PATHS.includes(entry) || SR2GF_SUCCESSOR_PATHS.includes(entry) || RECBP0_PATHS.includes(entry) || RECBP1_PATHS.includes(entry) || RECCP1_PATHS.includes(entry)
   ) &&
     otherMigrations.length === 0 &&
     deployableFunctionPaths.length === 0,

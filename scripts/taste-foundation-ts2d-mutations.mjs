@@ -110,6 +110,7 @@ const makeClient = (scripted) => {
       const builder = {
         select(columns) { call.columns = columns; return builder; },
         eq(column, value) { call.filters.push({ column, value }); return builder; },
+        is(column, value) { call.filters.push({ column, value }); return builder; },
         then(resolve, reject) {
           return Promise.resolve(typeof scripted === "function" ? scripted(table) : scripted).then(resolve, reject);
         }
@@ -267,7 +268,7 @@ await mutation("07 createClient is introduced in the live repository", liveAdapt
   (s) => s.replace("export class SupabaseConsumerTasteFoundationRepository", "const extra = createClient(\"url\", \"key\");\nexport class SupabaseConsumerTasteFoundationRepository"),
   async (s) => noCreateClientAuthority(s));
 await mutation("08 an arbitrary user id filter is introduced", liveAdapter,
-  (s) => s.replace(".select(columns);", ".select(columns).eq(\"user_id\", \"someone-else\");"),
+  (s) => s.replace(".select(columns));", ".select(columns).eq(\"user_id\", \"someone-else\"));"),
   async (s) => noUserFilterAuthority(s));
 await mutation("09 a permission failure is mapped to empty", liveAdapter,
   (s) => s.replace('if (response.error) return { status: "failed", failureCode: "source_read_failed" };', 'if (response.error) return { status: "empty", rows: [] };'),

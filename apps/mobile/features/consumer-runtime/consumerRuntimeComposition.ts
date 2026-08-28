@@ -75,6 +75,11 @@ import {
   clearSocialInterestSettingsRuntimeDependencies
 } from "../social-interest-settings/runtimeBinding";
 import type { SupabaseSocialInterestSettingsClientLike } from "../social-interest-settings/supabaseContracts";
+import {
+  bindConsumerAllergySettingsRuntimeDependencies,
+  clearConsumerAllergySettingsRuntimeDependencies
+} from "../consumer-allergy-settings/runtimeBinding";
+import type { SupabaseConsumerAllergySettingsClientLike } from "../consumer-allergy-settings/supabaseContracts";
 import { ConsumerMealWriteOperationStore } from "./consumerMealWriteOperationStore";
 import { ConsumerMealWriteRuntime } from "./consumerMealWriteRuntime";
 import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumerMealIdentificationFinalizationOperationStore";
@@ -364,6 +369,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   clearMealBuddyChatRuntimeDependencies();
   clearMealBuddyPushRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
+  clearConsumerAllergySettingsRuntimeDependencies();
   const canonicalFlags = options.flags ?? getConsumerRuntimeFlags();
   const capabilityFlags = normalizeConsumerCapabilityFlags(canonicalFlags);
   const authFlags = deriveAuthCompositionFlags(capabilityFlags);
@@ -475,6 +481,10 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         bindSocialInterestSettingsRuntimeDependencies({
           authPort,
           client: client as unknown as SupabaseSocialInterestSettingsClientLike
+        });
+        bindConsumerAllergySettingsRuntimeDependencies({
+          authPort,
+          client: client as unknown as SupabaseConsumerAllergySettingsClientLike
         });
       }
       return {

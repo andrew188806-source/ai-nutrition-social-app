@@ -77,6 +77,10 @@ const makeClient = (scripted) => {
           call.filters.push({ column, value });
           return builder;
         },
+        is(column, value) {
+          call.filters.push({ column, value });
+          return builder;
+        },
         then(resolve, reject) {
           const response = typeof scripted === "function" ? scripted(table) : scripted;
           return Promise.resolve(response).then(resolve, reject);
@@ -135,7 +139,14 @@ const PROFILE_ROW = {
     "C1 exactly the three allowlisted tables are queried, in order",
     tables
   );
-  expect(client.calls.every((call) => call.filters.length === 0), "C2 no query carries a user id filter — RLS owns owner scoping");
+  expect(
+    client.calls[0].filters.length === 0
+      && client.calls[1].filters.length === 0
+      && JSON.stringify(client.calls[2].filters) === JSON.stringify([
+        { column: "source_vocabulary_id", value: null }
+      ]),
+    "C2 no query carries a user id filter and Taste excludes governed Allergy rows"
+  );
   expect(
     client.calls[0].columns === contracts.SUPABASE_TASTE_PROFILE_SELECT_COLUMNS &&
       client.calls[1].columns === contracts.SUPABASE_NUTRITION_GOAL_SELECT_COLUMNS &&

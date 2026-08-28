@@ -46,6 +46,7 @@ export default function RootLayout() {
           <Stack.Screen name="community-card" options={{ title: zhTW.mobile.communityCard.title }} />
           <Stack.Screen name="community-card-settings" options={{ title: zhTW.mobile.communityCardSettings.title }} />
           <Stack.Screen name="social-interest-settings" options={{ title: zhTW.mobile.socialInterestSettings.title }} />
+          <Stack.Screen name="allergy-settings" options={{ title: zhTW.mobile.allergySettings.title }} />
           <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
           <Stack.Screen name="meal-buddy-candidate-profile/[candidateRef]" options={{ title: "飯友公開檔案" }} />
           <Stack.Screen name="meal-buddy-chat/[relationshipRef]" options={{ title: zhTW.mobile.mealBuddyChat.screenTitle }} />

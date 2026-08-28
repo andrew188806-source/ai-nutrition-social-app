@@ -1510,6 +1510,29 @@ export const zhTW = {
         { id: "taste-explorer", name: "嚐鮮探險家", description: "新店、探索、社交", personalityType: "探索社交型", tags: ["新店", "探索", "社交", "餐廳"], avatarType: "system", assetKey: "TE", isPremiumOnly: false, visibilityDefault: "public" }
       ]
     },
+    allergySettings: {
+      title: "過敏原",
+      entryTitle: "飲食限制・過敏原",
+      entryBody: "管理你需要避開的過敏原；其他食物偏好與飲食方式將於後續提供。",
+      description: "選擇你需要避開的過敏原，推薦時會依可確認的餐點資料進行篩選。",
+      disclaimer: "餐廳成分與交叉接觸狀況可能變動，如有嚴重過敏請再向店家確認。",
+      loading: "正在載入你的過敏原設定…",
+      signedOutTitle: "請重新登入",
+      signedOutBody: "登入後才能查看與儲存你的私人過敏原設定。",
+      loadErrorTitle: "暫時無法載入過敏原設定",
+      loadErrorBody: "目前沒有顯示或變更任何過敏原，請稍後重新載入。",
+      retry: "重新載入",
+      save: "儲存過敏原設定",
+      saving: "正在儲存…",
+      saved: "過敏原設定已儲存",
+      retrySave: "重新儲存",
+      saveErrorTitle: "過敏原設定尚未儲存",
+      saveErrorBody: "你的原有設定仍然保留，請稍後再試。",
+      unresolvedTitle: "部分設定目前無法辨識",
+      unresolvedBody: "請重新確認後再儲存；系統不會把這些設定當作沒有過敏原。",
+      empty: "目前尚未選擇過敏原",
+      back: "返回"
+    },
     socialInterestSettings: {
       title: "社交興趣",
       entryTitle: "社交興趣",

@@ -8,6 +8,7 @@ import {
   classifyRecbLifecycle, createRecbManifest
 } from "./recommendation-rec-b-successor-manifest.mjs";
 import { RECCP0_BASELINE, RECCP0_MIGRATION, RECCP0_NPM_KEYS, RECCP0_PATHS, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
+import { RECCP1_BASELINE, RECCP1_MIGRATION, classifyReccp1Lifecycle } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -56,9 +57,17 @@ const reccp0Lifecycle = classifyReccp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const reccp0Successor = reccp0Lifecycle.valid;
+const reccp1Lifecycle = classifyReccp1Lifecycle({
+  head, parent: head === RECCP1_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind, ahead, worktreePaths, stagedPaths,
+  deltaPaths: head === RECCP1_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccp1Successor = reccp1Lifecycle.valid;
 
 check("lifecycle is exact REC-B candidate or freeze",
-  lifecycle.valid || reccp0Successor, { recb: lifecycle, reccp0: reccp0Lifecycle.phase });
+  lifecycle.valid || reccp0Successor || reccp1Successor,
+  { recb: lifecycle, reccp0: reccp0Lifecycle.phase, reccp1: reccp1Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the exact pushed predecessor or REC-B pushed freeze",
   originHead === RECB_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
@@ -71,7 +80,7 @@ check("manifest is exact, unique, sorted, and wildcard-free",
 check("every exact manifest path exists", RECB_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("REC-B creates no migration", RECB_MIGRATIONS.length === 0
   && lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations", "supabase/schema"]))
-    .every((file) => file === RECCP0_MIGRATION));
+    .every((file) => file === RECCP0_MIGRATION || (reccp1Successor && file === RECCP1_MIGRATION)));
 check("dependency and lock bytes are unchanged",
   lines(git(["diff", "--name-only", RECB_BASELINE, "--", "apps/mobile/package.json", "package-lock.json"])).length === 0);
 check("Production, deployment, and workflow paths are untouched",
