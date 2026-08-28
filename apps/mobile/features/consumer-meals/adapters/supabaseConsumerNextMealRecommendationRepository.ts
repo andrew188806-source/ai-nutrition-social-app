@@ -18,6 +18,18 @@ import {
   SUPABASE_NEXT_MEAL_GEO_FUNCTION
 } from "./supabaseNextMealGeoRows";
 import { rankNextMealCandidatesByNutrition } from "../nextMealNutritionRanker";
+import { isTasteRankingPolicy } from "../tasteRankingPolicy";
+import { isRecommendationCompositionPolicy } from "../recommendationCompositionPolicy";
+import {
+  composeDualLaneRecommendation,
+  evaluateCandidateTaste,
+  normalizeExplicitTasteProfile
+} from "../recommendationTasteRanking";
+import { buildRecommendationReason } from "../recommendationReasons";
+import {
+  SupabaseRecommendationTasteReader,
+  type RecommendationTasteAuthorityReadResult
+} from "./supabaseRecommendationTasteReader";
 
 const DEFAULT_CANDIDATE_OUTPUT_LIMIT = 50;
 const MAX_CANDIDATE_OUTPUT_LIMIT = 50;
@@ -26,6 +38,11 @@ const CANDIDATE_READ_PAGE_SIZE = 100;
 export type SupabaseConsumerNextMealRecommendationRepositoryOptions = {
   authPort: ConsumerAuthPort;
   restaurantMenuClient: SupabaseRestaurantMenuClientLike;
+  tasteReader?: Readonly<{
+    readForEligibleCandidates(
+      candidates: readonly ConsumerNextMealCandidate[]
+    ): Promise<RecommendationTasteAuthorityReadResult>;
+  }>;
 };
 
 export class SupabaseConsumerNextMealRecommendationRepository
@@ -61,17 +78,78 @@ export class SupabaseConsumerNextMealRecommendationRepository
 
       const mapped = rows.map(mapRowToCandidate);
       const ranked = rankNextMealCandidatesByNutrition(mapped, input.nutritionRanking, input.nutritionRankingPolicy);
-      const candidates = ranked.candidates.slice(0, outputLimit);
+      const tasteResult = await this.applyTasteRanking(ranked, input);
+      const candidates = tasteResult.candidates.slice(0, outputLimit);
 
       return {
         status: "available",
         candidates,
         totalCandidateCount: ranked.candidates.length,
-        ranking: ranked.ranking
+        ranking: ranked.ranking,
+        tasteRanking: tasteResult.summary
       };
     } catch {
       return { status: "read_failed", errorCode: input.currentLocation
         ? "next_meal_geo_fetch_error" : "next_meal_supabase_fetch_error" };
+    }
+  }
+
+  private async applyTasteRanking(
+    ranked: ReturnType<typeof rankNextMealCandidatesByNutrition>,
+    input: ConsumerNextMealRecommendationRepositoryInput
+  ): Promise<Readonly<{
+    candidates: readonly ConsumerNextMealCandidate[];
+    summary: Readonly<{
+      status: "applied" | "unavailable";
+      tastePolicyId?: string;
+      tastePolicyVersion?: number;
+      compositionPolicyId?: string;
+      compositionPolicyVersion?: number;
+    }>;
+  }>> {
+    const unavailable = Object.freeze({
+      candidates: ranked.candidates,
+      summary: Object.freeze({ status: "unavailable" as const })
+    });
+    if (!input.tasteProfile || !isTasteRankingPolicy(input.tasteRankingPolicy)) return unavailable;
+    if (!isRecommendationCompositionPolicy(input.recommendationCompositionPolicy)) return unavailable;
+    try {
+      const reader = this.options.tasteReader
+        ?? new SupabaseRecommendationTasteReader(this.options.restaurantMenuClient);
+      const authority = await reader.readForEligibleCandidates(ranked.candidates);
+      if (authority.status !== "available") return unavailable;
+      const profile = normalizeExplicitTasteProfile(
+        input.tasteProfile,
+        authority.normalizationAuthority,
+        input.tasteRankingPolicy
+      );
+      const tasteByCandidateId = new Map(authority.projections.map((projection) => [
+        projection.candidateId,
+        evaluateCandidateTaste(profile, projection, input.tasteRankingPolicy!)
+      ]));
+      const composition = composeDualLaneRecommendation(
+        ranked.evaluations,
+        tasteByCandidateId,
+        input.recommendationCompositionPolicy
+      );
+      const candidates = composition.entries.map((entry, rankOrdinal) => Object.freeze({
+        ...entry.candidate,
+        reason: buildRecommendationReason(entry),
+        recommendationLane: entry.lane,
+        rankOrdinal
+      }));
+      return Object.freeze({
+        candidates: Object.freeze(candidates),
+        summary: Object.freeze({
+          status: "applied" as const,
+          tastePolicyId: input.tasteRankingPolicy.policyId,
+          tastePolicyVersion: input.tasteRankingPolicy.policyVersion,
+          compositionPolicyId: input.recommendationCompositionPolicy.policyId,
+          compositionPolicyVersion: input.recommendationCompositionPolicy.policyVersion
+        })
+      });
+    } catch {
+      return unavailable;
     }
   }
 
@@ -139,15 +217,27 @@ function mapRowToCandidate(
     mealName: row.meal_name,
     restaurantName: row.restaurant_name,
     areaLabel,
+    branchName: row.branch_name,
+    imageUrl: row.public_image_url,
+    description: null,
     emoji: null,
     nutrition,
+    nutritionSource: mapNutritionSource(row.nutrition_source_public),
     tags: [],
     reason: {
       reasonSummary: "尚未套用營養排序。",
-      reasonBasis: "neutral_nutrition_fallback"
+      reasonBasis: "neutral_nutrition_fallback",
+      reasonCode: "neutral_nutrition_fallback",
+      detailSummaries: []
     },
     rankOrdinal: index
   };
+}
+
+function mapNutritionSource(value: string): ConsumerNextMealCandidate["nutritionSource"] {
+  if (value === "restaurant_verified" || value === "admin_verified"
+    || value === "ai_estimated" || value === "user_corrected" || value === "manual") return value;
+  return null;
 }
 
 function normalizeOutputLimit(value: number | undefined): number {

@@ -19,7 +19,7 @@ const mutations = [
   "trust_invalid_policy",
   "skip_goal_read",
   "remove_pre_rank_order",
-  "compare_branch_offer_as_menu"
+  "preferred_hint_overrides_exposure"
 ];
 const results = mutations.map((mutation) => {
   const run = child.spawnSync(process.execPath, [smoke], {

@@ -101,7 +101,9 @@ export class MockConsumerNextMealRecommendationRepository implements ConsumerNex
       tags: seed.tags,
       reason: {
         reasonSummary: "尚未套用營養排序。",
-        reasonBasis: "neutral_nutrition_fallback"
+        reasonBasis: "neutral_nutrition_fallback",
+        reasonCode: "neutral_nutrition_fallback",
+        detailSummaries: []
       },
       rankOrdinal: index
     }));
@@ -117,7 +119,8 @@ export class MockConsumerNextMealRecommendationRepository implements ConsumerNex
       status: "available",
       candidates,
       totalCandidateCount: ranked.candidates.length,
-      ranking: ranked.ranking
+      ranking: ranked.ranking,
+      tasteRanking: { status: "unavailable" }
     };
   }
 }

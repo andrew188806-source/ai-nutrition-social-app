@@ -17,20 +17,6 @@ function toU1Source(source: ConsumerNextMealRecommendationSource): U1NextMealPre
   return "canonical_mock";
 }
 
-function toBasisDetails(basis: ConsumerNextMealRecommendationBasis): readonly string[] {
-  if (basis === "nutrition_gap") {
-    return [
-      "依每日營養目標與今日已記錄攝取量的剩餘缺口排序。",
-      "僅計入目標、今日攝取與餐點資料都可用的熱量、蛋白質、碳水、脂肪與纖維。",
-      "超過已滿足的目標會降低排序分數。"
-    ];
-  }
-  return [
-    "目前沒有可共同計算的每日目標與餐點營養資料。",
-    "結果使用穩定中性排序，未宣稱套用個人化營養計算。"
-  ];
-}
-
 function toCandidateViewModel(
   candidate: ConsumerNextMealCandidate,
   index: number,
@@ -49,14 +35,21 @@ function toCandidateViewModel(
     mealName: candidate.mealName,
     restaurantName: candidate.restaurantName,
     areaLabel: candidate.areaLabel ?? undefined,
+    branchName: candidate.branchName ?? undefined,
+    imageUrl: candidate.imageUrl ?? undefined,
+    description: candidate.description ?? undefined,
     emoji: candidate.emoji ?? undefined,
     calorieLabel:
       candidate.nutrition.calories != null && candidate.nutrition.calories > 0
         ? `${candidate.nutrition.calories} kcal`
         : undefined,
     tags: Array.from(candidate.tags),
+    nutrition: { ...candidate.nutrition },
+    nutritionSource: candidate.nutritionSource ?? undefined,
     reasonSummary: candidate.reason.reasonSummary,
-    reasonDetails: toBasisDetails(candidate.reason.reasonBasis)
+    reasonCode: candidate.reason.reasonCode,
+    reasonDetails: Array.from(candidate.reason.detailSummaries ?? []),
+    recommendationLane: candidate.recommendationLane
   };
 }
 
@@ -91,28 +84,10 @@ export function mapCanonicalToU1NextMeal(
 
   const { recommendation } = result;
   const presentationSource = toU1Source(recommendation.source);
-  const allCandidates = Array.from(recommendation.candidates);
-
-  let orderedCandidates: ConsumerNextMealCandidate[];
-  if (preferredMenuItemId) {
-    const preferredIndex = allCandidates.findIndex(
-      (c) => c.menuItemId === preferredMenuItemId
-    );
-    if (preferredIndex > 0) {
-      const preferred = allCandidates[preferredIndex];
-      orderedCandidates = [
-        preferred,
-        ...allCandidates.slice(0, preferredIndex),
-        ...allCandidates.slice(preferredIndex + 1)
-      ];
-    } else {
-      orderedCandidates = allCandidates;
-    }
-  } else {
-    orderedCandidates = allCandidates;
-  }
-
-  const clipped = orderedCandidates.slice(0, visibleLimit);
+  // The final dual-lane order is exposure authority. Navigation hints may not reorder it before
+  // entitlement clipping; both Free and Premium see prefixes of this exact same sequence.
+  void preferredMenuItemId;
+  const clipped = Array.from(recommendation.candidates).slice(0, visibleLimit);
   const candidates = clipped.map((c, i) =>
     toCandidateViewModel(c, i, presentationSource)
   );
@@ -123,8 +98,10 @@ export function mapCanonicalToU1NextMeal(
     headline: "這是你的下一餐",
     entitlement,
     visibleCandidateCount: candidates.length,
-    contextNote: recommendation.context.rankingMode === "nutrition_gap"
-      ? "本次排序已使用每日營養目標與今天已記錄的攝取量；未使用 Taste、飲食限制或社交情境。"
+    contextNote: recommendation.context.tasteRankingStatus === "applied"
+      ? "本次推薦參考今天的營養需求與你明確設定的口味偏好。"
+      : recommendation.context.rankingMode === "nutrition_gap"
+      ? "本次排序使用每日營養目標與今天已記錄的攝取量。"
       : "本次缺少可共同計算的營養目標與餐點資料，因此使用穩定中性排序，未宣稱個人化。",
     candidates
   };

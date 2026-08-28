@@ -8,7 +8,7 @@ import type { U1NextMealPrototypeProvider, U1NextMealPrototypeRequest, U1NextMea
 
 export type CanonicalNextMealPrototypeProviderDependencies = Pick<
   ConsumerMealFactoryDependencies,
-  "authPort" | "mealClient" | "nutritionGoalsReader" | "restaurantMenuClient"
+  "authPort" | "mealClient" | "nutritionGoalsReader" | "explicitTasteProfileReader" | "restaurantMenuClient"
 >;
 
 export function createCanonicalNextMealPrototypeProvider(

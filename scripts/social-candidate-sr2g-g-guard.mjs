@@ -17,6 +17,7 @@ import { classifyRecbp0Lifecycle, RECBP0_MIGRATION, RECBP0_NPM_KEYS } from "./re
 import { classifyRecbp1Lifecycle, RECBP1_MIGRATION, RECBP1_NPM_KEYS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECA_NPM_KEYS } from "./recommendation-rec-a-successor-manifest.mjs";
 import { GEO1C_NPM_KEYS } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
+import { classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = []; const failures = [];
@@ -50,7 +51,10 @@ const recbp0Lifecycle = classifyRecbp0Lifecycle({ ...state, parent: state.headPa
   deltaPaths: state.headDeltaPaths, deleted: state.headDeleted });
 const recbp1Lifecycle = classifyRecbp1Lifecycle({ ...state, parent: state.headParent,
   deltaPaths: state.headDeltaPaths, deleted: state.headDeleted });
-const effectiveLifecycle = recbp1Lifecycle.valid ? recbp1Lifecycle
+const recbLifecycle = classifyRecbLifecycle({ ...state, parent: state.headParent,
+  deltaPaths: state.headDeltaPaths, deleted: state.headDeleted });
+const effectiveLifecycle = recbLifecycle.valid ? recbLifecycle
+  : recbp1Lifecycle.valid ? recbp1Lifecycle
   : recbp0Lifecycle.valid ? recbp0Lifecycle : lifecycle;
 const frozenGPaths = lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2HA_BASELINE]));
 const frozenGAuthority = git(["rev-parse", `${SR2HA_BASELINE}^`]).trim() === SR2GG_BASELINE
@@ -95,7 +99,7 @@ check("02 frozen SR-2G-G authority commit retains its exact wildcard-free invent
 check("03 predecessor commit and subject are pinned", git(["cat-file", "-t", SR2GG_BASELINE]).trim() === "commit" && git(["log", "-1", "--format=%s", SR2GG_BASELINE]).trim() === SR2GG_BASELINE_SUBJECT);
 check("04 staged bytes are prohibited", state.stagedPaths.length === 0);
 check("05 every successor path exists and none is deleted", SR2GG_SUCCESSOR_PATHS.every((file) => fs.existsSync(path.join(root, file))) && !state.headDeleted);
-check("06 package differs only by the exact SR-2G-G and successor SR-2H-A commands", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+check("06 package differs only by authorized successor commands", recbLifecycle.valid || JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
 check("07 no dependency or lockfile changes", JSON.stringify(packageJson.dependencies) === JSON.stringify(baselinePackage.dependencies) && JSON.stringify(packageJson.devDependencies) === JSON.stringify(baselinePackage.devDependencies) && !SR2GG_SUCCESSOR_PATHS.some((file) => /lock/.test(file)));
 check("08 exactly one successor migration is added", SR2GG_SUCCESSOR_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1);
 

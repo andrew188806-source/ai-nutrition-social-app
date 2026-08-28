@@ -25,6 +25,7 @@ import { LocalMenuDemoConsumerNextMealRecommendationRepository } from "./adapter
 import { SupabaseConsumerNextMealRecommendationRepository } from "./adapters/supabaseConsumerNextMealRecommendationRepository";
 import {
   ConsumerNextMealRecommendationService,
+  type ConsumerExplicitTasteProfileReader,
   type ConsumerNutritionGoalsReader
 } from "./consumerNextMealRecommendationService";
 import type { SupabaseRestaurantMenuClientLike } from "./adapters/supabaseRestaurantMenuRows";
@@ -66,6 +67,7 @@ export type ConsumerMealFactoryDependencies = {
   correctionRepository?: ConsumerMealCorrectionRepository;
   nextMealRecommendationRepository?: ConsumerNextMealRecommendationRepository;
   nutritionGoalsReader?: ConsumerNutritionGoalsReader;
+  explicitTasteProfileReader?: ConsumerExplicitTasteProfileReader;
   restaurantMenuClient?: SupabaseRestaurantMenuClientLike;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
@@ -404,6 +406,7 @@ export function createConsumerNextMealRecommendationService(
     repository: dependencies.nextMealRecommendationRepository ?? createConsumerNextMealRecommendationRepository(flags, dependencies),
     intakeOverviewService: createConsumerTodayIntakeOverviewService(flags, dependencies),
     nutritionGoalsReader: dependencies.nutritionGoalsReader,
+    explicitTasteProfileReader: dependencies.explicitTasteProfileReader,
     clock: dependencies.clock ?? systemClock,
     timezone: dependencies.timezone
   });

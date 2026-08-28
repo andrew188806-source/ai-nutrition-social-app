@@ -38,6 +38,7 @@ import { SR2GE2_SUCCESSOR_PATHS } from "./social-candidate-sr2g-e2-successor-man
 import { SR2GF_SUCCESSOR_PATHS } from "./social-candidate-sr2g-f-successor-manifest.mjs";
 import { RECBP0_MIGRATION, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 import { RECBP1_MIGRATION, RECBP1_PATHS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
+import { RECB_PATHS } from "./recommendation-rec-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -455,7 +456,7 @@ const ALLOWED_PATHS = new Set([
   ...SR2B_SUCCESSOR_PATHS,
   ...SR2C_SUCCESSOR_PATHS,
     ...SR2D_SUCCESSOR_PATHS,
-    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS
+    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(

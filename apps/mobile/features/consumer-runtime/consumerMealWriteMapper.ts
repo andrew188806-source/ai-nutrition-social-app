@@ -21,6 +21,8 @@ export type ConsumerAnalysisMealWriteDraft = {
   isSelfCooked: boolean;
   wasUserCorrected: boolean;
   trustedCanonicalIdentity?: TrustedConsumerMealIdentity | null;
+  trustedNutritionSource?: import("../consumer-meals/types").ConsumerNutritionSourceType;
+  trustedMealSource?: "restaurant";
 };
 
 export type MapConsumerAnalysisMealWriteInput = ConsumerAnalysisMealWriteDraft & {
@@ -44,7 +46,7 @@ export function mapConsumerAnalysisMealWrite(input: MapConsumerAnalysisMealWrite
     timezone,
     title: mealName,
     note: null,
-    source: input.isSelfCooked ? "self_made" : "ai_estimated",
+    source: input.isSelfCooked ? "self_made" : input.trustedMealSource ?? "ai_estimated",
     items: [
       {
         restaurantId: identity?.restaurantId ?? null,
@@ -57,7 +59,9 @@ export function mapConsumerAnalysisMealWrite(input: MapConsumerAnalysisMealWrite
         normalizedName: null,
         portion: optionalText(input.portion),
         nutrition: { ...input.nutrition },
-        nutritionSource: input.wasUserCorrected ? "user_corrected" : "ai_estimated",
+        nutritionSource: input.wasUserCorrected
+          ? "user_corrected"
+          : input.trustedNutritionSource ?? "ai_estimated",
         sourceEntityVersion: null,
         confidenceScore: null,
         consumedRatio: 1

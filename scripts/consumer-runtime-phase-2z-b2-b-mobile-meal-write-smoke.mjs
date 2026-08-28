@@ -85,7 +85,7 @@ function makeRuntime({ service, storage = new authStorage.MemoryConsumerAuthStor
 }
 
 try {
-  expect(/saveMealRecordFromExplicitGesture/.test(analysisSource), "explicit gesture is the Meal Write entry");
+  expect(/finalizeMealIdentificationFromExplicitGesture/.test(analysisSource), "explicit gesture is the Meal Write entry");
   expect(!/autoSavedConfirmedMeal|matchState\s*===\s*["']confirmed["'][\s\S]{0,240}persistMealRecord/.test(analysisSource), "confirmed state performs no automatic write");
 
   const periods = [["早餐", "breakfast"], ["午餐", "lunch"], ["晚餐", "dinner"], ["點心", "snack"]];

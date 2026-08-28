@@ -594,6 +594,18 @@ export type ConsumerNextMealDataProvenance = "sample" | "live";
 
 export type ConsumerNextMealRecommendationBasis =
   | "nutrition_gap"
+  | "positive_taste_match"
+  | "mixed_nutrition_taste_match"
+  | "neutral_nutrition_fallback";
+
+export type ConsumerNextMealReasonCode =
+  | "nutrition_gap_match"
+  | "preferred_cuisine_match"
+  | "preferred_meal_type_match"
+  | "spice_preference_match"
+  | "mixed_nutrition_taste_match"
+  | "taste_evidence_insufficient"
+  | "known_taste_caveat"
   | "neutral_nutrition_fallback";
 
 export const CONSUMER_NEXT_MEAL_NUTRITION_DIMENSIONS = [
@@ -661,6 +673,8 @@ export type ConsumerNextMealGeoStatus = "not_requested" | "applied" | "unavailab
 export type ConsumerNextMealCandidateReason = {
   reasonSummary: string;
   reasonBasis: ConsumerNextMealRecommendationBasis;
+  reasonCode: ConsumerNextMealReasonCode;
+  detailSummaries: readonly string[];
 };
 
 export type ConsumerNextMealCandidate = {
@@ -676,12 +690,26 @@ export type ConsumerNextMealCandidate = {
   mealName: string;
   restaurantName: string;
   areaLabel?: string | null;
+  branchName?: string | null;
+  imageUrl?: string | null;
+  description?: string | null;
   emoji?: string | null;
   nutrition: ConsumerNutritionSnapshot;
+  nutritionSource?: ConsumerNutritionSourceType | null;
   tags: readonly string[];
   reason: ConsumerNextMealCandidateReason;
   rankOrdinal: number;
+  recommendationLane?: "nutrition_primary" | "taste_forward" | "nutrition_fallback";
 };
+
+/** Internal REC-A evaluation. Raw score and gap evidence never cross into UI view models. */
+export type ConsumerNextMealNutritionEvaluation = Readonly<{
+  candidate: ConsumerNextMealCandidate;
+  score: number;
+  usableDimensions: readonly ConsumerNextMealNutritionDimension[];
+  hasPositiveGapContribution: boolean;
+  rankOrdinal: number;
+}>;
 
 export type ConsumerNextMealRecommendationInput = {
   date?: string;
@@ -701,6 +729,11 @@ export type ConsumerNextMealRecommendationContext = {
   // Which ranking rule produced this order. Identity only — never weights or private nutrition.
   appliedPolicyId: string;
   appliedPolicyVersion: number;
+  tasteRankingStatus: "applied" | "unavailable";
+  appliedTastePolicyId?: string;
+  appliedTastePolicyVersion?: number;
+  appliedCompositionPolicyId?: string;
+  appliedCompositionPolicyVersion?: number;
   plannedMealCount: number;
   plannedMealsAvailable: boolean;
   plannedMealsAppliedToRanking: false;
@@ -721,6 +754,9 @@ export type ConsumerNextMealRecommendationRepositoryInput = {
   // Supplied by the service from its policy provider. Absent means "use the shipped default",
   // which is what keeps every adapter free of formula authority.
   nutritionRankingPolicy?: NutritionRankingPolicy;
+  tasteProfile?: import("../consumer-taste-profile/types").ConsumerTasteProfileRow;
+  tasteRankingPolicy?: import("./tasteRankingPolicy").TasteRankingPolicy;
+  recommendationCompositionPolicy?: import("./recommendationCompositionPolicy").RecommendationCompositionPolicy;
   candidatePoolLimit?: number;
   currentLocation?: ConsumerNextMealGeoInput;
 };
@@ -731,6 +767,13 @@ export type ConsumerNextMealRecommendationRepositoryResult =
       candidates: readonly ConsumerNextMealCandidate[];
       totalCandidateCount: number;
       ranking: ConsumerNextMealRankingSummary;
+      tasteRanking: Readonly<{
+        status: "applied" | "unavailable";
+        tastePolicyId?: string;
+        tastePolicyVersion?: number;
+        compositionPolicyId?: string;
+        compositionPolicyVersion?: number;
+      }>;
     }
   | { status: "empty" }
   | { status: "disabled" }

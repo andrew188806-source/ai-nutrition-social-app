@@ -9,6 +9,7 @@ import {
 } from "./recommendation-rec-a-successor-manifest.mjs";
 import { RECBP0_BASELINE, RECBP0_MIGRATION } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 import { classifyRecbp1Lifecycle, RECBP1_BASELINE, RECBP1_MIGRATION } from "./recommendation-rec-b-p1-successor-manifest.mjs";
+import { RECB_BASELINE, classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -46,20 +47,28 @@ const recbp1Lifecycle = classifyRecbp1Lifecycle({
   deltaPaths: head === RECBP1_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
-const lifecycle = recbp1Lifecycle.valid ? recbp1Lifecycle : recaLifecycle;
+const recbLifecycle = classifyRecbLifecycle({
+  head, parent: head === RECB_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths, stagedPaths,
+  deltaPaths: head === RECB_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECB_BASELINE}..HEAD`])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const lifecycle = recbLifecycle.valid ? recbLifecycle : recbp1Lifecycle.valid ? recbp1Lifecycle : recaLifecycle;
 
 check("lifecycle is exact REC-A candidate or frozen local", lifecycle.valid, lifecycle);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("origin/main remains the frozen REC-A/REC-B predecessor authority",
-  originHead === RECA_BASELINE || originHead === RECBP0_BASELINE || originHead === RECBP1_BASELINE
+  originHead === RECA_BASELINE || originHead === RECBP0_BASELINE || originHead === RECBP1_BASELINE || originHead === RECB_BASELINE
     || (recbp1Lifecycle.phase === "frozen_pushed" && originHead === head), originHead);
 check("exact wildcard-free manifest", new Set(RECA_PATHS).size === RECA_PATHS.length
   && RECA_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every manifest path exists", RECA_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 const schemaDelta = lines(git(["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations", "supabase/schema"]));
 check("REC-B-P0 successor adds only its one migration; REC-A itself changed none",
-  recbp1Lifecycle.valid
+  recbLifecycle.valid
+    ? schemaDelta.length <= 2 && schemaDelta.every((file) => file === RECBP0_MIGRATION || file === RECBP1_MIGRATION)
+    : recbp1Lifecycle.valid
     ? schemaDelta.length <= 2 && schemaDelta.every((file) => file === RECBP0_MIGRATION || file === RECBP1_MIGRATION)
     : lifecycle.phase.startsWith("rec_b_p0_")
     ? schemaDelta.length <= 1 && schemaDelta.every((file) => file === RECBP0_MIGRATION)
@@ -134,7 +143,10 @@ check("canonical goals are read with the same Supabase client", /SupabaseConsume
 check("non-Geo candidates are ordered and paged before ranking", /order\(column: "candidate_id"/.test(rows)
   && /\.order\("candidate_id"/.test(repository) && /\.range\(/.test(repository)
   && /rankNextMealCandidatesByNutrition/.test(repository));
-check("preferred identity is menu-item-level without branch collapse", /preferredMenuItemId/.test(mapper) && /c\.menuItemId === preferredMenuItemId/.test(mapper));
+check("preferred identity does not collapse branch offers or override REC-B exposure",
+  recbLifecycle.valid
+    ? /void preferredMenuItemId/.test(mapper) && !/preferredIndex/.test(mapper) && /candidate\.candidateId/.test(product)
+    : /preferredMenuItemId/.test(mapper) && /c\.menuItemId === preferredMenuItemId/.test(mapper));
 check("neutral fallback is explicit and fixed 520 is absent", /neutral_fallback/.test(ranker + service) && !/\b520\b/.test(ranker + service + repository));
 check("planned meals remain excluded", /plannedMealsAppliedToRanking:\s*false/.test(service));
 check("no excluded ranking authority is introduced", !/tasteScore|similarityScore|dietaryRestriction|allergen|foodContext|geocodeOnRequest/.test(product));

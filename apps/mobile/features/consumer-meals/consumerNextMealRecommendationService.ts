@@ -2,6 +2,7 @@ import type { ConsumerTodayIntakeOverviewClock } from "./consumerTodayIntakeOver
 import type { ConsumerTodayIntakeOverviewService } from "./consumerTodayIntakeOverviewService";
 import type {
   ConsumerNutritionGoalRow,
+  ConsumerTasteProfileRow,
   ConsumerTasteFoundationReadResult
 } from "../consumer-taste-profile/types";
 import { resolveActiveDailyNutritionGoals } from "./nextMealNutritionRanker";
@@ -9,6 +10,14 @@ import {
   createDefaultNutritionRankingPolicyProvider,
   type NutritionRankingPolicyProvider
 } from "./nutritionRankingPolicy";
+import {
+  createDefaultTasteRankingPolicyProvider,
+  type TasteRankingPolicyProvider
+} from "./tasteRankingPolicy";
+import {
+  createDefaultRecommendationCompositionPolicyProvider,
+  type RecommendationCompositionPolicyProvider
+} from "./recommendationCompositionPolicy";
 import type {
   ConsumerNextMealGeoStatus,
   ConsumerNextMealRecommendationInput,
@@ -25,6 +34,12 @@ export type ConsumerNutritionGoalsReader = Readonly<{
   >;
 }>;
 
+export type ConsumerExplicitTasteProfileReader = Readonly<{
+  readCurrentUserTasteProfile(): Promise<
+    ConsumerTasteFoundationReadResult<ConsumerTasteProfileRow>
+  >;
+}>;
+
 export type ConsumerNextMealRecommendationServiceOptions = {
   repository: ConsumerNextMealRecommendationRepository;
   intakeOverviewService: ConsumerTodayIntakeOverviewService;
@@ -32,6 +47,9 @@ export type ConsumerNextMealRecommendationServiceOptions = {
   // The seam a future TastKind backend or nutritionist-facing admin attaches to. Omitted here means
   // the shipped default policy; nothing in this app hard-codes which policy is canonical.
   nutritionRankingPolicyProvider?: NutritionRankingPolicyProvider;
+  explicitTasteProfileReader?: ConsumerExplicitTasteProfileReader;
+  tasteRankingPolicyProvider?: TasteRankingPolicyProvider;
+  recommendationCompositionPolicyProvider?: RecommendationCompositionPolicyProvider;
   clock: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -88,11 +106,32 @@ export class ConsumerNextMealRecommendationService {
     const nutritionRankingPolicy = (
       this.options.nutritionRankingPolicyProvider ?? createDefaultNutritionRankingPolicyProvider()
     ).getActiveNutritionRankingPolicy();
+    const tasteProfile = await readExplicitTasteProfile(this.options.explicitTasteProfileReader);
+    let tasteRankingPolicy;
+    let recommendationCompositionPolicy;
+    try {
+      tasteRankingPolicy = (
+        this.options.tasteRankingPolicyProvider ?? createDefaultTasteRankingPolicyProvider()
+      ).getActiveTasteRankingPolicy();
+    } catch {
+      tasteRankingPolicy = undefined;
+    }
+    try {
+      recommendationCompositionPolicy = (
+        this.options.recommendationCompositionPolicyProvider
+          ?? createDefaultRecommendationCompositionPolicyProvider()
+      ).getActiveRecommendationCompositionPolicy();
+    } catch {
+      recommendationCompositionPolicy = undefined;
+    }
 
     // Step 2: obtain ranked candidates from repository using deterministic context
     let repoResult = await repository.getRankedNextMealCandidates({
       nutritionRanking,
       nutritionRankingPolicy,
+      tasteProfile,
+      tasteRankingPolicy,
+      recommendationCompositionPolicy,
       candidatePoolLimit: input.candidatePoolLimit,
       currentLocation: input.currentLocation
     });
@@ -105,6 +144,9 @@ export class ConsumerNextMealRecommendationService {
       repoResult = await repository.getRankedNextMealCandidates({
         nutritionRanking,
         nutritionRankingPolicy,
+        tasteProfile,
+        tasteRankingPolicy,
+        recommendationCompositionPolicy,
         candidatePoolLimit: input.candidatePoolLimit
       });
     }
@@ -136,6 +178,13 @@ export class ConsumerNextMealRecommendationService {
           usableNutritionDimensions: repoResult.ranking.usableNutritionDimensions,
           appliedPolicyId: repoResult.ranking.appliedPolicyId,
           appliedPolicyVersion: repoResult.ranking.appliedPolicyVersion,
+          tasteRankingStatus: repoResult.tasteRanking?.status ?? "unavailable",
+          ...(repoResult.tasteRanking?.status === "applied" ? {
+            appliedTastePolicyId: repoResult.tasteRanking.tastePolicyId,
+            appliedTastePolicyVersion: repoResult.tasteRanking.tastePolicyVersion,
+            appliedCompositionPolicyId: repoResult.tasteRanking.compositionPolicyId,
+            appliedCompositionPolicyVersion: repoResult.tasteRanking.compositionPolicyVersion
+          } : {}),
           plannedMealCount,
           plannedMealsAvailable,
           plannedMealsAppliedToRanking: false,
@@ -144,6 +193,18 @@ export class ConsumerNextMealRecommendationService {
         }
       }
     };
+  }
+}
+
+async function readExplicitTasteProfile(
+  reader: ConsumerExplicitTasteProfileReader | undefined
+): Promise<ConsumerTasteProfileRow | undefined> {
+  if (!reader) return undefined;
+  try {
+    const result = await reader.readCurrentUserTasteProfile();
+    return result.status === "available" && result.rows.length === 1 ? result.rows[0] : undefined;
+  } catch {
+    return undefined;
   }
 }
 

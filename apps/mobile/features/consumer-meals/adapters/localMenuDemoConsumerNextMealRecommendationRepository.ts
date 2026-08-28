@@ -44,7 +44,9 @@ export class LocalMenuDemoConsumerNextMealRecommendationRepository implements Co
             tags: buildDemoTags(item.protein, restaurant.tags),
             reason: {
               reasonSummary: "尚未套用營養排序。",
-              reasonBasis: "neutral_nutrition_fallback"
+              reasonBasis: "neutral_nutrition_fallback",
+              reasonCode: "neutral_nutrition_fallback",
+              detailSummaries: []
             },
             rankOrdinal: index
           };
@@ -63,7 +65,8 @@ export class LocalMenuDemoConsumerNextMealRecommendationRepository implements Co
         status: "available",
         candidates,
         totalCandidateCount: ranked.candidates.length,
-        ranking: ranked.ranking
+        ranking: ranked.ranking,
+        tasteRanking: { status: "unavailable" }
       };
     } catch {
       return { status: "read_failed", errorCode: "next_meal_local_demo_data_error" };

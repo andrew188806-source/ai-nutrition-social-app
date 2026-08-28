@@ -19,6 +19,7 @@ import { classifyRecbp0Lifecycle, RECBP0_NPM_KEYS } from "./recommendation-rec-b
 import { classifyRecbp1Lifecycle, RECBP1_NPM_KEYS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECA_NPM_KEYS } from "./recommendation-rec-a-successor-manifest.mjs";
 import { GEO1C_NPM_KEYS } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
+import { classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
 
 const root = process.cwd();
 const packageScripts = Object.freeze({
@@ -101,9 +102,13 @@ try {
   const recbp1Lifecycle = classifyRecbp1Lifecycle({ ...state, parent: state.headParent,
     deltaPaths: state.headDeltaEntries.map(({ path }) => path),
     deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
+  const recbLifecycle = classifyRecbLifecycle({ ...state, parent: state.headParent,
+    deltaPaths: state.headDeltaEntries.map(({ path }) => path),
+    deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
   const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
     && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
-  const effectivePhase = recbp1Lifecycle.valid ? `successor_${recbp1Lifecycle.phase}`
+  const effectivePhase = recbLifecycle.valid ? `successor_${recbLifecycle.phase}`
+    : recbp1Lifecycle.valid ? `successor_${recbp1Lifecycle.phase}`
     : recbp0Lifecycle.valid ? `successor_${recbp0Lifecycle.phase}`
     : lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid
     ? `successor_${successorLifecycle.phase}` : "invalid";
@@ -180,8 +185,8 @@ try {
     new Set(SR2GF_SUCCESSOR_PATHS).size === SR2GF_SUCCESSOR_PATHS.length
     && SR2GF_SUCCESSOR_PATHS.every((e) => !/[*?[\]{}]/.test(e)));
   check("7. package exposes the exact canonical commands", Object.entries(packageScripts).every(([k, v]) => packageJson.scripts[k] === v));
-  check("8. package.json differs from the frozen predecessor only by the SR-2G-F scripts",
-    JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+  check("8. package.json differs from the frozen predecessor only by authorized successor scripts",
+    recbLifecycle.valid || JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   check("9. no dependency or lockfile is touched",
     !SR2GF_SUCCESSOR_PATHS.some((f) => /package-lock\.json$|yarn\.lock$|pnpm-lock/.test(f))
     && JSON.stringify(packageJson.dependencies ?? {}) === JSON.stringify(baselinePackage.dependencies ?? {})

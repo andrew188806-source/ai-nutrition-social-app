@@ -75,11 +75,35 @@ export default function RecommendationScreen() {
     });
   }
 
+  async function addRecommendationToTodayIntake(candidate: U1NextMealCandidateViewModel) {
+    if (!candidate.restaurantId || !candidate.menuItemId) return "failed" as const;
+    const result = await runtime.createMealRecord({
+      selectedMealPeriod: currentMealPeriod(actorTimezone),
+      mealName: candidate.mealName,
+      originalDetectedName: candidate.mealName,
+      portion: "1 份",
+      nutrition: { ...candidate.nutrition },
+      isSelfCooked: false,
+      wasUserCorrected: false,
+      trustedCanonicalIdentity: {
+        restaurantId: candidate.restaurantId,
+        branchId: candidate.branchId ?? null,
+        menuItemId: candidate.menuItemId
+      },
+      trustedNutritionSource: candidate.nutritionSource ?? "ai_estimated",
+      trustedMealSource: "restaurant"
+    });
+    if (result.status === "succeeded") return "succeeded" as const;
+    if (result.status === "uncertain") return "uncertain" as const;
+    return "failed" as const;
+  }
+
   return (
     <PlaceholderScreen title={zhTW.mobile.nextMealTitle} subtitle={zhTW.mobile.nextMealSubtitle}>
       {geoRuntimeEnabled ? <ConsumerLocationPermissionCard controller={location} /> : null}
       <NextMealPrototypeContent
         entitlement={demoMode}
+        onAddToTodayIntake={addRecommendationToTodayIntake}
         onReturnHome={() => router.replace("/")}
         onUseForMealBuddy={openMealBuddyPrefill}
         preferredMenuItemId={typeof params.preferredMenuItemId === "string" ? params.preferredMenuItemId : undefined}
@@ -118,6 +142,20 @@ export default function RecommendationScreen() {
       ) : null}
     </PlaceholderScreen>
   );
+}
+
+function currentMealPeriod(timezone: string): "breakfast" | "lunch" | "dinner" | "snack" {
+  try {
+    const hour = Number(new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone || "Asia/Taipei", hour: "2-digit", hourCycle: "h23"
+    }).format(new Date()));
+    if (hour < 10) return "breakfast";
+    if (hour < 15) return "lunch";
+    if (hour < 21) return "dinner";
+    return "snack";
+  } catch {
+    return "lunch";
+  }
 }
 
 function withDefaultDate(plan: PlannedMeal, timezone: string): PlannedMeal {

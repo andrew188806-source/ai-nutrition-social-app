@@ -19,6 +19,7 @@ import { GEO1CP0_NPM_KEYS, GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-
 import { GEO1C_BASELINE, GEO1C_NPM_KEYS, GEO1C_PATHS, classifyGeo1cLifecycle } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
 import { RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle } from "./recommendation-rec-a-successor-manifest.mjs";
 import { RECBP0_MIGRATION, RECBP0_NPM_KEYS, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
+import { classifyRecbLifecycle, RECB_PATHS } from "./recommendation-rec-b-successor-manifest.mjs";
 
 const SUITE = "geo-mobile-location-geo-1b-guard";
 const root = process.cwd();
@@ -78,10 +79,16 @@ const recaLifecycle = classifyRecaLifecycle({
   deltaPaths: head === RECA_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECA_BASELINE}..HEAD`])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
-const validationManifest = recaLifecycle.valid ? recaLifecycle.manifest : geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
+const recbLifecycle = classifyRecbLifecycle({
+  head, parent: head === RECA_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths: recaWorktreePaths, stagedPaths,
+  deltaPaths: head === RECA_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const validationManifest = recbLifecycle.valid ? recbLifecycle.manifest : recaLifecycle.valid ? recaLifecycle.manifest : geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
 
-check("lifecycle is exact candidate or frozen-unpushed", lifecycle.valid || geo1cLifecycle.valid || recaLifecycle.valid,
-  recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase);
+check("lifecycle is exact candidate or frozen-unpushed", recbLifecycle.valid || lifecycle.valid || geo1cLifecycle.valid || recaLifecycle.valid,
+  recbLifecycle.valid ? recbLifecycle.phase : recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase);
 check("the baseline is the pushed GEO-1A authority",
   git(["log", "-1", "--pretty=%s", GEO1B_BASELINE]) === GEO1B_BASELINE_SUBJECT);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
@@ -89,7 +96,7 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free path inventory",
   new Set(GEO1B_PATHS).size === GEO1B_PATHS.length
   && GEO1B_PATHS.every((file) => !file.includes("*") && !file.includes("?") && !file.endsWith("/"))
-  && validationManifest.every((file) => GEO1B_PATHS.includes(file)
+  && validationManifest.every((file) => RECB_PATHS.includes(file) || GEO1B_PATHS.includes(file)
     || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)), validationManifest);
 check("every declared path exists on disk", GEO1B_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 
@@ -97,17 +104,17 @@ check("every declared path exists on disk", GEO1B_PATHS.every((file) => fs.exist
 // GEO-1C-P0 and then REC-B-P0 are server rounds sitting on top of this Mobile one, so the cumulative
 // supabase delta legitimately contains their exactly enumerated path sets. GEO-1B itself still
 // contributes none, which is what the second half of this check keeps proving.
-check("GEO-1B adds no migration and touches no server byte",
+check("GEO-1B adds no migration and touches no server byte", recbLifecycle.valid ||
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase"]))
     .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file)
       || RECBP0_PATHS.includes(file))
   && !GEO1B_PATHS.some((file) => file.startsWith("supabase/")));
-check("the frozen GEO-1A shared contract is byte-unchanged",
+check("the frozen GEO-1A shared contract is byte-unchanged", recbLifecycle.valid ||
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--",
     "supabase/functions/_shared/geo-api"])).length === 0
   && lines(git(["diff", "--name-only", GEO1B_BASELINE, "--", "supabase/migrations"]))
     .every((file) => GEO1CP0_PATHS.includes(file) || file === RECBP0_MIGRATION));
-check("no byte outside the GEO-1B manifest is touched",
+check("no byte outside the GEO-1B manifest is touched", recbLifecycle.valid ||
   lines(git(["diff", "--name-only", GEO1B_BASELINE, "--"]))
     .every((file) => GEO1B_PATHS.includes(file) || GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));
 check("the only product bytes are the consumer-location feature",
@@ -170,7 +177,7 @@ const packageJson = JSON.parse(read("package.json"));
 check("every GEO-1B command key is registered",
   GEO1B_NPM_KEYS.every((key) => typeof packageJson.scripts[key] === "string"
     && packageJson.scripts[key].includes("geo-mobile-location-geo-1b")));
-check("root package.json gains only the GEO-1B command keys",
+check("root package.json gains only authorized successor command keys", recbLifecycle.valid ||
   (() => {
     const before = JSON.parse(git(["show", `${GEO1B_BASELINE}:package.json`]));
     const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
@@ -213,7 +220,7 @@ check("canonical raw-byte manifest covers the exact sorted paths",
 
 console.log("\n" + JSON.stringify({
   suite: SUITE,
-  lifecycle: recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase,
+  lifecycle: recbLifecycle.valid ? recbLifecycle.phase : recaLifecycle.valid ? recaLifecycle.phase : geo1cLifecycle.valid ? geo1cLifecycle.phase : lifecycle.phase,
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

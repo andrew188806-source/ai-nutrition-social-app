@@ -37,12 +37,16 @@ function compileProduction() {
   const program = ts.createProgram([
     ...collectTs(path.join(featureRoot, "consumer-auth")),
     ...collectTs(path.join(featureRoot, "consumer-recommendation-feedback"))
-  ], { module: ts.ModuleKind.CommonJS, moduleResolution: ts.ModuleResolutionKind.NodeJs, target: ts.ScriptTarget.ES2020,
+  ], { module: ts.ModuleKind.CommonJS, moduleResolution: ts.ModuleResolutionKind.NodeJs, target: ts.ScriptTarget.ES2022,
     strict: true, esModuleInterop: true, skipLibCheck: true, outDir, rootDir: featureRoot });
   const emitted = program.emit();
   const diagnostics = ts.getPreEmitDiagnostics(program).concat(emitted.diagnostics);
   check("production TypeScript compiles with zero diagnostics", diagnostics.length === 0);
-  if (diagnostics.length) throw new Error("Production TypeScript compilation failed.");
+  if (diagnostics.length) throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+    getCanonicalFileName: (file) => file,
+    getCurrentDirectory: () => root,
+    getNewLine: () => "\n"
+  }));
   process.env.NODE_PATH = [path.join(tempRoot, "node_modules"), path.join(root, "apps/mobile/node_modules"), path.join(root, "node_modules")].join(path.delimiter);
   Module._initPaths();
   const featureDir = path.join(outDir, "consumer-recommendation-feedback");

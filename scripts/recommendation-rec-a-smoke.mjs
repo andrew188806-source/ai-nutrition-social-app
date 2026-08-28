@@ -25,7 +25,9 @@ const mutations = Object.freeze({
   trust_invalid_policy: [policyPath, "isNutritionRankingPolicy(candidate) ? candidate : DEFAULT_NUTRITION_RANKING_POLICY", "candidate"],
   skip_goal_read: [servicePath, "const dailyGoals = await readDailyGoals(this.options.nutritionGoalsReader, date);", "const dailyGoals = null;"],
   remove_pre_rank_order: [repositoryPath, ".order(\"candidate_id\", { ascending: true })", ""],
-  compare_branch_offer_as_menu: [mapperPath, "(c) => c.menuItemId === preferredMenuItemId", "(c) => c.candidateId === preferredMenuItemId"]
+  preferred_hint_overrides_exposure: [mapperPath,
+    "const clipped = Array.from(recommendation.candidates).slice(0, visibleLimit);",
+    "const clipped = [...recommendation.candidates.filter((candidate) => candidate.menuItemId === preferredMenuItemId), ...recommendation.candidates.filter((candidate) => candidate.menuItemId !== preferredMenuItemId)].slice(0, visibleLimit);"]
 });
 
 const mutationName = process.env.RECA_MUTATION;
@@ -181,8 +183,8 @@ const menuPromotionResult = {
   }
 };
 const promoted = mapper.mapCanonicalToU1NextMeal(menuPromotionResult, "premium", 10, "menu-shared");
-check("16 preferred identity is explicitly menu-item-level",
-  promoted.status === "success" && promoted.recommendation.candidates[0].menuItemId === "menu-shared");
+check("16 preferred identity cannot override the REC-B canonical exposure order",
+  promoted.status === "success" && promoted.recommendation.candidates[0].menuItemId === "menu-other");
 check("17 same menu at two branches remains two distinct branch-offer identities",
   promoted.status === "success"
   && promoted.recommendation.candidates.filter((item) => item.menuItemId === "menu-shared").map((item) => item.branchMenuItemId).join(",") === "branch-a,branch-b");

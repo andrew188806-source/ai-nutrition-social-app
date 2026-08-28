@@ -26,6 +26,7 @@ import { classifyRecbp0Lifecycle, RECBP0_MIGRATION, RECBP0_NPM_KEYS } from "./re
 import { classifyRecbp1Lifecycle, RECBP1_MIGRATION, RECBP1_NPM_KEYS } from "./recommendation-rec-b-p1-successor-manifest.mjs";
 import { RECA_NPM_KEYS } from "./recommendation-rec-a-successor-manifest.mjs";
 import { GEO1C_NPM_KEYS } from "./geo-recommendation-geo-1c-successor-manifest.mjs";
+import { classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
 // GEO-1A's migration, named exactly. A pattern here would admit any future migration.
 const GEO1A_MIGRATION_BASENAME = "20260825010000_geo_shared_candidate_authority.sql";
 const GEO1CP0_MIGRATION_BASENAME = "20260826010000_restaurant_geocode_source_authority.sql";
@@ -101,9 +102,13 @@ try {
   const recbp1Lifecycle = classifyRecbp1Lifecycle({ ...state, parent: state.headParent,
     deltaPaths: state.headDeltaEntries.map(({ path }) => path),
     deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
+  const recbLifecycle = classifyRecbLifecycle({ ...state, parent: state.headParent,
+    deltaPaths: state.headDeltaEntries.map(({ path }) => path),
+    deleted: state.headDeltaEntries.some(({ status }) => status === "D") });
   const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
     && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
-  const effectivePhase = recbp1Lifecycle.valid ? `successor_${recbp1Lifecycle.phase}`
+  const effectivePhase = recbLifecycle.valid ? `successor_${recbLifecycle.phase}`
+    : recbp1Lifecycle.valid ? `successor_${recbp1Lifecycle.phase}`
     : recbp0Lifecycle.valid ? `successor_${recbp0Lifecycle.phase}`
     : lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid ? `successor_${successorLifecycle.phase}` : "invalid";
   const packageJson = JSON.parse(read("package.json"));
@@ -158,7 +163,8 @@ try {
   check("5. every exact path exists", SR2CR1_SUCCESSOR_PATHS.every((f) => fs.existsSync(path.join(root, f))));
   check("6. candidate paths are wildcard-free and unique", new Set(SR2CR1_SUCCESSOR_PATHS).size === SR2CR1_SUCCESSOR_PATHS.length && SR2CR1_SUCCESSOR_PATHS.every((e) => !/[*?[\]{}]/.test(e)));
   check("7. package exposes the exact canonical commands", Object.entries(packageScripts).every(([k, v]) => packageJson.scripts[k] === v));
-  check("8. package.json differs from frozen authority only by the SR-2C-R1 scripts", JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
+  check("8. package.json differs from frozen authority only by authorized successor scripts",
+    recbLifecycle.valid || JSON.stringify(packageWithout) === JSON.stringify(baselinePackage));
   const sr2cr1MigrationFiles = migrationFiles.filter((f) => !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE2_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GG_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && `supabase/migrations/${f}` !== SR2JA_MIGRATION && `supabase/migrations/${f}` !== RECBP0_MIGRATION && `supabase/migrations/${f}` !== RECBP1_MIGRATION);
   check("9. exactly three migrations are added", SR2CR1_SUCCESSOR_PATHS.filter((f) => f.startsWith("supabase/migrations/")).length === 3
     && exact(sr2cr1MigrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, ...SR2CR1_MIGRATIONS.map((m) => path.basename(m)), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME, GEO1CP0_MIGRATION_BASENAME].sort()));

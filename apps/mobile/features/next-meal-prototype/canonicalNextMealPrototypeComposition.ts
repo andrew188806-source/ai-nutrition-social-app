@@ -38,9 +38,12 @@ export function createCanonicalNextMealPrototypeRuntimeDependencies(): Canonical
         transportEnabled: true
       }),
       mealClient: client as unknown as SupabaseConsumerMealClientLike,
-      // REC-A consumes only the canonical current-user nutrition-goal read. It does not construct
-      // the Taste service or invoke Taste, restriction, favourite, rating or Social authorities.
+      // One current-user foundation repository supplies only the two explicit inputs authorized by
+      // REC-A/REC-B. Favorites, ratings, meal history, restrictions and Social remain disconnected.
       nutritionGoalsReader: new SupabaseConsumerTasteFoundationRepository(
+        client as unknown as SupabaseConsumerTasteFoundationClientLike
+      ),
+      explicitTasteProfileReader: new SupabaseConsumerTasteFoundationRepository(
         client as unknown as SupabaseConsumerTasteFoundationClientLike
       ),
       restaurantMenuClient: client as unknown as SupabaseRestaurantMenuClientLike

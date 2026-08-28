@@ -130,7 +130,9 @@ function toCandidateViewModel(row: PrototypeCandidateRow, index: number): U1Next
     areaLabel: row.areaLabel,
     emoji: row.emoji,
     calorieLabel: row.calories > 0 ? `${row.calories} kcal` : undefined,
+    nutrition: { calories: row.calories, protein: row.protein, fiber: row.fiber },
     tags: buildPresentationTags(row.protein, row.fiber, row.restaurantTags),
+    reasonCode: "neutral_nutrition_fallback",
     reasonSummary: index === 0 ? "固定排序中的首選範例，方便先比較最適合的呈現方式。" : "同一份 deterministic mock 排序中的替代選項。",
     reasonDetails: ["目前只展示 U1 prototype data，不是正式營養缺口演算法。", "餐點與餐廳名稱來自既有 restaurant sample dataset。"]
   };

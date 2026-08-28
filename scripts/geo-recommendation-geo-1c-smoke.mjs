@@ -17,7 +17,9 @@ const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, parent, ...rest) {
   if (request.startsWith(".") && parent?.filename) {
     const base = path.resolve(path.dirname(parent.filename), request);
-    for (const candidate of [base, `${base}.ts`, `${base}.tsx`]) if (fs.existsSync(candidate)) return candidate;
+    for (const candidate of [`${base}.ts`, `${base}.tsx`, path.join(base, "index.ts"), base]) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    }
   }
   return originalResolve.call(this, request, parent, ...rest);
 };

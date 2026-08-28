@@ -4,6 +4,7 @@ import {
   CONSUMER_NEXT_MEAL_NUTRITION_DIMENSIONS,
   type ConsumerNextMealCandidate,
   type ConsumerNextMealNutritionDimension,
+  type ConsumerNextMealNutritionEvaluation,
   type ConsumerNextMealNutritionRankingInput,
   type ConsumerNextMealNutritionValues,
   type ConsumerNextMealRankingSummary,
@@ -14,6 +15,7 @@ const SCORE_PRECISION = 1_000_000_000_000;
 
 export type ConsumerNextMealNutritionRankResult = Readonly<{
   candidates: readonly ConsumerNextMealCandidate[];
+  evaluations: readonly ConsumerNextMealNutritionEvaluation[];
   ranking: ConsumerNextMealRankingSummary;
 }>;
 
@@ -79,15 +81,26 @@ export function rankNextMealCandidatesByNutrition(
         ...entry.candidate,
         reason: Object.freeze({
           reasonBasis: candidateUsesNutrition ? "nutrition_gap" as const : "neutral_nutrition_fallback" as const,
+          reasonCode: candidateUsesNutrition ? "nutrition_gap_match" as const : "neutral_nutrition_fallback" as const,
           reasonSummary: candidateUsesNutrition
             ? index === 0
               ? "依今日剩餘營養缺口排序最合適的選項。"
               : "依今日剩餘營養缺口排序的替代選項。"
-            : "目前缺少可用的目標或餐點營養維度，使用穩定中性排序。"
+            : "目前缺少可用的目標或餐點營養維度，使用穩定中性排序。",
+          detailSummaries: Object.freeze(candidateUsesNutrition
+            ? ["這份餐點可計入今天仍有缺口的營養維度。"]
+            : ["目前沒有足夠的共同營養資料可做個人化比較。"])
         }),
         rankOrdinal: index
       });
     })),
+    evaluations: Object.freeze(ordered.map((entry, index) => Object.freeze({
+      candidate: entry.candidate,
+      score: entry.score,
+      usableDimensions: entry.usableDimensions,
+      hasPositiveGapContribution: entry.hasPositiveGapContribution,
+      rankOrdinal: index
+    }))),
     ranking: Object.freeze({
       rankingMode: gapAware ? "nutrition_gap" as const : "neutral_fallback" as const,
       nutritionGoalsApplied: gapAware,
@@ -107,12 +120,16 @@ function scoreCandidate(
   candidate: ConsumerNextMealCandidate;
   score: number;
   usableDimensions: readonly ConsumerNextMealNutritionDimension[];
+  hasPositiveGapContribution: boolean;
 }> {
-  if (!input) return Object.freeze({ candidate, score: 0, usableDimensions: Object.freeze([]) });
+  if (!input) return Object.freeze({
+    candidate, score: 0, usableDimensions: Object.freeze([]), hasPositiveGapContribution: false
+  });
 
   let weightedTotal = 0;
   let weightTotal = 0;
   const usableDimensions: ConsumerNextMealNutritionDimension[] = [];
+  let hasPositiveGapContribution = false;
   // Only the dimensions the ACTIVE POLICY enables are considered. A dimension the policy omits is
   // not ranked on at all, which is how a future policy narrows or widens the formula without a
   // code change here.
@@ -125,6 +142,7 @@ function scoreCandidate(
 
     const remainingGap = Math.max(goal - consumed, 0);
     const improvement = Math.min(candidateValue, remainingGap) / goal;
+    if (remainingGap > 0 && candidateValue > 0) hasPositiveGapContribution = true;
     const existingOverage = Math.max(consumed - goal, 0);
     const resultingOverage = Math.max(consumed + candidateValue - goal, 0);
     const addedOveragePenalty = ((resultingOverage - existingOverage) / goal) * entry.overagePenaltyWeight;
@@ -138,7 +156,8 @@ function scoreCandidate(
   return Object.freeze({
     candidate,
     score: Number.isFinite(score) ? score : 0,
-    usableDimensions: Object.freeze(usableDimensions)
+    usableDimensions: Object.freeze(usableDimensions),
+    hasPositiveGapContribution
   });
 }
 

@@ -1,5 +1,6 @@
 import type { NextMealCandidateEntitlement } from "./nextMealCandidateCountPolicy";
 import type { ConsumerRecommendationFeedbackCanonicalTargetSource } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackTargetMapper";
+import type { ConsumerNextMealReasonCode, ConsumerNutritionSnapshot, ConsumerNutritionSourceType } from "../consumer-meals/types";
 
 export type U1NextMealPrototypeScenario = "success" | "empty" | "error";
 
@@ -21,11 +22,18 @@ export type U1NextMealCandidateViewModel = {
   mealName: string;
   restaurantName?: string;
   areaLabel?: string;
+  branchName?: string;
+  imageUrl?: string;
+  description?: string;
   emoji?: string;
   calorieLabel?: string;
+  nutrition: ConsumerNutritionSnapshot;
+  nutritionSource?: ConsumerNutritionSourceType;
   tags: readonly string[];
   reasonSummary: string;
+  reasonCode: ConsumerNextMealReasonCode;
   reasonDetails: readonly string[];
+  recommendationLane?: "nutrition_primary" | "taste_forward" | "nutrition_fallback";
   canonicalFeedbackTarget?: ConsumerRecommendationFeedbackCanonicalTargetSource;
 };
 
