@@ -37,4 +37,5 @@ export type SupabaseRestaurantMenuClientLike = {
     };
   };
 } & import("./supabaseNextMealGeoRows").SupabaseNextMealGeoClientLike
-  & import("./supabaseRecommendationTasteReader").SupabaseRecommendationTasteClientLike;
+  & import("./supabaseRecommendationTasteReader").SupabaseRecommendationTasteClientLike
+  & import("./supabaseRecommendationAllergyEvidenceReader").SupabaseRecommendationAllergyEvidenceClientLike;

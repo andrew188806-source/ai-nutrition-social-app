@@ -120,6 +120,7 @@ export class MockConsumerNextMealRecommendationRepository implements ConsumerNex
       candidates,
       totalCandidateCount: ranked.candidates.length,
       ranking: ranked.ranking,
+      allergyEligibility: { status: "not_applied" },
       tasteRanking: { status: "unavailable" }
     };
   }

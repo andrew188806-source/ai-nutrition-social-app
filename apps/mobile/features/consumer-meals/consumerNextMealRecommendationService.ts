@@ -158,8 +158,15 @@ export class ConsumerNextMealRecommendationService {
       return { status: "read_failed", source: repository.source, errorCode: repoResult.errorCode };
     }
     if (repoResult.status === "empty") {
-      return { status: "empty", source: repository.source, date, geoStatus };
+      return {
+        status: "empty",
+        source: repository.source,
+        date,
+        geoStatus,
+        reason: repoResult.reason ?? "no_candidates"
+      };
     }
+    const allergyEligibility = repoResult.allergyEligibility ?? { status: "not_applied" as const };
 
     return {
       status: "available",
@@ -189,7 +196,12 @@ export class ConsumerNextMealRecommendationService {
           plannedMealsAvailable,
           plannedMealsAppliedToRanking: false,
           geoStatus,
-          geoApplied: geoStatus === "applied"
+          geoApplied: geoStatus === "applied",
+          allergyEligibilityStatus: allergyEligibility.status,
+          ...(allergyEligibility.status === "applied" ? {
+            appliedAllergyPolicyId: allergyEligibility.policyId,
+            appliedAllergyPolicyVersion: allergyEligibility.policyVersion
+          } : {})
         }
       }
     };

@@ -12,6 +12,7 @@ import {
   classifyReccp1Lifecycle,
   createReccp1Manifest
 } from "./recommendation-rec-c-p1-successor-manifest.mjs";
+import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -40,6 +41,11 @@ const lifecycle = classifyReccp1Lifecycle({
   parent: head === RECCP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+const recLifecycle = classifyReccLifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths, deltaPaths,
+  parent: head === RECCP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
 
 const sql = read(RECCP1_MIGRATION);
 const repository = read("apps/mobile/features/consumer-allergy-settings/repository.ts");
@@ -52,17 +58,21 @@ const copy = read("lib/i18n/zh-TW.ts");
 const docs = read("docs/recommendation/rec-c-p1-user-allergy-setting-authority.md");
 const packageJson = JSON.parse(read("package.json"));
 
-check("lifecycle is exact REC-C-P1 candidate or freeze", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact REC-C-P1 candidate/freeze or REC-C successor",
+  lifecycle.valid || recLifecycle.valid,
+  lifecycle.valid ? lifecycle.phase : recLifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
-check("origin/main remains the exact pushed P0 baseline or this pushed freeze",
-  originHead === RECCP1_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head));
+check("origin/main remains the exact pushed P0/P1 authority or REC-C predecessor",
+  originHead === RECCP1_BASELINE
+  || (lifecycle.phase === "frozen_pushed" && originHead === head)
+  || recLifecycle.valid);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is exact, sorted, unique, wildcard-free, and present",
   JSON.stringify(RECCP1_PATHS) === JSON.stringify([...RECCP1_PATHS].sort())
   && new Set(RECCP1_PATHS).size === RECCP1_PATHS.length
   && RECCP1_PATHS.every((file) => !/[?*]/.test(file) && fs.existsSync(path.join(root, file))));
 check("P1 contributes exactly one additive migration",
-  lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")).join("\n") === RECCP1_MIGRATION);
+  RECCP1_PATHS.filter((file) => file.startsWith("supabase/migrations/")).join("\n") === RECCP1_MIGRATION);
 check("frozen P0 migration digest is unchanged",
   crypto.createHash("sha256").update(fs.readFileSync("supabase/migrations/20260830010000_candidate_allergen_data_authority.sql")).digest("hex")
     === "eccebb25a1d705786256a67c028e35c7a2e2298d39c6036051c5eb0b2ea32b5a");
@@ -157,7 +167,8 @@ check("manifest bytes contain no credential shape, CRLF, BOM, or NUL",
     return !secretPatterns.some((pattern) => pattern.test(text)) && !bytes.includes(Buffer.from("\r\n"))
       && !bytes.includes(0) && !(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
   }));
-if (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed") {
+if ((lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")
+  && !recLifecycle.valid) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECCP1_COMMIT_SUBJECT);
 }
 const manifest = createReccp1Manifest((file) => fs.readFileSync(path.join(root, file)));

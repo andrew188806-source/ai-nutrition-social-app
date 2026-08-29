@@ -50,6 +50,14 @@ const row = (candidateId, branchId, restaurantId, calories = 500, menuItemId = `
   availability: "available"
 });
 const request = Object.freeze({ origin: Object.freeze({ latitude: 25.033, longitude: 121.565 }), candidatePoolLimit: 50 });
+const noActiveAllergySettingsReader = Object.freeze({
+  async loadCurrentUser() {
+    return {
+      ok: true,
+      value: { options: [], selectedAllergenKeys: [], unresolvedSelectionCount: 0 }
+    };
+  }
+});
 
 // GEO-1A narrowing is the only branch eligibility answer, and only its identities reach the view.
 {
@@ -166,7 +174,8 @@ const request = Object.freeze({ origin: Object.freeze({ latitude: 25.033, longit
   };
   const repository = new SupabaseConsumerNextMealRecommendationRepository({
     authPort: { async getCurrentSession() { return { ok: true, value: { user: { userId: "actor" } } }; } },
-    restaurantMenuClient: client
+    restaurantMenuClient: client,
+    allergySettingsReader: noActiveAllergySettingsReader
   });
   const result = await repository.getRankedNextMealCandidates({
     nutritionRanking: { dailyGoals: { calories: 520 }, consumedTotals: { calories: 0 } },
@@ -187,7 +196,8 @@ const request = Object.freeze({ origin: Object.freeze({ latitude: 25.033, longit
       from() { calls.push("view"); return { select() { return { order() { return { async range() {
         return { data: [row("offer-direct", "branch-direct", "restaurant-direct")], error: null };
       } }; } }; } }; }
-    }
+    },
+    allergySettingsReader: noActiveAllergySettingsReader
   });
   const result = await repository.getRankedNextMealCandidates({
     nutritionRanking: { dailyGoals: { calories: 520 }, consumedTotals: { calories: 0 } }

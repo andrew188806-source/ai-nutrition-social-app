@@ -20,6 +20,7 @@ import {
 import { RECB_BASELINE, classifyRecbLifecycle } from "./recommendation-rec-b-successor-manifest.mjs";
 import { RECCP0_BASELINE, RECCP0_MIGRATION, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 import { RECCP1_BASELINE, RECCP1_MIGRATION, classifyReccp1Lifecycle } from "./recommendation-rec-c-p1-successor-manifest.mjs";
+import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -96,6 +97,15 @@ const reccp1Lifecycle = classifyReccp1Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const reccp1Successor = reccp1Lifecycle.valid;
+const reccLifecycle = classifyReccLifecycle({
+  head, parent: head === RECCP1_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind, ahead, worktreePaths, stagedPaths,
+  deltaPaths: head === RECCP1_BASELINE ? [] : lines(git([
+    "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"
+  ])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const reccSuccessor = reccLifecycle.valid;
 const activeLifecycle = recbLifecycle.valid
   ? Object.freeze({ ...recbLifecycle, phase: `rec_b_${recbLifecycle.phase}` })
   : recbp1Lifecycle.valid
@@ -104,6 +114,8 @@ const activeLifecycle = recbLifecycle.valid
   ? Object.freeze({ ...reccp0Lifecycle, phase: `rec_c_p0_${reccp0Lifecycle.phase}` })
   : reccp1Successor
   ? Object.freeze({ ...reccp1Lifecycle, phase: `rec_c_p1_${reccp1Lifecycle.phase}` })
+  : reccSuccessor
+  ? Object.freeze({ ...reccLifecycle, phase: `rec_c_${reccLifecycle.phase}` })
   : lifecycle;
 
 check("lifecycle is the exact REC-B-P0 freeze or REC-B-P1 successor", activeLifecycle.valid, activeLifecycle);
@@ -117,7 +129,11 @@ check("every manifest path exists", RECBP0_PATHS.every((file) => fs.existsSync(p
 const activeMigration = recbp1Lifecycle.valid ? RECBP1_MIGRATION : RECBP0_MIGRATION;
 const activeDeltaPaths = recbp1Lifecycle.valid ? recbp1DeltaPaths : deltaPaths;
 check("the active round adds exactly its declared migration and mutates no frozen migration",
-  reccp1Successor
+  reccSuccessor
+    ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"]))
+        .every((file) => file === RECCP0_MIGRATION || file === RECCP1_MIGRATION)
+      && worktreePaths.every((file) => !file.startsWith("supabase/migrations/"))
+    : reccp1Successor
     ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"]))
         .every((file) => file === RECCP0_MIGRATION || file === RECCP1_MIGRATION)
       && worktreePaths.filter((file) => file.startsWith("supabase/migrations/"))
@@ -133,7 +149,7 @@ check("the active round adds exactly its declared migration and mutates no froze
       && activeDeltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === activeMigration));
 check("Production/deploy/workflow surfaces are absent", !activeLifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file)));
 check("Mobile product surfaces are unchanged before the authorized REC-B runtime successor",
-  recbLifecycle.valid || reccp1Successor
+  recbLifecycle.valid || reccp1Successor || reccSuccessor
     || !activeLifecycle.manifest.some((file) => file.startsWith("apps/mobile/")));
 
 const frozenPaths = [
@@ -148,7 +164,7 @@ const frozenPaths = [
   "apps/mobile/features/consumer-meals/nutritionRankingPolicy.ts"
 ];
 check("frozen Taste, Social, Meal Context, candidate, and REC-A product bytes are unchanged",
-  recbLifecycle.valid || reccp0Successor || reccp1Successor
+  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor
     ? [RECBP0_MIGRATION, "packages/shared/src/domain/candidate-taste/candidateTasteAuthority.ts"]
       .every((file) => git(["diff", "--name-only", RECB_BASELINE, "--", file]) === "")
     : frozenPaths.every((file) => git(["diff", "--name-only", RECBP0_BASELINE, "--", file]) === ""));

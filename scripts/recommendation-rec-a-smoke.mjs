@@ -289,7 +289,13 @@ const menuClient = {
 };
 const liveRepository = new repositoryModule.SupabaseConsumerNextMealRecommendationRepository({
   authPort: { getCurrentSession: async () => ({ ok: true, value: { user: { userId: "user-1" } } }) },
-  restaurantMenuClient: menuClient
+  restaurantMenuClient: menuClient,
+  allergySettingsReader: {
+    loadCurrentUser: async () => ({
+      ok: true,
+      value: { options: [], selectedAllergenKeys: [], unresolvedSelectionCount: 0 }
+    })
+  }
 });
 const repositoryInput = { nutritionRanking: input({ calories: 100 }, { calories: 0 }) };
 const nonGeo = await liveRepository.getRankedNextMealCandidates(repositoryInput);
@@ -310,8 +316,18 @@ const scopeSource = [
   fs.readFileSync(rankerPath, "utf8"), fs.readFileSync(servicePath, "utf8"),
   fs.readFileSync(repositoryPath, "utf8")
 ].join("\n");
-check("29 REC-A adds no Taste, restriction, Meal-context, distance or geocoding rank",
-  !/tasteScore|similarityScore|dietaryRestriction|allergen|foodContext|distanceMeters[^\n]*(?:score|sort|rank)|geocodeOnRequest/.test(scopeSource));
+const repositorySource = fs.readFileSync(repositoryPath, "utf8");
+const forbiddenAllergyRankingAuthority = [
+  /\b(?:allergy|allergen|restriction)[A-Za-z0-9_]*(?:score|rank|weight|bonus|penalty|lane)\b/i,
+  /\b(?:score|rank|weight|bonus|penalty|lane)[A-Za-z0-9_]*(?:allergy|allergen|restriction)\b/i,
+  /\b(?:allergy|allergen|restriction)[ _-]+(?:score|ranking weight|rank weight|bonus|penalty|lane)\b/i,
+  /\b(?:score|ranking weight|rank weight|bonus|penalty|lane)[ _-]+(?:allergy|allergen|restriction)\b/i
+];
+check("29 Allergy is pre-ranking eligibility and never REC-A/B ranking authority",
+  !/tasteScore|similarityScore|dietaryRestriction|foodContext|distanceMeters[^\n]*(?:score|sort|rank)|geocodeOnRequest/.test(scopeSource)
+  && forbiddenAllergyRankingAuthority.every((pattern) => !pattern.test(scopeSource))
+  && repositorySource.indexOf("this.applyAllergyEligibility(mapped)")
+    < repositorySource.indexOf("rankNextMealCandidatesByNutrition("));
 check("30 fixed 520 is absent from the canonical REC-A runtime", !/\b520\b/.test(scopeSource));
 
 // ---- nutrition ranking policy boundary ----------------------------------------------------------

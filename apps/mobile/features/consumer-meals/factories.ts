@@ -29,6 +29,9 @@ import {
   type ConsumerNutritionGoalsReader
 } from "./consumerNextMealRecommendationService";
 import type { SupabaseRestaurantMenuClientLike } from "./adapters/supabaseRestaurantMenuRows";
+import { SupabaseConsumerAllergySettingsRepository } from "../consumer-allergy-settings/repository";
+import type { ConsumerAllergySettingsRepository } from "../consumer-allergy-settings/types";
+import type { SupabaseConsumerAllergySettingsClientLike } from "../consumer-allergy-settings/supabaseContracts";
 import { SupabaseDisabledConsumerMealRecordsRepository } from "./adapters/supabaseDisabledConsumerMealRecordsRepository";
 import { SupabaseDisabledConsumerMealRecordWriteRepository } from "./adapters/supabaseDisabledConsumerMealRecordWriteRepository";
 import { SupabaseDisabledConsumerDailyNutritionSummaryRepository } from "./adapters/supabaseDisabledConsumerDailyNutritionSummaryRepository";
@@ -69,6 +72,7 @@ export type ConsumerMealFactoryDependencies = {
   nutritionGoalsReader?: ConsumerNutritionGoalsReader;
   explicitTasteProfileReader?: ConsumerExplicitTasteProfileReader;
   restaurantMenuClient?: SupabaseRestaurantMenuClientLike;
+  allergySettingsReader?: Pick<ConsumerAllergySettingsRepository, "loadCurrentUser">;
   clock?: ConsumerTodayIntakeOverviewClock;
   timezone?: string;
 };
@@ -390,7 +394,12 @@ export function createConsumerNextMealRecommendationRepository(
     if (!dependencies.restaurantMenuClient) throw new ConsumerMealSourceConfigurationInvalidError("Consumer live next-meal recommendation requires an explicit restaurantMenuClient.");
     return new SupabaseConsumerNextMealRecommendationRepository({
       authPort: dependencies.authPort,
-      restaurantMenuClient: dependencies.restaurantMenuClient
+      restaurantMenuClient: dependencies.restaurantMenuClient,
+      allergySettingsReader: dependencies.allergySettingsReader
+        ?? new SupabaseConsumerAllergySettingsRepository(
+          dependencies.authPort,
+          dependencies.restaurantMenuClient as unknown as SupabaseConsumerAllergySettingsClientLike
+        )
     });
   }
   return new DisabledConsumerNextMealRecommendationRepository();

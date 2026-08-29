@@ -739,6 +739,9 @@ export type ConsumerNextMealRecommendationContext = {
   plannedMealsAppliedToRanking: false;
   geoStatus: ConsumerNextMealGeoStatus;
   geoApplied: boolean;
+  allergyEligibilityStatus: "not_applied" | "applied";
+  appliedAllergyPolicyId?: string;
+  appliedAllergyPolicyVersion?: number;
 };
 
 export type ConsumerNextMealRecommendation = {
@@ -767,6 +770,11 @@ export type ConsumerNextMealRecommendationRepositoryResult =
       candidates: readonly ConsumerNextMealCandidate[];
       totalCandidateCount: number;
       ranking: ConsumerNextMealRankingSummary;
+      allergyEligibility: Readonly<{
+        status: "not_applied" | "applied";
+        policyId?: string;
+        policyVersion?: number;
+      }>;
       tasteRanking: Readonly<{
         status: "applied" | "unavailable";
         tastePolicyId?: string;
@@ -775,7 +783,7 @@ export type ConsumerNextMealRecommendationRepositoryResult =
         compositionPolicyVersion?: number;
       }>;
     }
-  | { status: "empty" }
+  | { status: "empty"; reason?: "no_candidates" | "allergy_eligibility" }
   | { status: "disabled" }
   | { status: "read_failed"; errorCode: string };
 
@@ -789,7 +797,13 @@ export interface ConsumerNextMealRecommendationRepository {
 
 export type ConsumerNextMealRecommendationResult =
   | { status: "available"; recommendation: ConsumerNextMealRecommendation }
-  | { status: "empty"; source: ConsumerNextMealRecommendationSource; date: string; geoStatus: ConsumerNextMealGeoStatus }
+  | {
+      status: "empty";
+      source: ConsumerNextMealRecommendationSource;
+      date: string;
+      geoStatus: ConsumerNextMealGeoStatus;
+      reason: "no_candidates" | "allergy_eligibility";
+    }
   | { status: "disabled"; source: ConsumerNextMealRecommendationSource }
   | { status: "intake_unavailable"; source: ConsumerNextMealRecommendationSource; errorCode: string }
   | { status: "read_failed"; source: ConsumerNextMealRecommendationSource; errorCode: string };

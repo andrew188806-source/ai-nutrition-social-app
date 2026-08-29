@@ -1,4 +1,12 @@
 import type { ConsumerAuthPort } from "../../consumer-auth/ports";
+import type { ConsumerAllergySettingsRepository } from "../../consumer-allergy-settings/types";
+import {
+  createDefaultAllergyContentEligibilityPolicyProvider,
+  evaluateAllergyCandidateEligibility,
+  isAllergyContentEligibilityPolicy,
+  resolveAllergyUserState,
+  type AllergyContentEligibilityPolicyProvider
+} from "../../../../../packages/shared/src/domain/candidate-allergen";
 import type {
   ConsumerNextMealCandidate,
   ConsumerNextMealDataProvenance,
@@ -30,6 +38,10 @@ import {
   SupabaseRecommendationTasteReader,
   type RecommendationTasteAuthorityReadResult
 } from "./supabaseRecommendationTasteReader";
+import {
+  SupabaseRecommendationAllergyEvidenceReader,
+  type RecommendationAllergyEvidenceReadResult
+} from "./supabaseRecommendationAllergyEvidenceReader";
 
 const DEFAULT_CANDIDATE_OUTPUT_LIMIT = 50;
 const MAX_CANDIDATE_OUTPUT_LIMIT = 50;
@@ -43,6 +55,13 @@ export type SupabaseConsumerNextMealRecommendationRepositoryOptions = {
       candidates: readonly ConsumerNextMealCandidate[]
     ): Promise<RecommendationTasteAuthorityReadResult>;
   }>;
+  allergySettingsReader: Pick<ConsumerAllergySettingsRepository, "loadCurrentUser">;
+  allergyEvidenceReader?: Readonly<{
+    readForCandidates(
+      candidates: readonly ConsumerNextMealCandidate[]
+    ): Promise<RecommendationAllergyEvidenceReadResult>;
+  }>;
+  allergyEligibilityPolicyProvider?: AllergyContentEligibilityPolicyProvider;
 };
 
 export class SupabaseConsumerNextMealRecommendationRepository
@@ -77,7 +96,16 @@ export class SupabaseConsumerNextMealRecommendationRepository
       if (rows.length === 0) return { status: "empty" };
 
       const mapped = rows.map(mapRowToCandidate);
-      const ranked = rankNextMealCandidatesByNutrition(mapped, input.nutritionRanking, input.nutritionRankingPolicy);
+      const allergyResult = await this.applyAllergyEligibility(mapped);
+      if (allergyResult.status === "read_failed") return allergyResult;
+      if (allergyResult.candidates.length === 0) {
+        return { status: "empty", reason: "allergy_eligibility" };
+      }
+      const ranked = rankNextMealCandidatesByNutrition(
+        allergyResult.candidates,
+        input.nutritionRanking,
+        input.nutritionRankingPolicy
+      );
       const tasteResult = await this.applyTasteRanking(ranked, input);
       const candidates = tasteResult.candidates.slice(0, outputLimit);
 
@@ -86,11 +114,87 @@ export class SupabaseConsumerNextMealRecommendationRepository
         candidates,
         totalCandidateCount: ranked.candidates.length,
         ranking: ranked.ranking,
+        allergyEligibility: allergyResult.summary,
         tasteRanking: tasteResult.summary
       };
     } catch {
       return { status: "read_failed", errorCode: input.currentLocation
         ? "next_meal_geo_fetch_error" : "next_meal_supabase_fetch_error" };
+    }
+  }
+
+  private async applyAllergyEligibility(
+    candidates: readonly ConsumerNextMealCandidate[]
+  ): Promise<
+    | Readonly<{
+        status: "available";
+        candidates: readonly ConsumerNextMealCandidate[];
+        summary: Readonly<{
+          status: "not_applied" | "applied";
+          policyId?: string;
+          policyVersion?: number;
+        }>;
+      }>
+    | Readonly<{ status: "read_failed"; errorCode: string }>
+  > {
+    try {
+      const settings = await this.options.allergySettingsReader.loadCurrentUser();
+      if (!settings.ok) {
+        return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };
+      }
+      const userState = resolveAllergyUserState({
+        allergenKeys: settings.value.selectedAllergenKeys,
+        unresolvedSelectionCount: settings.value.unresolvedSelectionCount
+      });
+      if (userState.state === "unresolved_user_allergy") {
+        return { status: "read_failed", errorCode: "next_meal_allergy_unresolved_user_allergy" };
+      }
+      if (userState.state === "no_active_allergies") {
+        return Object.freeze({
+          status: "available",
+          candidates,
+          summary: Object.freeze({ status: "not_applied" })
+        });
+      }
+
+      const policy = (
+        this.options.allergyEligibilityPolicyProvider
+          ?? createDefaultAllergyContentEligibilityPolicyProvider()
+      ).getActiveAllergyContentEligibilityPolicy();
+      if (!isAllergyContentEligibilityPolicy(policy)) {
+        return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };
+      }
+      const evidenceReader = this.options.allergyEvidenceReader
+        ?? new SupabaseRecommendationAllergyEvidenceReader(this.options.restaurantMenuClient);
+      const authority = await evidenceReader.readForCandidates(candidates);
+      if (authority.status !== "available") {
+        return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };
+      }
+      const evidenceById = new Map(authority.evidence.map((entry) => [entry.candidateId, entry]));
+      if (evidenceById.size !== candidates.length) {
+        return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };
+      }
+      const eligible = candidates.filter((candidate) => {
+        const evidence = evidenceById.get(candidate.candidateId);
+        if (!evidence) throw new TypeError("Missing Candidate Allergy evidence.");
+        return evaluateAllergyCandidateEligibility({
+          activeAllergenKeys: userState.allergenKeys,
+          knownPresentAllergenKeys: evidence.knownPresentAllergenKeys,
+          coverageState: evidence.coverageState,
+          policy
+        }).eligible;
+      });
+      return Object.freeze({
+        status: "available",
+        candidates: Object.freeze(eligible),
+        summary: Object.freeze({
+          status: "applied",
+          policyId: policy.policyId,
+          policyVersion: policy.policyVersion
+        })
+      });
+    } catch {
+      return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };
     }
   }
 

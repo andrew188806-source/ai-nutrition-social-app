@@ -66,6 +66,7 @@ export class LocalMenuDemoConsumerNextMealRecommendationRepository implements Co
         candidates,
         totalCandidateCount: ranked.candidates.length,
         ranking: ranked.ranking,
+        allergyEligibility: { status: "not_applied" },
         tasteRanking: { status: "unavailable" }
       };
     } catch {

@@ -113,7 +113,9 @@ export function auditGeo1cAuthoredSources(sources) {
     && /readGeoRows/.test(mobileRepository) && /candidate_id\.localeCompare/.test(mobileRepository));
   rule("Geo infrastructure failure alone falls back", /startsWith\("next_meal_geo_"\)/.test(service)
     && /geoStatus = "unavailable"/.test(service));
-  rule("zero nearby stays an applied empty result", /geoStatus \}/.test(service)
+  rule("zero nearby stays an applied empty result",
+    /if \(rows\.length === 0\) return \{ status: "empty" \};/.test(mobileRepository)
+    && /if \(repoResult\.status === "empty"\) \{[\s\S]{0,260}?status: "empty",[\s\S]{0,260}?geoStatus,/.test(service)
     && /result\.geoStatus === "applied"/.test(get("mapCanonicalToU1NextMeal.ts")));
   rule("GEO-1B is mounted only in recommendation", /useConsumerLocation/.test(screen)
     && /<ConsumerLocationPermissionCard\b/.test(screen) && /nextMealRecommendationSource === "supabase"/.test(screen));

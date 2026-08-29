@@ -23,6 +23,10 @@ import { classifyRecbLifecycle, RECB_NPM_KEYS, RECB_PATHS } from "./recommendati
 import {
   RECCP0_BASELINE, RECCP0_MIGRATION, RECCP0_PATHS, classifyReccp0Lifecycle
 } from "./recommendation-rec-c-p0-successor-manifest.mjs";
+import { RECCP1_MIGRATION } from "./recommendation-rec-c-p1-successor-manifest.mjs";
+import {
+  RECC_BASELINE, RECC_PATHS, classifyReccLifecycle
+} from "./recommendation-rec-c-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -90,14 +94,21 @@ const reccp0Lifecycle = classifyReccp0Lifecycle({
   deltaPaths: head === RECCP0_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+const reccLifecycle = classifyReccLifecycle({
+  head, parent: head === RECC_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths: recaWorktreePaths, stagedPaths,
+  deltaPaths: head === RECC_BASELINE ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const isReccSuccessor = reccLifecycle.valid;
 const isReccp0Successor = reccp0Lifecycle.valid;
 const isRecbSuccessor = recbLifecycle.valid;
 const isRecbp1Successor = recbp1Lifecycle.valid;
 const isRecaSuccessor = recaLifecycle.valid;
 const isRecbp0Successor = recaLifecycle.phase.startsWith("rec_b_p0_");
-const lifecycle = isRecbSuccessor ? recbLifecycle : isReccp0Successor ? reccp0Lifecycle : isRecbp1Successor ? recbp1Lifecycle : isRecaSuccessor ? recaLifecycle : geoLifecycle;
+const lifecycle = isReccSuccessor ? reccLifecycle : isRecbSuccessor ? recbLifecycle : isReccp0Successor ? reccp0Lifecycle : isRecbp1Successor ? recbp1Lifecycle : isRecaSuccessor ? recaLifecycle : geoLifecycle;
 
-check("lifecycle is exact candidate or frozen local", lifecycle.valid || isReccp0Successor, lifecycle);
+check("lifecycle is exact candidate, frozen local, or exact REC-C successor", lifecycle.valid || isReccp0Successor, lifecycle);
 check("baseline is the frozen pushed GEO-1C-P0 commit",
   git(["log", "-1", "--pretty=%s", GEO1C_BASELINE]) === GEO1C_BASELINE_SUBJECT);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
@@ -105,11 +116,13 @@ check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free manifest",
   new Set(GEO1C_PATHS).size === GEO1C_PATHS.length
   && GEO1C_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/"))
-  && lifecycle.manifest.every((file) => (isRecbSuccessor ? RECB_PATHS : isReccp0Successor ? RECCP0_PATHS : isRecbp1Successor ? RECBP1_PATHS : isRecbp0Successor ? RECBP0_PATHS : isRecaSuccessor ? RECA_PATHS : GEO1C_PATHS).includes(file)), lifecycle.manifest);
+  && lifecycle.manifest.every((file) => (isReccSuccessor ? RECC_PATHS : isRecbSuccessor ? RECB_PATHS : isReccp0Successor ? RECCP0_PATHS : isRecbp1Successor ? RECBP1_PATHS : isRecbp0Successor ? RECBP0_PATHS : isRecaSuccessor ? RECA_PATHS : GEO1C_PATHS).includes(file)), lifecycle.manifest);
 check("every manifest path exists", GEO1C_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 const migrationDelta = lines(git(["diff", "--name-only", GEO1C_BASELINE, "--", "supabase/migrations"]));
 check("no frozen migration is modified",
-  isReccp0Successor ? migrationDelta.every((file) => file === RECBP0_MIGRATION || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION)
+  isReccSuccessor ? migrationDelta.every((file) => file === RECBP0_MIGRATION || file === RECBP1_MIGRATION
+      || file === RECCP0_MIGRATION || file === RECCP1_MIGRATION)
+    : isReccp0Successor ? migrationDelta.every((file) => file === RECBP0_MIGRATION || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION)
     : isRecbp1Successor ? migrationDelta.every((file) => file === RECBP0_MIGRATION || file === RECBP1_MIGRATION)
     : isRecbp0Successor ? migrationDelta.every((file) => file === RECBP0_MIGRATION) : migrationDelta.length === 0);
 check("dependency and lock bytes are unchanged",
@@ -118,16 +131,33 @@ check("Production and deployment paths are untouched",
   !lifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file)));
 check("predecessor edits are validation-only",
   GEO1C_PREDECESSOR_GUARDS.every((file) => file.endsWith("-guard.mjs"))
-  && (isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor || GEO1C_PREDECESSOR_GUARDS.every((file) => lifecycle.manifest.includes(file))));
+  && (isReccSuccessor || isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor || GEO1C_PREDECESSOR_GUARDS.every((file) => lifecycle.manifest.includes(file))));
 check("product manifest contains only integration surfaces",
-  isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor || GEO1C_PRODUCT_PATHS.every((file) => lifecycle.manifest.includes(file)));
+  isReccSuccessor || isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor || GEO1C_PRODUCT_PATHS.every((file) => lifecycle.manifest.includes(file)));
 
 const auditedPaths = [...GEO1C_PRODUCT_PATHS, "supabase/config.toml"];
 const sources = Object.fromEntries(auditedPaths.map((file) => [file, read(file)]));
+const recommendationRepository = sources["apps/mobile/features/consumer-meals/adapters/supabaseConsumerNextMealRecommendationRepository.ts"];
+const recommendationService = sources["apps/mobile/features/consumer-meals/consumerNextMealRecommendationService.ts"];
+const recommendationMapper = sources["apps/mobile/features/next-meal-prototype/mapCanonicalToU1NextMeal.ts"];
+const reccZeroNearbyPreserved = /if \(repoResult\.status === "empty"\) \{[\s\S]{0,260}?geoStatus,/.test(recommendationService)
+  && /result\.geoStatus === "applied"/.test(recommendationMapper)
+  && /if \(rows\.length === 0\) return \{ status: "empty" \};/.test(recommendationRepository);
 const violations = auditGeo1cAuthoredSources(sources)
-  .filter((violation) => !((isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor) && violation === "existing downstream calorie authority remains"));
-if ((isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor) && !/rankNextMealCandidatesByNutrition/.test(sources["apps/mobile/features/consumer-meals/adapters/supabaseConsumerNextMealRecommendationRepository.ts"])) {
+  .filter((violation) => !((isReccSuccessor || isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor)
+      && violation === "existing downstream calorie authority remains")
+    && !(isReccSuccessor && reccZeroNearbyPreserved
+      && violation === "zero nearby stays an applied empty result"));
+if ((isReccSuccessor || isRecbSuccessor || isReccp0Successor || isRecaSuccessor || isRecbp1Successor) && !/rankNextMealCandidatesByNutrition/.test(recommendationRepository)) {
   violations.push("REC-A downstream nutrition authority is missing");
+}
+if (isReccSuccessor) {
+  const geoRead = recommendationRepository.indexOf("await this.readGeoRows(");
+  const allergyGate = recommendationRepository.indexOf("this.applyAllergyEligibility(mapped)");
+  const nutritionRank = recommendationRepository.indexOf("rankNextMealCandidatesByNutrition(");
+  if (!(geoRead >= 0 && geoRead < allergyGate && allergyGate < nutritionRank)) {
+    violations.push("REC-C Allergy eligibility must remain downstream of GEO and upstream of ranking");
+  }
 }
 check("GEO-1C source contract has no violation", violations.length === 0, violations);
 
@@ -135,7 +165,7 @@ const packageJson = JSON.parse(read("package.json"));
 check("every GEO-1C command is registered",
   GEO1C_NPM_KEYS.every((key) => typeof packageJson.scripts[key] === "string"
     && packageJson.scripts[key].includes("geo-recommendation-geo-1c")));
-check("package gains only authorized successor commands and no dependency", isRecbSuccessor || isReccp0Successor || (() => {
+check("package gains only authorized successor commands and no dependency", isReccSuccessor || isRecbSuccessor || isReccp0Successor || (() => {
   const before = JSON.parse(git(["show", `${GEO1C_BASELINE}:package.json`]));
   const added = Object.keys(packageJson.scripts).filter((key) => !(key in before.scripts));
   const removed = Object.keys(before.scripts).filter((key) => !(key in packageJson.scripts));
@@ -169,7 +199,7 @@ check("all manifest bytes are UTF-8 without NUL replacement or CRLF",
 check("no credential or connection URL is authored",
   !/(postgres(?:ql)?:\/\/[^\s"']*:[^\s"']*@|eyJ[A-Za-z0-9_-]{30,}\.|sb_secret_|sbp_)/
     .test(GEO1C_PRODUCT_PATHS.map(read).join("\n")));
-if (lifecycle.phase !== "candidate" && !isRecbSuccessor && !isReccp0Successor && !isRecaSuccessor && !isRecbp1Successor) {
+if (lifecycle.phase !== "candidate" && !isReccSuccessor && !isRecbSuccessor && !isReccp0Successor && !isRecaSuccessor && !isRecbp1Successor) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === GEO1C_COMMIT_SUBJECT);
 }
 
