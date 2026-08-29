@@ -10,6 +10,11 @@ import {
 import { RECCP0_BASELINE, RECCP0_MIGRATION, RECCP0_NPM_KEYS, RECCP0_PATHS, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 import { RECCP1_BASELINE, RECCP1_MIGRATION, classifyReccp1Lifecycle } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
+import {
+  RECDP0_BASELINE,
+  RECDP0_MIGRATION,
+  classifyRecdp0Lifecycle
+} from "./recommendation-rec-d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -74,9 +79,20 @@ const reccLifecycle = classifyReccLifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const reccSuccessor = reccLifecycle.valid;
+// REC-D-P0 successor seam ONLY, recognised on exactly the terms the REC-C successor above is:
+// by its own exact lifecycle and exact path set. Widening only; the stale-origin assertion in
+// this guard is deliberately NOT relaxed.
+const recdp0Lifecycle = classifyRecdp0Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp0Successor = recdp0Lifecycle.valid;
 
 check("lifecycle is exact REC-B candidate or freeze",
-  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor,
+  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor,
   { recb: lifecycle, reccp0: reccp0Lifecycle.phase, reccp1: reccp1Lifecycle.phase,
     recc: reccLifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
@@ -92,7 +108,8 @@ check("every exact manifest path exists", RECB_PATHS.every((file) => fs.existsSy
 check("REC-B creates no migration", RECB_MIGRATIONS.length === 0
   && lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations", "supabase/schema"]))
     .every((file) => file === RECCP0_MIGRATION
-      || ((reccp1Successor || reccSuccessor) && file === RECCP1_MIGRATION)));
+      || ((reccp1Successor || reccSuccessor || recdp0Successor) && file === RECCP1_MIGRATION)
+      || (recdp0Successor && file === RECDP0_MIGRATION)));
 check("dependency and lock bytes are unchanged",
   lines(git(["diff", "--name-only", RECB_BASELINE, "--", "apps/mobile/package.json", "package-lock.json"])).length === 0);
 check("Production, deployment, and workflow paths are untouched",

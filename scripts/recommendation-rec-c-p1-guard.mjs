@@ -13,6 +13,7 @@ import {
   createReccp1Manifest
 } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
+import { RECDP0_BASELINE, classifyRecdp0Lifecycle } from "./recommendation-rec-d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -46,6 +47,15 @@ const recLifecycle = classifyReccLifecycle({
   parent: head === RECCP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+// REC-D-P0 successor seam ONLY, on the same terms the REC-C successor above is already recognised.
+const recdp0Lifecycle = classifyRecdp0Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp0Successor = recdp0Lifecycle.valid;
 
 const sql = read(RECCP1_MIGRATION);
 const repository = read("apps/mobile/features/consumer-allergy-settings/repository.ts");
@@ -59,13 +69,14 @@ const docs = read("docs/recommendation/rec-c-p1-user-allergy-setting-authority.m
 const packageJson = JSON.parse(read("package.json"));
 
 check("lifecycle is exact REC-C-P1 candidate/freeze or REC-C successor",
-  lifecycle.valid || recLifecycle.valid,
-  lifecycle.valid ? lifecycle.phase : recLifecycle.phase);
+  lifecycle.valid || recLifecycle.valid || recdp0Successor,
+  lifecycle.valid ? lifecycle.phase : recLifecycle.valid ? recLifecycle.phase : recdp0Lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the exact pushed P0/P1 authority or REC-C predecessor",
   originHead === RECCP1_BASELINE
   || (lifecycle.phase === "frozen_pushed" && originHead === head)
-  || recLifecycle.valid);
+  || recLifecycle.valid
+  || (recdp0Successor && originHead === RECDP0_BASELINE));
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is exact, sorted, unique, wildcard-free, and present",
   JSON.stringify(RECCP1_PATHS) === JSON.stringify([...RECCP1_PATHS].sort())

@@ -21,6 +21,11 @@ import { RECB_BASELINE, classifyRecbLifecycle } from "./recommendation-rec-b-suc
 import { RECCP0_BASELINE, RECCP0_MIGRATION, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
 import { RECCP1_BASELINE, RECCP1_MIGRATION, classifyReccp1Lifecycle } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
+import {
+  RECDP0_BASELINE,
+  RECDP0_MIGRATION,
+  classifyRecdp0Lifecycle
+} from "./recommendation-rec-d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -106,6 +111,17 @@ const reccLifecycle = classifyReccLifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const reccSuccessor = reccLifecycle.valid;
+// REC-D-P0 successor seam ONLY, recognised on exactly the terms the REC-C successor above is:
+// by its own exact lifecycle and exact path set. Widening only; the stale-origin assertion in
+// this guard is deliberately NOT relaxed.
+const recdp0Lifecycle = classifyRecdp0Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp0Successor = recdp0Lifecycle.valid;
 const activeLifecycle = recbLifecycle.valid
   ? Object.freeze({ ...recbLifecycle, phase: `rec_b_${recbLifecycle.phase}` })
   : recbp1Lifecycle.valid
@@ -116,6 +132,8 @@ const activeLifecycle = recbLifecycle.valid
   ? Object.freeze({ ...reccp1Lifecycle, phase: `rec_c_p1_${reccp1Lifecycle.phase}` })
   : reccSuccessor
   ? Object.freeze({ ...reccLifecycle, phase: `rec_c_${reccLifecycle.phase}` })
+  : recdp0Successor
+  ? Object.freeze({ ...recdp0Lifecycle, phase: `rec_d_p0_${recdp0Lifecycle.phase}` })
   : lifecycle;
 
 check("lifecycle is the exact REC-B-P0 freeze or REC-B-P1 successor", activeLifecycle.valid, activeLifecycle);
@@ -129,7 +147,13 @@ check("every manifest path exists", RECBP0_PATHS.every((file) => fs.existsSync(p
 const activeMigration = recbp1Lifecycle.valid ? RECBP1_MIGRATION : RECBP0_MIGRATION;
 const activeDeltaPaths = recbp1Lifecycle.valid ? recbp1DeltaPaths : deltaPaths;
 check("the active round adds exactly its declared migration and mutates no frozen migration",
-  reccSuccessor
+  recdp0Successor
+    ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"]))
+        .every((file) => file === RECCP0_MIGRATION || file === RECCP1_MIGRATION
+          || file === RECDP0_MIGRATION)
+      && worktreePaths.filter((file) => file.startsWith("supabase/migrations/"))
+        .every((file) => file === RECDP0_MIGRATION)
+    : reccSuccessor
     ? lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations"]))
         .every((file) => file === RECCP0_MIGRATION || file === RECCP1_MIGRATION)
       && worktreePaths.every((file) => !file.startsWith("supabase/migrations/"))
@@ -149,7 +173,7 @@ check("the active round adds exactly its declared migration and mutates no froze
       && activeDeltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === activeMigration));
 check("Production/deploy/workflow surfaces are absent", !activeLifecycle.manifest.some((file) => /production|deploy|\.github\/workflows/i.test(file)));
 check("Mobile product surfaces are unchanged before the authorized REC-B runtime successor",
-  recbLifecycle.valid || reccp1Successor || reccSuccessor
+  recbLifecycle.valid || reccp1Successor || reccSuccessor || recdp0Successor
     || !activeLifecycle.manifest.some((file) => file.startsWith("apps/mobile/")));
 
 const frozenPaths = [
@@ -164,7 +188,7 @@ const frozenPaths = [
   "apps/mobile/features/consumer-meals/nutritionRankingPolicy.ts"
 ];
 check("frozen Taste, Social, Meal Context, candidate, and REC-A product bytes are unchanged",
-  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor
+  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor
     ? [RECBP0_MIGRATION, "packages/shared/src/domain/candidate-taste/candidateTasteAuthority.ts"]
       .every((file) => git(["diff", "--name-only", RECB_BASELINE, "--", file]) === "")
     : frozenPaths.every((file) => git(["diff", "--name-only", RECBP0_BASELINE, "--", file]) === ""));

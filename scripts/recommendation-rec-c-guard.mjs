@@ -11,6 +11,11 @@ import {
   classifyReccLifecycle,
   createReccManifest
 } from "./recommendation-rec-c-successor-manifest.mjs";
+import {
+  RECDP0_BASELINE,
+  RECDP0_PATHS,
+  classifyRecdp0Lifecycle
+} from "./recommendation-rec-d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -44,6 +49,17 @@ const lifecycle = classifyReccLifecycle({
   parent: head === RECC_BASELINE ? null : git(["rev-parse", "HEAD^"]),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+// REC-D-P0 successor seam ONLY. Recognising the next round's exact lifecycle and exact path set
+// stops this guard reporting work that is not its own. Nothing below is weakened: on REC-C's own
+// commit the REC-D-P0 set is absent and every assertion evaluates exactly as before.
+const recdp0Lifecycle = classifyRecdp0Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp0Successor = recdp0Lifecycle.valid;
 
 const policy = read("packages/shared/src/domain/candidate-allergen/allergyContentEligibility.ts");
 const evidence = read("apps/mobile/features/consumer-meals/adapters/supabaseRecommendationAllergyEvidenceReader.ts");
@@ -55,10 +71,12 @@ const types = read("apps/mobile/features/consumer-meals/types.ts");
 const docs = read("docs/recommendation/rec-c-allergy-eligibility-activation.md");
 const packageJson = JSON.parse(read("package.json"));
 
-check("lifecycle is exact REC-C candidate or freeze", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact REC-C candidate or freeze",
+  lifecycle.valid || recdp0Successor, lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains exact P1 baseline or exact pushed REC-C freeze",
-  originHead === RECC_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head));
+  originHead === RECC_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
+  || (recdp0Successor && originHead === RECDP0_BASELINE));
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is exact, sorted, unique, wildcard-free, and present",
   JSON.stringify(RECC_PATHS) === JSON.stringify([...RECC_PATHS].sort())
