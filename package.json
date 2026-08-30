@@ -331,7 +331,11 @@
     "test:recommendation-rec-d-p0": "node scripts/recommendation-rec-d-p0-guard.mjs",
     "test:recommendation-rec-d-p0-smoke": "node scripts/recommendation-rec-d-p0-smoke.mjs",
     "test:recommendation-rec-d-p0-mutations": "node scripts/recommendation-rec-d-p0-mutations.mjs",
-    "test:recommendation-rec-d-p0-postgres": "node scripts/recommendation-rec-d-p0-postgres-apply.mjs"
+    "test:recommendation-rec-d-p0-postgres": "node scripts/recommendation-rec-d-p0-postgres-apply.mjs",
+    "test:recommendation-rec-d-p1": "node scripts/recommendation-rec-d-p1-guard.mjs",
+    "test:recommendation-rec-d-p1-smoke": "node scripts/recommendation-rec-d-p1-smoke.mjs",
+    "test:recommendation-rec-d-p1-mutations": "node scripts/recommendation-rec-d-p1-mutations.mjs",
+    "test:recommendation-rec-d-p1-postgres": "node scripts/recommendation-rec-d-p1-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

@@ -22,6 +22,9 @@ import {
   RECDP0_MIGRATION,
   classifyRecdp0Lifecycle
 } from "./recommendation-rec-d-p0-successor-manifest.mjs";
+import {
+  RECDP1_BASELINE, RECDP1_MIGRATION, classifyRecdp1Lifecycle
+} from "./recommendation-rec-d-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -104,11 +107,20 @@ const recdp0Lifecycle = classifyRecdp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp0Successor = recdp0Lifecycle.valid;
+const recdp1Lifecycle = classifyRecdp1Lifecycle({
+  head, parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  originHead, behind, ahead, worktreePaths, stagedPaths,
+  deltaPaths: head === RECDP1_BASELINE ? [] : lines(git([
+    "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"
+  ])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp1Successor = recdp1Lifecycle.valid;
 
 check("lifecycle is the exact REC-C-P0 candidate/freeze or REC-C-P1 successor",
-  lifecycle.valid || reccp1Successor || reccSuccessor || recdp0Successor,
+  lifecycle.valid || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor,
   { reccp0: lifecycle, reccp1: reccp1Lifecycle.phase, recc: reccLifecycle.phase,
-    recdp0: recdp0Lifecycle.phase });
+    recdp0: recdp0Lifecycle.phase, recdp1: recdp1Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the frozen REC-B authority or exact pushed REC-C-P0 freeze",
   originHead === RECCP0_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
@@ -118,7 +130,13 @@ check("exact wildcard-free manifest", new Set(RECCP0_PATHS).size === RECCP0_PATH
   && RECCP0_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every manifest path exists", RECCP0_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("the round adds exactly one migration and mutates no frozen migration",
-  recdp0Successor
+  recdp1Successor
+    ? worktreePaths.filter((file) => file.startsWith("supabase/migrations/"))
+        .every((file) => file === RECDP1_MIGRATION)
+      && deltaPaths.filter((file) => file.startsWith("supabase/migrations/"))
+        .every((file) => file === RECCP0_MIGRATION || file === RECCP1_MIGRATION
+          || file === RECDP0_MIGRATION || file === RECDP1_MIGRATION)
+    : recdp0Successor
     ? worktreePaths.filter((file) => file.startsWith("supabase/migrations/"))
         .every((file) => file === RECDP0_MIGRATION)
       && deltaPaths.filter((file) => file.startsWith("supabase/migrations/"))
@@ -135,10 +153,11 @@ check("the round adds exactly one migration and mutates no frozen migration",
     : worktreePaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECCP0_MIGRATION)
       && deltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECCP0_MIGRATION));
 check("Production, deploy, workflow, and Mobile surfaces are absent",
-  !(recdp0Successor ? recdp0Lifecycle.manifest
+  !(recdp1Successor ? recdp1Lifecycle.manifest
+    : recdp0Successor ? recdp0Lifecycle.manifest
     : reccSuccessor ? reccLifecycle.manifest : lifecycle.manifest)
     .some((file) => /production|deploy|\.github\/workflows/i.test(file))
-    && (reccp1Successor || reccSuccessor || recdp0Successor
+    && (reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor
       || !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/"))));
 
 const frozenPaths = [

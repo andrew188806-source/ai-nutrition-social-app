@@ -12,6 +12,9 @@ import {
   classifyRecdp0Lifecycle,
   createRecdp0Manifest
 } from "./recommendation-rec-d-p0-successor-manifest.mjs";
+import {
+  RECDP1_BASELINE, RECDP1_MIGRATION, classifyRecdp1Lifecycle
+} from "./recommendation-rec-d-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -51,6 +54,14 @@ const lifecycle = classifyRecdp0Lifecycle({
   deleted
 });
 
+const recdp1Lifecycle = classifyRecdp1Lifecycle({
+  head, parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP1_BASELINE ? [] : lines(git(["diff", "--name-only", `${RECDP1_BASELINE}..HEAD`])),
+  deleted
+});
+const recdp1Successor = recdp1Lifecycle.valid;
+
 const sql = read(RECDP0_MIGRATION);
 const executableSql = sql.replace(/--.*$/gm, "").replace(/comment on[\s\S]*?;\s*/gi, "");
 const structuralSql = executableSql.replace(/\x27[^\x27]*\x27/g, "");
@@ -62,10 +73,12 @@ const docs = read(
 );
 const packageJson = JSON.parse(read("package.json"));
 
-check("lifecycle is exact REC-D-P0 candidate or freeze", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact REC-D-P0 candidate/freeze or REC-D-P1 successor",
+  lifecycle.valid || recdp1Successor, recdp1Successor ? recdp1Lifecycle.phase : lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains exact REC-C baseline or exact pushed REC-D-P0 freeze",
-  originHead === RECDP0_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head),
+  originHead === RECDP0_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
+  || (recdp1Successor && originHead === RECDP1_BASELINE),
   originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free manifest is sorted, unique, and present",
@@ -73,9 +86,10 @@ check("exact wildcard-free manifest is sorted, unique, and present",
   && new Set(RECDP0_PATHS).size === RECDP0_PATHS.length
   && RECDP0_PATHS.every((file) => !/[?*]/.test(file) && fs.existsSync(path.join(root, file))));
 check("round adds exactly one migration and changes no frozen migration",
-  JSON.stringify((lifecycle.phase === "candidate" ? worktreePaths : deltaPaths)
+  JSON.stringify((recdp1Successor ? recdp1Lifecycle.manifest
+    : lifecycle.phase === "candidate" ? worktreePaths : deltaPaths)
     .filter((file) => file.startsWith("supabase/migrations/")))
-  === JSON.stringify([RECDP0_MIGRATION]));
+  === JSON.stringify([recdp1Successor ? RECDP1_MIGRATION : RECDP0_MIGRATION]));
 check("REC-C-P0 migration digest remains frozen",
   bytesSha("supabase/migrations/20260830010000_candidate_allergen_data_authority.sql")
   === "eccebb25a1d705786256a67c028e35c7a2e2298d39c6036051c5eb0b2ea32b5a");

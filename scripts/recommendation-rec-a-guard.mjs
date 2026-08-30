@@ -18,6 +18,9 @@ import {
   RECDP0_MIGRATION,
   classifyRecdp0Lifecycle
 } from "./recommendation-rec-d-p0-successor-manifest.mjs";
+import {
+  RECDP1_BASELINE, RECDP1_MIGRATION, classifyRecdp1Lifecycle
+} from "./recommendation-rec-d-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -97,16 +100,25 @@ const recdp0Lifecycle = classifyRecdp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp0Successor = recdp0Lifecycle.valid;
-const lifecycle = reccSuccessor ? reccLifecycle
+const recdp1Lifecycle = classifyRecdp1Lifecycle({
+  head, originHead, behind: counts[0], ahead: counts[1], stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP1_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp1Successor = recdp1Lifecycle.valid;
+const lifecycle = recdp1Successor ? recdp1Lifecycle
+  : reccSuccessor ? reccLifecycle
   : recbLifecycle.valid ? recbLifecycle
   : reccp1Successor ? reccp1Lifecycle
   : reccp0Successor ? reccp0Lifecycle
   : recbp1Lifecycle.valid ? recbp1Lifecycle : recaLifecycle;
 
 check("lifecycle is exact REC-A candidate or frozen local",
-  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor,
+  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor,
   { active: lifecycle, reccp0: reccp0Lifecycle.phase, reccp1: reccp1Lifecycle.phase,
-    recc: reccLifecycle.phase });
+    recc: reccLifecycle.phase, recdp1: recdp1Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("origin/main remains the frozen REC-A/REC-B predecessor authority",
@@ -117,7 +129,11 @@ check("exact wildcard-free manifest", new Set(RECA_PATHS).size === RECA_PATHS.le
 check("every manifest path exists", RECA_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 const schemaDelta = lines(git(["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations", "supabase/schema"]));
 check("REC-B-P0 successor adds only its one migration; REC-A itself changed none",
-  reccSuccessor || recdp0Successor
+  recdp1Successor
+    ? schemaDelta.length <= 6 && schemaDelta.every((file) => file === RECBP0_MIGRATION
+        || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION || file === RECCP1_MIGRATION
+        || file === RECDP0_MIGRATION || file === RECDP1_MIGRATION)
+    : reccSuccessor || recdp0Successor
     ? schemaDelta.length <= 5 && schemaDelta.every((file) => file === RECBP0_MIGRATION
         || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION || file === RECCP1_MIGRATION
         || (recdp0Successor && file === RECDP0_MIGRATION))
@@ -205,13 +221,13 @@ check("non-Geo candidates are ordered and paged before ranking", /order\(column:
   && /\.order\("candidate_id"/.test(repository) && /\.range\(/.test(repository)
   && /rankNextMealCandidatesByNutrition/.test(repository));
 check("preferred identity does not collapse branch offers or override REC-B exposure",
-  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor
+  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor
     ? /void preferredMenuItemId/.test(mapper) && !/preferredIndex/.test(mapper) && /candidate\.candidateId/.test(product)
     : /preferredMenuItemId/.test(mapper) && /c\.menuItemId === preferredMenuItemId/.test(mapper));
 check("neutral fallback is explicit and fixed 520 is absent", /neutral_fallback/.test(ranker + service) && !/\b520\b/.test(ranker + service + repository));
 check("planned meals remain excluded", /plannedMealsAppliedToRanking:\s*false/.test(service));
 check("no excluded ranking authority is introduced",
-  reccSuccessor || recdp0Successor
+  reccSuccessor || recdp0Successor || recdp1Successor
     ? /applyAllergyEligibility/.test(repository)
       && !/tasteScore|similarityScore|dietaryRestriction|foodContext|geocodeOnRequest/.test(product)
     : !/tasteScore|similarityScore|dietaryRestriction|allergen|foodContext|geocodeOnRequest/.test(product));

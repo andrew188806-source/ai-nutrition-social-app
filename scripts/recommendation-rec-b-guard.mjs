@@ -15,6 +15,9 @@ import {
   RECDP0_MIGRATION,
   classifyRecdp0Lifecycle
 } from "./recommendation-rec-d-p0-successor-manifest.mjs";
+import {
+  RECDP1_BASELINE, RECDP1_MIGRATION, classifyRecdp1Lifecycle
+} from "./recommendation-rec-d-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -90,11 +93,19 @@ const recdp0Lifecycle = classifyRecdp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp0Successor = recdp0Lifecycle.valid;
+const recdp1Lifecycle = classifyRecdp1Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP1_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp1Successor = recdp1Lifecycle.valid;
 
 check("lifecycle is exact REC-B candidate or freeze",
-  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor,
+  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor,
   { recb: lifecycle, reccp0: reccp0Lifecycle.phase, reccp1: reccp1Lifecycle.phase,
-    recc: reccLifecycle.phase });
+    recc: reccLifecycle.phase, recdp1: recdp1Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the exact pushed predecessor or REC-B pushed freeze",
   originHead === RECB_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
@@ -108,8 +119,9 @@ check("every exact manifest path exists", RECB_PATHS.every((file) => fs.existsSy
 check("REC-B creates no migration", RECB_MIGRATIONS.length === 0
   && lines(git(["diff", "--name-only", RECB_BASELINE, "--", "supabase/migrations", "supabase/schema"]))
     .every((file) => file === RECCP0_MIGRATION
-      || ((reccp1Successor || reccSuccessor || recdp0Successor) && file === RECCP1_MIGRATION)
-      || (recdp0Successor && file === RECDP0_MIGRATION)));
+      || ((reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor) && file === RECCP1_MIGRATION)
+      || ((recdp0Successor || recdp1Successor) && file === RECDP0_MIGRATION)
+      || (recdp1Successor && file === RECDP1_MIGRATION)));
 check("dependency and lock bytes are unchanged",
   lines(git(["diff", "--name-only", RECB_BASELINE, "--", "apps/mobile/package.json", "package-lock.json"])).length === 0);
 check("Production, deployment, and workflow paths are untouched",

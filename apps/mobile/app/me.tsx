@@ -49,6 +49,12 @@ export default function MeScreen() {
       onPress: () => router.push("/allergy-settings" as never)
     },
     {
+      icon: "leaf",
+      title: zhTW.mobile.ingredientAvoidanceSettings.entryTitle,
+      subtitle: zhTW.mobile.ingredientAvoidanceSettings.entryBody,
+      onPress: () => router.push("/ingredient-avoidance-settings" as never)
+    },
+    {
       icon: "buddies",
       title: zhTW.mobile.socialInterestSettings.entryTitle,
       subtitle: zhTW.mobile.socialInterestSettings.entryBody,

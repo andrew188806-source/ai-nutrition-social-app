@@ -39,6 +39,10 @@ import {
   RECC_BASELINE,
   classifyReccLifecycle
 } from "./recommendation-rec-c-successor-manifest.mjs";
+import {
+  RECDP1_BASELINE,
+  classifyRecdp1Lifecycle
+} from "./recommendation-rec-d-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const temporaryRoot = process.platform === "win32" ? os.tmpdir() : "/tmp";
@@ -250,6 +254,20 @@ try {
     deleted: lines(git(["diff", "--name-only", "--diff-filter=D"]).stdout).length > 0
   });
   const reccSuccessor = reccLifecycle.valid;
+  const recdp1Lifecycle = classifyRecdp1Lifecycle({
+    head,
+    parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]).stdout.trim(),
+    originHead,
+    behind,
+    ahead,
+    worktreePaths: reccp1WorktreePaths,
+    stagedPaths: lines(git(["diff", "--cached", "--name-only"]).stdout),
+    deltaPaths: head === RECDP1_BASELINE
+      ? []
+      : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"]).stdout),
+    deleted: lines(git(["diff", "--name-only", "--diff-filter=D"]).stdout).length > 0
+  });
+  const recdp1Successor = recdp1Lifecycle.valid;
   const freezeCandidates = git(["log", "--format=%H%x09%s", `${baseline}..HEAD`]).stdout.split(/\r?\n/).filter(Boolean)
     .map((entry) => entry.split("\t")).filter(([, subject]) => subject.startsWith(freezeMessage)).map(([commit]) => commit);
   const freezeCommit = freezeCandidates[0] ?? null;
@@ -279,7 +297,7 @@ try {
   check("4. not one byte of the frozen taste domain changed since the baseline",
     changedSince(baseline, domainRoot).length === 0, { changed: changedSince(baseline, domainRoot) });
   check("5. not one byte of the frozen Mobile taste-profile feature changed since the baseline",
-    changedSince(baseline, mobileTasteRoot).filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !((reccp1Successor || reccSuccessor) && RECCP1_PATHS.includes(entry))).length === 0, { changed: changedSince(baseline, mobileTasteRoot).filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !((reccp1Successor || reccSuccessor) && RECCP1_PATHS.includes(entry))) });
+    changedSince(baseline, mobileTasteRoot).filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !((reccp1Successor || reccSuccessor || recdp1Successor) && RECCP1_PATHS.includes(entry))).length === 0, { changed: changedSince(baseline, mobileTasteRoot).filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !((reccp1Successor || reccSuccessor || recdp1Successor) && RECCP1_PATHS.includes(entry))) });
   check("6. no Mobile file changed at all — SR-1A is server-internal",
     changedSince(baseline, "apps").filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry)).length === 0, { changed: changedSince(baseline, "apps").filter((entry) => !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry)) });
   check("7. no packages/ file changed at all",

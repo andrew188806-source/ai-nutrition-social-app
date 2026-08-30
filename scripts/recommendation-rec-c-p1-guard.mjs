@@ -14,10 +14,11 @@ import {
 } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
 import { RECDP0_BASELINE, classifyRecdp0Lifecycle } from "./recommendation-rec-d-p0-successor-manifest.mjs";
+import { RECDP1_BASELINE, classifyRecdp1Lifecycle } from "./recommendation-rec-d-p1-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-const git = (args) => child.execFileSync("git", ["-c", "core.autocrlf=false", ...args], {
+const git = (args) => child.execFileSync("git", ["-c", "core.safecrlf=false", ...args], {
   cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]
 }).trim();
 const lines = (value) => value ? value.split(/\r?\n/).filter(Boolean) : [];
@@ -56,6 +57,14 @@ const recdp0Lifecycle = classifyRecdp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp0Successor = recdp0Lifecycle.valid;
+const recdp1Lifecycle = classifyRecdp1Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECDP1_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdp1Successor = recdp1Lifecycle.valid;
 
 const sql = read(RECCP1_MIGRATION);
 const repository = read("apps/mobile/features/consumer-allergy-settings/repository.ts");
@@ -69,14 +78,16 @@ const docs = read("docs/recommendation/rec-c-p1-user-allergy-setting-authority.m
 const packageJson = JSON.parse(read("package.json"));
 
 check("lifecycle is exact REC-C-P1 candidate/freeze or REC-C successor",
-  lifecycle.valid || recLifecycle.valid || recdp0Successor,
-  lifecycle.valid ? lifecycle.phase : recLifecycle.valid ? recLifecycle.phase : recdp0Lifecycle.phase);
+  lifecycle.valid || recLifecycle.valid || recdp0Successor || recdp1Successor,
+  lifecycle.valid ? lifecycle.phase : recLifecycle.valid ? recLifecycle.phase
+    : recdp1Successor ? recdp1Lifecycle.phase : recdp0Lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the exact pushed P0/P1 authority or REC-C predecessor",
   originHead === RECCP1_BASELINE
   || (lifecycle.phase === "frozen_pushed" && originHead === head)
   || recLifecycle.valid
-  || (recdp0Successor && originHead === RECDP0_BASELINE));
+  || (recdp0Successor && originHead === RECDP0_BASELINE)
+  || (recdp1Successor && originHead === RECDP1_BASELINE));
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is exact, sorted, unique, wildcard-free, and present",
   JSON.stringify(RECCP1_PATHS) === JSON.stringify([...RECCP1_PATHS].sort())
