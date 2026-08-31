@@ -22,6 +22,9 @@ import {
   RECDP1_BASELINE, RECDP1_MIGRATION, classifyRecdp1Lifecycle
 } from "./recommendation-rec-d-p1-successor-manifest.mjs";
 import { RECD_BASELINE, classifyRecdLifecycle } from "./recommendation-rec-d-successor-manifest.mjs";
+import {
+  GEO1DP0_BASELINE, GEO1DP0_MIGRATION, classifyGeo1dp0Lifecycle
+} from "./geo-meal-buddy-geo-1d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args) => {
@@ -117,8 +120,17 @@ const recdLifecycle = classifyRecdLifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdSuccessor = recdLifecycle.valid;
+const geo1dp0Lifecycle = classifyGeo1dp0Lifecycle({
+  head, originHead, behind: counts[0], ahead: counts[1], stagedPaths, worktreePaths,
+  deltaPaths: head === GEO1DP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === GEO1DP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const geo1dp0Successor = geo1dp0Lifecycle.valid;
 
-const lifecycle = recdSuccessor ? recdLifecycle
+const lifecycle = geo1dp0Successor ? geo1dp0Lifecycle
+  : recdSuccessor ? recdLifecycle
   : recdp1Successor ? recdp1Lifecycle
   : reccSuccessor ? reccLifecycle
   : recbLifecycle.valid ? recbLifecycle
@@ -127,9 +139,10 @@ const lifecycle = recdSuccessor ? recdLifecycle
   : recbp1Lifecycle.valid ? recbp1Lifecycle : recaLifecycle;
 
 check("lifecycle is exact REC-A candidate or frozen local",
-  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor,
+  lifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor || geo1dp0Successor,
   { active: lifecycle, reccp0: reccp0Lifecycle.phase, reccp1: reccp1Lifecycle.phase,
-    recc: reccLifecycle.phase, recdp1: recdp1Lifecycle.phase, recd: recdLifecycle.phase });
+    recc: reccLifecycle.phase, recdp1: recdp1Lifecycle.phase, recd: recdLifecycle.phase,
+    geo1dp0: geo1dp0Lifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("origin/main remains the frozen REC-A/REC-B predecessor authority",
@@ -140,7 +153,25 @@ check("exact wildcard-free manifest", new Set(RECA_PATHS).size === RECA_PATHS.le
 check("every manifest path exists", RECA_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 const schemaDelta = lines(git(["diff", "--name-only", RECA_BASELINE, "--", "supabase/migrations", "supabase/schema"]));
 check("REC-B-P0 successor adds only its one migration; REC-A itself changed none",
-  recdSuccessor || recdp1Successor
+  // GEO-1D-P0 has exactly two legitimate migration states, and the committed delta differs between
+  // them: as a candidate its migration is UNTRACKED (delta = the 6 frozen predecessors), and once
+  // frozen it is TRACKED (delta = those same 6 plus exactly GEO1DP0_MIGRATION). Both are accepted
+  // and nothing else is: any other extra entry lands in the predecessor partition and fails the
+  // frozen allow-list, so no future migration and no count broadening can slip through.
+  geo1dp0Successor
+    ? (() => {
+        const frozenPredecessors = [RECBP0_MIGRATION, RECBP1_MIGRATION, RECCP0_MIGRATION,
+          RECCP1_MIGRATION, RECDP0_MIGRATION, RECDP1_MIGRATION];
+        const candidateEntries = schemaDelta.filter((file) => file === GEO1DP0_MIGRATION);
+        const predecessorEntries = schemaDelta.filter((file) => file !== GEO1DP0_MIGRATION);
+        return predecessorEntries.length === 6
+          && predecessorEntries.every((file) => frozenPredecessors.includes(file))
+          && candidateEntries.length <= 1
+          && schemaDelta.length === 6 + candidateEntries.length
+          && lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")).length === 1
+          && lifecycle.manifest.includes(GEO1DP0_MIGRATION);
+      })()
+    : recdSuccessor || recdp1Successor
     ? schemaDelta.length <= 6 && schemaDelta.every((file) => file === RECBP0_MIGRATION
         || file === RECBP1_MIGRATION || file === RECCP0_MIGRATION || file === RECCP1_MIGRATION
         || file === RECDP0_MIGRATION || file === RECDP1_MIGRATION)
@@ -232,15 +263,15 @@ check("non-Geo candidates are ordered and paged before ranking", /order\(column:
   && /\.order\("candidate_id"/.test(repository) && /\.range\(/.test(repository)
   && /rankNextMealCandidatesByNutrition/.test(repository));
 check("preferred identity does not collapse branch offers or override REC-B exposure",
-  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor
+  recbLifecycle.valid || reccp0Successor || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor || geo1dp0Successor
     ? /void preferredMenuItemId/.test(mapper) && !/preferredIndex/.test(mapper) && /candidate\.candidateId/.test(product)
     : /preferredMenuItemId/.test(mapper) && /c\.menuItemId === preferredMenuItemId/.test(mapper));
 check("neutral fallback is explicit and fixed 520 is absent", /neutral_fallback/.test(ranker + service) && !/\b520\b/.test(ranker + service + repository));
 check("planned meals remain excluded", /plannedMealsAppliedToRanking:\s*false/.test(service));
 check("no excluded ranking authority is introduced",
-  reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor
+  reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor || geo1dp0Successor
     ? /applyAllergyEligibility/.test(repository)
-      && (!recdSuccessor || /applyIngredientAvoidanceEligibility/.test(repository))
+      && (!(recdSuccessor || geo1dp0Successor) || /applyIngredientAvoidanceEligibility/.test(repository))
       && !/tasteScore|similarityScore|dietaryRestriction|foodContext|geocodeOnRequest/.test(product)
       && !/ingredientAvoidance(?:Score|Weight|Bonus|Penalty)|restriction(?:Score|Weight|Bonus|Penalty)/i.test(product)
     : !/tasteScore|similarityScore|dietaryRestriction|allergen|foodContext|geocodeOnRequest/.test(product));

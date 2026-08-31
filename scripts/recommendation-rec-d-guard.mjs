@@ -11,6 +11,13 @@ import {
   classifyRecdLifecycle,
   createRecdManifest
 } from "./recommendation-rec-d-successor-manifest.mjs";
+import {
+  GEO1DP0_BASELINE,
+  GEO1DP0_MIGRATION,
+  GEO1DP0_MIGRATION_SHA256,
+  GEO1DP0_PATHS,
+  classifyGeo1dp0Lifecycle
+} from "./geo-meal-buddy-geo-1d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -42,6 +49,14 @@ const lifecycle = classifyRecdLifecycle({
   parent: head === RECD_BASELINE ? null : git(["rev-parse", "HEAD^"]),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+const geo1dp0Lifecycle = classifyGeo1dp0Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === GEO1DP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === GEO1DP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const geo1dp0Successor = geo1dp0Lifecycle.valid;
 
 const policy = read("packages/shared/src/domain/candidate-ingredient-avoidance/ingredientAvoidanceContentEligibility.ts");
 const evidence = read("apps/mobile/features/consumer-meals/adapters/supabaseRecommendationIngredientAvoidanceEvidenceReader.ts");
@@ -53,19 +68,27 @@ const types = read("apps/mobile/features/consumer-meals/types.ts");
 const docs = read("docs/recommendation/rec-d-ingredient-avoidance-eligibility-activation.md");
 const packageJson = JSON.parse(read("package.json"));
 
-check("lifecycle is exact REC-D candidate or freeze", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact REC-D candidate or freeze",
+  lifecycle.valid || geo1dp0Successor, geo1dp0Successor ? geo1dp0Lifecycle.phase : lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains exact P1 baseline or exact pushed REC-D freeze",
-  originHead === RECD_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head), originHead);
+  originHead === RECD_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
+    || (geo1dp0Successor && originHead === GEO1DP0_BASELINE), originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is exact, sorted, unique, wildcard-free, and present",
   JSON.stringify(RECD_PATHS) === JSON.stringify([...RECD_PATHS].sort())
   && new Set(RECD_PATHS).size === RECD_PATHS.length
   && RECD_PATHS.every((file) => !/[?*]/.test(file) && fs.existsSync(path.join(root, file))));
 check("round changes exactly the REC-D manifest",
-  JSON.stringify(lifecycle.manifest) === JSON.stringify(RECD_PATHS),
-  { actual: lifecycle.manifest, expected: RECD_PATHS });
-check("REC-D adds no migration", !RECD_PATHS.some((file) => file.startsWith("supabase/migrations/")));
+  JSON.stringify(geo1dp0Successor ? geo1dp0Lifecycle.manifest : lifecycle.manifest)
+    === JSON.stringify(geo1dp0Successor ? GEO1DP0_PATHS : RECD_PATHS),
+  { actual: geo1dp0Successor ? geo1dp0Lifecycle.manifest : lifecycle.manifest,
+    expected: geo1dp0Successor ? GEO1DP0_PATHS : RECD_PATHS });
+check("REC-D adds no migration", geo1dp0Successor
+  ? GEO1DP0_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1
+    && GEO1DP0_PATHS.includes(GEO1DP0_MIGRATION)
+    && sha(GEO1DP0_MIGRATION) === GEO1DP0_MIGRATION_SHA256
+  : !RECD_PATHS.some((file) => file.startsWith("supabase/migrations/")));
 check("REC-C-P0 migration digest remains frozen",
   sha("supabase/migrations/20260830010000_candidate_allergen_data_authority.sql")
     === "eccebb25a1d705786256a67c028e35c7a2e2298d39c6036051c5eb0b2ea32b5a");

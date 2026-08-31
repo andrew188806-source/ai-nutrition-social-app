@@ -43,6 +43,9 @@ import { RECCP1_MIGRATION, RECCP1_PATHS } from "./recommendation-rec-c-p1-succes
 import { RECC_PATHS } from "./recommendation-rec-c-successor-manifest.mjs";
 import { RECDP1_MIGRATION, RECDP1_PATHS } from "./recommendation-rec-d-p1-successor-manifest.mjs";
 import { RECD_PATHS } from "./recommendation-rec-d-successor-manifest.mjs";
+import {
+  GEO1DP0_MIGRATION, GEO1DP0_MIGRATION_SHA256, GEO1DP0_PATHS
+} from "./geo-meal-buddy-geo-1d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -462,7 +465,7 @@ const ALLOWED_PATHS = new Set([
   ...SR2B_SUCCESSOR_PATHS,
   ...SR2C_SUCCESSOR_PATHS,
     ...SR2D_SUCCESSOR_PATHS,
-    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS, ...RECCP1_PATHS, ...RECC_PATHS, ...RECDP1_PATHS, ...RECD_PATHS
+    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS, ...RECCP1_PATHS, ...RECC_PATHS, ...RECDP1_PATHS, ...RECD_PATHS, ...GEO1DP0_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -583,6 +586,14 @@ check(
     && RECD_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 0
     && !RECD_PATHS.some((entry) => entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
     && !RECD_PATHS.some((entry) => /consumer-taste-profile|recommendationTasteRanking|tasteRankingPolicy|recommendationCompositionPolicy/.test(entry))
+    && GEO1DP0_PATHS.length > 0
+    && new Set(GEO1DP0_PATHS).size === GEO1DP0_PATHS.length
+    && GEO1DP0_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && GEO1DP0_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 1
+    && GEO1DP0_PATHS.includes(GEO1DP0_MIGRATION)
+    && sha(GEO1DP0_MIGRATION) === GEO1DP0_MIGRATION_SHA256
+    && !GEO1DP0_PATHS.some((entry) => entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
+    && !GEO1DP0_PATHS.some((entry) => /consumer-taste-profile|recommendationTasteRanking|tasteRankingPolicy|recommendationCompositionPolicy/.test(entry))
 );
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated
@@ -596,10 +607,10 @@ const otherMigrations = touchedSupabase.filter(
     !SR1D_SUCCESSOR_PATHS.includes(entry) &&
     !SR2A_SUCCESSOR_PATHS.includes(entry) &&
     !SR2B_SUCCESSOR_PATHS.includes(entry) &&
-    !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !RECC_PATHS.includes(entry) && entry !== RECBP0_MIGRATION && entry !== RECBP1_MIGRATION && entry !== RECCP1_MIGRATION && entry !== RECDP1_MIGRATION
+    !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !RECC_PATHS.includes(entry) && !GEO1DP0_PATHS.includes(entry) && entry !== RECBP0_MIGRATION && entry !== RECBP1_MIGRATION && entry !== RECCP1_MIGRATION && entry !== RECDP1_MIGRATION
 );
 const deployableFunctionPaths = touchedSupabase.filter(
-  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !RECC_PATHS.includes(entry) && !RECDP1_PATHS.includes(entry)
+  (entry) => /^supabase\/functions\/(?!_)[^/]+\//.test(entry) && !SR1C_SUCCESSOR_PATHS.includes(entry) && !SR1D_SUCCESSOR_PATHS.includes(entry) && !SR2A_SUCCESSOR_PATHS.includes(entry) && !SR2B_SUCCESSOR_PATHS.includes(entry) && !SR2C_SUCCESSOR_PATHS.includes(entry) && !SR2D_SUCCESSOR_PATHS.includes(entry) && !SR2E_SUCCESSOR_PATHS.includes(entry) && !SR2F_SUCCESSOR_PATHS.includes(entry) && !SR2GA_SUCCESSOR_PATHS.includes(entry) && !SR2GB_SUCCESSOR_PATHS.includes(entry) && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !RECC_PATHS.includes(entry) && !RECDP1_PATHS.includes(entry) && !GEO1DP0_PATHS.includes(entry)
 );
 check(
   "27. this round changes no other migration and adds no deployable Edge Function",
@@ -616,7 +627,7 @@ check(
       SR2D_SUCCESSOR_PATHS.includes(entry) ||
       SR2E_SUCCESSOR_PATHS.includes(entry) ||
       SR2F_SUCCESSOR_PATHS.includes(entry) ||
-      SR2GA_SUCCESSOR_PATHS.includes(entry) || SR2GB_SUCCESSOR_PATHS.includes(entry) || SR2GC_SUCCESSOR_PATHS.includes(entry) || SR2GBR1_SUCCESSOR_PATHS.includes(entry) || SR2GCR1_SUCCESSOR_PATHS.includes(entry) || SR2CR1_SUCCESSOR_PATHS.includes(entry) || SR2GD_SUCCESSOR_PATHS.includes(entry) || SR2GE1_SUCCESSOR_PATHS.includes(entry) || SR2GE2_SUCCESSOR_PATHS.includes(entry) || SR2GF_SUCCESSOR_PATHS.includes(entry) || RECBP0_PATHS.includes(entry) || RECBP1_PATHS.includes(entry) || RECCP1_PATHS.includes(entry) || RECC_PATHS.includes(entry) || RECDP1_PATHS.includes(entry)
+      SR2GA_SUCCESSOR_PATHS.includes(entry) || SR2GB_SUCCESSOR_PATHS.includes(entry) || SR2GC_SUCCESSOR_PATHS.includes(entry) || SR2GBR1_SUCCESSOR_PATHS.includes(entry) || SR2GCR1_SUCCESSOR_PATHS.includes(entry) || SR2CR1_SUCCESSOR_PATHS.includes(entry) || SR2GD_SUCCESSOR_PATHS.includes(entry) || SR2GE1_SUCCESSOR_PATHS.includes(entry) || SR2GE2_SUCCESSOR_PATHS.includes(entry) || SR2GF_SUCCESSOR_PATHS.includes(entry) || RECBP0_PATHS.includes(entry) || RECBP1_PATHS.includes(entry) || RECCP1_PATHS.includes(entry) || RECC_PATHS.includes(entry) || RECDP1_PATHS.includes(entry) || GEO1DP0_PATHS.includes(entry)
   ) &&
     otherMigrations.length === 0 &&
     deployableFunctionPaths.length === 0,

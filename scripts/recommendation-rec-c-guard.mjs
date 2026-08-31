@@ -20,6 +20,9 @@ import {
   RECDP1_BASELINE, classifyRecdp1Lifecycle
 } from "./recommendation-rec-d-p1-successor-manifest.mjs";
 import { RECD_BASELINE, classifyRecdLifecycle } from "./recommendation-rec-d-successor-manifest.mjs";
+import {
+  GEO1DP0_BASELINE, classifyGeo1dp0Lifecycle
+} from "./geo-meal-buddy-geo-1d-p0-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -78,6 +81,14 @@ const recdLifecycle = classifyRecdLifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdSuccessor = recdLifecycle.valid;
+const geo1dp0Lifecycle = classifyGeo1dp0Lifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === GEO1DP0_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === GEO1DP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const geo1dp0Successor = geo1dp0Lifecycle.valid;
 
 
 const policy = read("packages/shared/src/domain/candidate-allergen/allergyContentEligibility.ts");
@@ -91,8 +102,9 @@ const docs = read("docs/recommendation/rec-c-allergy-eligibility-activation.md")
 const packageJson = JSON.parse(read("package.json"));
 
 check("lifecycle is exact REC-C candidate or freeze",
-  lifecycle.valid || recdp0Successor || recdp1Successor || recdSuccessor,
-  recdSuccessor ? recdLifecycle.phase : recdp1Successor ? recdp1Lifecycle.phase : lifecycle.phase);
+  lifecycle.valid || recdp0Successor || recdp1Successor || recdSuccessor || geo1dp0Successor,
+  geo1dp0Successor ? geo1dp0Lifecycle.phase
+    : recdSuccessor ? recdLifecycle.phase : recdp1Successor ? recdp1Lifecycle.phase : lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains exact P1 baseline or exact pushed REC-C freeze",
   originHead === RECC_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)

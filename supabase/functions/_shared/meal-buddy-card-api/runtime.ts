@@ -15,7 +15,7 @@ import {
 type PayloadRow = Readonly<{ payload: unknown }>;
 
 const CREATE_CARD = defineSocialRuntimeExecutorStatement<PayloadRow>`
-  select social_internal.create_meal_buddy_card_from_recommendation($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::date, $7::text, $8::time, $9::integer, $10::integer, $11::text, $12::text, $13::text, $14::text, $15::text) as payload
+  select social_internal.create_meal_buddy_card_from_recommendation_with_branch_context($1::uuid, $2::text, $3::text, $4::text, $5::text, $6::date, $7::text, $8::time, $9::integer, $10::integer, $11::text, $12::text, $13::text, $14::text, $15::text) as payload
 `;
 
 const LIST_CARDS = defineSocialRuntimeExecutorStatement<PayloadRow>`
