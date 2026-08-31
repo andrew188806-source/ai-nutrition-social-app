@@ -15,6 +15,7 @@ import {
 import { classifyReccLifecycle } from "./recommendation-rec-c-successor-manifest.mjs";
 import { RECDP0_BASELINE, classifyRecdp0Lifecycle } from "./recommendation-rec-d-p0-successor-manifest.mjs";
 import { RECDP1_BASELINE, classifyRecdp1Lifecycle } from "./recommendation-rec-d-p1-successor-manifest.mjs";
+import { RECD_BASELINE, classifyRecdLifecycle } from "./recommendation-rec-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -65,6 +66,15 @@ const recdp1Lifecycle = classifyRecdp1Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp1Successor = recdp1Lifecycle.valid;
+const recdLifecycle = classifyRecdLifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECD_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECD_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdSuccessor = recdLifecycle.valid;
+
 
 const sql = read(RECCP1_MIGRATION);
 const repository = read("apps/mobile/features/consumer-allergy-settings/repository.ts");
@@ -78,9 +88,9 @@ const docs = read("docs/recommendation/rec-c-p1-user-allergy-setting-authority.m
 const packageJson = JSON.parse(read("package.json"));
 
 check("lifecycle is exact REC-C-P1 candidate/freeze or REC-C successor",
-  lifecycle.valid || recLifecycle.valid || recdp0Successor || recdp1Successor,
+  lifecycle.valid || recLifecycle.valid || recdp0Successor || recdp1Successor || recdSuccessor,
   lifecycle.valid ? lifecycle.phase : recLifecycle.valid ? recLifecycle.phase
-    : recdp1Successor ? recdp1Lifecycle.phase : recdp0Lifecycle.phase);
+    : recdSuccessor ? recdLifecycle.phase : recdp1Successor ? recdp1Lifecycle.phase : recdp0Lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the exact pushed P0/P1 authority or REC-C predecessor",
   originHead === RECCP1_BASELINE
@@ -190,7 +200,7 @@ check("manifest bytes contain no credential shape, CRLF, BOM, or NUL",
       && !bytes.includes(0) && !(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
   }));
 if ((lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")
-  && !recLifecycle.valid) {
+  && !recLifecycle.valid && !recdSuccessor) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECCP1_COMMIT_SUBJECT);
 }
 const manifest = createReccp1Manifest((file) => fs.readFileSync(path.join(root, file)));

@@ -12,6 +12,7 @@ import {
   classifyRecdp1Lifecycle,
   createRecdp1Manifest
 } from "./recommendation-rec-d-p1-successor-manifest.mjs";
+import { RECD_BASELINE, RECD_PATHS, classifyRecdLifecycle } from "./recommendation-rec-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -43,6 +44,15 @@ const lifecycle = classifyRecdp1Lifecycle({
   parent: head === RECDP1_BASELINE ? null : git(["rev-parse", "HEAD^"]),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+const recdLifecycle = classifyRecdLifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECD_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECD_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdSuccessor = recdLifecycle.valid;
+
 
 const sql = read(RECDP1_MIGRATION);
 const executable = sql.replace(/--.*$/gm, "");
@@ -59,20 +69,31 @@ const settingCopy = copy.slice(copy.indexOf("ingredientAvoidanceSettings:"),
 const docs = read("docs/recommendation/rec-d-p1-user-ingredient-avoidance-setting-authority.md");
 const packageJson = JSON.parse(read("package.json"));
 
-check("lifecycle is exact REC-D-P1 candidate or freeze", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact REC-D-P1 candidate/freeze or REC-D successor",
+  lifecycle.valid || recdSuccessor, recdSuccessor ? recdLifecycle.phase : lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains exact REC-D-P0 baseline or pushed P1 freeze",
-  originHead === RECDP1_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head), originHead);
+  originHead === RECDP1_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
+    || (recdSuccessor && originHead === RECD_BASELINE), originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("exact wildcard-free manifest is sorted, unique, and present",
   JSON.stringify(RECDP1_PATHS) === JSON.stringify([...RECDP1_PATHS].sort())
   && new Set(RECDP1_PATHS).size === RECDP1_PATHS.length
   && RECDP1_PATHS.every((file) => !/[?*]/.test(file) && fs.existsSync(path.join(root, file))));
-check("round changes exactly the authorized manifest", JSON.stringify(lifecycle.manifest) === JSON.stringify(RECDP1_PATHS),
-  { actual: lifecycle.manifest, expected: RECDP1_PATHS });
-check("round adds exactly one additive migration",
-  JSON.stringify(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")))
-    === JSON.stringify([RECDP1_MIGRATION]));
+// Under a REC-D successor the HEAD commit is REC-D's, so its delta is REC-D's exact path set, not
+// this round's. Recognised on exactly the terms check 07 below already uses; on REC-D-P1's own
+// commit the REC-D set is absent and this assertion evaluates unchanged.
+check("round changes exactly the authorized manifest",
+  recdSuccessor
+    ? JSON.stringify(recdLifecycle.manifest) === JSON.stringify(RECD_PATHS)
+    : JSON.stringify(lifecycle.manifest) === JSON.stringify(RECDP1_PATHS),
+  { actual: recdSuccessor ? recdLifecycle.manifest : lifecycle.manifest,
+    expected: recdSuccessor ? RECD_PATHS : RECDP1_PATHS });
+check("round adds exactly one additive migration, while REC-D adds none",
+  recdSuccessor
+    ? recdLifecycle.manifest.every((file) => !file.startsWith("supabase/migrations/"))
+    : JSON.stringify(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")))
+      === JSON.stringify([RECDP1_MIGRATION]));
 check("frozen REC-C-P0 migration digest is unchanged",
   sha("supabase/migrations/20260830010000_candidate_allergen_data_authority.sql")
     === "eccebb25a1d705786256a67c028e35c7a2e2298d39c6036051c5eb0b2ea32b5a");
@@ -180,7 +201,7 @@ check("manifest bytes contain no credential shape, CRLF, BOM, or NUL", RECDP1_PA
   return !secretPatterns.some((pattern) => pattern.test(text)) && !bytes.includes(Buffer.from("\r\n"))
     && !bytes.includes(0) && !(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
 }));
-if (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed") {
+if (!recdSuccessor && (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECDP1_COMMIT_SUBJECT);
 }
 const manifest = createRecdp1Manifest((file) => fs.readFileSync(path.join(root, file)));

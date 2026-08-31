@@ -58,6 +58,14 @@ const noActiveAllergySettingsReader = Object.freeze({
     };
   }
 });
+const noActiveIngredientAvoidanceSettingsReader = Object.freeze({
+  async loadCurrentUser() {
+    return {
+      ok: true,
+      value: { options: [], selectedIngredientAvoidanceKeys: [], unresolvedSelectionCount: 0 }
+    };
+  }
+});
 
 // GEO-1A narrowing is the only branch eligibility answer, and only its identities reach the view.
 {
@@ -175,7 +183,8 @@ const noActiveAllergySettingsReader = Object.freeze({
   const repository = new SupabaseConsumerNextMealRecommendationRepository({
     authPort: { async getCurrentSession() { return { ok: true, value: { user: { userId: "actor" } } }; } },
     restaurantMenuClient: client,
-    allergySettingsReader: noActiveAllergySettingsReader
+    allergySettingsReader: noActiveAllergySettingsReader,
+    ingredientAvoidanceSettingsReader: noActiveIngredientAvoidanceSettingsReader
   });
   const result = await repository.getRankedNextMealCandidates({
     nutritionRanking: { dailyGoals: { calories: 520 }, consumedTotals: { calories: 0 } },
@@ -197,7 +206,8 @@ const noActiveAllergySettingsReader = Object.freeze({
         return { data: [row("offer-direct", "branch-direct", "restaurant-direct")], error: null };
       } }; } }; } }; }
     },
-    allergySettingsReader: noActiveAllergySettingsReader
+    allergySettingsReader: noActiveAllergySettingsReader,
+    ingredientAvoidanceSettingsReader: noActiveIngredientAvoidanceSettingsReader
   });
   const result = await repository.getRankedNextMealCandidates({
     nutritionRanking: { dailyGoals: { calories: 520 }, consumedTotals: { calories: 0 } }

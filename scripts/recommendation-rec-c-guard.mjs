@@ -19,6 +19,7 @@ import {
 import {
   RECDP1_BASELINE, classifyRecdp1Lifecycle
 } from "./recommendation-rec-d-p1-successor-manifest.mjs";
+import { RECD_BASELINE, classifyRecdLifecycle } from "./recommendation-rec-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -69,6 +70,15 @@ const recdp1Lifecycle = classifyRecdp1Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp1Successor = recdp1Lifecycle.valid;
+const recdLifecycle = classifyRecdLifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECD_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECD_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdSuccessor = recdLifecycle.valid;
+
 
 const policy = read("packages/shared/src/domain/candidate-allergen/allergyContentEligibility.ts");
 const evidence = read("apps/mobile/features/consumer-meals/adapters/supabaseRecommendationAllergyEvidenceReader.ts");
@@ -81,8 +91,8 @@ const docs = read("docs/recommendation/rec-c-allergy-eligibility-activation.md")
 const packageJson = JSON.parse(read("package.json"));
 
 check("lifecycle is exact REC-C candidate or freeze",
-  lifecycle.valid || recdp0Successor || recdp1Successor,
-  recdp1Successor ? recdp1Lifecycle.phase : lifecycle.phase);
+  lifecycle.valid || recdp0Successor || recdp1Successor || recdSuccessor,
+  recdSuccessor ? recdLifecycle.phase : recdp1Successor ? recdp1Lifecycle.phase : lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains exact P1 baseline or exact pushed REC-C freeze",
   originHead === RECC_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
@@ -199,7 +209,7 @@ check("manifest bytes contain no credential shape, CRLF, BOM, or NUL",
       && !bytes.includes(0)
       && !(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
   }));
-if (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed") {
+if (!recdSuccessor && (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECC_COMMIT_SUBJECT);
 }
 const manifest = createReccManifest((file) => fs.readFileSync(path.join(root, file)));

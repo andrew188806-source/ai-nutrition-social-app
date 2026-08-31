@@ -65,6 +65,8 @@ export function mapCanonicalToU1NextMeal(
   if (result.status === "empty") {
     return { status: "empty", message: result.reason === "allergy_eligibility"
       ? "目前沒有能依現有過敏原資料確認可推薦的餐點。請向店家確認成分與交叉接觸風險。"
+      : result.reason === "ingredient_avoidance_eligibility"
+      ? "目前沒有能依「我不吃的食物」設定與已確認成分資料推薦的餐點。"
       : result.geoStatus === "applied"
       ? "目前附近沒有可用的下一餐候選選項。"
       : "目前沒有符合條件的下一餐候選選項。" };
@@ -91,6 +93,20 @@ export function mapCanonicalToU1NextMeal(
         retryable: true
       };
     }
+    if (result.errorCode === "next_meal_ingredient_avoidance_unresolved_governed_avoidance") {
+      return {
+        status: "error",
+        message: "有部分「我不吃的食物」設定目前無法辨識，請先回到個人設定重新確認。",
+        retryable: false
+      };
+    }
+    if (result.errorCode === "next_meal_ingredient_avoidance_authority_unavailable") {
+      return {
+        status: "error",
+        message: "目前無法確認「我不吃的食物」設定，請稍後再試。",
+        retryable: true
+      };
+    }
     return {
       status: "error",
       message: "下一餐候選資料讀取失敗，請稍後再試。",
@@ -114,7 +130,9 @@ export function mapCanonicalToU1NextMeal(
     headline: "這是你的下一餐",
     entitlement,
     visibleCandidateCount: candidates.length,
-    contextNote: recommendation.context.allergyEligibilityStatus === "applied"
+    contextNote: recommendation.context.ingredientAvoidanceEligibilityStatus === "applied"
+      ? "已依「我不吃的食物」設定與可確認的餐點成分篩選候選餐點。"
+      : recommendation.context.allergyEligibilityStatus === "applied"
       ? "已依你設定的過敏原排除已知成分衝突；仍請向店家確認成分與交叉接觸風險。"
       : recommendation.context.tasteRankingStatus === "applied"
       ? "本次推薦參考今天的營養需求與你明確設定的口味偏好。"

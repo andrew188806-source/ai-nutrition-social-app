@@ -41,7 +41,7 @@ const mutations = Object.freeze({
     'if (!settings.ok) {\n        return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };\n      }',
     'if (!settings.ok) {\n        return Object.freeze({ status: "available", candidates, summary: Object.freeze({ status: "not_applied" }) });\n      }'],
   eligibility_after_ranking: [repositoryPath,
-    'allergyResult.candidates,\n        input.nutritionRanking,',
+    'ingredientAvoidanceResult.candidates,\n        input.nutritionRanking,',
     'mapped,\n        input.nutritionRanking,'],
   lane_a_reintroduces_conflict: [repositoryPath,
     'const tasteResult = await this.applyTasteRanking(ranked, input);',
@@ -218,6 +218,12 @@ const runRepository = async ({
     authPort: authPort(),
     restaurantMenuClient: candidateClient(rows),
     allergySettingsReader: settingsReader(keys, unresolved, settingsFail),
+    ingredientAvoidanceSettingsReader: {
+      loadCurrentUser: async () => ({
+        ok: true,
+        value: { options: [], selectedIngredientAvoidanceKeys: [], unresolvedSelectionCount: 0 }
+      })
+    },
     allergyEvidenceReader: injectedEvidence(evidenceStatus, entries),
     ...(policyProvider ? { allergyEligibilityPolicyProvider: policyProvider } : {})
   });

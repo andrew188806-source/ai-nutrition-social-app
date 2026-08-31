@@ -38,4 +38,6 @@ export type SupabaseRestaurantMenuClientLike = {
   };
 } & import("./supabaseNextMealGeoRows").SupabaseNextMealGeoClientLike
   & import("./supabaseRecommendationTasteReader").SupabaseRecommendationTasteClientLike
-  & import("./supabaseRecommendationAllergyEvidenceReader").SupabaseRecommendationAllergyEvidenceClientLike;
+  & import("./supabaseRecommendationAllergyEvidenceReader").SupabaseRecommendationAllergyEvidenceClientLike
+  & import("./supabaseRecommendationIngredientAvoidanceEvidenceReader")
+    .SupabaseRecommendationIngredientAvoidanceEvidenceClientLike;

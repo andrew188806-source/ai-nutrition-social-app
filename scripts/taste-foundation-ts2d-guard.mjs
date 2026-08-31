@@ -42,6 +42,7 @@ import { RECB_PATHS } from "./recommendation-rec-b-successor-manifest.mjs";
 import { RECCP1_MIGRATION, RECCP1_PATHS } from "./recommendation-rec-c-p1-successor-manifest.mjs";
 import { RECC_PATHS } from "./recommendation-rec-c-successor-manifest.mjs";
 import { RECDP1_MIGRATION, RECDP1_PATHS } from "./recommendation-rec-d-p1-successor-manifest.mjs";
+import { RECD_PATHS } from "./recommendation-rec-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -461,7 +462,7 @@ const ALLOWED_PATHS = new Set([
   ...SR2B_SUCCESSOR_PATHS,
   ...SR2C_SUCCESSOR_PATHS,
     ...SR2D_SUCCESSOR_PATHS,
-    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS, ...RECCP1_PATHS, ...RECC_PATHS, ...RECDP1_PATHS
+    ...SR2E_SUCCESSOR_PATHS, ...SR2F_SUCCESSOR_PATHS, ...SR2GA_SUCCESSOR_PATHS, ...SR2GB_SUCCESSOR_PATHS, ...SR2GC_SUCCESSOR_PATHS, ...SR2GBR1_SUCCESSOR_PATHS, ...SR2GCR1_SUCCESSOR_PATHS, ...SR2CR1_SUCCESSOR_PATHS, ...SR2GD_SUCCESSOR_PATHS, ...SR2GE1_SUCCESSOR_PATHS, ...SR2GE2_SUCCESSOR_PATHS, ...SR2GF_SUCCESSOR_PATHS, ...RECBP0_PATHS, ...RECBP1_PATHS, ...RECB_PATHS, ...RECCP1_PATHS, ...RECC_PATHS, ...RECDP1_PATHS, ...RECD_PATHS
 ]);
 const outsideManifest = touched.filter((entry) => !ALLOWED_PATHS.has(entry));
 check(
@@ -556,7 +557,7 @@ check(
     !SR2C_SUCCESSOR_PATHS.some((entry) => entry.startsWith("apps/") || entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
 );
 check(
-  "26k. REC-C-P1, REC-C, and REC-D-P1 successor awareness is exact; REC-D-P1 adds one migration, no deployable function, and no Taste rank authority",
+  "26k. REC-C-P1, REC-C, REC-D-P1, and REC-D successor awareness is exact; REC-D adds no migration, deployable function, or Taste rank authority",
   RECCP1_PATHS.length > 0
     && new Set(RECCP1_PATHS).size === RECCP1_PATHS.length
     && RECCP1_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
@@ -576,6 +577,12 @@ check(
     && RECDP1_PATHS.includes(RECDP1_MIGRATION)
     && !RECDP1_PATHS.some((entry) => entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
     && !RECDP1_PATHS.some((entry) => /consumer-taste-profile|recommendationTasteRanking|tasteRankingPolicy|recommendationCompositionPolicy/.test(entry))
+    && RECD_PATHS.length > 0
+    && new Set(RECD_PATHS).size === RECD_PATHS.length
+    && RECD_PATHS.every((entry) => !/[*?\[\]{}]/.test(entry))
+    && RECD_PATHS.filter((entry) => entry.startsWith("supabase/migrations/")).length === 0
+    && !RECD_PATHS.some((entry) => entry === "supabase/config.toml" || /^supabase\/functions\/(?!_)/.test(entry))
+    && !RECD_PATHS.some((entry) => /consumer-taste-profile|recommendationTasteRanking|tasteRankingPolicy|recommendationCompositionPolicy/.test(entry))
 );
 const touchedSupabase = touched.filter((entry) => entry.startsWith("supabase/"));
 // "Other migration" means any migration that is neither TS-2D's own nor the exactly enumerated

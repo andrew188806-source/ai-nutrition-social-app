@@ -295,6 +295,12 @@ const liveRepository = new repositoryModule.SupabaseConsumerNextMealRecommendati
       ok: true,
       value: { options: [], selectedAllergenKeys: [], unresolvedSelectionCount: 0 }
     })
+  },
+  ingredientAvoidanceSettingsReader: {
+    loadCurrentUser: async () => ({
+      ok: true,
+      value: { options: [], selectedIngredientAvoidanceKeys: [], unresolvedSelectionCount: 0 }
+    })
   }
 });
 const repositoryInput = { nutritionRanking: input({ calories: 100 }, { calories: 0 }) };

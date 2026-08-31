@@ -167,6 +167,8 @@ export class ConsumerNextMealRecommendationService {
       };
     }
     const allergyEligibility = repoResult.allergyEligibility ?? { status: "not_applied" as const };
+    const ingredientAvoidanceEligibility = repoResult.ingredientAvoidanceEligibility
+      ?? { status: "not_applied" as const };
 
     return {
       status: "available",
@@ -201,6 +203,11 @@ export class ConsumerNextMealRecommendationService {
           ...(allergyEligibility.status === "applied" ? {
             appliedAllergyPolicyId: allergyEligibility.policyId,
             appliedAllergyPolicyVersion: allergyEligibility.policyVersion
+          } : {}),
+          ingredientAvoidanceEligibilityStatus: ingredientAvoidanceEligibility.status,
+          ...(ingredientAvoidanceEligibility.status === "applied" ? {
+            appliedIngredientAvoidancePolicyId: ingredientAvoidanceEligibility.policyId,
+            appliedIngredientAvoidancePolicyVersion: ingredientAvoidanceEligibility.policyVersion
           } : {})
         }
       }

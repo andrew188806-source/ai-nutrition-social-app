@@ -1,5 +1,7 @@
 import type { ConsumerAuthPort } from "../../consumer-auth/ports";
 import type { ConsumerAllergySettingsRepository } from "../../consumer-allergy-settings/types";
+import type { ConsumerIngredientAvoidanceSettingsRepository } from
+  "../../consumer-ingredient-avoidance-settings/types";
 import {
   createDefaultAllergyContentEligibilityPolicyProvider,
   evaluateAllergyCandidateEligibility,
@@ -7,6 +9,13 @@ import {
   resolveAllergyUserState,
   type AllergyContentEligibilityPolicyProvider
 } from "../../../../../packages/shared/src/domain/candidate-allergen";
+import {
+  createDefaultIngredientAvoidanceContentEligibilityPolicyProvider,
+  evaluateIngredientAvoidanceCandidateEligibility,
+  isIngredientAvoidanceContentEligibilityPolicy,
+  resolveIngredientAvoidanceUserAuthorityState,
+  type IngredientAvoidanceContentEligibilityPolicyProvider
+} from "../../../../../packages/shared/src/domain/candidate-ingredient-avoidance";
 import type {
   ConsumerNextMealCandidate,
   ConsumerNextMealDataProvenance,
@@ -42,6 +51,10 @@ import {
   SupabaseRecommendationAllergyEvidenceReader,
   type RecommendationAllergyEvidenceReadResult
 } from "./supabaseRecommendationAllergyEvidenceReader";
+import {
+  SupabaseRecommendationIngredientAvoidanceEvidenceReader,
+  type RecommendationIngredientAvoidanceEvidenceReadResult
+} from "./supabaseRecommendationIngredientAvoidanceEvidenceReader";
 
 const DEFAULT_CANDIDATE_OUTPUT_LIMIT = 50;
 const MAX_CANDIDATE_OUTPUT_LIMIT = 50;
@@ -62,6 +75,15 @@ export type SupabaseConsumerNextMealRecommendationRepositoryOptions = {
     ): Promise<RecommendationAllergyEvidenceReadResult>;
   }>;
   allergyEligibilityPolicyProvider?: AllergyContentEligibilityPolicyProvider;
+  ingredientAvoidanceSettingsReader:
+    Pick<ConsumerIngredientAvoidanceSettingsRepository, "loadCurrentUser">;
+  ingredientAvoidanceEvidenceReader?: Readonly<{
+    readForCandidates(
+      candidates: readonly ConsumerNextMealCandidate[]
+    ): Promise<RecommendationIngredientAvoidanceEvidenceReadResult>;
+  }>;
+  ingredientAvoidanceEligibilityPolicyProvider?:
+    IngredientAvoidanceContentEligibilityPolicyProvider;
 };
 
 export class SupabaseConsumerNextMealRecommendationRepository
@@ -101,8 +123,17 @@ export class SupabaseConsumerNextMealRecommendationRepository
       if (allergyResult.candidates.length === 0) {
         return { status: "empty", reason: "allergy_eligibility" };
       }
+      const ingredientAvoidanceResult = await this.applyIngredientAvoidanceEligibility(
+        allergyResult.candidates
+      );
+      if (ingredientAvoidanceResult.status === "read_failed") {
+        return ingredientAvoidanceResult;
+      }
+      if (ingredientAvoidanceResult.candidates.length === 0) {
+        return { status: "empty", reason: "ingredient_avoidance_eligibility" };
+      }
       const ranked = rankNextMealCandidatesByNutrition(
-        allergyResult.candidates,
+        ingredientAvoidanceResult.candidates,
         input.nutritionRanking,
         input.nutritionRankingPolicy
       );
@@ -115,6 +146,7 @@ export class SupabaseConsumerNextMealRecommendationRepository
         totalCandidateCount: ranked.candidates.length,
         ranking: ranked.ranking,
         allergyEligibility: allergyResult.summary,
+        ingredientAvoidanceEligibility: ingredientAvoidanceResult.summary,
         tasteRanking: tasteResult.summary
       };
     } catch {
@@ -195,6 +227,105 @@ export class SupabaseConsumerNextMealRecommendationRepository
       });
     } catch {
       return { status: "read_failed", errorCode: "next_meal_allergy_authority_unavailable" };
+    }
+  }
+
+  private async applyIngredientAvoidanceEligibility(
+    candidates: readonly ConsumerNextMealCandidate[]
+  ): Promise<
+    | Readonly<{
+        status: "available";
+        candidates: readonly ConsumerNextMealCandidate[];
+        summary: Readonly<{
+          status: "not_applied" | "applied";
+          policyId?: string;
+          policyVersion?: number;
+        }>;
+      }>
+    | Readonly<{ status: "read_failed"; errorCode: string }>
+  > {
+    try {
+      const settings = await this.options.ingredientAvoidanceSettingsReader.loadCurrentUser();
+      const userState = resolveIngredientAvoidanceUserAuthorityState(settings.ok
+        ? {
+            status: "available",
+            ingredientAvoidanceKeys: settings.value.selectedIngredientAvoidanceKeys,
+            unresolvedSelectionCount: settings.value.unresolvedSelectionCount
+          }
+        : { status: "unavailable" });
+      if (userState.state === "authority_unavailable") {
+        return {
+          status: "read_failed",
+          errorCode: "next_meal_ingredient_avoidance_authority_unavailable"
+        };
+      }
+      if (userState.state === "unresolved_governed_avoidance") {
+        return {
+          status: "read_failed",
+          errorCode: "next_meal_ingredient_avoidance_unresolved_governed_avoidance"
+        };
+      }
+      if (userState.state === "no_active_governed_avoidance") {
+        return Object.freeze({
+          status: "available",
+          candidates,
+          summary: Object.freeze({ status: "not_applied" })
+        });
+      }
+
+      const policy = (
+        this.options.ingredientAvoidanceEligibilityPolicyProvider
+          ?? createDefaultIngredientAvoidanceContentEligibilityPolicyProvider()
+      ).getActiveIngredientAvoidanceContentEligibilityPolicy();
+      if (!isIngredientAvoidanceContentEligibilityPolicy(policy)) {
+        return {
+          status: "read_failed",
+          errorCode: "next_meal_ingredient_avoidance_authority_unavailable"
+        };
+      }
+      const evidenceReader = this.options.ingredientAvoidanceEvidenceReader
+        ?? new SupabaseRecommendationIngredientAvoidanceEvidenceReader(
+          this.options.restaurantMenuClient
+        );
+      const authority = await evidenceReader.readForCandidates(candidates);
+      if (authority.status !== "available") {
+        return {
+          status: "read_failed",
+          errorCode: "next_meal_ingredient_avoidance_authority_unavailable"
+        };
+      }
+      const evidenceById = new Map(authority.evidence.map((entry) => [entry.candidateId, entry]));
+      if (evidenceById.size !== candidates.length) {
+        return {
+          status: "read_failed",
+          errorCode: "next_meal_ingredient_avoidance_authority_unavailable"
+        };
+      }
+      const eligible = candidates.filter((candidate) => {
+        const evidence = evidenceById.get(candidate.candidateId);
+        if (!evidence) throw new TypeError("Missing Candidate Ingredient Avoidance evidence.");
+        return evaluateIngredientAvoidanceCandidateEligibility({
+          activeIngredientAvoidanceKeys: userState.ingredientAvoidanceKeys,
+          knownPresentIngredientAvoidanceKeys:
+            evidence.knownPresentIngredientAvoidanceKeys,
+          coverageState: evidence.coverageState,
+          policy
+        }).eligible;
+      });
+      return Object.freeze({
+        status: "available",
+        candidates: Object.freeze(eligible),
+        summary: Object.freeze({
+          status: "applied",
+          policyId: policy.policyId,
+          policyVersion: policy.policyVersion
+        })
+      });
+    } catch {
+      return {
+        status: "read_failed",
+        errorCode: "next_meal_ingredient_avoidance_authority_unavailable"
+      };
     }
   }
 

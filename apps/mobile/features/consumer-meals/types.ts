@@ -742,6 +742,9 @@ export type ConsumerNextMealRecommendationContext = {
   allergyEligibilityStatus: "not_applied" | "applied";
   appliedAllergyPolicyId?: string;
   appliedAllergyPolicyVersion?: number;
+  ingredientAvoidanceEligibilityStatus: "not_applied" | "applied";
+  appliedIngredientAvoidancePolicyId?: string;
+  appliedIngredientAvoidancePolicyVersion?: number;
 };
 
 export type ConsumerNextMealRecommendation = {
@@ -775,6 +778,11 @@ export type ConsumerNextMealRecommendationRepositoryResult =
         policyId?: string;
         policyVersion?: number;
       }>;
+      ingredientAvoidanceEligibility: Readonly<{
+        status: "not_applied" | "applied";
+        policyId?: string;
+        policyVersion?: number;
+      }>;
       tasteRanking: Readonly<{
         status: "applied" | "unavailable";
         tastePolicyId?: string;
@@ -783,7 +791,10 @@ export type ConsumerNextMealRecommendationRepositoryResult =
         compositionPolicyVersion?: number;
       }>;
     }
-  | { status: "empty"; reason?: "no_candidates" | "allergy_eligibility" }
+  | {
+      status: "empty";
+      reason?: "no_candidates" | "allergy_eligibility" | "ingredient_avoidance_eligibility";
+    }
   | { status: "disabled" }
   | { status: "read_failed"; errorCode: string };
 
@@ -802,7 +813,7 @@ export type ConsumerNextMealRecommendationResult =
       source: ConsumerNextMealRecommendationSource;
       date: string;
       geoStatus: ConsumerNextMealGeoStatus;
-      reason: "no_candidates" | "allergy_eligibility";
+      reason: "no_candidates" | "allergy_eligibility" | "ingredient_avoidance_eligibility";
     }
   | { status: "disabled"; source: ConsumerNextMealRecommendationSource }
   | { status: "intake_unavailable"; source: ConsumerNextMealRecommendationSource; errorCode: string }

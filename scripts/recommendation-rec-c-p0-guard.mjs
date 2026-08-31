@@ -25,6 +25,7 @@ import {
 import {
   RECDP1_BASELINE, RECDP1_MIGRATION, classifyRecdp1Lifecycle
 } from "./recommendation-rec-d-p1-successor-manifest.mjs";
+import { RECD_BASELINE, classifyRecdLifecycle } from "./recommendation-rec-d-successor-manifest.mjs";
 
 const root = process.cwd();
 const git = (args, options = {}) => {
@@ -116,11 +117,20 @@ const recdp1Lifecycle = classifyRecdp1Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const recdp1Successor = recdp1Lifecycle.valid;
+const recdLifecycle = classifyRecdLifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === RECD_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === RECD_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const recdSuccessor = recdLifecycle.valid;
+
 
 check("lifecycle is the exact REC-C-P0 candidate/freeze or REC-C-P1 successor",
-  lifecycle.valid || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor,
+  lifecycle.valid || reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor,
   { reccp0: lifecycle, reccp1: reccp1Lifecycle.phase, recc: reccLifecycle.phase,
-    recdp0: recdp0Lifecycle.phase, recdp1: recdp1Lifecycle.phase });
+    recdp0: recdp0Lifecycle.phase, recdp1: recdp1Lifecycle.phase, recd: recdLifecycle.phase });
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("origin/main remains the frozen REC-B authority or exact pushed REC-C-P0 freeze",
   originHead === RECCP0_BASELINE || (lifecycle.phase === "frozen_pushed" && originHead === head)
@@ -130,7 +140,12 @@ check("exact wildcard-free manifest", new Set(RECCP0_PATHS).size === RECCP0_PATH
   && RECCP0_PATHS.every((file) => !/[?*]/.test(file) && !file.endsWith("/")));
 check("every manifest path exists", RECCP0_PATHS.every((file) => fs.existsSync(path.join(root, file))));
 check("the round adds exactly one migration and mutates no frozen migration",
-  recdp1Successor
+  recdSuccessor
+    ? worktreePaths.every((file) => !file.startsWith("supabase/migrations/"))
+      && deltaPaths.filter((file) => file.startsWith("supabase/migrations/"))
+        .every((file) => file === RECCP0_MIGRATION || file === RECCP1_MIGRATION
+          || file === RECDP0_MIGRATION || file === RECDP1_MIGRATION)
+    : recdp1Successor
     ? worktreePaths.filter((file) => file.startsWith("supabase/migrations/"))
         .every((file) => file === RECDP1_MIGRATION)
       && deltaPaths.filter((file) => file.startsWith("supabase/migrations/"))
@@ -153,11 +168,12 @@ check("the round adds exactly one migration and mutates no frozen migration",
     : worktreePaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECCP0_MIGRATION)
       && deltaPaths.filter((file) => file.startsWith("supabase/migrations/")).every((file) => file === RECCP0_MIGRATION));
 check("Production, deploy, workflow, and Mobile surfaces are absent",
-  !(recdp1Successor ? recdp1Lifecycle.manifest
+  !(recdSuccessor ? recdLifecycle.manifest
+    : recdp1Successor ? recdp1Lifecycle.manifest
     : recdp0Successor ? recdp0Lifecycle.manifest
     : reccSuccessor ? reccLifecycle.manifest : lifecycle.manifest)
     .some((file) => /production|deploy|\.github\/workflows/i.test(file))
-    && (reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor
+    && (reccp1Successor || reccSuccessor || recdp0Successor || recdp1Successor || recdSuccessor
       || !lifecycle.manifest.some((file) => file.startsWith("apps/mobile/"))));
 
 const frozenPaths = [
@@ -284,7 +300,7 @@ check("manifest bytes contain no credential shape, CRLF, BOM, or NUL",
       && !bytes.includes(0) && !(bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
   }));
 
-if (!reccSuccessor && (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")) {
+if (!reccSuccessor && !recdSuccessor && (lifecycle.phase === "frozen_local" || lifecycle.phase === "frozen_pushed")) {
   check("freeze commit subject is exact", git(["log", "-1", "--pretty=%s"]) === RECCP0_COMMIT_SUBJECT);
 }
 const manifest = createReccp0Manifest((file) => fs.readFileSync(path.join(root, file)));
