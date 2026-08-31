@@ -39,21 +39,58 @@ export type GalleryMealPhotoAssetNormalizationDependencies = Readonly<{
   cacheDirectoryUri: string;
 }>;
 
-const nativeDependencies: GalleryMealPhotoAssetNormalizationDependencies = {
-  async readBytes(uri) {
-    const file = new File(uri);
-    if (!file.exists) throw new Error("Gallery asset is not locally readable.");
-    return file.bytes();
-  },
-  async transcodeToJpeg(uri) {
-    return manipulateAsync(uri, [], { compress: 0.9, format: SaveFormat.JPEG });
-  },
-  async deleteFile(uri) {
-    const file = new File(uri);
-    if (file.exists) file.delete();
-  },
-  cacheDirectoryUri: Paths.cache.uri
-};
+function isWebRuntime(): boolean {
+  return typeof document !== "undefined";
+}
+
+function isBrowserLocalImageUri(uri: string): boolean {
+  return uri.startsWith("blob:") || /^data:image\//i.test(uri);
+}
+
+async function readBrowserLocalImageBytes(uri: string): Promise<Uint8Array> {
+  if (!isBrowserLocalImageUri(uri)) {
+    throw new Error("Unsupported browser-local gallery URI.");
+  }
+  const response = await fetch(uri);
+  if (!response.ok) throw new Error("Browser-local gallery URI could not be read.");
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+function createDefaultDependencies(): GalleryMealPhotoAssetNormalizationDependencies {
+  if (isWebRuntime()) {
+    return {
+      readBytes: readBrowserLocalImageBytes,
+      async transcodeToJpeg(uri) {
+        const rendered = await manipulateAsync(uri, [], { compress: 0.9, format: SaveFormat.JPEG });
+        const bytes = await readBrowserLocalImageBytes(rendered.uri);
+        const exactBytes = new Uint8Array(bytes.byteLength);
+        exactBytes.set(bytes);
+        const objectUri = URL.createObjectURL(new Blob([exactBytes.buffer], { type: "image/jpeg" }));
+        return { uri: objectUri, width: rendered.width, height: rendered.height };
+      },
+      async deleteFile(uri) {
+        if (uri.startsWith("blob:")) URL.revokeObjectURL(uri);
+      },
+      cacheDirectoryUri: "blob:"
+    };
+  }
+
+  return {
+    async readBytes(uri) {
+      const file = new File(uri);
+      if (!file.exists) throw new Error("Gallery asset is not locally readable.");
+      return file.bytes();
+    },
+    async transcodeToJpeg(uri) {
+      return manipulateAsync(uri, [], { compress: 0.9, format: SaveFormat.JPEG });
+    },
+    async deleteFile(uri) {
+      const file = new File(uri);
+      if (file.exists) file.delete();
+    },
+    cacheDirectoryUri: Paths.cache.uri
+  };
+}
 
 let ownedNormalizedAsset: Readonly<{
   uri: string;
@@ -69,6 +106,7 @@ function canonicalFileName(extension: "jpg" | "png" | "webp"): string {
 }
 
 function isInsideCacheDirectory(uri: string, cacheDirectoryUri: string): boolean {
+  if (cacheDirectoryUri.endsWith(":")) return uri.startsWith(cacheDirectoryUri);
   const cachePrefix = cacheDirectoryUri.endsWith("/") ? cacheDirectoryUri : `${cacheDirectoryUri}/`;
   return uri.startsWith(cachePrefix);
 }
@@ -103,7 +141,7 @@ export async function releaseOwnedGalleryMealPhotoAsset(): Promise<void> {
 // orientation-normalized by Expo ImageManipulator, and re-encoded as JPEG in app-private cache.
 export async function normalizeGalleryMealPhotoAsset(
   asset: GalleryMealPhotoAssetInput,
-  dependencies: GalleryMealPhotoAssetNormalizationDependencies = nativeDependencies
+  dependencies: GalleryMealPhotoAssetNormalizationDependencies = createDefaultDependencies()
 ): Promise<GalleryMealPhotoAssetNormalizationOutcome> {
   if (!asset.uri || !isUsableDimension(asset.width) || !isUsableDimension(asset.height)) {
     return failure("gallery_asset_unavailable");
