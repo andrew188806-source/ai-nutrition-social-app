@@ -1,6 +1,6 @@
 import { validateMealBuddyCandidateApiResponseV1 } from "@haocu/shared";
 import type { ConsumerAuthPort } from "../../consumer-auth/ports";
-import type { MealBuddyCandidateRepository } from "../ports";
+import type { MealBuddyCandidateGeoContext, MealBuddyCandidateRepository } from "../ports";
 import { errCandidates, MealBuddyCandidateClientError, okCandidates } from "../types";
 import {
   MEAL_BUDDY_CANDIDATE_LIST_FUNCTION_NAME,
@@ -25,12 +25,23 @@ export class SupabaseMealBuddyCandidateRepository implements MealBuddyCandidateR
 
   constructor(private readonly options: SupabaseMealBuddyCandidateRepositoryOptions) {}
 
-  async listCandidates(sourceCardRef: string) {
+  async listCandidates(
+    sourceCardRef: string,
+    geoContext: MealBuddyCandidateGeoContext | null = null
+  ) {
     // The reference is checked only for presence and family. It is never decoded, split or inspected
     // past its marker: the server owns what it means and re-verifies ownership on every request.
     if (typeof sourceCardRef !== "string" || !sourceCardRef.startsWith("mbc1.")) {
       return errCandidates(new MealBuddyCandidateClientError(
         "invalid_request", "A source Meal Buddy card reference is required."));
+    }
+
+    if (geoContext !== null && (
+      !Number.isFinite(geoContext.latitude) || geoContext.latitude < -90 || geoContext.latitude > 90
+      || !Number.isFinite(geoContext.longitude) || geoContext.longitude < -180 || geoContext.longitude > 180
+    )) {
+      return errCandidates(new MealBuddyCandidateClientError(
+        "invalid_request", "The current location is not usable for Meal Buddy discovery."));
     }
 
     const session = await this.options.authPort.getCurrentSession();
@@ -41,9 +52,13 @@ export class SupabaseMealBuddyCandidateRepository implements MealBuddyCandidateR
 
     let invokeResult;
     try {
-      // Exactly one business key. The frozen contract rejects a second one rather than ignoring it.
+      // No location preserves the byte-for-byte frozen request. An available GEO-1B position adds
+      // only its two required axes; actor, branch, radius and candidate authority remain server-side.
+      const body = geoContext === null
+        ? { sourceCardRef }
+        : { sourceCardRef, geo: { latitude: geoContext.latitude, longitude: geoContext.longitude } };
       invokeResult = await this.options.mealBuddyClient.functions.invoke(
-        MEAL_BUDDY_CANDIDATE_LIST_FUNCTION_NAME, { body: { sourceCardRef } }
+        MEAL_BUDDY_CANDIDATE_LIST_FUNCTION_NAME, { body }
       );
     } catch {
       return errCandidates(new MealBuddyCandidateClientError(

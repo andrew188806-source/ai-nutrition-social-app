@@ -3,11 +3,14 @@
 // eligibility rule, no Taste algorithm, no ranking rule, no exposure cap, no profile policy, no
 // interest hierarchy and no context classification of its own, and issues no refill query.
 //
-// The request contract is unchanged by SR-2G-F: still `{ sourceCardRef }`, still nothing else. The
-// context is a property of the actor's own card, resolved server-side, so it is not expressible,
-// forgeable or overridable by a caller.
+// GEO-1D adds only optional foreground coordinates to the frozen source-reference request. Actor,
+// selected cards, branches, radius, eligibility and ranking remain server authority.
 import { mealBuddyCandidateApiContractViolation } from "./policy.ts";
-import { readExposedCandidateInterests, readMealBuddyCandidateCards } from "./readCandidateCards.ts";
+import {
+  readExposedCandidateInterests,
+  readMealBuddyCandidateBranchContexts,
+  readMealBuddyCandidateCards
+} from "./readCandidateCards.ts";
 import { toMealBuddyCandidateApiResponse } from "./toCandidateDto.ts";
 import type {
   MealBuddyCandidateApiResponse, MealBuddyCandidateEntitlementRowSource, MealBuddySelectedCard
@@ -23,6 +26,11 @@ import { projectPublicSocialProfiles, readExposedSocialProfileFacts } from "../s
 import type { SocialRuntimeExecutorTransport } from "../social-runtime-transport/executorTransactionTransport.ts";
 import type { SocialCandidateRefCipher } from "../social-candidate-ref/types.ts";
 import type { MealBuddyCardRefCipher } from "../meal-buddy-card-ref/types.ts";
+import { ExecutorGeoRepository, parseGeoQuery, parseGeoPoint, type GeoPoint } from "../geo-api/index.ts";
+import {
+  NEXT_MEAL_GEO_BRANCH_LIMIT,
+  NEXT_MEAL_GEO_RADIUS_METERS
+} from "../next-meal-geo-api/policy.ts";
 
 export type MealBuddyCandidateListComposition = Readonly<{
   transport: SocialRuntimeExecutorTransport;
@@ -32,6 +40,13 @@ export type MealBuddyCandidateListComposition = Readonly<{
   actorUserId: string;
   sourceCardId: string;
   requestInstant: Date;
+  geoOrigin?: GeoPoint | null;
+}>;
+
+export type MealBuddyGeoApplicationStatus = "not_applied" | "applied" | "empty" | "fallback";
+type MealBuddyGeoApplication = Readonly<{
+  status: MealBuddyGeoApplicationStatus;
+  cards: readonly MealBuddySelectedCard[];
 }>;
 
 const EMPTY: MealBuddyCandidateApiResponse = Object.freeze({
@@ -39,12 +54,53 @@ const EMPTY: MealBuddyCandidateApiResponse = Object.freeze({
   candidates: Object.freeze([])
 });
 
+async function applyMealBuddyGeoEligibility(
+  transport: SocialRuntimeExecutorTransport,
+  selectedCards: readonly MealBuddySelectedCard[],
+  geoOrigin: GeoPoint | null
+): Promise<MealBuddyGeoApplication> {
+  if (geoOrigin === null) return Object.freeze({ status: "not_applied", cards: selectedCards });
+
+  try {
+    // The reader receives only the cards already selected by frozen Social/Meal Context authority.
+    // A missing row is an unbound historical card and therefore an applied exclusion, not a reason
+    // to infer another branch or to enter fallback.
+    const contexts = await readMealBuddyCandidateBranchContexts(transport, selectedCards);
+    if (contexts.size === 0) return Object.freeze({ status: "empty", cards: Object.freeze([]) });
+
+    const query = parseGeoQuery({
+      latitude: geoOrigin.latitude,
+      longitude: geoOrigin.longitude,
+      radiusMeters: NEXT_MEAL_GEO_RADIUS_METERS,
+      limit: NEXT_MEAL_GEO_BRANCH_LIMIT
+    });
+    if (!query.ok) return mealBuddyCandidateApiContractViolation();
+    const nearbyBranches = await new ExecutorGeoRepository(transport).narrowBranchCandidates(query.value);
+    const nearbyExactBindings = new Set(
+      nearbyBranches.map((branch) => `${branch.restaurantId}\u0000${branch.branchId}`)
+    );
+
+    // Preserve the frozen person/card order. GEO answers membership only: its nearest-first row
+    // order and raw distance never become Social/Taste ranking input or public projection.
+    const survivors = Object.freeze(selectedCards.filter((card) => {
+      const context = contexts.get(card.cardId);
+      return context !== undefined
+        && nearbyExactBindings.has(`${context.restaurantId}\u0000${context.branchId}`);
+    }));
+    return Object.freeze({ status: survivors.length === 0 ? "empty" : "applied", cards: survivors });
+  } catch {
+    // One high-level fallback only. Successful empty/unbound/outside/unknown-coordinate outcomes
+    // return above and can never reach this branch or repopulate the pool.
+    return Object.freeze({ status: "fallback", cards: selectedCards });
+  }
+}
+
 export async function composeMealBuddyCandidateList(
   composition: MealBuddyCandidateListComposition
 ): Promise<MealBuddyCandidateApiResponse> {
   const {
     transport, entitlementRowSource, candidateCipher, cardCipher,
-    actorUserId, sourceCardId, requestInstant
+    actorUserId, sourceCardId, requestInstant, geoOrigin = null
   } = composition;
   if (typeof actorUserId !== "string" || actorUserId.length === 0) {
     return mealBuddyCandidateApiContractViolation();
@@ -55,15 +111,25 @@ export async function composeMealBuddyCandidateList(
   if (!(requestInstant instanceof Date) || !Number.isFinite(requestInstant.getTime())) {
     return mealBuddyCandidateApiContractViolation();
   }
+  if (geoOrigin !== null) {
+    const parsedOrigin = parseGeoPoint(geoOrigin.latitude, geoOrigin.longitude);
+    if (!parsedOrigin.ok) return mealBuddyCandidateApiContractViolation();
+  }
 
   // 1. Frozen SR-2G-C compatible-card pool, from the one server instant, now read through the
   //    SR-2G-F context primitive that labels each row. This is still the only stage that decides
   //    WHICH card represents an owner, and it still decides it exactly once, before any ranking.
   //    Hard eligibility is untouched: the labels ride along with the frozen pool, they do not filter
   //    it, so a legacy card with no context yields one uniform label and the frozen order stands.
-  const selectedCards = await readMealBuddyCandidateCards(
+  const baseSelectedCards = await readMealBuddyCandidateCards(
     transport, actorUserId, sourceCardId, requestInstant
   );
+  if (baseSelectedCards.length === 0) return EMPTY;
+
+  // GEO-1D runs over the complete frozen person/card pool before ranking and exposure. The exact
+  // selected card is never changed; only its P0 branch binding may allow that person to survive.
+  const geoApplication = await applyMealBuddyGeoEligibility(transport, baseSelectedCards, geoOrigin);
+  const selectedCards = geoApplication.cards;
   if (selectedCards.length === 0) return EMPTY;
 
   // The owner -> card binding, fixed here and never renegotiated. Ranking and exposure operate on

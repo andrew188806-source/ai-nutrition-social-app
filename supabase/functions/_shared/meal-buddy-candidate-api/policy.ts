@@ -8,8 +8,10 @@ export const MEAL_BUDDY_CANDIDATE_API_POLICY_VERSION = "meal-buddy-candidate-api
 // The frozen SR-2B Premium exposure cap. SR-2G-D never raises it and never paginates past it.
 export const MEAL_BUDDY_CANDIDATE_API_MAXIMUM_CANDIDATES = 10;
 
-// The exact V1 request contract: one business key, nothing else.
+// The frozen source identity plus GEO-1D's sole optional context object. Actor, candidate, branch,
+// radius and every other authority remain server-derived or fixed policy.
 export const MEAL_BUDDY_CANDIDATE_API_REQUEST_KEY = "sourceCardRef" as const;
+export const MEAL_BUDDY_CANDIDATE_API_GEO_REQUEST_KEY = "geo" as const;
 
 // Business-control keys a caller must never be able to supply. Presence of any one is a rejected
 // request, not a silently ignored field: silently ignoring would let a client believe it had
@@ -17,7 +19,8 @@ export const MEAL_BUDDY_CANDIDATE_API_REQUEST_KEY = "sourceCardRef" as const;
 export const MEAL_BUDDY_CANDIDATE_API_FORBIDDEN_REQUEST_KEYS = Object.freeze([
   "actorUserId", "sourceCardId", "ownerUserId", "candidateUserId", "candidateRef",
   "candidateCardRef", "limit", "page", "cursor", "tier", "entitlement", "isPremium",
-  "clock", "authorityInstant", "diningDate", "mealPeriod", "restaurantId", "area",
+  "clock", "authorityInstant", "diningDate", "mealPeriod", "restaurantId", "branchId", "area",
+  "latitude", "longitude", "radiusMeters", "candidateCoordinates",
   "interests", "interestFilters", "tasteWeights", "rankingWeights"
 ]);
 

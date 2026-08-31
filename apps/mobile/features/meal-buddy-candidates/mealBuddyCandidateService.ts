@@ -1,4 +1,8 @@
-import type { MealBuddyCandidateRepository, MealBuddySourceCardRepository } from "./ports";
+import type {
+  MealBuddyCandidateGeoContext,
+  MealBuddyCandidateRepository,
+  MealBuddySourceCardRepository
+} from "./ports";
 import {
   errCandidates,
   MealBuddyCandidateClientError,
@@ -30,8 +34,11 @@ export class MealBuddyCandidateService {
   }
 
   // The reference is supplied by the caller for exactly one request and is never stored here.
-  listCandidates(sourceCardRef: string): Promise<MealBuddyCandidateOutcome> {
-    return this.options.candidateRepository.listCandidates(sourceCardRef);
+  listCandidates(
+    sourceCardRef: string,
+    geoContext: MealBuddyCandidateGeoContext | null = null
+  ): Promise<MealBuddyCandidateOutcome> {
+    return this.options.candidateRepository.listCandidates(sourceCardRef, geoContext);
   }
 
   // The narrow end-to-end read the screen actually needs: the actor's own cards, then the candidates

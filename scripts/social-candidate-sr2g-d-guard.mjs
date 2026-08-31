@@ -25,6 +25,9 @@ import { SR2JA_MIGRATION } from "./meal-buddy-chat-sr2j-a-successor-manifest.mjs
 import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
+import {
+  GEO1D_BASELINE, GEO1D_PATHS, auditGeo1dSources, classifyGeo1dLifecycle
+} from "./geo-meal-buddy-geo-1d-successor-manifest.mjs";
 // GEO-1A's migration, named exactly. A pattern here would admit any future migration.
 const GEO1A_MIGRATION_BASENAME = "20260825010000_geo_shared_candidate_authority.sql";
 const GEO1CP0_MIGRATION_BASENAME = "20260826010000_restaurant_geocode_source_authority.sql";
@@ -95,6 +98,17 @@ try {
   const state = lifecycleState();
   const lifecycle = classifySr2gfLifecycle(state);
   const successorLifecycle = classifySr2ggLifecycle({ ...state, headDeltaPaths: state.headDeltaEntries.map(({ path }) => path), headDeleted: state.headDeltaEntries.some(({ status }) => status === "D") });
+  const geo1dLifecycle = classifyGeo1dLifecycle({
+    head: state.head,
+    parent: state.head === GEO1D_BASELINE ? null : state.headParent,
+    originHead: state.originHead,
+    behind: state.behind,
+    ahead: state.ahead,
+    worktreePaths: state.worktreePaths,
+    stagedPaths: state.stagedPaths,
+    deltaPaths: state.head === GEO1D_BASELINE ? [] : state.headDeltaEntries.map(({ path }) => path),
+    deleted: state.headDeltaEntries.some(({ status }) => status === "D")
+  });
   const frozenAuthorityAtHead = git(["rev-parse", `${SR2GG_BASELINE}^`]).trim() === SR2GF_BASELINE
     && exact(lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2GG_BASELINE])), SR2GF_SUCCESSOR_PATHS);
   const effectivePhase = lifecycle.valid ? lifecycle.phase : frozenAuthorityAtHead && successorLifecycle.valid ? `successor_${successorLifecycle.phase}` : "invalid";
@@ -139,6 +153,13 @@ try {
   const allEdge = [handler, entry, errors, config].map(tsExec).join("\n");
   const allTs = `${allApi}\n${allEdge}`;
   const everything = `${allTs}\n${migration}`;
+  const geo1dSources = Object.fromEntries(GEO1D_PATHS
+    .filter((file) => fs.existsSync(path.join(root, file)))
+    .map((file) => [file, read(file)]));
+  geo1dSources["supabase/functions/_shared/geo-api/repository.ts"] =
+    read("supabase/functions/_shared/geo-api/repository.ts");
+  const exactGeo1dSuccessor = geo1dLifecycle.valid
+    && auditGeo1dSources(geo1dSources).length === 0;
 
   const migrationFiles = fs.readdirSync(path.join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
   const baselineMigrations = lines(git(["ls-tree", "--name-only", `${SR2GD_BASELINE}:supabase/migrations`])).filter((f) => f.endsWith(".sql")).sort();
@@ -211,7 +232,16 @@ try {
   // --- request authority -------------------------------------------------------------------------
   check("34. the request contract is exactly one business key",
     new RegExp(`MEAL_BUDDY_CANDIDATE_API_REQUEST_KEY = "${SR2GD_REQUEST_KEY}"`).test(policy)
-    && /keys\.length !== 1 \|\| keys\[0\] !== MEAL_BUDDY_CANDIDATE_API_REQUEST_KEY/.test(request));
+    && (/keys\.length !== 1 \|\| keys\[0\] !== MEAL_BUDDY_CANDIDATE_API_REQUEST_KEY/.test(request)
+      || exactGeo1dSuccessor
+      && /MEAL_BUDDY_CANDIDATE_API_GEO_REQUEST_KEY = "geo"/.test(policy)
+      && /const exactNonGeo = keys\.length === 1/.test(request)
+      && /const exactGeo = keys\.length === 2/.test(request)
+      && /if \(!exactNonGeo && !exactGeo\) return REJECTED;/.test(request)
+      && /geoKeys\.length !== 2/.test(request)
+      && /parseGeoPoint\(geoRecord\.latitude, geoRecord\.longitude\)/.test(request)
+      && /const actorUserId = authentication\.value\.userId/.test(handler)
+      && !/actorUserId:\s*parsed\.value/.test(handler)));
   check("35. every forbidden business-control key is named and refused",
     SR2GD_FORBIDDEN_REQUEST_KEYS.every((key) => policy.includes(`"${key}"`))
     && /MEAL_BUDDY_CANDIDATE_API_FORBIDDEN_REQUEST_KEYS\.some/.test(request));
@@ -258,10 +288,17 @@ try {
   // SR-2G-F reads the context primitive, which COMPOSES this bridge rather than replacing it, so the
   // bridge must still be the pool source — proven in the SR-2G-F migration, not merely assumed.
   check("49. exactly two executor statements exist, both frozen primitives",
-    count(reads, "defineSocialRuntimeExecutorStatement<") === 2
+    (count(reads, "defineSocialRuntimeExecutorStatement<") === 2
     && reads.includes("social_internal.canonical_meal_buddy_context_candidates")
     && read("supabase/migrations/20260820010000_meal_buddy_food_context_authority.sql").includes(SR2GD_BRIDGE_FUNCTION)
-    && reads.includes(SR2GD_INTEREST_FUNCTION));
+    && reads.includes(SR2GD_INTEREST_FUNCTION))
+    || (exactGeo1dSuccessor
+      && count(reads, "defineSocialRuntimeExecutorStatement<") === 3
+      && reads.includes("social_internal.canonical_meal_buddy_context_candidates")
+      && reads.includes(SR2GD_INTEREST_FUNCTION)
+      && reads.includes("social_internal.read_meal_buddy_card_branch_context")
+      && !/from social_internal\.meal_buddy_card_branch_context/.test(reads)
+      && /new ExecutorGeoRepository\(transport\)\.narrowBranchCandidates/.test(compose)));
   check("50. the profile projection is the frozen SR-2C primitive, reused not reimplemented",
     /readExposedSocialProfileFacts|projectPublicSocialProfiles/.test(compose)
     && !allTs.includes(SR2GD_PROFILE_FUNCTION));

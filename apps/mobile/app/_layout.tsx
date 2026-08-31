@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { ConsumerRuntimeNavigationGate, ConsumerRuntimeProvider } from "../features/consumer-runtime";
+import { ConsumerLocationProvider } from "../features/consumer-location/ConsumerLocationProvider";
 import { snowPalette } from "../theme/tokens";
 
 export default function RootLayout() {
@@ -22,8 +23,9 @@ export default function RootLayout() {
 
   return (
     <ConsumerRuntimeProvider>
-      <ConsumerRuntimeNavigationGate>
-        <Stack
+      <ConsumerLocationProvider>
+        <ConsumerRuntimeNavigationGate>
+          <Stack
           screenOptions={{
             headerStyle: { backgroundColor: snowPalette.card },
             headerTintColor: snowPalette.ink,
@@ -51,8 +53,9 @@ export default function RootLayout() {
           <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
           <Stack.Screen name="meal-buddy-candidate-profile/[candidateRef]" options={{ title: "飯友公開檔案" }} />
           <Stack.Screen name="meal-buddy-chat/[relationshipRef]" options={{ title: zhTW.mobile.mealBuddyChat.screenTitle }} />
-        </Stack>
-      </ConsumerRuntimeNavigationGate>
+          </Stack>
+        </ConsumerRuntimeNavigationGate>
+      </ConsumerLocationProvider>
     </ConsumerRuntimeProvider>
   );
 }

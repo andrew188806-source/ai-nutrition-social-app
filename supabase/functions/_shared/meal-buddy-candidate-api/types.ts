@@ -9,6 +9,18 @@ import type { MealBuddyContextState } from "../meal-buddy-context/types.ts";
 // One row of the SR-2G-F context primitive, which composes the SR-2G-D card projection and through
 // it the frozen SR-2G-C pool. `context_state` is a closed server-side vocabulary and never a score;
 // it is consumed by the bucket composer and never reaches the client DTO.
+export type MealBuddyCardBranchContextRow = Readonly<{
+  card_id: string;
+  restaurant_id: string;
+  branch_id: string;
+}>;
+
+export type MealBuddyCardBranchContext = Readonly<{
+  cardId: string;
+  restaurantId: string;
+  branchId: string;
+}>;
+
 export type MealBuddyCandidateCardRow = Readonly<{
   candidate_owner_user_id: string;
   candidate_card_id: string;

@@ -23,7 +23,7 @@ import {
 } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 import { ConsumerLocationPermissionCard } from "../features/consumer-location/ConsumerLocationPermissionCard";
-import { useConsumerLocation } from "../features/consumer-location";
+import { useConsumerLocationRuntime } from "../features/consumer-location/ConsumerLocationProvider";
 import { getConsumerMealRuntimeFlags } from "../features/consumer-meals/featureFlags";
 
 // Canonical provider: wires Phase 2Q service behind the U1 presentation layer.
@@ -38,10 +38,7 @@ export default function RecommendationScreen() {
   const [demoMode] = useDemoUserPlan();
   const runtime = useConsumerRuntime();
   const geoRuntimeEnabled = getConsumerMealRuntimeFlags().nextMealRecommendationSource === "supabase";
-  const location = useConsumerLocation(
-    geoRuntimeEnabled ? runtime.state.actorKey : null,
-    runtime.state.actorGeneration
-  );
+  const location = useConsumerLocationRuntime();
   const actorTimezone = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile.timezone : runtime.mode === "mock" ? "Asia/Taipei" : "";
   const [planExpanded, setPlanExpanded] = useState(false);
   const [plannedDinner, setPlannedDinner] = useState<PlannedMeal | null>(null);

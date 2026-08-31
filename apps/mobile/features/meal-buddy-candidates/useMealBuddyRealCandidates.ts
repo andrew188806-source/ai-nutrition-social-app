@@ -5,6 +5,7 @@ import {
   type InterestCategoryLabels
 } from "./interestCatalog";
 import { getMealBuddyCandidateRuntimeDependencies } from "./runtimeBinding";
+import type { MealBuddyCandidateGeoContext } from "./ports";
 import type {
   MealBuddyCandidate,
   MealBuddyCandidateClientErrorCode,
@@ -61,7 +62,10 @@ export type MealBuddyRealCandidatesController = {
 
 const EMPTY_LABELS: InterestCategoryLabels = new Map<string, string>();
 
-export function useMealBuddyRealCandidates(isLiveMode: boolean): MealBuddyRealCandidatesController {
+export function useMealBuddyRealCandidates(
+  isLiveMode: boolean,
+  geoContext: MealBuddyCandidateGeoContext | null = null
+): MealBuddyRealCandidatesController {
   const [sourceCards, setSourceCards] = useState<MealBuddyRealSourceCardsState>({ phase: "idle" });
   const [selectedSourceCardRef, setSelectedSourceCardRef] = useState<string | null>(null);
   const [state, setState] = useState<MealBuddyRealCandidateState>({ phase: "idle" });
@@ -132,7 +136,7 @@ export function useMealBuddyRealCandidates(isLiveMode: boolean): MealBuddyRealCa
     // disguised fallback. No field is consulted, no position is used and no other card can be
     // reached from here. The server re-verifies ownership and active state on every request, and an
     // inactive card comes back as a legitimate empty result rather than as somebody else's pool.
-    const outcome = await service().listCandidates(sourceCardRef);
+    const outcome = await service().listCandidates(sourceCardRef, geoContext);
     if (requestSequence.current !== sequence) return;
 
     if (outcome.ok) {
@@ -143,7 +147,17 @@ export function useMealBuddyRealCandidates(isLiveMode: boolean): MealBuddyRealCa
     setState(outcome.error.code === "no_source_card"
       ? { phase: "noSource" }
       : { phase: "failed", code: outcome.error.code });
-  }, [service]);
+  }, [geoContext, service]);
+
+  const geoKey = geoContext === null ? "not_applied" : `${geoContext.latitude}:${geoContext.longitude}`;
+  const previousGeoKey = useRef(geoKey);
+  useEffect(() => {
+    if (previousGeoKey.current === geoKey) return;
+    previousGeoKey.current = geoKey;
+    // Changing between unavailable and available location automatically re-evaluates the selected
+    // card. This is a fresh canonical request, never client filtering or reuse of a prior response.
+    if (isLiveMode && selectedSourceCardRef !== null) void runForRef(selectedSourceCardRef);
+  }, [geoKey, isLiveMode, runForRef, selectedSourceCardRef]);
 
   const selectSourceCard = useCallback(async (sourceCardRef: string) => {
     await runForRef(sourceCardRef);

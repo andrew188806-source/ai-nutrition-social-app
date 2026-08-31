@@ -82,7 +82,8 @@ export async function processMealBuddyCandidateListRequest(
       cardCipher,
       actorUserId,
       sourceCardId,
-      requestInstant
+      requestInstant,
+      geoOrigin: parsed.value.geoOrigin
     });
     return new Response(JSON.stringify(response), {
       status: 200,

@@ -8,6 +8,10 @@ import {
   GEO1DP0_MIGRATION, GEO1DP0_NPM_KEYS, GEO1DP0_PATHS,
   auditGeo1dp0Sources, classifyGeo1dp0Lifecycle, createGeo1dp0Manifest
 } from "./geo-meal-buddy-geo-1d-p0-successor-manifest.mjs";
+import {
+  GEO1D_BASELINE, GEO1D_COMMIT_SUBJECT, GEO1D_PATHS,
+  auditGeo1dSources, classifyGeo1dLifecycle
+} from "./geo-meal-buddy-geo-1d-successor-manifest.mjs";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -37,6 +41,14 @@ const lifecycle = classifyGeo1dp0Lifecycle({
   parent: head === GEO1DP0_BASELINE ? null : git(["rev-parse", "HEAD^"]),
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
+const geo1dLifecycle = classifyGeo1dLifecycle({
+  head, originHead, behind, ahead, stagedPaths, worktreePaths,
+  deltaPaths: head === GEO1D_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  parent: head === GEO1D_BASELINE ? null : git(["rev-parse", "HEAD^"]),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const isGeo1dSuccessor = geo1dLifecycle.valid;
 
 const sources = Object.fromEntries(GEO1DP0_PATHS.filter((file) => fs.existsSync(path.join(root, file)))
   .map((file) => [file, read(file)]));
@@ -44,20 +56,29 @@ const migration = sources[GEO1DP0_MIGRATION] ?? "";
 const runtime = sources["supabase/functions/_shared/meal-buddy-card-api/runtime.ts"] ?? "";
 const packageJson = JSON.parse(sources["package.json"] ?? "{}");
 const violations = auditGeo1dp0Sources(sources);
+const geo1dSources = Object.fromEntries(GEO1D_PATHS.filter((file) => fs.existsSync(path.join(root, file)))
+  .map((file) => [file, read(file)]));
+geo1dSources["supabase/functions/_shared/geo-api/repository.ts"] =
+  read("supabase/functions/_shared/geo-api/repository.ts");
+const geo1dViolations = isGeo1dSuccessor ? auditGeo1dSources(geo1dSources) : [];
 
-check("lifecycle is exact GEO-1D-P0 candidate or freeze", lifecycle.valid, lifecycle.phase);
+check("lifecycle is exact GEO-1D-P0 candidate or freeze", lifecycle.valid || isGeo1dSuccessor,
+  isGeo1dSuccessor ? geo1dLifecycle.phase : lifecycle.phase);
 check("branch remains main", git(["branch", "--show-current"]) === "main");
 check("baseline subject is exact", git(["show", "-s", "--format=%s", GEO1DP0_BASELINE]) === GEO1DP0_BASELINE_SUBJECT);
 check("origin/main is the pushed baseline or exact pushed freeze",
-  originHead === GEO1DP0_BASELINE || lifecycle.phase === "frozen_pushed", originHead);
+  originHead === GEO1DP0_BASELINE || lifecycle.phase === "frozen_pushed"
+    || (isGeo1dSuccessor && originHead === GEO1D_BASELINE), originHead);
 check("nothing is staged", stagedPaths.length === 0, stagedPaths);
 check("manifest is sorted unique wildcard-free and present",
   JSON.stringify(GEO1DP0_PATHS) === JSON.stringify([...GEO1DP0_PATHS].sort())
   && new Set(GEO1DP0_PATHS).size === GEO1DP0_PATHS.length
   && GEO1DP0_PATHS.every((file) => !/[?*]/.test(file) && fs.existsSync(path.join(root, file))));
 check("dirty or freeze delta equals exact manifest",
-  JSON.stringify(lifecycle.manifest) === JSON.stringify(GEO1DP0_PATHS),
-  { actual: lifecycle.manifest, expected: GEO1DP0_PATHS });
+  JSON.stringify(isGeo1dSuccessor ? geo1dLifecycle.manifest : lifecycle.manifest) ===
+    JSON.stringify(isGeo1dSuccessor ? GEO1D_PATHS : GEO1DP0_PATHS),
+  { actual: isGeo1dSuccessor ? geo1dLifecycle.manifest : lifecycle.manifest,
+    expected: isGeo1dSuccessor ? GEO1D_PATHS : GEO1DP0_PATHS });
 check("exactly one additive migration exists after the frozen chain",
   fs.readdirSync(path.join(root, "supabase/migrations")).filter((file) => file.endsWith(".sql")).length === 91
   && GEO1DP0_PATHS.filter((file) => file.startsWith("supabase/migrations/")).length === 1);
@@ -92,7 +113,10 @@ check("anon authenticated and service role have no table or function authority",
   /revoke all on table[\s\S]{0,150}?anon, authenticated, authenticator, service_role/.test(migration)
   && (migration.match(/from public, anon, authenticated, authenticator, service_role, social_runtime_executor/g) ?? []).length === 3);
 check("no Mobile public DTO or profile surface changes",
-  git(["diff", "--name-only", GEO1DP0_BASELINE, "--", "apps/mobile", "packages/shared"]).length === 0);
+  isGeo1dSuccessor
+    ? lines(git(["diff", "--name-only", GEO1D_BASELINE, "--", "apps/mobile", "packages/shared"]))
+      .every((file) => GEO1D_PATHS.includes(file))
+    : git(["diff", "--name-only", GEO1DP0_BASELINE, "--", "apps/mobile", "packages/shared"]).length === 0);
 const publicSurfaces = [
   "supabase/functions/_shared/meal-buddy-card-api/types.ts",
   "supabase/functions/_shared/meal-buddy-candidate-api/types.ts",
@@ -104,10 +128,14 @@ check("no public Meal Buddy or profile DTO contains branch context",
   ownedDto.length > 0 && candidateDto.length > 0
   && !/branchContext|branch_id|branchId/.test(ownedDto + candidateDto));
 check("candidate person/card dedupe bytes remain frozen",
-  git(["diff", "--name-only", GEO1DP0_BASELINE, "--",
-    "supabase/migrations/20260817030000_meal_buddy_candidate_pool_authority.sql",
-    "supabase/functions/_shared/meal-buddy-candidate-api/compose.ts",
-    "supabase/functions/_shared/meal-buddy-candidate-api/readCandidateCards.ts"]).length === 0);
+  isGeo1dSuccessor
+    ? geo1dViolations.length === 0
+      && git(["diff", "--name-only", GEO1D_BASELINE, "--",
+        "supabase/migrations/20260817030000_meal_buddy_candidate_pool_authority.sql"]).length === 0
+    : git(["diff", "--name-only", GEO1DP0_BASELINE, "--",
+      "supabase/migrations/20260817030000_meal_buddy_candidate_pool_authority.sql",
+      "supabase/functions/_shared/meal-buddy-candidate-api/compose.ts",
+      "supabase/functions/_shared/meal-buddy-candidate-api/readCandidateCards.ts"]).length === 0);
 check("Meal Context authority bytes remain frozen",
   git(["diff", "--name-only", GEO1DP0_BASELINE, "--",
     "supabase/migrations/20260820010000_meal_buddy_food_context_authority.sql",
@@ -131,7 +159,8 @@ check("manifest bytes contain no secrets CRLF BOM NUL or replacement character",
     && !(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf);
 }));
 if (lifecycle.phase !== "candidate") {
-  check("freeze commit subject is exact", git(["log", "-1", "--format=%s"]) === GEO1DP0_COMMIT_SUBJECT);
+  check("freeze commit subject is exact", git(["log", "-1", "--format=%s"]) ===
+    (isGeo1dSuccessor && geo1dLifecycle.phase !== "candidate" ? GEO1D_COMMIT_SUBJECT : GEO1DP0_COMMIT_SUBJECT));
 }
 const manifest = createGeo1dp0Manifest((file) => fs.readFileSync(path.join(root, file)));
 check("raw-byte manifest covers exact paths", manifest.entries.length === GEO1DP0_PATHS.length
@@ -139,7 +168,7 @@ check("raw-byte manifest covers exact paths", manifest.entries.length === GEO1DP
     && /^[0-9a-f]{64}$/.test(entry.sha256)));
 
 console.log("\n" + JSON.stringify({
-  suite: "geo-meal-buddy-geo-1d-p0-guard", lifecycle: lifecycle.phase,
+  suite: "geo-meal-buddy-geo-1d-p0-guard", lifecycle: isGeo1dSuccessor ? geo1dLifecycle.phase : lifecycle.phase,
   total: checks.length, passed: checks.length - failures.length, failed: failures.length,
   failures: failures.map((item) => item.name),
   canonicalManifestSha256: manifest.aggregateSha256,

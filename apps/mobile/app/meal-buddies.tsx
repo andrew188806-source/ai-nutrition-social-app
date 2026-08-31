@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -52,6 +52,8 @@ import {
   type MealBuddyRealCandidatesController
 } from "../features/meal-buddy-candidates/useMealBuddyRealCandidates";
 import { useConsumerRuntime } from "../features/consumer-runtime";
+import { ConsumerLocationPermissionCard } from "../features/consumer-location/ConsumerLocationPermissionCard";
+import { useConsumerLocationRuntime } from "../features/consumer-location/ConsumerLocationProvider";
 import { MealBuddyRelationshipInbox } from "../features/meal-buddy-relationships/MealBuddyRelationshipInbox";
 import { MealBuddyPushPermissionCard } from "../features/meal-buddy-push/MealBuddyPushPermissionCard";
 import { useMealBuddyPush } from "../features/meal-buddy-push/useMealBuddyPush";
@@ -219,7 +221,9 @@ export default function MealBuddyHomeScreen() {
   // reachable at all — not as a source, not as a fallback and not on error.
   const consumerRuntime = useConsumerRuntime();
   const isRealCandidateMode = consumerRuntime.mode === "supabase";
-  const realCandidates = useMealBuddyRealCandidates(isRealCandidateMode);
+  const location = useConsumerLocationRuntime();
+  const mealBuddyGeoContext = location.state.phase === "available" ? location.state.position : null;
+  const realCandidates = useMealBuddyRealCandidates(isRealCandidateMode, mealBuddyGeoContext);
   const realRelationships = useMealBuddyRelationships(
     isRealCandidateMode ? consumerRuntime.state.actorKey : null,
     consumerRuntime.state.actorGeneration
@@ -371,6 +375,9 @@ export default function MealBuddyHomeScreen() {
           <Chip label="飯局" active={activeSection === "gatherings" || activeSection === "tables"} onPress={() => setActiveSection("gatherings")} />
         </View>
       ) : null}
+
+      {isRealCandidateMode && (activeSection === "discover" || activeSection === "cards")
+        ? <ConsumerLocationPermissionCard controller={location} /> : null}
 
       {activeSection === "discover" || activeSection === "cards" ? (
         <DiscoverSection

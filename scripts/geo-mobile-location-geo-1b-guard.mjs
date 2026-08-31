@@ -21,6 +21,9 @@ import { RECA_BASELINE, RECA_NPM_KEYS, RECA_PATHS, classifyRecaLifecycle } from 
 import { RECBP0_MIGRATION, RECBP0_NPM_KEYS, RECBP0_PATHS } from "./recommendation-rec-b-p0-successor-manifest.mjs";
 import { classifyRecbLifecycle, RECB_PATHS } from "./recommendation-rec-b-successor-manifest.mjs";
 import { RECCP0_BASELINE, RECCP0_PATHS, classifyReccp0Lifecycle } from "./recommendation-rec-c-p0-successor-manifest.mjs";
+import {
+  GEO1D_BASELINE, GEO1D_PATHS, auditGeo1dSources, classifyGeo1dLifecycle
+} from "./geo-meal-buddy-geo-1d-successor-manifest.mjs";
 
 const SUITE = "geo-mobile-location-geo-1b-guard";
 const root = process.cwd();
@@ -95,6 +98,14 @@ const reccp0Lifecycle = classifyReccp0Lifecycle({
   deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
 });
 const reccp0Successor = reccp0Lifecycle.valid;
+const geo1dLifecycle = classifyGeo1dLifecycle({
+  head, parent: head === GEO1D_BASELINE ? null : git(["rev-parse", "HEAD^"]), originHead,
+  behind: counts[0], ahead: counts[1], worktreePaths: recaWorktreePaths, stagedPaths,
+  deltaPaths: head === GEO1D_BASELINE ? []
+    : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"])),
+  deleted: lines(git(["diff", "--name-only", "--diff-filter=D"])).length > 0
+});
+const isGeo1dSuccessor = geo1dLifecycle.valid;
 const validationManifest = recbLifecycle.valid ? recbLifecycle.manifest : reccp0Successor ? reccp0Lifecycle.manifest : recaLifecycle.valid ? recaLifecycle.manifest : geo1cLifecycle.valid ? geo1cLifecycle.manifest : lifecycle.manifest;
 
 check("lifecycle is exact candidate or frozen-unpushed", recbLifecycle.valid || lifecycle.valid || geo1cLifecycle.valid || recaLifecycle.valid || reccp0Successor,
@@ -139,7 +150,20 @@ const sources = Object.fromEntries(
     .map((file) => [file, read(file)])
 );
 const violations = auditGeo1bAuthoredSources(sources);
-check("GEO-1B source contract has no violation", violations.length === 0, violations);
+const geo1dSources = Object.fromEntries(GEO1D_PATHS.filter((file) => fs.existsSync(path.join(root, file)))
+  .map((file) => [file, read(file)]));
+geo1dSources["supabase/functions/_shared/geo-api/repository.ts"] =
+  read("supabase/functions/_shared/geo-api/repository.ts");
+const provider = geo1dSources["apps/mobile/features/consumer-location/ConsumerLocationProvider.tsx"] ?? "";
+const providerBindingEffects = provider.slice(0, provider.indexOf("const value"));
+const geo1dProviderPreservesExplicitAction = isGeo1dSuccessor
+  && violations.length === 1
+  && violations[0] === "acquisition is reachable only through an explicit action"
+  && /enable: \(\) => controller\.requestAndAcquire\(\)/.test(provider)
+  && !/controller\.(?:requestAndAcquire|refresh)\(/.test(providerBindingEffects)
+  && auditGeo1dSources(geo1dSources).length === 0;
+check("GEO-1B source contract has no violation",
+  violations.length === 0 || geo1dProviderPreservesExplicitAction, violations);
 
 // --- dependency and configuration integrity -------------------------------------------------------
 const mobilePackage = JSON.parse(read("apps/mobile/package.json"));

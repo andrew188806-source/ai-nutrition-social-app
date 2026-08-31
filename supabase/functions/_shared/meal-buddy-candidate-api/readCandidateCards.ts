@@ -1,6 +1,11 @@
 // SR-2G-D executor reads. Two statements, both frozen primitives, neither re-implementing any rule.
 import { mealBuddyCandidateApiContractViolation } from "./policy.ts";
-import type { MealBuddyCandidateCardRow, MealBuddySelectedCard } from "./types.ts";
+import type {
+  MealBuddyCardBranchContext,
+  MealBuddyCardBranchContextRow,
+  MealBuddyCandidateCardRow,
+  MealBuddySelectedCard
+} from "./types.ts";
 import {
   defineSocialRuntimeExecutorStatement,
   type SocialRuntimeExecutorTransport
@@ -33,6 +38,14 @@ const CANDIDATE_INTERESTS = defineSocialRuntimeExecutorStatement<SocialInterestR
   select exposure_ordinal, namespace, tag_key, category_key, display_order
   from social_internal.project_public_social_interests($1::uuid, $2::uuid[])
 `;
+
+// GEO-1D-P0's sealed exact selected-card binding. This calls the bounded private reader only; it
+// never reads the table directly and cannot infer a branch from restaurant identity.
+const CARD_BRANCH_CONTEXTS = defineSocialRuntimeExecutorStatement<MealBuddyCardBranchContextRow>`
+  select card_id::text, restaurant_id::text, branch_id::text
+  from social_internal.read_meal_buddy_card_branch_context($1::uuid[])
+`;
+const CARD_BRANCH_CONTEXT_READ_LIMIT = 200;
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 
@@ -88,6 +101,47 @@ export async function readMealBuddyCandidateCards(
   // The actor can never be their own candidate; the frozen pool already excludes them.
   if (owners.has(actorUserId)) return mealBuddyCandidateApiContractViolation();
   return Object.freeze(cards);
+}
+
+// Reads branch context only for cards already selected by frozen Social authority. The P0 function
+// accepts at most 200 ids, so larger complete pools are chunked inside one executor transaction;
+// there is no candidate cap and no alternate-card lookup. Missing rows remain explicitly unbound.
+export async function readMealBuddyCandidateBranchContexts(
+  transport: SocialRuntimeExecutorTransport,
+  selectedCards: readonly MealBuddySelectedCard[]
+): Promise<ReadonlyMap<string, MealBuddyCardBranchContext>> {
+  if (!Array.isArray(selectedCards)) return mealBuddyCandidateApiContractViolation();
+  if (selectedCards.length === 0) return new Map();
+  const selectedByCardId = new Map(selectedCards.map((card) => [card.cardId, card]));
+  if (selectedByCardId.size !== selectedCards.length) return mealBuddyCandidateApiContractViolation();
+
+  const rows = await transport.withTransaction(async (transaction) => {
+    const result: MealBuddyCardBranchContextRow[] = [];
+    const cardIds = [...selectedByCardId.keys()];
+    for (let index = 0; index < cardIds.length; index += CARD_BRANCH_CONTEXT_READ_LIMIT) {
+      result.push(...await transaction.query(
+        CARD_BRANCH_CONTEXTS,
+        [cardIds.slice(index, index + CARD_BRANCH_CONTEXT_READ_LIMIT)]
+      ));
+    }
+    return result;
+  });
+
+  const contexts = new Map<string, MealBuddyCardBranchContext>();
+  for (const row of rows) {
+    if (!isNonEmptyString(row.card_id) || !isNonEmptyString(row.restaurant_id)
+      || !isNonEmptyString(row.branch_id)) return mealBuddyCandidateApiContractViolation();
+    const selected = selectedByCardId.get(row.card_id);
+    if (!selected || selected.restaurantId !== row.restaurant_id || contexts.has(row.card_id)) {
+      return mealBuddyCandidateApiContractViolation();
+    }
+    contexts.set(row.card_id, Object.freeze({
+      cardId: row.card_id,
+      restaurantId: row.restaurant_id,
+      branchId: row.branch_id
+    }));
+  }
+  return contexts;
 }
 
 // Reads the CURRENT profile interests for exactly the exposed candidate owners. Nothing here reads a

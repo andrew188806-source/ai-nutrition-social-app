@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConsumerLocationController } from "./controller";
 import { createExpoConsumerLocationDevicePort } from "./expoLocationPort";
 import type { ConsumerLocationState } from "./types";
+import { useConsumerLocationRuntime } from "./ConsumerLocationProvider";
 
 // GEO-1B acquisition hook.
 //
@@ -28,3 +29,5 @@ export function useConsumerLocation(actorKey: string | null, actorGeneration: nu
 
   return useMemo(() => Object.freeze({ state, ...actions }), [actions, state]);
 }
+
+export { useConsumerLocationRuntime };

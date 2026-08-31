@@ -4,14 +4,19 @@ import type {
   MealBuddySourceCardOutcome
 } from "./types";
 
+export type MealBuddyCandidateGeoContext = Readonly<{
+  latitude: number;
+  longitude: number;
+}>;
+
 // The whole read surface of SR-2G-E1. Two reads, both server-authoritative.
 //
 // `listSourceCards` takes NO argument: the server derives the owner from the verified session, so
 // there is no parameter for an actor or a foreign owner to hide in.
 //
-// `listCandidates` takes exactly one opaque source-purpose reference. It is not authorization —
-// the frozen pool re-verifies ownership and active state server-side — and there is deliberately no
-// second parameter, so no limit, page, tier, clock or eligibility input is expressible.
+// `listCandidates` takes one opaque source-purpose reference and optional current coordinates. The
+// reference is not authorization and the coordinate is not identity: server authority re-verifies
+// the actor/card, fixes the radius, resolves exact candidate branches and owns all eligibility.
 export interface MealBuddySourceCardRepository {
   readonly source: "disabled" | "supabase-live";
   listSourceCards(): Promise<MealBuddySourceCardOutcome>;
@@ -19,7 +24,10 @@ export interface MealBuddySourceCardRepository {
 
 export interface MealBuddyCandidateRepository {
   readonly source: "disabled" | "supabase-live";
-  listCandidates(sourceCardRef: string): Promise<MealBuddyCandidateOutcome>;
+  listCandidates(
+    sourceCardRef: string,
+    geoContext?: MealBuddyCandidateGeoContext | null
+  ): Promise<MealBuddyCandidateOutcome>;
 }
 
 export interface MealBuddyCandidateProfileRepository {
