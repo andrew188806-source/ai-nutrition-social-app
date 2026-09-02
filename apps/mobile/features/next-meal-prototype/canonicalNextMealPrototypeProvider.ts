@@ -2,6 +2,7 @@ import {
   createConsumerNextMealRecommendationService,
   type ConsumerMealFactoryDependencies
 } from "../consumer-meals/factories";
+import { getConsumerMealRuntimeFlags } from "../consumer-meals/featureFlags";
 import { getNextMealCandidateCount, normalizeNextMealCandidateEntitlement } from "./nextMealCandidateCountPolicy";
 import { mapCanonicalToU1NextMeal } from "./mapCanonicalToU1NextMeal";
 import type { U1NextMealPrototypeProvider, U1NextMealPrototypeRequest, U1NextMealProviderResult } from "./types";
@@ -17,7 +18,7 @@ export function createCanonicalNextMealPrototypeProvider(
   let service: ReturnType<typeof createConsumerNextMealRecommendationService> | undefined;
 
   try {
-    service = createConsumerNextMealRecommendationService(undefined, dependencies);
+    service = createConsumerNextMealRecommendationService(recommendationReadFlags(), dependencies);
   } catch {
     // Factory or configuration error — return fail-closed provider rather than propagating to module scope
   }
@@ -92,5 +93,29 @@ export function createCanonicalNextMealPrototypeProvider(
         };
       }
     }
+  };
+}
+
+// Only this canonical live successor projects read capability from the product flags. The
+// historical factories stay strict, and the original flags still govern each explicit write.
+function recommendationReadFlags(): ReturnType<typeof getConsumerMealRuntimeFlags> {
+  const flags = getConsumerMealRuntimeFlags();
+  if (flags.nextMealRecommendationSource !== "supabase") return flags;
+  if (flags.authSource !== "supabase-live" || !flags.supabaseAuthEnabled
+    || flags.mealRecordsSource !== "supabase-live" || flags.dailyNutritionSource !== "supabase-live") {
+    throw new Error("Canonical live Recommendation requires live Auth and live intake sources.");
+  }
+  return {
+    ...flags,
+    supabaseWritesEnabled: false,
+    mealRecordWritesEnabled: false,
+    mealRecordLiveWriteOptIn: false,
+    dailyNutritionWriteSource: "disabled",
+    plannedMealsWriteSource: "disabled",
+    // Exact pre-write-era read conflicts only; invalid values, project/environment checks and
+    // missing read/write opt-ins remain errors. Never erase the entire issue list.
+    issues: flags.issues.filter((issue) =>
+      issue !== "Supabase live daily nutrition summary reads require Consumer Supabase writes to remain disabled unless Phase 2K summary persistence or Phase 2O planned meal writes are explicitly enabled."
+      && issue !== "Supabase live daily nutrition summary reads require Consumer meal record writes to remain disabled.")
   };
 }

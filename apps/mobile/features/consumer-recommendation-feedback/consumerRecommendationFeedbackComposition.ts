@@ -1,6 +1,7 @@
 import { createAsyncStorageConsumerAuthStorage } from "../consumer-auth/asyncStorageConsumerAuthStorage";
 import { createConsumerAuthPort } from "../consumer-auth/factories";
 import { getConsumerRuntimeFlags } from "../consumer-auth/featureFlags";
+import { deriveLiveSupabaseClientFlags } from "../consumer-auth/liveClientCompositionFlags";
 import type { ConsumerAuthPort } from "../consumer-auth/ports";
 import type { ConsumerAuthStorage } from "../consumer-auth/storage";
 import type { SupabaseConsumerSdkLoader } from "../consumer-auth/supabaseConsumerClientFactory";
@@ -32,7 +33,7 @@ export function createMobileConsumerRecommendationFeedbackComposition(
 ) {
   const env = options.env ?? readEnv();
   const flags = options.flags ?? getConsumerRecommendationFeedbackRuntimeFlags(env);
-  const authFlags = getConsumerRuntimeFlags(env);
+  const authFlags = deriveLiveSupabaseClientFlags(getConsumerRuntimeFlags(env));
   let feedbackClient = options.feedbackClient;
 
   const authPort = options.authPort ?? createConsumerAuthPort(

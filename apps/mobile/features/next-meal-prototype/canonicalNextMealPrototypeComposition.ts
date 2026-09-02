@@ -1,6 +1,7 @@
 import { SupabaseConsumerAuthAdapter } from "../consumer-auth/adapters/supabaseConsumerAuthAdapter";
 import { createAsyncStorageConsumerAuthStorage } from "../consumer-auth/asyncStorageConsumerAuthStorage";
 import { getConsumerRuntimeFlags } from "../consumer-auth/featureFlags";
+import { deriveLiveSupabaseClientFlags } from "../consumer-auth/liveClientCompositionFlags";
 import { SupabaseConsumerClientFactory } from "../consumer-auth/supabaseConsumerClientFactory";
 import { getSupabaseConsumerEnvironment } from "../consumer-auth/supabaseConsumerEnvironment";
 import { createOfficialSupabaseConsumerSdkLoader } from "../consumer-auth/supabaseSdkLoader";
@@ -11,21 +12,14 @@ import { SupabaseConsumerTasteFoundationRepository } from "../consumer-taste-pro
 import type { SupabaseConsumerTasteFoundationClientLike } from "../consumer-taste-profile/supabaseTasteFoundationContracts";
 import type { CanonicalNextMealPrototypeProviderDependencies } from "./canonicalNextMealPrototypeProvider";
 
-type RuntimeEnv = Record<string, string | undefined>;
-
-function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
-}
-
 export function createCanonicalNextMealPrototypeRuntimeDependencies(): CanonicalNextMealPrototypeProviderDependencies {
   const mealFlags = getConsumerMealRuntimeFlags();
   if (mealFlags.nextMealRecommendationSource !== "supabase") return {};
 
   try {
-    const authFlags = getConsumerRuntimeFlags();
+    const authFlags = deriveLiveSupabaseClientFlags(getConsumerRuntimeFlags());
     const factory = new SupabaseConsumerClientFactory({
-      env: getSupabaseConsumerEnvironment(readEnv()),
+      env: getSupabaseConsumerEnvironment(),
       flags: authFlags,
       storage: createAsyncStorageConsumerAuthStorage(),
       sdkLoader: createOfficialSupabaseConsumerSdkLoader()

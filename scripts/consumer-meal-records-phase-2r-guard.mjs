@@ -124,7 +124,10 @@ else
 
 const providerAndMapper = provider + mapper;
 
-if (!/plannedMeal.*[Ww]rite|writePlanned|savePlanned|insertPlanned/.test(providerAndMapper))
+// The canonical live-read successor explicitly DISABLES this write source. Ignore only that
+// exact property assignment in the provider; actual write calls and all mapper code stay fenced.
+const plannedWriteAuthority = provider.replace('    plannedMealsWriteSource: "disabled",', "") + mapper;
+if (!/plannedMeal.*[Ww]rite|writePlanned|savePlanned|insertPlanned/.test(plannedWriteAuthority))
   pass("no planned-meal write in provider or mapper");
 else fail("no planned-meal write in provider or mapper", "Phase 2R must not write planned meals.");
 

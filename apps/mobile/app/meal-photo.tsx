@@ -194,15 +194,13 @@ export default function MealPhotoScreen() {
     mimeType: string | null,
     fileName: string | null
   ) {
-    // TODO: Replace fake demo nutrition estimate with a real AI image analysis API call.
-    // Media acquisition (camera/photo-library) is real as of MI-E-B4; only the downstream
-    // nutrition estimate remains a fixed demo result. A new photo means a new AI Analysis
-    // session: clear any previously completed analysis, and record how this photo was
+    // A new photo starts a new analysis session: clear any previously completed analysis,
+    // and record how this photo was
     // obtained (camera vs. photo_library) plus its real local URI so analysis.tsx knows
     // whether to show the current/post-hoc confirmation (camera: never; photo_library: always).
-    // MI-E-C3: also starts the private Storage upload of this same photo (see analysis.tsx /
-    // useMealPhotoUpload) — mimeType/fileName are only ever used to resolve a trusted upload
-    // MIME type, never for the (still-fake) nutrition estimate above.
+    // analysis.tsx / useMealPhotoUpload materialize and privately upload this photo when the
+    // live runtime is enabled, then invoke the AI analysis service. mimeType/fileName resolve
+    // the trusted upload MIME type; they are not nutrition evidence.
     // MI-E-C5-R5-R2: the new session is stamped with the actor that took this photo. When signed
     // out, `owner` is null, so the session is explicitly ownerless and /analysis will reset it
     // rather than attributing the photo to whoever mounts next.
@@ -232,7 +230,7 @@ export default function MealPhotoScreen() {
   }
 
   function navigateToDemoResult() {
-    // TODO: Replace static demo nutrition result with dynamic AI result.
+    // Open the analysis flow; the configured runtime determines live or explicit demo behavior.
     router.push("/analysis");
   }
 
