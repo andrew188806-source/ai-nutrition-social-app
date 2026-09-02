@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 
 const root = process.cwd();
 const checks = [];
@@ -41,6 +42,38 @@ const RATINGS = "apps/mobile/features/consumer-ratings/consumerRatingComposition
 const LAUNCHER = "scripts/start-mobile.mjs";
 const GUARD = "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-guard.mjs";
 const SMOKE = "scripts/consumer-live-client-composition-mi-e-c5-r7-c4-r1-smoke.mjs";
+
+// PUBLIC_DEMO_REAL_AI_ACTIVATION: exact candidate/frozen-local lifecycle, not a later-phase bypass.
+const ACTIVATION_BASE = "a8ade613917908baee5a682f33f77aac8de3bbf6";
+const ACTIVATION_SMOKE = "scripts/public-demo-real-ai-activation-smoke.mjs";
+const ACTIVATION_PATHS = Object.freeze([
+  AUTH_FLAGS,
+  "apps/mobile/features/consumer-auth/supabaseConsumerEnvironment.ts",
+  "apps/mobile/features/consumer-meals/featureFlags.ts",
+  "apps/mobile/features/meal-photo-upload/featureFlags.ts",
+  "apps/mobile/features/meal-photo-analysis/featureFlags.ts",
+  RUNTIME,
+  "supabase/functions/meal-photo-analysis/index.ts",
+  ACTIVATION_SMOKE, SMOKE, GUARD
+]);
+const activationDirty = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+  .split("\0").filter(Boolean).map((entry) => entry.slice(3).replaceAll("\\", "/"));
+const activationCommitted = git(["diff", "--name-only", ACTIVATION_BASE, "HEAD"])
+  .split("\n").filter(Boolean);
+const activationScope = exists(ACTIVATION_SMOKE) || activationDirty.includes(GUARD) || activationCommitted.includes(GUARD);
+const exactActivationPaths = (paths) => paths.length === 10 && new Set(paths).size === 10
+  && ACTIVATION_PATHS.length === 10 && new Set(ACTIVATION_PATHS).size === 10
+  && ACTIVATION_PATHS.every((file) => paths.includes(file) && exists(file));
+// Locks the entire authorized Auth-flags result, including all frozen parser/default assertions.
+const activationAuthDigest = createHash("sha256").update(read(AUTH_FLAGS).replaceAll("\r\n", "\n")).digest("hex");
+const exactActivation = git(["branch", "--show-current"]) === "main"
+  && git(["rev-parse", "origin/main"]) === ACTIVATION_BASE
+  && activationAuthDigest === "bda47ba668ab520e105da77a0e96c5d7628f86edf1874654be3545fcabcd8458"
+  && ((git(["rev-parse", "HEAD"]) === ACTIVATION_BASE && exactActivationPaths(activationDirty))
+    || (git(["rev-parse", "HEAD^"]) === ACTIVATION_BASE
+      && git(["show", "-s", "--format=%P", "HEAD"]) === ACTIVATION_BASE
+      && git(["show", "-s", "--format=%s", "HEAD"]) === "Activate Development AI for public demo"
+      && activationDirty.length === 0 && exactActivationPaths(activationCommitted)));
 
 // The four predecessor guards whose exact successor manifests must register this round, exactly as
 // every previous round in this chain registered with its predecessors.
@@ -243,12 +276,13 @@ check(
   "28. no R7-C3 / resolver / finalization / factory surface is modified by this round (vacuous on a clean tree)",
   PROTECTED_UNCHANGED.filter(
     (file) => !C4_R2_SUCCESSOR_MANIFEST.includes(file) && !C4_R3_SUCCESSOR_MANIFEST.includes(file)
+      && !(exactActivation && file === AUTH_FLAGS)
   ).every((file) => !changedVsHead.includes(file)),
   changedVsHead.filter(
     (file) =>
       PROTECTED_UNCHANGED.includes(file) &&
       !C4_R2_SUCCESSOR_MANIFEST.includes(file) &&
-      !C4_R3_SUCCESSOR_MANIFEST.includes(file)
+      !C4_R3_SUCCESSOR_MANIFEST.includes(file) && !(exactActivation && file === AUTH_FLAGS)
   )
 );
 check(
@@ -303,7 +337,8 @@ const outsideC4R2Manifest = worktree.filter((file) => !C4_R2_SUCCESSOR_MANIFEST.
 const outsideC4R3Manifest = worktree.filter((file) => !C4_R3_SUCCESSOR_MANIFEST.includes(file));
 check(
   "31. every uncommitted change is confined to the manifest, and a clean committed tree also passes",
-  outsideManifest.length === 0 || outsideC4R2Manifest.length === 0 || outsideC4R3Manifest.length === 0,
+  activationScope ? exactActivation :
+    outsideManifest.length === 0 || outsideC4R2Manifest.length === 0 || outsideC4R3Manifest.length === 0,
   { worktreeEntries: worktree.length, outsideManifest, outsideC4R2Manifest, outsideC4R3Manifest }
 );
 const guardCode = stripComments(read(GUARD));

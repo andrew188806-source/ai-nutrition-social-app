@@ -6,10 +6,14 @@ export type MealPhotoUploadRuntimeFlags = {
 };
 
 type RuntimeEnv = Record<string, string | undefined>;
+declare const process: { env: RuntimeEnv };
 
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return {
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_PHOTO_UPLOAD_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_PHOTO_UPLOAD_SOURCE,
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: process.env.EXPO_PUBLIC_TASTKIND_ENVIRONMENT,
+    TASTKIND_ENVIRONMENT: typeof process === "undefined" ? undefined : process.env.TASTKIND_ENVIRONMENT
+  };
 }
 
 const uploadSources = new Set<MealPhotoUploadSource>(["disabled", "mock", "supabase-live"]);

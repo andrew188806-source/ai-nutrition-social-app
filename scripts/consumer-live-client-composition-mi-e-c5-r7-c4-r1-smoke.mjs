@@ -96,9 +96,10 @@ const factoryMod = loadTs(FACTORY);
 expect(typeof helper.deriveLiveSupabaseClientFlags === "function", "H0 the shared live-client flag helper loads");
 expect(typeof helper.withoutObsoleteConsumerWritesIssue === "function", "H0 the shared capability-issue helper loads");
 
-// ---- canonical Development-shaped env (no real project, no real key) --------------------------
+// ---- exact public Development identity; fake public key; no network --------------------------
 const DEV_ENV = Object.freeze({
-  EXPO_PUBLIC_SUPABASE_URL: "https://devprojectref000000.supabase.co",
+  EXPO_PUBLIC_SUPABASE_URL: "https://msbgnnoorsoefuiwluye.supabase.co",
+  EXPO_PUBLIC_TASTKIND_ENVIRONMENT: "development",
   EXPO_PUBLIC_SUPABASE_ANON_KEY: "local-test-publishable-value",
   EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: "supabase-live",
   EXPO_PUBLIC_TASTKIND_CONSUMER_PROFILE_SOURCE: "supabase-live",

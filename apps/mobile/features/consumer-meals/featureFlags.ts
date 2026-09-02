@@ -10,10 +10,19 @@ const correctionSources = new Set<ConsumerMealCorrectionSource>(["disabled", "mo
 const nextMealRecommendationSources = new Set<ConsumerNextMealRecommendationSource>(["disabled", "mock", "local-menu-demo", "supabase"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
+declare const process: { env: RuntimeEnv };
 
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  // Preserve unrelated selectors; statically inline only the shared photo-activation inputs.
+  const unrelatedEnv = typeof process === "undefined" ? {} : process.env;
+  return {
+    ...unrelatedEnv,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES,
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: process.env.EXPO_PUBLIC_TASTKIND_ENVIRONMENT
+  };
 }
 
 function parseAuthSource(value: string | undefined, issues: string[]): ConsumerMealRuntimeFlags["authSource"] {

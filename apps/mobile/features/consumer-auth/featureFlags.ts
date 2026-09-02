@@ -4,10 +4,16 @@ const authSources = new Set<ConsumerAuthSource>(["mock", "supabase-disabled", "s
 const profileSources = new Set<ConsumerProfileSource>(["mock", "supabase-disabled", "supabase-live"]);
 
 type RuntimeEnv = Record<string, string | undefined>;
+declare const process: { env: RuntimeEnv };
 
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return {
+    EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_PROFILE_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_PROFILE_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES
+  };
 }
 
 function parseAuthSource(value: string | undefined, issues: string[]): ConsumerAuthSource {

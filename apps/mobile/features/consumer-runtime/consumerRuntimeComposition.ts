@@ -437,6 +437,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         authPort,
         storage,
         mealClient: client as unknown as SupabaseConsumerMealClientLike,
+        developmentProjectValidated: true,
         mealFlags: options.mealFlags,
         mealWriteRuntime: options.mealWriteRuntime,
         mealIdentificationFinalizationRuntime: options.mealIdentificationFinalizationRuntime,
@@ -538,6 +539,7 @@ function createMealRuntimeParts(input: {
   authPort: ConsumerAuthPort;
   storage: ConsumerAuthStorage;
   mealClient?: SupabaseConsumerMealClientLike;
+  developmentProjectValidated?: boolean;
   mealFlags?: ConsumerMealRuntimeFlags;
   mealWriteRuntime?: ConsumerMealWriteRuntime;
   mealIdentificationFinalizationRuntime?: ConsumerMealIdentificationFinalizationRuntime;
@@ -561,9 +563,26 @@ function createMealRuntimeParts(input: {
     require("../meal-identification-finalization/consumerMealIdentificationFinalizationService") as typeof import("../meal-identification-finalization/consumerMealIdentificationFinalizationService");
   const rawMealFlags = input.mealFlags ?? getConsumerMealRuntimeFlags();
   if (rawMealFlags.authSource !== input.authFlags.authSource) return null;
-  const writeFlags = normalizeMealWriteFlags(rawMealFlags, input.authFlags.authSource);
-  const overviewFlags = normalizeOverviewFlags(rawMealFlags, input.authFlags.authSource);
-  const plannedWriteFlags = normalizePlannedMealWriteFlags(rawMealFlags, input.authFlags.authSource);
+  const mealPhotoUploadFlags = normalizeMealPhotoUploadFlags(
+    getMealPhotoUploadRuntimeFlags(input.authFlags.authSource, input.authFlags.supabaseAuthEnabled, input.authFlags.supabaseWritesEnabled),
+    input.authFlags.authSource
+  );
+  // A validated live photo upload is its own approved write surface. It does not grant
+  // meal-record, Daily Nutrition or planned-meal writes, nor erase their configuration errors.
+  const photoOnlyApproved = input.developmentProjectValidated === true
+    && input.authFlags.authSource === "supabase-live" && input.authFlags.profileSource === "supabase-live"
+    && input.authFlags.supabaseAuthEnabled && input.authFlags.supabaseWritesEnabled && !input.authFlags.issues.length
+    && rawMealFlags.supabaseAuthEnabled && rawMealFlags.supabaseWritesEnabled
+    && mealPhotoUploadFlags.uploadSource === "supabase-live" && !mealPhotoUploadFlags.issues.length
+    && !rawMealFlags.mealRecordWritesEnabled && !rawMealFlags.mealRecordLiveWriteOptIn
+    && rawMealFlags.dailyNutritionWriteSource === "disabled" && rawMealFlags.plannedMealsWriteSource === "disabled";
+  const mealFlags = photoOnlyApproved ? {
+    ...rawMealFlags,
+    issues: rawMealFlags.issues.filter((issue) => issue !== "Consumer Supabase writes require an explicit approved write source.")
+  } : rawMealFlags;
+  const writeFlags = normalizeMealWriteFlags(mealFlags, input.authFlags.authSource);
+  const overviewFlags = normalizeOverviewFlags(mealFlags, input.authFlags.authSource);
+  const plannedWriteFlags = normalizePlannedMealWriteFlags(mealFlags, input.authFlags.authSource);
   if (writeFlags.issues.length || overviewFlags.issues.length || plannedWriteFlags.issues.length) return null;
   const dependencies = { authPort: input.authPort, mealClient: input.mealClient };
   const mealWriteRuntime = input.mealWriteRuntime ?? new ConsumerMealWriteRuntime({
@@ -635,10 +654,6 @@ function createMealRuntimeParts(input: {
     service: plannedMealService,
     operationStore: new ConsumerPlannedMealOperationStore(input.storage)
   });
-  const mealPhotoUploadFlags = normalizeMealPhotoUploadFlags(
-    getMealPhotoUploadRuntimeFlags(input.authFlags.authSource, input.authFlags.supabaseAuthEnabled, input.authFlags.supabaseWritesEnabled),
-    input.authFlags.authSource
-  );
   const mealPhotoUploadService = createMealPhotoUploadService(
     input.authFlags.authSource,
     input.authFlags.supabaseAuthEnabled,
