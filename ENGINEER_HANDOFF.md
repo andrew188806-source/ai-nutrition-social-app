@@ -311,4 +311,51 @@ The following are professional-engineer follow-up. They are **not** hidden unfin
 - Operational runbooks
 - Legal/privacy operational review where applicable
 
+## 11. RA-1A — Platform Admin authorization foundation (local, not applied)
+
+RA-1A is the first Admin round after the MVP handoff. It creates the authorization foundation an
+Admin console must pass through and **grants no console capability**: no restaurant approval, no
+catalog write, no support surface, no moderation action, no private-data projection.
+
+- Migration: `supabase/migrations/20260904010000_platform_admin_authority.sql` (the 92nd).
+  **Not applied to Development or Production.** No function was deployed, no remote configuration or
+  secret changed, and no Platform Admin has been provisioned.
+- Private schema `admin_internal` with four tables — role catalogue, closed permission vocabulary,
+  membership, and an append-only audit log with no UPDATE or DELETE policy for any role.
+- Two sealed `NOLOGIN NOINHERIT NOBYPASSRLS` roles: `platform_admin_context_reader` owns the three
+  client-callable read functions, `platform_admin_write_authority` owns the tables and the
+  provisioning functions and is granted to no client role. No `SUPERUSER`, `CREATEDB`, `CREATEROLE`,
+  `REPLICATION` or `BYPASSRLS` anywhere.
+- The client boundary — `public.platform_admin_current_context_v1()`,
+  `platform_admin_has_permission_v1()`, `platform_admin_audit_log_v1()` — takes **no actor
+  parameter**; the actor comes only from the verified request subject. Default `PUBLIC` execution is
+  revoked; only `authenticated` may execute.
+- **Role graph.** `authenticated` receives `EXECUTE` on reader-owned functions and is **never a
+  member** of either sealed role; the same holds for `anon`, `authenticator` and `service_role`. The
+  migration's only role-membership grants are two transient `postgres` bootstraps, both revoked
+  before it commits, so no client can `SET ROLE` to a sealed role or inherit its column privileges.
+  `NOINHERIT` is defence in depth, not the protection.
+- Provisioning and revocation live in `admin_internal`, are granted to **no role**, and write their
+  audit row in the same statement flow as the membership change, including on refusal. There is no
+  client-callable make-me-admin path.
+- Platform Admin is **not** Restaurant Owner, **not** Consumer, **not** a future Nutritionist, and
+  **not** a break-glass authority; the `role_key` CHECK admits `platform_admin` only.
+- Server-only contract module: `apps/admin-web/server/platformAdminAuthority.ts`. It holds no
+  transport and reads no environment, and fails closed — an unrecognised role or permission is
+  `unavailable`, never a silently narrowed admin, and authority failure is never reported as
+  "not an admin".
+- **Statement order is load-bearing.** Every function's `REVOKE`/`GRANT` runs *before* its
+  `ALTER FUNCTION … OWNER TO`. A privilege statement issued after ownership has moved to a sealed
+  role is not an error — PostgreSQL warns and changes nothing — so the whole block would silently
+  no-op and leave `PUBLIC` holding `EXECUTE` on all five functions. Guard, smoke and mutations pin
+  the order; live Development is what found it.
+- Validation: `npm run test:platform-admin-ra-1a`, `…-smoke`, `…-mutations`. Two Development-only,
+  separately gated utilities complete the round: `…-development-acceptance` (read-only) and
+  `…-development-reset` (drops RA-1A objects only, after proving the installation is pristine —
+  acceptance infrastructure, never a runtime path). Full detail and the explicit follow-up list are
+  in [docs/platform-admin-authority-ra-1a.md](docs/platform-admin-authority-ra-1a.md).
+
+RA-1A Development Acceptance, provisioning the first Platform Admin, and RA-1B (the Admin read API)
+are separate rounds and are not started.
+
 Handoff conclusion: the audited declared MVP is ready for professional takeover at `9d68eab2b0833c3a20d35727cff42fd1a403e24b`. Production hardening/deployment and the bounded follow-ups above remain engineering work; this artifact makes no Production or security certification claim.
