@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Phase 1 monorepo foundation for a Taiwan AI healthy eating and social discovery MVP.",
   "scripts": {
+    "test:platform-admin-ra-1b": "node scripts/platform-admin-ra-1b-guard.mjs",
+    "test:platform-admin-ra-1b-smoke": "node scripts/platform-admin-ra-1b-smoke.mjs",
+    "test:platform-admin-ra-1b-mutations": "node scripts/platform-admin-ra-1b-mutations.mjs",
     "test:platform-admin-ra-1a": "node scripts/platform-admin-ra-1a-guard.mjs",
     "test:platform-admin-ra-1a-smoke": "node scripts/platform-admin-ra-1a-smoke.mjs",
     "test:platform-admin-ra-1a-mutations": "node scripts/platform-admin-ra-1a-mutations.mjs",
