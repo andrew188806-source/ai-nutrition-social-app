@@ -366,7 +366,12 @@
     "test:platform-admin-ra-1c-r1": "node scripts/platform-admin-ra-1c-r1-guard.mjs",
     "test:platform-admin-ra-1c-r1-smoke": "node scripts/platform-admin-ra-1c-r1-smoke.mjs",
     "test:platform-admin-ra-1c-r1-mutations": "node scripts/platform-admin-ra-1c-r1-mutations.mjs",
-    "test:platform-admin-ra-1c-r1-development-security": "node scripts/platform-admin-ra-1c-r1-development-security.mjs"
+    "test:platform-admin-ra-1c-r1-development-security": "node scripts/platform-admin-ra-1c-r1-development-security.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p1": "node scripts/restaurant-owner-sold-out-ra-2a-p1-guard.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p1-smoke": "node scripts/restaurant-owner-sold-out-ra-2a-p1-smoke.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p1-mutations": "node scripts/restaurant-owner-sold-out-ra-2a-p1-mutations.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p1-postgres": "node scripts/restaurant-owner-sold-out-ra-2a-p1-postgres-apply.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p1-development": "node scripts/restaurant-owner-sold-out-ra-2a-p1-development-acceptance.mjs"
   },
   "workspaces": [
     "apps/*",
