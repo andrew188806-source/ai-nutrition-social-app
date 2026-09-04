@@ -2,6 +2,7 @@ import { BranchFilterPicker, Card, MetricCard, Section, StatusPill } from "../Re
 import type { AwaitedReturn } from "../../runtime/runtime-types";
 import type { OwnerBranch } from "../../runtime/restaurant-rpc-contracts";
 import type { loadLiveDashboard, loadLiveLocations, loadLiveMenu, loadLiveNutrition } from "../../runtime/live-restaurant-reads";
+import { RestaurantOwnerSoldOutControl } from "../menu/RestaurantOwnerSoldOutControl";
 
 export function LiveDashboard({ data, branches, selectedBranchId }: { data: AwaitedReturn<typeof loadLiveDashboard>; branches: OwnerBranch[]; selectedBranchId: string | null }) {
   const branchItems = selectedBranchId ? data.branchItems.filter((row) => row.branchId === selectedBranchId) : data.branchItems;
@@ -12,11 +13,12 @@ export function LiveLocations({ data }: { data: AwaitedReturn<typeof loadLiveLoc
 }
 export function LiveMenu({ data, branches, selectedBranchId }: { data: AwaitedReturn<typeof loadLiveMenu>; branches: OwnerBranch[]; selectedBranchId: string | null }) {
   const categories=new Map(data.categories.map(category=>[category.id,category.name]));
+  const branchNames=new Map(branches.map(branch=>[branch.id,branch.name]));
   const branchItems = selectedBranchId ? data.branchItems.filter((row) => row.branchId === selectedBranchId) : data.branchItems;
-  const branchItemsByItem=new Map<string,number>(); branchItems.forEach(row=>branchItemsByItem.set(row.menuItemId,(branchItemsByItem.get(row.menuItemId)??0)+1));
+  const branchItemsByItem=new Map<string,typeof branchItems>(); branchItems.forEach(row=>branchItemsByItem.set(row.menuItemId,[...(branchItemsByItem.get(row.menuItemId)??[]),row]));
   const nutritionIds=new Set(data.nutrition.map(row=>row.menuItemId));
   const items = selectedBranchId ? data.items.filter((item) => branchItemsByItem.has(item.id)) : data.items;
-  return <Section title="菜單與餐點" subtitle={`${data.menus.length} 份菜單；只呈現 Phase 2V-C 窄型欄位。`} action={<BranchFilterPicker basePath="/restaurant/menu" branches={branches} selectedBranchId={selectedBranchId} />}><div className="grid gap-4 lg:grid-cols-2">{items.map(item=><Card key={item.id}><h3 className="font-black">{item.name}</h3><p className="mt-1 text-sm text-stone-500">{categories.get(item.menuCategoryId)??"未分類"} · {item.status}</p><p className="mt-3 text-sm text-stone-600">授權分店供應 {branchItemsByItem.get(item.id)??0} 筆 · {nutritionIds.has(item.id)?"有目前營養資料":"無目前營養資料"}</p></Card>)}</div></Section>;
+  return <Section title="菜單與餐點" subtitle={`${data.menus.length} 份菜單；正式售完控制需由資料庫即時授權。`} action={<BranchFilterPicker basePath="/restaurant/menu" branches={branches} selectedBranchId={selectedBranchId} />}><div className="grid gap-4 lg:grid-cols-2">{items.map(item=>{const offers=branchItemsByItem.get(item.id)??[];return <Card key={item.id}><h3 className="font-black">{item.name}</h3><p className="mt-1 text-sm text-stone-500">{categories.get(item.menuCategoryId)??"未分類"} · {item.status}</p><p className="mt-3 text-sm text-stone-600">授權分店供應 {offers.length} 筆 · {nutritionIds.has(item.id)?"有目前營養資料":"無目前營養資料"}</p><div className="mt-4 space-y-3">{offers.map(offer=><div className="flex flex-col gap-2 rounded-md border border-stone-200 p-3 sm:flex-row sm:items-center sm:justify-between" key={offer.id}><div><p className="text-sm font-bold text-stone-800">{branchNames.get(offer.branchId)??"授權分店"}</p><p className="text-xs text-stone-500">{offer.soldOut?"菜單讀取顯示：已售完":"菜單讀取顯示：供應中"}</p></div><RestaurantOwnerSoldOutControl branchId={offer.branchId} branchMenuItemId={offer.id} branchName={branchNames.get(offer.branchId)??"授權分店"} itemName={item.name}/></div>)}</div></Card>;})}</div></Section>;
 }
 export function LiveNutrition({ data }: { data: AwaitedReturn<typeof loadLiveNutrition> }) {
   const names=new Map(data.items.map(item=>[item.id,item.name]));

@@ -376,7 +376,11 @@
     "test:restaurant-owner-sold-out-preview-ra-2a-p1-r1-smoke": "node scripts/restaurant-owner-sold-out-preview-ra-2a-p1-r1-smoke.mjs",
     "test:restaurant-owner-sold-out-preview-ra-2a-p1-r1-mutations": "node scripts/restaurant-owner-sold-out-preview-ra-2a-p1-r1-mutations.mjs",
     "test:restaurant-owner-sold-out-preview-ra-2a-p1-r1-postgres": "node scripts/restaurant-owner-sold-out-preview-ra-2a-p1-r1-postgres-apply.mjs",
-    "test:restaurant-owner-sold-out-preview-ra-2a-p1-r1-development": "node scripts/restaurant-owner-sold-out-preview-ra-2a-p1-r1-development-acceptance.mjs"
+    "test:restaurant-owner-sold-out-preview-ra-2a-p1-r1-development": "node scripts/restaurant-owner-sold-out-preview-ra-2a-p1-r1-development-acceptance.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p2": "node scripts/restaurant-owner-sold-out-ra-2a-p2-guard.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p2-smoke": "node scripts/restaurant-owner-sold-out-ra-2a-p2-smoke.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p2-mutations": "node scripts/restaurant-owner-sold-out-ra-2a-p2-mutations.mjs",
+    "test:restaurant-owner-sold-out-ra-2a-p2-development": "node scripts/restaurant-owner-sold-out-ra-2a-p2-development-acceptance.mjs"
   },
   "workspaces": [
     "apps/*",
