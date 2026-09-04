@@ -243,13 +243,24 @@ try {
     has_function_privilege('authenticated','admin_internal.lock_current_platform_admin_branch_status_actor_v1()','execute') helper_client_execute,
     has_function_privilege('anon','public.platform_admin_set_restaurant_branch_status_v1(text,text,text,text,bigint,text,uuid)','execute') anon_mutation_execute,
     has_column_privilege('platform_admin_branch_status_authority','public.restaurant_branches','address','update') writer_address_update,
-    pg_has_role('postgres','platform_admin_write_authority','member') postgres_writer_member,
+    (select count(*) = 3 and count(*) filter (where member.rolname = 'postgres' and grantor.rolname = 'supabase_admin'
+      and membership.admin_option is true and membership.inherit_option is false and membership.set_option is false) = 3
+      from pg_auth_members membership join pg_roles role on role.oid=membership.roleid
+      join pg_roles member on member.oid=membership.member join pg_roles grantor on grantor.oid=membership.grantor
+      where role.rolname in ('platform_admin_write_authority','platform_admin_branch_status_authority','platform_admin_context_reader'))
+      platform_creator_memberships_exact,
+    exists(select 1 from (values ('platform_admin_write_authority'),('platform_admin_branch_status_authority'),
+      ('platform_admin_context_reader')) sealed(role_name)
+      where pg_has_role('postgres',sealed.role_name,'usage') or pg_has_role('postgres',sealed.role_name,'set'))
+      postgres_runtime_path,
     exists(select 1 from pg_auth_members m join pg_roles role on role.oid=m.roleid join pg_roles member on member.oid=m.member
       where role.rolname in ('platform_admin_write_authority','platform_admin_branch_status_authority','platform_admin_context_reader')
       and member.rolname in ('anon','authenticated','authenticator','service_role')) client_role_residue;`);
   check("receipt table and private helper remain client-denied", security.receipt_client_read === false && security.helper_client_execute === false, security);
   check("anon mutation and unrelated writer UPDATE remain denied", security.anon_mutation_execute === false && security.writer_address_update === false, security);
-  check("no operator or client sealed-role residue", security.postgres_writer_member === false && security.client_role_residue === false, security);
+  check("trusted control-plane memberships are exact and confer no runtime path",
+    security.platform_creator_memberships_exact === true && security.postgres_runtime_path === false
+    && security.client_role_residue === false, security);
   check("final sign-out succeeds", await signOut(publishableKey, bearer)); bearer = undefined;
   console.log(JSON.stringify({ phase: "FINAL_DEVELOPMENT_STATE", target: final, protectedFingerprint: fingerprint(protectedFinal),
     ownerFingerprint: fingerprint(ownerFinal), receiptsBefore, receiptsAfter, requestEvidence }, null, 2));

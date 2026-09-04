@@ -362,7 +362,11 @@
     "test:platform-admin-ra-1c-p1": "node scripts/platform-admin-ra-1c-p1-guard.mjs",
     "test:platform-admin-ra-1c-p1-smoke": "node scripts/platform-admin-ra-1c-p1-smoke.mjs",
     "test:platform-admin-ra-1c-p1-mutations": "node scripts/platform-admin-ra-1c-p1-mutations.mjs",
-    "test:platform-admin-ra-1c-p1-development": "node scripts/platform-admin-ra-1c-p1-development-acceptance.mjs"
+    "test:platform-admin-ra-1c-p1-development": "node scripts/platform-admin-ra-1c-p1-development-acceptance.mjs",
+    "test:platform-admin-ra-1c-r1": "node scripts/platform-admin-ra-1c-r1-guard.mjs",
+    "test:platform-admin-ra-1c-r1-smoke": "node scripts/platform-admin-ra-1c-r1-smoke.mjs",
+    "test:platform-admin-ra-1c-r1-mutations": "node scripts/platform-admin-ra-1c-r1-mutations.mjs",
+    "test:platform-admin-ra-1c-r1-development-security": "node scripts/platform-admin-ra-1c-r1-development-security.mjs"
   },
   "workspaces": [
     "apps/*",
