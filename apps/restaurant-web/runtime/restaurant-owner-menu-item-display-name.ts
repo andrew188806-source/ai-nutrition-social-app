@@ -42,20 +42,23 @@ export function parsePreview(value: unknown): Preview | null {
   if (!isRecord(value)) return null;
   const error = parseError(value, ["unauthenticated", "permission_denied", "invalid_request", "target_not_found"]);
   if (error) return { state: error };
+  const branchMenuItemId = readId(value.branchMenuItemId); const branchId = readId(value.branchId); const menuItemId = readId(value.menuItemId);
+  const branchSpecificDisplayName = value.branchSpecificDisplayName; const branchSpecificDisplayNameVersion = value.branchSpecificDisplayNameVersion; const canonicalDisplayName = value.canonicalDisplayName;
   if (!exactKeys(value, ["ok", "state", "branchMenuItemId", "branchId", "menuItemId", "branchSpecificDisplayName", "branchSpecificDisplayNameVersion", "canonicalDisplayName"])
-    || value.ok !== true || value.state !== "ready" || !readId(value.branchMenuItemId) || !readId(value.branchId) || !readId(value.menuItemId)
-    || (value.branchSpecificDisplayName !== null && typeof value.branchSpecificDisplayName !== "string")
-    || !isVersion(value.branchSpecificDisplayNameVersion) || typeof value.canonicalDisplayName !== "string") return null;
-  return { ok: true, state: "ready", branchMenuItemId: value.branchMenuItemId, branchId: value.branchId, menuItemId: value.menuItemId, branchSpecificDisplayName: value.branchSpecificDisplayName, branchSpecificDisplayNameVersion: value.branchSpecificDisplayNameVersion, canonicalDisplayName: value.canonicalDisplayName };
+    || value.ok !== true || value.state !== "ready" || !branchMenuItemId || !branchId || !menuItemId
+    || (branchSpecificDisplayName !== null && typeof branchSpecificDisplayName !== "string")
+    || !isVersion(branchSpecificDisplayNameVersion) || typeof canonicalDisplayName !== "string") return null;
+  return { ok: true, state: "ready", branchMenuItemId, branchId, menuItemId, branchSpecificDisplayName, branchSpecificDisplayNameVersion, canonicalDisplayName };
 }
 
 export function parseMutation(value: unknown): Mutation | null {
   if (!isRecord(value)) return null;
   const error = parseError(value, ["unauthenticated", "permission_denied", "invalid_request", "target_not_found", "stale_state", "no_change"]);
   if (error) return { state: error };
+  const branchMenuItemId = readId(value.branchMenuItemId); const branchSpecificDisplayName = value.branchSpecificDisplayName; const branchSpecificDisplayNameVersion = value.branchSpecificDisplayNameVersion; const auditId = value.auditId;
   if (!exactKeys(value, ["ok", "state", "branchMenuItemId", "branchSpecificDisplayName", "branchSpecificDisplayNameVersion", "auditId"])
-    || value.ok !== true || value.state !== "applied" || !readId(value.branchMenuItemId)
-    || (value.branchSpecificDisplayName !== null && typeof value.branchSpecificDisplayName !== "string")
-    || !isVersion(value.branchSpecificDisplayNameVersion) || typeof value.auditId !== "string") return null;
-  return { state: "applied", branchMenuItemId: value.branchMenuItemId, branchSpecificDisplayName: value.branchSpecificDisplayName, branchSpecificDisplayNameVersion: value.branchSpecificDisplayNameVersion };
+    || value.ok !== true || value.state !== "applied" || !branchMenuItemId
+    || (branchSpecificDisplayName !== null && typeof branchSpecificDisplayName !== "string")
+    || !isVersion(branchSpecificDisplayNameVersion) || typeof auditId !== "string") return null;
+  return { state: "applied", branchMenuItemId, branchSpecificDisplayName, branchSpecificDisplayNameVersion };
 }

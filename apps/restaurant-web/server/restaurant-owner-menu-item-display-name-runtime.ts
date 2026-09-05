@@ -13,10 +13,11 @@ async function authenticated() {
   if (getRestaurantDataSourceConfig().dataSource !== "supabase") return "dependency_unavailable" as const;
   try { return await getVerifiedRestaurantClaims() ? "verified" as const : "unauthenticated" as const; } catch { return "dependency_unavailable" as const; }
 }
-async function selectedRestaurant() {
+type RestaurantSelection = Readonly<{ state: "selected"; restaurantId: string }> | Readonly<{ state: "failure"; failure: "unauthenticated" | "permission_denied" }>;
+async function selectedRestaurant(): Promise<RestaurantSelection> {
   const access = await loadRestaurantAccessContext();
-  if (access.state === "selected") return { restaurant: access.restaurant } as const;
-  return { failure: access.state === "missing-identity" ? "unauthenticated" : "permission_denied" } as const;
+  if (access.state === "selected") return { state: "selected", restaurantId: access.restaurant.id };
+  return { state: "failure", failure: access.state === "missing-identity" ? "unauthenticated" : "permission_denied" };
 }
 function invalidQuery(request: Request) { return [...new URL(request.url).searchParams.keys()].length > 0; }
 
@@ -25,8 +26,8 @@ export async function previewMenuItemDisplayName(request: Request, branchIdValue
   if (invalidQuery(request) || !branchId || !branchMenuItemId) return json({ state: "invalid_request" });
   const auth = await authenticated(); if (auth !== "verified") return json({ state: auth });
   try {
-    const selection = await selectedRestaurant(); if ("failure" in selection) return json({ state: selection.failure });
-    const result = await createRestaurantOwnerMenuItemDisplayNameRepository().preview(selection.restaurant.id, branchId, branchMenuItemId);
+    const selection = await selectedRestaurant(); if (selection.state === "failure") return json({ state: selection.failure });
+    const result = await createRestaurantOwnerMenuItemDisplayNameRepository().preview(selection.restaurantId, branchId, branchMenuItemId);
     return result.state === "ready" && (result.branchId !== branchId || result.branchMenuItemId !== branchMenuItemId) ? json({ state: "internal_failure" }) : json(result);
   } catch { return json({ state: "dependency_unavailable" }); }
 }
@@ -43,7 +44,7 @@ export async function mutateMenuItemDisplayName(request: Request, branchIdValue:
   } catch { return json({ state: "invalid_request" }); }
   if (!input) return json({ state: "invalid_request" });
   try {
-    const selection = await selectedRestaurant(); if ("failure" in selection) return json({ state: selection.failure });
+    const selection = await selectedRestaurant(); if (selection.state === "failure") return json({ state: selection.failure });
     const result = await createRestaurantOwnerMenuItemDisplayNameRepository().mutate(branchMenuItemId, input);
     return result.state === "applied" && result.branchMenuItemId !== branchMenuItemId ? json({ state: "internal_failure" }) : json(result);
   } catch { return json({ state: "dependency_unavailable" }); }
