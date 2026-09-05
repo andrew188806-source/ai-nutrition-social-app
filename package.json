@@ -401,7 +401,11 @@
     "test:restaurant-owner-visibility-ra-2d-p1": "node scripts/restaurant-owner-visibility-ra-2d-p1-guard.mjs",
     "test:restaurant-owner-visibility-ra-2d-p1-smoke": "node scripts/restaurant-owner-visibility-ra-2d-p1-smoke.mjs",
     "test:restaurant-owner-visibility-ra-2d-p1-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p1-mutations.mjs",
-    "test:restaurant-owner-visibility-ra-2d-p1-postgres": "node scripts/restaurant-owner-visibility-ra-2d-p1-postgres-apply.mjs"
+    "test:restaurant-owner-visibility-ra-2d-p1-postgres": "node scripts/restaurant-owner-visibility-ra-2d-p1-postgres-apply.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p1": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-guard.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p1-smoke": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-smoke.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p1-mutations": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-mutations.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p1-postgres": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-postgres-apply.mjs"
     ,"test:restaurant-owner-visibility-ra-2d-p2": "node scripts/restaurant-owner-visibility-ra-2d-p2-guard.mjs"
     ,"test:restaurant-owner-visibility-ra-2d-p2-smoke": "node scripts/restaurant-owner-visibility-ra-2d-p2-smoke.mjs"
     ,"test:restaurant-owner-visibility-ra-2d-p2-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p2-mutations.mjs"
