@@ -405,7 +405,11 @@
     "test:restaurant-owner-branch-display-name-ra-2e-p1": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-guard.mjs",
     "test:restaurant-owner-branch-display-name-ra-2e-p1-smoke": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-smoke.mjs",
     "test:restaurant-owner-branch-display-name-ra-2e-p1-mutations": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-mutations.mjs",
-    "test:restaurant-owner-branch-display-name-ra-2e-p1-postgres": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-postgres-apply.mjs"
+    "test:restaurant-owner-branch-display-name-ra-2e-p1-postgres": "node scripts/restaurant-owner-branch-display-name-ra-2e-p1-postgres-apply.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-guard.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-smoke": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-smoke.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-mutations": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-mutations.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-postgres": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-postgres-apply.mjs"
     ,"test:restaurant-owner-branch-display-name-ra-2e-p2-smoke": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-smoke.mjs"
     ,"test:restaurant-owner-branch-display-name-ra-2e-p2-mutations": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-mutations.mjs"
     ,"test:restaurant-owner-branch-display-name-ra-2e-p2-development": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-development-acceptance.mjs"
