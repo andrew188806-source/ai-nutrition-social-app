@@ -419,6 +419,10 @@
     ,"test:restaurant-owner-visibility-ra-2d-p2-development": "node scripts/restaurant-owner-visibility-ra-2d-p2-development-acceptance.mjs"
     ,"test:restaurant-owner-visibility-ra-2d-p2-r1": "node scripts/restaurant-owner-visibility-ra-2d-p2-r1-regression.mjs"
     ,"test:restaurant-owner-visibility-ra-2d-p2-r1-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p2-r1-mutations.mjs"
+    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-guard.mjs"
+    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-smoke": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-smoke.mjs"
+    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-mutations": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-mutations.mjs"
+    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-development": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-development-acceptance.mjs"
   },
   "workspaces": [
     "apps/*",
