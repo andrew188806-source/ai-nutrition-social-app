@@ -385,7 +385,11 @@
     "test:restaurant-owner-availability-ra-2b-p1-smoke": "node scripts/restaurant-owner-availability-ra-2b-p1-smoke.mjs",
     "test:restaurant-owner-availability-ra-2b-p1-mutations": "node scripts/restaurant-owner-availability-ra-2b-p1-mutations.mjs",
     "test:restaurant-owner-availability-ra-2b-p1-postgres": "node scripts/restaurant-owner-availability-ra-2b-p1-postgres-apply.mjs",
-    "test:restaurant-owner-availability-ra-2b-p1-development": "node scripts/restaurant-owner-availability-ra-2b-p1-development-acceptance.mjs"
+    "test:restaurant-owner-availability-ra-2b-p1-development": "node scripts/restaurant-owner-availability-ra-2b-p1-development-acceptance.mjs",
+    "test:restaurant-owner-availability-ra-2b-p2": "node scripts/restaurant-owner-availability-ra-2b-p2-guard.mjs",
+    "test:restaurant-owner-availability-ra-2b-p2-smoke": "node scripts/restaurant-owner-availability-ra-2b-p2-smoke.mjs",
+    "test:restaurant-owner-availability-ra-2b-p2-mutations": "node scripts/restaurant-owner-availability-ra-2b-p2-mutations.mjs",
+    "test:restaurant-owner-availability-ra-2b-p2-development": "node scripts/restaurant-owner-availability-ra-2b-p2-development-acceptance.mjs"
   },
   "workspaces": [
     "apps/*",
