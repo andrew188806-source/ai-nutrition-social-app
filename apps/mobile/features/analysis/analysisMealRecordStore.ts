@@ -1,4 +1,5 @@
 import { storage } from "../../lib/storage";
+import { consumerUserScopedStorageKey, getConsumerClientStateScope, subscribeConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 import type { SavedMealRecord } from "./types";
 
 // DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
@@ -334,9 +335,16 @@ const plannedDinnerEstimateOptions: Record<string, DinnerEstimate[]> = {
   其他: [{ name: "一般晚餐估算", calories: 700, protein: 32, carbs: 74, fat: 26 }]
 };
 
-let mealRecords: SavedMealRecord[] = readStoredMealRecords();
+let loadedActorKey: string | null = null;
+let mealRecords: SavedMealRecord[] = [];
+
+subscribeConsumerClientStateScope(() => {
+  loadedActorKey = null;
+  mealRecords = [];
+});
 
 export function saveCorrectedMealRecord(record: SavedMealRecord) {
+  ensureActorState();
   // Backend integration entry: AI Analysis -> Today Intake / Food Diary.
   const existingIndex = record.mealId ? mealRecords.findIndex((meal) => meal.mealId === record.mealId) : -1;
   if (existingIndex >= 0) {
@@ -348,6 +356,7 @@ export function saveCorrectedMealRecord(record: SavedMealRecord) {
 }
 
 export function getMealRecords(): SavedMealRecord[] {
+  ensureActorState();
   return [...mealRecords];
 }
 
@@ -356,14 +365,17 @@ export function getTodayMealRecords(): SavedMealRecord[] {
 }
 
 export function getLatestCorrectedMealRecord() {
+  ensureActorState();
   return mealRecords.find((record) => !record.mealId?.startsWith("baseline-")) ?? null;
 }
 
 export function getMealRecordByMealId(mealId: string): SavedMealRecord | null {
+  ensureActorState();
   return mealRecords.find((record) => record.mealId === mealId) ?? null;
 }
 
 export function updateMealRecordByMealId(mealId: string, updates: Partial<SavedMealRecord>): SavedMealRecord | null {
+  ensureActorState();
   // Backend integration entry: post-meal rating / guilt-sharing -> Today Intake / Food Diary.
   const index = mealRecords.findIndex((record) => record.mealId === mealId);
   if (index === -1) {
@@ -376,6 +388,7 @@ export function updateMealRecordByMealId(mealId: string, updates: Partial<SavedM
 }
 
 export function resetMealRecords() {
+  ensureActorState();
   mealRecords = [...baselineMealRecords];
   persistMealRecords();
 }
@@ -396,7 +409,9 @@ export function getPlannedDinnerEstimateOptions(type: string, restaurantName = "
 }
 
 function readStoredMealRecords(): SavedMealRecord[] {
-  const raw = storage.getItem(mealRecordsStorageKey);
+  const key = consumerUserScopedStorageKey(mealRecordsStorageKey);
+  if (!key) return [];
+  const raw = storage.getItem(key);
   if (!raw) {
     return [...baselineMealRecords];
   }
@@ -409,5 +424,17 @@ function readStoredMealRecords(): SavedMealRecord[] {
 }
 
 function persistMealRecords() {
-  storage.setItem(mealRecordsStorageKey, JSON.stringify(mealRecords));
+  const key = consumerUserScopedStorageKey(mealRecordsStorageKey);
+  if (key) storage.setItem(key, JSON.stringify(mealRecords));
+}
+
+function ensureActorState() {
+  const actorKey = getConsumerClientStateScope().actorKey;
+  if (actorKey === loadedActorKey) return;
+  loadedActorKey = actorKey;
+  mealRecords = [];
+  if (!actorKey) return;
+  // The prior global demo cache has no accountable owner and is intentionally discarded.
+  storage.removeItem(mealRecordsStorageKey);
+  mealRecords = readStoredMealRecords();
 }

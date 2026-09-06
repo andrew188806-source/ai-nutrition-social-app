@@ -91,6 +91,7 @@ import { ConsumerMealIdentificationFinalizationOperationStore } from "./consumer
 import { ConsumerMealIdentificationFinalizationRuntime } from "./consumerMealIdentificationFinalizationRuntime";
 import { ConsumerPlannedMealOperationStore } from "./consumerPlannedMealOperationStore";
 import { ConsumerPlannedMealRuntime } from "./consumerPlannedMealRuntime";
+import { setConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 
 export type ConsumerRuntimeMode = "mock" | "disabled" | "supabase";
 export type ConsumerRuntimeOperation = "idle" | "signingIn" | "signingOut";
@@ -248,6 +249,9 @@ export class ConsumerAuthProfileRuntime {
       const actorKey = next.session.user.userId;
       if (actorKey !== this.state.actorKey) {
         const actorGeneration = this.state.actorGeneration + 1;
+        // This is an identity boundary, not a token refresh.  Client-only
+        // Consumer state observes this before the new actor can render.
+        setConsumerClientStateScope(actorKey, actorGeneration);
         this.state = {
           ...this.state,
           authState: next,
@@ -285,11 +289,13 @@ export class ConsumerAuthProfileRuntime {
 
   private clearActor(authState: ConsumerAuthState, errorCode: ConsumerRuntimeErrorCode | null) {
     const changed = this.state.actorKey !== null || this.state.profileState.status !== "idle";
+    const actorGeneration = changed ? this.state.actorGeneration + 1 : this.state.actorGeneration;
+    setConsumerClientStateScope(null, actorGeneration);
     this.state = {
       ...this.state,
       authState,
       actorKey: null,
-      actorGeneration: changed ? this.state.actorGeneration + 1 : this.state.actorGeneration,
+      actorGeneration,
       profileState: idleProfileState(),
       errorCode
     };

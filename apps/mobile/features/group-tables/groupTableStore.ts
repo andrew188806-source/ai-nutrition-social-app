@@ -1,4 +1,5 @@
 import { storage } from "../../lib/storage";
+import { consumerUserScopedStorageKey, getConsumerClientStateScope, subscribeConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 import type { ChatId, TableId, UserId } from "../meal-buddy-card/types";
 
 // DEMO_ONLY MOCK_DATA TODO_SUPABASE_REPLACE:
@@ -28,9 +29,16 @@ type StoredActiveFourPersonTable = ActiveFourPersonTable & {
 // - Intended future integration: replace with group-table APIs and realtime participant updates.
 // - Related feature: Restaurants -> Four-Person Tables -> Group Chat.
 const activeTableStorageKey = "haocu.fourPersonTable.active.v1";
-let activeTable = readStoredActiveTable();
+let loadedActorKey: string | null = null;
+let activeTable: ActiveFourPersonTable | null = null;
+
+subscribeConsumerClientStateScope(() => {
+  loadedActorKey = null;
+  activeTable = null;
+});
 
 export function getActiveFourPersonTable() {
+  ensureActorState();
   return activeTable;
 }
 
@@ -41,6 +49,7 @@ export function createRestaurantFourPersonTable(input: {
   cuisineTags: string[];
   suggestedTime: string;
 }) {
+  ensureActorState();
   // Backend integration entry: Restaurant -> Four-Person Table.
   activeTable = {
     tableId: `table-${safeId(input.restaurantId || input.restaurantName)}`,
@@ -59,6 +68,7 @@ export function createRestaurantFourPersonTable(input: {
 }
 
 export function updateActiveFourPersonTable(update: Partial<ActiveFourPersonTable>) {
+  ensureActorState();
   if (!activeTable) {
     return null;
   }
@@ -68,12 +78,25 @@ export function updateActiveFourPersonTable(update: Partial<ActiveFourPersonTabl
 }
 
 export function clearActiveFourPersonTable() {
+  ensureActorState();
   activeTable = null;
+  removeScoped();
+}
+
+function ensureActorState() {
+  const actorKey = getConsumerClientStateScope().actorKey;
+  if (actorKey === loadedActorKey) return;
+  loadedActorKey = actorKey;
+  activeTable = null;
+  if (!actorKey) return;
   storage.removeItem(activeTableStorageKey);
+  activeTable = readStoredActiveTable();
 }
 
 function readStoredActiveTable(): ActiveFourPersonTable | null {
-  const raw = storage.getItem(activeTableStorageKey);
+  const key = consumerUserScopedStorageKey(activeTableStorageKey);
+  if (!key) return null;
+  const raw = storage.getItem(key);
   if (!raw) {
     return null;
   }
@@ -86,10 +109,16 @@ function readStoredActiveTable(): ActiveFourPersonTable | null {
 
 function persistActiveTable() {
   if (!activeTable) {
-    storage.removeItem(activeTableStorageKey);
+    removeScoped();
     return;
   }
-  storage.setItem(activeTableStorageKey, JSON.stringify(activeTable));
+  const key = consumerUserScopedStorageKey(activeTableStorageKey);
+  if (key) storage.setItem(key, JSON.stringify(activeTable));
+}
+
+function removeScoped() {
+  const key = consumerUserScopedStorageKey(activeTableStorageKey);
+  if (key) storage.removeItem(key);
 }
 
 function safeId(value: string) {

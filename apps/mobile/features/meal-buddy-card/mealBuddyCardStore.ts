@@ -1,5 +1,6 @@
 import type { DemoMode } from "../../components/DemoUi";
 import { storage } from "../../lib/storage";
+import { consumerUserScopedStorageKey, getConsumerClientStateScope, subscribeConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 import { getEffectiveDateKey } from "../demo-time";
 import { getMealBuddyCardId, type MealBuddyCard, type MealBuddyCardType, type RankedMealBuddyCandidate } from "./types";
 
@@ -9,7 +10,8 @@ import { getMealBuddyCardId, type MealBuddyCard, type MealBuddyCardType, type Ra
 const activeCardsStorageKey = "haocu.mealBuddy.activeCards.v3";
 const dailyStateStorageKey = "haocu.mealBuddy.dailyState.v1";
 
-let activeCards: MealBuddyCard[] = readStoredActiveCards();
+let loadedActorKey: string | null = null;
+let activeCards: MealBuddyCard[] = [];
 let lastReplacementNotice = false;
 let pendingMatchRequest: { cardCreatedAt: string; isRestaurantMatch: boolean; mode: DemoMode; requestedCount: number } | null = null;
 let seenCandidateIds: Record<DemoMode, Set<string>> = {
@@ -21,7 +23,15 @@ let dailyVisibleUsed: Record<DemoMode, number> = {
   premium: 0
 };
 let dailyStateDateKey = getEffectiveDateKey();
-restoreDailyState();
+
+subscribeConsumerClientStateScope(() => {
+  loadedActorKey = null;
+  activeCards = [];
+  dailyVisibleUsed = { free: 0, premium: 0 };
+  seenCandidateIds = { free: new Set<string>(), premium: new Set<string>() };
+  pendingMatchRequest = null;
+  lastReplacementNotice = false;
+});
 
 function getCardLimit(cardType: MealBuddyCardType, mode: DemoMode) {
   if (mode === "premium") {
@@ -31,6 +41,7 @@ function getCardLimit(cardType: MealBuddyCardType, mode: DemoMode) {
 }
 
 export function upsertMealBuddyCardWithQuota(card: MealBuddyCard, mode: DemoMode) {
+  ensureActorState();
   const limit = getCardLimit(card.cardType, mode);
   const sameTypeCards = activeCards.filter((item) => item.cardType === card.cardType);
   lastReplacementNotice = false;
@@ -50,6 +61,7 @@ export function upsertMealBuddyCardWithQuota(card: MealBuddyCard, mode: DemoMode
 }
 
 export function setPendingMatchRequest(card: MealBuddyCard, requestedCount: number, isRestaurantMatch = false, mode: DemoMode = "free") {
+  ensureActorState();
   pendingMatchRequest = {
     cardCreatedAt: card.createdAt,
     isRestaurantMatch,
@@ -59,14 +71,17 @@ export function setPendingMatchRequest(card: MealBuddyCard, requestedCount: numb
 }
 
 export function getPendingMatchRequest() {
+  ensureActorState();
   return pendingMatchRequest;
 }
 
 export function clearPendingMatchRequest() {
+  ensureActorState();
   pendingMatchRequest = null;
 }
 
 export function drawMatchedMealBuddyCandidates(mode: DemoMode, ranked: RankedMealBuddyCandidate[], requestedCount: number, isRestaurantMatch = false) {
+  ensureActorState();
   ensureDailyStateForEffectiveDate();
   const key = mode === "premium" ? "premium" : "free";
   const restaurantCap = isRestaurantMatch ? 3 : requestedCount;
@@ -83,12 +98,12 @@ export function drawMatchedMealBuddyCandidates(mode: DemoMode, ranked: RankedMea
 }
 
 export function getActiveMealBuddyCards() {
-  activeCards = readStoredActiveCards();
+  ensureActorState();
   return [...activeCards];
 }
 
 export function getActiveCardUsage(mode: DemoMode) {
-  activeCards = readStoredActiveCards();
+  ensureActorState();
   const generalLimit = getCardLimit("general", mode);
   const restaurantLimit = getCardLimit("restaurant", mode);
   return {
@@ -104,11 +119,13 @@ export function getActiveCardUsage(mode: DemoMode) {
 }
 
 export function deleteMealBuddyCard(card: MealBuddyCard) {
+  ensureActorState();
   activeCards = activeCards.filter((item) => getMealBuddyCardId(item) !== getMealBuddyCardId(card));
   persistActiveCards();
 }
 
 export function consumeDailyVisibleCards(mode: DemoMode, requested: number) {
+  ensureActorState();
   ensureDailyStateForEffectiveDate();
   const key = mode === "premium" ? "premium" : "free";
   const limit = mode === "premium" ? 10 : 3;
@@ -124,6 +141,7 @@ export function consumeDailyVisibleCards(mode: DemoMode, requested: number) {
 }
 
 export function getDailyVisibleRemaining(mode: DemoMode) {
+  ensureActorState();
   ensureDailyStateForEffectiveDate();
   const key = mode === "premium" ? "premium" : "free";
   const limit = mode === "premium" ? 10 : 3;
@@ -131,6 +149,7 @@ export function getDailyVisibleRemaining(mode: DemoMode) {
 }
 
 export function getDailyVisibleUsage(mode: DemoMode) {
+  ensureActorState();
   ensureDailyStateForEffectiveDate();
   const key = mode === "premium" ? "premium" : "free";
   const limit = mode === "premium" ? 10 : 3;
@@ -142,6 +161,7 @@ export function getDailyVisibleUsage(mode: DemoMode) {
 }
 
 export function resetMealBuddyVisibleQuotaForDemo(mode: DemoMode) {
+  ensureActorState();
   ensureDailyStateForEffectiveDate();
   const key = mode === "premium" ? "premium" : "free";
   dailyVisibleUsed[key] = 0;
@@ -150,13 +170,32 @@ export function resetMealBuddyVisibleQuotaForDemo(mode: DemoMode) {
 }
 
 export function resetAllMealBuddyDemoState() {
+  ensureActorState();
   activeCards = [];
   dailyVisibleUsed = { free: 0, premium: 0 };
   seenCandidateIds = { free: new Set<string>(), premium: new Set<string>() };
   lastReplacementNotice = false;
   pendingMatchRequest = null;
+  removeScoped(activeCardsStorageKey);
+  removeScoped(dailyStateStorageKey);
+}
+
+function ensureActorState() {
+  const actorKey = getConsumerClientStateScope().actorKey;
+  if (actorKey === loadedActorKey) return;
+  loadedActorKey = actorKey;
+  activeCards = [];
+  dailyVisibleUsed = { free: 0, premium: 0 };
+  seenCandidateIds = { free: new Set<string>(), premium: new Set<string>() };
+  pendingMatchRequest = null;
+  lastReplacementNotice = false;
+  dailyStateDateKey = getEffectiveDateKey();
+  if (!actorKey) return;
+  // Legacy global state must never be adopted by the first signed-in actor.
   storage.removeItem(activeCardsStorageKey);
   storage.removeItem(dailyStateStorageKey);
+  activeCards = readStoredActiveCards();
+  restoreDailyState();
 }
 
 function ensureDailyStateForEffectiveDate() {
@@ -171,7 +210,9 @@ function ensureDailyStateForEffectiveDate() {
 }
 
 function restoreDailyState() {
-  const raw = storage.getItem(dailyStateStorageKey);
+  const key = scoped(dailyStateStorageKey);
+  if (!key) return;
+  const raw = storage.getItem(key);
   if (!raw) {
     return;
   }
@@ -194,8 +235,10 @@ function restoreDailyState() {
 }
 
 function persistDailyState() {
+  const key = scoped(dailyStateStorageKey);
+  if (!key) return;
   storage.setItem(
-    dailyStateStorageKey,
+    key,
     JSON.stringify({
       dateKey: dailyStateDateKey,
       dailyVisibleUsed,
@@ -208,7 +251,9 @@ function persistDailyState() {
 }
 
 function readStoredActiveCards() {
-  const raw = storage.getItem(activeCardsStorageKey);
+  const key = scoped(activeCardsStorageKey);
+  if (!key) return [];
+  const raw = storage.getItem(key);
   if (!raw) {
     return buildDefaultActiveCards();
   }
@@ -225,7 +270,17 @@ function readStoredActiveCards() {
 }
 
 function persistActiveCards() {
-  storage.setItem(activeCardsStorageKey, JSON.stringify(activeCards));
+  const key = scoped(activeCardsStorageKey);
+  if (key) storage.setItem(key, JSON.stringify(activeCards));
+}
+
+function scoped(key: string) {
+  return consumerUserScopedStorageKey(key);
+}
+
+function removeScoped(key: string) {
+  const scopedKey = scoped(key);
+  if (scopedKey) storage.removeItem(scopedKey);
 }
 
 function buildDefaultActiveCards(): MealBuddyCard[] {

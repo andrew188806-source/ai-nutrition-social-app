@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -158,19 +158,23 @@ function createMatchedBuddyFromInvitation(invite: ReturnType<typeof getMealBuddy
   return referenceOnlyFriend;
 }
 
-function readPersistedRecommendationGroups(_activeCards: MealBuddyCard[]) {
+function scopedRecommendationStorageKey(actorKey: string | null) {
+  return actorKey ? `${recommendationStorageKey}.${encodeURIComponent(actorKey)}` : null;
+}
+
+function readPersistedRecommendationGroups(_activeCards: MealBuddyCard[], actorKey: string | null) {
   const activeCardIds = new Set(_activeCards.map(getMealBuddyCardId));
-  const memoryFallback = (globalThis as typeof globalThis & { __mealBuddyRecommendationGroups?: RecommendationGroup[] }).__mealBuddyRecommendationGroups ?? [];
-  const raw = storage.getItem(recommendationStorageKey);
-  const parsed = raw ? safelyParseRecommendationGroups(raw) : memoryFallback;
+  const key = scopedRecommendationStorageKey(actorKey);
+  const raw = key ? storage.getItem(key) : null;
+  const parsed = raw ? safelyParseRecommendationGroups(raw) : [];
   return parsed
     .filter((group) => activeCardIds.has(group.sourceCardId ?? getMealBuddyCardId(group.card)))
     .map((group) => ({ ...group, highlight: false }));
 }
 
-function persistRecommendationGroups(groups: RecommendationGroup[]) {
-  (globalThis as typeof globalThis & { __mealBuddyRecommendationGroups?: RecommendationGroup[] }).__mealBuddyRecommendationGroups = groups;
-  storage.setItem(recommendationStorageKey, JSON.stringify(groups));
+function persistRecommendationGroups(groups: RecommendationGroup[], actorKey: string | null) {
+  const key = scopedRecommendationStorageKey(actorKey);
+  if (key) storage.setItem(key, JSON.stringify(groups));
 }
 
 function safelyParseRecommendationGroups(raw: string): RecommendationGroup[] {
@@ -189,6 +193,7 @@ const gatheringRecords = mockGatheringRecords;
 
 export default function MealBuddyHomeScreen() {
   const router = useRouter();
+  const consumerRuntime = useConsumerRuntime();
   const params = useLocalSearchParams<{
     highlightCardCreatedAt?: string;
     restaurantActionType?: string;
@@ -208,7 +213,9 @@ export default function MealBuddyHomeScreen() {
   const [activeCards, setActiveCards] = useState<MealBuddyCard[]>(() => initialCards);
   const [showFreeQuotaModal, setShowFreeQuotaModal] = useState(false);
   const [paidQuotaMessage, setPaidQuotaMessage] = useState("");
-  const [recommendationGroups, setRecommendationGroups] = useState<RecommendationGroup[]>(() => readPersistedRecommendationGroups(initialCards));
+  const [recommendationGroups, setRecommendationGroups] = useState<RecommendationGroup[]>(() =>
+    readPersistedRecommendationGroups(initialCards, consumerRuntime.state.actorKey)
+  );
   const [friendInitialTab, setFriendInitialTab] = useState<MyFriendsTab>("matched");
   const [focusedChatId, setFocusedChatId] = useState("");
   const [focusedChatName, setFocusedChatName] = useState("");
@@ -219,11 +226,15 @@ export default function MealBuddyHomeScreen() {
   // SR-2G-D endpoint via the SR-2G-E1 data layer, and the mock candidate pipeline below
   // (getMealBuddyCandidates / rankMealBuddyRecommendations / drawMatchedMealBuddyCandidates) is not
   // reachable at all — not as a source, not as a fallback and not on error.
-  const consumerRuntime = useConsumerRuntime();
   const isRealCandidateMode = consumerRuntime.mode === "supabase";
   const location = useConsumerLocationRuntime();
   const mealBuddyGeoContext = location.state.phase === "available" ? location.state.position : null;
-  const realCandidates = useMealBuddyRealCandidates(isRealCandidateMode, mealBuddyGeoContext);
+  const realCandidates = useMealBuddyRealCandidates(
+    isRealCandidateMode,
+    mealBuddyGeoContext,
+    consumerRuntime.state.actorKey,
+    consumerRuntime.state.actorGeneration
+  );
   const realRelationships = useMealBuddyRelationships(
     isRealCandidateMode ? consumerRuntime.state.actorKey : null,
     consumerRuntime.state.actorGeneration
@@ -311,8 +322,18 @@ export default function MealBuddyHomeScreen() {
   }, [params.u1PrefillToken]);
 
   useEffect(() => {
-    persistRecommendationGroups(recommendationGroups);
-  }, [recommendationGroups]);
+    persistRecommendationGroups(recommendationGroups, consumerRuntime.state.actorKey);
+  }, [consumerRuntime.state.actorKey, recommendationGroups]);
+
+  // The demo presentation path is user-scoped too.  A new authenticated actor
+  // gets only their own local demo state; it never inherits an in-memory list
+  // or an unscoped browser key from the preceding actor.
+  useEffect(() => {
+    const cards = getActiveMealBuddyCards();
+    setActiveCards(cards);
+    storage.removeItem(recommendationStorageKey);
+    setRecommendationGroups(readPersistedRecommendationGroups(cards, consumerRuntime.state.actorKey));
+  }, [consumerRuntime.state.actorGeneration, consumerRuntime.state.actorKey]);
 
   useEffect(() => {
     if (!recommendationGroups.some((group) => group.highlight)) {

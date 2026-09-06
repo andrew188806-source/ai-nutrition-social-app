@@ -64,7 +64,9 @@ const EMPTY_LABELS: InterestCategoryLabels = new Map<string, string>();
 
 export function useMealBuddyRealCandidates(
   isLiveMode: boolean,
-  geoContext: MealBuddyCandidateGeoContext | null = null
+  geoContext: MealBuddyCandidateGeoContext | null = null,
+  actorKey: string | null = null,
+  actorGeneration = 0
 ): MealBuddyRealCandidatesController {
   const [sourceCards, setSourceCards] = useState<MealBuddyRealSourceCardsState>({ phase: "idle" });
   const [selectedSourceCardRef, setSelectedSourceCardRef] = useState<string | null>(null);
@@ -72,6 +74,9 @@ export function useMealBuddyRealCandidates(
   const [labels, setLabels] = useState<InterestCategoryLabels>(EMPTY_LABELS);
   // Guards against a slow response for a previous source card overwriting a newer one.
   const requestSequence = useRef(0);
+  const actorIdentity = `${actorKey ?? "signed-out"}:${actorGeneration}`;
+  const actorIdentityRef = useRef(actorIdentity);
+  actorIdentityRef.current = actorIdentity;
 
   const service = useCallback(() => createMealBuddyCandidateService(
     isLiveMode ? "supabase-live" : "mock",
@@ -89,11 +94,12 @@ export function useMealBuddyRealCandidates(
     setState({ phase: "idle" });
   }, []);
 
-  // Sign-out clears everything. The dependency is the live-mode flag itself, so leaving live mode is
-  // what drops the cards, the selection and the candidates, rather than any screen remembering to.
+  // An actor identity change is a hard boundary, even when both actors are in live mode.  Incrementing
+  // the sequence invalidates every in-flight read, then clears the old source/card/candidate view
+  // before the next actor's server-backed reads begin.
   useEffect(() => {
-    if (!isLiveMode) reset();
-  }, [isLiveMode, reset]);
+    reset();
+  }, [actorGeneration, actorKey, isLiveMode, reset]);
 
   // Public catalog vocabulary only: no user, no candidate and no interest selection is read here.
   useEffect(() => {
@@ -111,8 +117,16 @@ export function useMealBuddyRealCandidates(
   }, [isLiveMode]);
 
   const loadSourceCards = useCallback(async () => {
+    if (!isLiveMode || !actorKey) {
+      reset();
+      return;
+    }
+    const sequence = requestSequence.current + 1;
+    requestSequence.current = sequence;
+    const requestActorIdentity = actorIdentity;
     setSourceCards({ phase: "loading" });
     const outcome = await service().listSourceCards();
+    if (requestSequence.current !== sequence || actorIdentityRef.current !== requestActorIdentity) return;
     // The server's order is kept exactly. No sorting, "soonest first" or other selection rule is
     // applied: choosing among the actor's own cards belongs to the user, not to this hook.
     if (!outcome.ok) { setSourceCards({ phase: "failed", code: outcome.error.code }); return; }
@@ -120,11 +134,16 @@ export function useMealBuddyRealCandidates(
     // Holding no active real card is the canonical no-source state, and the CARD LIST is what
     // establishes it. Nothing is fabricated to fill the gap.
     if (outcome.value.length === 0) setState({ phase: "noSource" });
-  }, [service]);
+  }, [actorIdentity, actorKey, isLiveMode, reset, service]);
 
   const runForRef = useCallback(async (sourceCardRef: string) => {
+    if (!isLiveMode || !actorKey) {
+      reset();
+      return;
+    }
     const sequence = requestSequence.current + 1;
     requestSequence.current = sequence;
+    const requestActorIdentity = actorIdentity;
     setSelectedSourceCardRef(sourceCardRef);
     // Loading replaces whatever was on screen. A previous authenticated list is never left visible
     // underneath a pending request, and never flickers across a source-card change.
@@ -137,7 +156,7 @@ export function useMealBuddyRealCandidates(
     // reached from here. The server re-verifies ownership and active state on every request, and an
     // inactive card comes back as a legitimate empty result rather than as somebody else's pool.
     const outcome = await service().listCandidates(sourceCardRef, geoContext);
-    if (requestSequence.current !== sequence) return;
+    if (requestSequence.current !== sequence || actorIdentityRef.current !== requestActorIdentity) return;
 
     if (outcome.ok) {
       // The array is stored exactly as received. It is never sorted, capped, filtered or refilled.
@@ -147,7 +166,7 @@ export function useMealBuddyRealCandidates(
     setState(outcome.error.code === "no_source_card"
       ? { phase: "noSource" }
       : { phase: "failed", code: outcome.error.code });
-  }, [geoContext, service]);
+  }, [actorIdentity, actorKey, geoContext, isLiveMode, reset, service]);
 
   const geoKey = geoContext === null ? "not_applied" : `${geoContext.latitude}:${geoContext.longitude}`;
   const previousGeoKey = useRef(geoKey);

@@ -1,4 +1,5 @@
 import { storage } from "../../lib/storage";
+import { consumerUserScopedStorageKey, getConsumerClientStateScope, subscribeConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 import { getEffectiveCurrentDate } from "../demo-time";
 import { buildMealBuddyCardFromProfile } from "./mealBuddyCardMock";
 import { getMockChatThreadByName, getMockProfile, mockChatThreads } from "./mealBuddyFlowMock";
@@ -232,11 +233,18 @@ function buildDefaultInvites(): MealBuddyInvitePreview[] {
   ];
 }
 
-const storedSocialState = readStoredSocialState();
-let chatPreviews: MealBuddyChatPreview[] = mergeMissingDefaultChats(storedSocialState?.chats ?? []);
-let invitePreviews: MealBuddyInvitePreview[] = mergeMissingDefaultInvites(storedSocialState?.invites ?? []);
+let loadedActorKey: string | null = null;
+let chatPreviews: MealBuddyChatPreview[] = [];
+let invitePreviews: MealBuddyInvitePreview[] = [];
+
+subscribeConsumerClientStateScope(() => {
+  loadedActorKey = null;
+  chatPreviews = [];
+  invitePreviews = [];
+});
 
 export function createOrOpenMealBuddyChat(candidate: RankedMealBuddyCandidate) {
+  ensureActorState();
   const mockThread = getMockChatThreadByName(candidate.displayName);
   const now = currentTimestamp();
   const fallbackChatId = `chat-direct-${candidate.userId}`;
@@ -281,6 +289,7 @@ export function createOrOpenMealSessionChat({
   relatedMeal: string;
   userName: string;
 }) {
+  ensureActorState();
   const mockThread = getMockChatThreadByName(userName);
   const resolvedChatId = chatThreadId ?? mockThread?.id ?? `chat-session-${participantProfileId ?? buddyId ?? userName}`;
   const existingChat = chatPreviews.find((item) => item.id === resolvedChatId);
@@ -315,6 +324,7 @@ export function createOrOpenMealSessionChat({
 }
 
 export function createOrOpenGroupTableChat(tableName = defaultGroupTableName, tableId?: string, chatThreadId?: string) {
+  ensureActorState();
   const now = getEffectiveCurrentDate();
   const resolvedTableId = tableId ?? (tableName === defaultGroupTableName ? defaultGroupTableId : undefined);
   const resolvedChatId = chatThreadId ?? (resolvedTableId === defaultGroupTableId ? defaultGroupChatId : `chat-group-${safeId(tableName)}`);
@@ -349,6 +359,7 @@ export function createOrOpenGroupTableChat(tableName = defaultGroupTableName, ta
 }
 
 export function addMealBuddyChatMessage(chatId: string, message: string) {
+  ensureActorState();
   touchChat(chatId, message, "剛剛", "me");
 }
 
@@ -365,6 +376,7 @@ export function addMealBuddyChatSystemMessage({
   relatedMeal?: string;
   userName?: string;
 }) {
+  ensureActorState();
   const message = `${userName} 更新飯局狀態：${reason}`;
 
   if (groupTableName) {
@@ -399,6 +411,7 @@ export function addMealBuddyChatSystemMessage({
 }
 
 export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type: "chat" | "meal" | "table" = "meal", inviterCard?: MealBuddyCard) {
+  ensureActorState();
   const sourceCardKey = inviterCard ? getMealBuddyCardId(inviterCard) : `candidate-${candidate.userId}`;
   const existingPending = getPendingInviteForCandidate(candidate.userId, sourceCardKey);
   if (existingPending) return existingPending;
@@ -442,6 +455,7 @@ export function createMealBuddyInvite(candidate: RankedMealBuddyCandidate, type:
 }
 
 export function acceptMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
+  ensureActorState();
   if (invitePreview.type === "table") {
     acceptFourPersonTableInvite(invitePreview);
     return;
@@ -485,6 +499,7 @@ export function acceptMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
 }
 
 export function declineMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
+  ensureActorState();
   if (invitePreview.type === "table") {
     invitePreviews = invitePreviews.map((item) => (item.id === invitePreview.id ? { ...item, status: "declined", tableStatus: "declined" } : item));
     persistSocialState();
@@ -500,11 +515,13 @@ export function declineMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
 }
 
 export function deleteMealBuddyInvite(invitePreview: MealBuddyInvitePreview) {
+  ensureActorState();
   invitePreviews = invitePreviews.filter((item) => item.id !== invitePreview.id);
   persistSocialState();
 }
 
 export function getMealBuddyChats() {
+  ensureActorState();
   const now = getEffectiveCurrentDate().getTime();
   chatPreviews = sortChatsByActivity(mergeMissingDefaultChats(chatPreviews));
   persistSocialState();
@@ -515,19 +532,36 @@ export function getMealBuddyChats() {
 }
 
 export function getMealBuddyInvites() {
+  ensureActorState();
   const now = getEffectiveCurrentDate().getTime();
   invitePreviews = mergeMissingDefaultInvites(invitePreviews).filter((item) => item.status !== "declined" || item.direction !== "sent" || new Date(item.expiresAt).getTime() > now);
   return [...invitePreviews];
 }
 
 export function getPendingInviteForCandidate(candidateUserId: string, sourceCardKey: string) {
+  ensureActorState();
   return invitePreviews.find((item) => item.direction === "sent" && item.status === "pending" && item.candidateUserId === candidateUserId && item.sourceCardKey === sourceCardKey) ?? null;
 }
 
 export function resetMealBuddySocialDemoState() {
+  ensureActorState();
   chatPreviews = buildDefaultChats();
   invitePreviews = buildDefaultInvites();
   persistSocialState();
+}
+
+function ensureActorState() {
+  const actorKey = getConsumerClientStateScope().actorKey;
+  if (actorKey === loadedActorKey) return;
+  loadedActorKey = actorKey;
+  chatPreviews = [];
+  invitePreviews = [];
+  if (!actorKey) return;
+  // Do not migrate device-global chats or invitations into an arbitrary account.
+  storage.removeItem(socialStorageKey);
+  const stored = readStoredSocialState();
+  chatPreviews = mergeMissingDefaultChats(stored?.chats ?? []);
+  invitePreviews = mergeMissingDefaultInvites(stored?.invites ?? []);
 }
 
 function invite(input: {
@@ -616,7 +650,8 @@ function touchChat(chatId: string, lastMessage: string, time: string, sender: Me
 }
 
 function persistSocialState() {
-  storage.setItem(socialStorageKey, JSON.stringify({ chats: chatPreviews, invites: invitePreviews }));
+  const key = consumerUserScopedStorageKey(socialStorageKey);
+  if (key) storage.setItem(key, JSON.stringify({ chats: chatPreviews, invites: invitePreviews }));
 }
 
 function mergeMissingDefaultChats(currentChats: MealBuddyChatPreview[]) {
@@ -705,7 +740,9 @@ function defaultChatUpdatedAt(index: number) {
 }
 
 function readStoredSocialState() {
-  const raw = storage.getItem(socialStorageKey);
+  const key = consumerUserScopedStorageKey(socialStorageKey);
+  if (!key) return null;
+  const raw = storage.getItem(key);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as { chats?: MealBuddyChatPreview[]; invites?: MealBuddyInvitePreview[] };

@@ -1,9 +1,13 @@
 import { zhTW } from "../../../../lib/i18n/zh-TW";
+import { getConsumerClientStateScope, subscribeConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 import type { CommunityCardSettingsState, SystemMascot, VisibilityLevel } from "./types";
 
 const mascots = zhTW.mobile.communityCardSettings.mascots as readonly SystemMascot[];
 
-let savedSettings: CommunityCardSettingsState = {
+let loadedActorKey: string | null = null;
+
+function defaultSettings(): CommunityCardSettingsState {
+  return {
   age: zhTW.mobile.communityCardSettings.ageValue,
   gender: zhTW.mobile.communityCardSettings.genderValue,
   nickname: zhTW.mobile.communityCardSettings.nicknameValue,
@@ -27,13 +31,23 @@ let savedSettings: CommunityCardSettingsState = {
   publicMascotAvatarId: mascots[0].id,
   hasUploadedPhoto: false,
   fieldVisibility: Object.fromEntries(zhTW.mobile.communityCardSettings.privacyFields.map((field) => [field.id, "public" as VisibilityLevel]))
-};
+  };
+}
+
+let savedSettings: CommunityCardSettingsState = defaultSettings();
+
+subscribeConsumerClientStateScope(() => {
+  loadedActorKey = null;
+  savedSettings = defaultSettings();
+});
 
 export function getCommunityCardSettings() {
+  ensureActorState();
   return savedSettings;
 }
 
 export function saveCommunityCardSettings(nextSettings: CommunityCardSettingsState) {
+  ensureActorState();
   savedSettings = {
     ...nextSettings,
     selectedEatingTags: [...nextSettings.selectedEatingTags],
@@ -45,6 +59,17 @@ export function saveCommunityCardSettings(nextSettings: CommunityCardSettingsSta
   };
 }
 
-export function getSelectedMascot(settings = savedSettings) {
-  return mascots.find((mascot) => mascot.id === settings.selectedMascotId) ?? mascots[0];
+export function getSelectedMascot(settings?: CommunityCardSettingsState) {
+  ensureActorState();
+  const resolvedSettings = settings ?? savedSettings;
+  return mascots.find((mascot) => mascot.id === resolvedSettings.selectedMascotId) ?? mascots[0];
+}
+
+function ensureActorState() {
+  const actorKey = getConsumerClientStateScope().actorKey;
+  if (actorKey === loadedActorKey) return;
+  loadedActorKey = actorKey;
+  // This compatibility-only mock has no server persistence.  It is session
+  // state, so a different Consumer must start from the neutral defaults.
+  savedSettings = defaultSettings();
 }

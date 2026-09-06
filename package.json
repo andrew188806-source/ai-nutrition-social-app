@@ -433,6 +433,8 @@
     ,"test:restaurant-owner-branch-temporal-ra-2h-p2-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-mutations.mjs"
     ,"test:restaurant-owner-branch-temporal-ra-2h-p2-development": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-development-acceptance.mjs"
     ,"test:auth-scoped-client-state-isolation": "node scripts/auth-scoped-client-state-isolation-smoke.mjs"
+    ,"test:meal-buddy-late-response-actor-boundary": "node scripts/meal-buddy-late-response-actor-boundary-smoke.mjs"
+    ,"test:meal-buddy-auth-fix-live-development-validation": "node scripts/meal-buddy-auth-fix-live-development-validation.mjs"
   },
   "workspaces": [
     "apps/*",
