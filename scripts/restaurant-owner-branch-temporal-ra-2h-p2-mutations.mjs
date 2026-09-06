@@ -38,7 +38,9 @@ const required = [
   // timezone read-only display
   "timezone",
   // Admin lifecycle boundary text present in UI copy
-  "lifecycle_blocked", "Admin"
+  "lifecycle_blocked", "Admin",
+  // RA-2H-P2-R1: deterministic Gregorian calendar-date validity, no Date.parse rollover as authority
+  "isGregorianDate", "isLeapYear", "daysInMonth"
 ];
 const forbidden = [
   "service_role", ".from(", "PATCH", "restaurant_internal", "supabaseUrl", "supabaseKey", "createClient(",
@@ -62,7 +64,31 @@ const behavioural = [
   ["weekday bound widened to 0..6 (JS Sunday=0 leak)",
     "(weekday as number)<1||(weekday as number)>7", "(weekday as number)<0||(weekday as number)>6"],
   ["special custom-hours empty array silently accepted",
-    "x.length>0&&x.length<=8", "x.length<=8"]
+    "x.length>0&&x.length<=8", "x.length<=8"],
+  // RA-2H-P2-R1: calendar-date validity mutants
+  ["date() calendar validity check removed, reverts to format-only regex (the exact reported live defect: 2099-13-40 accepted)",
+    "const date=(v:unknown):v is string=>{if(typeof v!==\"string\")return false;const m=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(v);return m!==null&&isGregorianDate(Number(m[1]),Number(m[2]),Number(m[3]));};",
+    "const date=(v:unknown):v is string=>typeof v===\"string\"&&/^\\d{4}-\\d{2}-\\d{2}$/.test(v);"],
+  ["localDateTime() calendar validity check removed, reverts to format-only regex (same defect class)",
+    "const localDateTime=(v:unknown):v is string=>{if(typeof v!==\"string\")return false;const m=/^(\\d{4})-(\\d{2})-(\\d{2})T\\d{2}:\\d{2}(?::\\d{2})?$/.exec(v);return m!==null&&isGregorianDate(Number(m[1]),Number(m[2]),Number(m[3]));};",
+    "const localDateTime=(v:unknown):v is string=>typeof v===\"string\"&&/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2})?$/.test(v);"],
+  ["month upper bound widened to 13 (month 13 would be accepted)",
+    "mo>=1&&mo<=12&&d>=1&&d<=daysInMonth(y,mo)", "mo>=1&&mo<=13&&d>=1&&d<=daysInMonth(y,mo)"],
+  ["month lower bound dropped to 0 (month 00 would be accepted)",
+    "mo>=1&&mo<=12&&d>=1&&d<=daysInMonth(y,mo)", "mo>=0&&mo<=12&&d>=1&&d<=daysInMonth(y,mo)"],
+  ["day upper bound widened to a fixed 32 (day 32 would be accepted every month)",
+    "mo>=1&&mo<=12&&d>=1&&d<=daysInMonth(y,mo)", "mo>=1&&mo<=12&&d>=1&&d<=32"],
+  ["day lower bound dropped to 0 (day 00 would be accepted)",
+    "mo>=1&&mo<=12&&d>=1&&d<=daysInMonth(y,mo)", "mo>=1&&mo<=12&&d>=0&&d<=daysInMonth(y,mo)"],
+  ["April days-in-month widened to 31 (April 31 would be accepted)",
+    "[31,isLeapYear(y)?29:28,31,30,31,30,31,31,30,31,30,31][mo-1]", "[31,isLeapYear(y)?29:28,31,31,31,30,31,31,30,31,30,31][mo-1]"],
+  ["leap-year century exception dropped (2100-02-29 would be wrongly accepted as leap)",
+    "y%4===0&&(y%100!==0||y%400===0)", "y%4===0"],
+  ["leap-year 400-rule dropped (2000-02-29 would be wrongly rejected as non-leap)",
+    "y%4===0&&(y%100!==0||y%400===0)", "y%4===0&&y%100!==0"],
+  ["date() authority replaced by Date.parse rollover instead of deterministic numeric Gregorian check",
+    "return m!==null&&isGregorianDate(Number(m[1]),Number(m[2]),Number(m[3]));};const localDateTime",
+    "return m!==null&&Number.isFinite(Date.parse(v));};const localDateTime"]
 ];
 for (const [name, find, replace] of behavioural) {
   if (!runtimeSource.includes(find)) { console.log(`STALE behavioural ${name}`); survivors++; continue; }

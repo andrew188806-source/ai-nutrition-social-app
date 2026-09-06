@@ -102,12 +102,39 @@ const tests = [
   ["special localDate must be a plain date, not a UTC-shiftable datetime", mod.parseSpecialInput({ localDate: "2099-01-01T00:00:00Z", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
   ["special CLEAR_OVERRIDE has its own exact shape", mod.parseSpecialInput({ localDate: "2099-01-01", operation: "CLEAR_OVERRIDE", expectedVersion: "0" })?.operation === "CLEAR_OVERRIDE"],
 
+  // --- RA-2H-P2-R1: calendar-date validity (format-shaped but calendrically-invalid dates must reject
+  // during request parsing, never reach the P1 RPC as a false "valid" date; see RA-2H-P2-R1 defect report) ---
+  ["special localDate rejects month 13 (2099-13-40, the reported live defect)", mod.parseSpecialInput({ localDate: "2099-13-40", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate rejects month 00", mod.parseSpecialInput({ localDate: "2099-00-10", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate rejects day 00", mod.parseSpecialInput({ localDate: "2099-12-00", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate rejects day 32", mod.parseSpecialInput({ localDate: "2099-12-32", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate rejects April 31 (30-day month overflow)", mod.parseSpecialInput({ localDate: "2026-04-31", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate rejects Feb 29 on a non-leap year (2026)", mod.parseSpecialInput({ localDate: "2026-02-29", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate accepts Feb 29 on an ordinary leap year (2028)", mod.parseSpecialInput({ localDate: "2028-02-29", operation: "SET_CLOSED", expectedVersion: "0" }) !== null],
+  ["special localDate rejects Feb 29 on a century non-leap year (2100)", mod.parseSpecialInput({ localDate: "2100-02-29", operation: "SET_CLOSED", expectedVersion: "0" }) === null],
+  ["special localDate accepts Feb 29 on a 400-divisible century leap year (2000)", mod.parseSpecialInput({ localDate: "2000-02-29", operation: "SET_CLOSED", expectedVersion: "0" }) !== null],
+  ["special localDate accepts an ordinary valid date and preserves it verbatim (no UTC/rollover shift)", mod.parseSpecialInput({ localDate: "2026-04-30", operation: "SET_CLOSED", expectedVersion: "0" })?.localDate === "2026-04-30"],
+
   ["closure CLOSE_NOW_INDEFINITE has its own exact shape (no datetime fields)", mod.parseClosureInput({ operation: "CLOSE_NOW_INDEFINITE", expectedVersion: "0" })?.operation === "CLOSE_NOW_INDEFINITE"],
   ["closure CLOSE_NOW_UNTIL rejects a bare date without time (not a local datetime)", mod.parseClosureInput({ operation: "CLOSE_NOW_UNTIL", untilLocalDateTime: "2099-01-01", fold: null, expectedVersion: "0" }) === null],
   ["closure CLOSE_NOW_UNTIL accepts a local civil datetime and passes fold through unresolved (no client-side DST logic)", mod.parseClosureInput({ operation: "CLOSE_NOW_UNTIL", untilLocalDateTime: "2099-01-01T10:00:00", fold: "earlier", expectedVersion: "0" })?.fold === "earlier"],
+  ["closure CLOSE_NOW_UNTIL rejects an invalid calendar date embedded in a local datetime (2026-13-01T12:00:00)", mod.parseClosureInput({ operation: "CLOSE_NOW_UNTIL", untilLocalDateTime: "2026-13-01T12:00:00", fold: null, expectedVersion: "0" }) === null],
+  ["closure CLOSE_NOW_UNTIL rejects a non-existent day-of-month in a local datetime (2026-02-30T12:00:00)", mod.parseClosureInput({ operation: "CLOSE_NOW_UNTIL", untilLocalDateTime: "2026-02-30T12:00:00", fold: null, expectedVersion: "0" }) === null],
+  ["closure CLOSE_NOW_UNTIL accepts a structurally valid leap-day local datetime (2028-02-29T12:00:00)", mod.parseClosureInput({ operation: "CLOSE_NOW_UNTIL", untilLocalDateTime: "2028-02-29T12:00:00", fold: null, expectedVersion: "0" }) !== null],
+  ["closure SCHEDULE_CLOSURE rejects an invalid calendar start date (2100-02-29, century non-leap)", mod.parseClosureInput({ operation: "SCHEDULE_CLOSURE", startLocalDateTime: "2100-02-29T00:00:00", startFold: null, endLocalDateTime: null, endFold: null, expectedVersion: "0" }) === null],
   ["closure SCHEDULE_CLOSURE allows a null end (open-ended)", mod.parseClosureInput({ operation: "SCHEDULE_CLOSURE", startLocalDateTime: "2099-01-01T10:00:00", startFold: null, endLocalDateTime: null, endFold: null, expectedVersion: "0" }) !== null],
   ["closure REOPEN_NOW requires a real uuid closureId", mod.parseClosureInput({ operation: "REOPEN_NOW", closureId: "not-a-uuid", expectedVersion: "0" }) === null],
   ["closure input rejects an unknown operation", mod.parseClosureInput({ operation: "FORCE_CLOSE", expectedVersion: "0" }) === null],
+
+  // --- server-side boundary: an invalid calendar date must never reach the repository/RPC call -------
+  ["server special mutation rejects the request (parseSpecialInput) strictly before any repository call is reachable in source order",
+    (() => { const s = fs.readFileSync(serverPath, "utf8"); const start = s.indexOf("async function mutateSpecial"); const nextFn = s.indexOf("async function ", start + 1); const fn = s.slice(start, nextFn === -1 ? undefined : nextFn);
+      const parseIdx = fn.indexOf("parseSpecialInput"); const repoIdx = fn.indexOf("Repository()"); const invalidReturnIdx = fn.indexOf("invalid_request", parseIdx);
+      return parseIdx >= 0 && repoIdx > parseIdx && invalidReturnIdx > parseIdx && invalidReturnIdx < repoIdx; })()],
+  ["server closure mutation rejects the request (parseClosureInput) strictly before any repository call is reachable in source order",
+    (() => { const s = fs.readFileSync(serverPath, "utf8"); const start = s.indexOf("async function mutateClosure"); const nextFn = s.indexOf("export const mutateWeeklyTemporal", start + 1); const fn = s.slice(start, nextFn === -1 ? undefined : nextFn);
+      const parseIdx = fn.indexOf("parseClosureInput"); const repoIdx = fn.indexOf("Repository()"); const invalidReturnIdx = fn.indexOf("invalid_request", parseIdx);
+      return parseIdx >= 0 && repoIdx > parseIdx && invalidReturnIdx > parseIdx && invalidReturnIdx < repoIdx; })()],
 
   // --- source-level scope/security proofs (static text scan of the real files) -------------------
   ["no Number()/parseInt() applied to any version field anywhere in the runtime module", !/Number\(\s*(v\.)?\w*[Vv]ersion|parseInt\(\s*(v\.)?\w*[Vv]ersion/.test(source)],
