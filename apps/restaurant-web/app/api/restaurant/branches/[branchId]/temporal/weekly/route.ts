@@ -1,0 +1,1 @@
+import{mutateWeeklyTemporal}from"../../../../../../../server/restaurant-owner-branch-temporal-runtime";export const dynamic="force-dynamic";export const revalidate=0;export async function POST(r:Request,c:{params:{branchId:string}}){return mutateWeeklyTemporal(r,c.params.branchId)}

@@ -1,0 +1,1 @@
+import{previewBranchTemporal}from"../../../../../../server/restaurant-owner-branch-temporal-runtime";export const dynamic="force-dynamic";export const revalidate=0;export async function GET(r:Request,c:{params:{branchId:string}}){return previewBranchTemporal(r,c.params.branchId)}

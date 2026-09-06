@@ -428,6 +428,11 @@
     ,"test:restaurant-owner-branch-temporal-ra-2h-p1-smoke": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-smoke.mjs"
     ,"test:restaurant-owner-branch-temporal-ra-2h-p1-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-mutations.mjs"
     ,"test:restaurant-owner-branch-temporal-ra-2h-p1-postgres": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-postgres-apply.mjs"
+    ,"test:restaurant-owner-branch-temporal-ra-2h-p2": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-guard.mjs"
+    ,"test:restaurant-owner-branch-temporal-ra-2h-p2-smoke": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-smoke.mjs"
+    ,"test:restaurant-owner-branch-temporal-ra-2h-p2-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-mutations.mjs"
+    ,"test:restaurant-owner-branch-temporal-ra-2h-p2-development": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-development-acceptance.mjs"
+    ,"test:auth-scoped-client-state-isolation": "node scripts/auth-scoped-client-state-isolation-smoke.mjs"
   },
   "workspaces": [
     "apps/*",
