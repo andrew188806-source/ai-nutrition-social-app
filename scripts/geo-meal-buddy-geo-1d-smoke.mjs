@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { hasExactRa2hP3TemporalSuccessor } from "./consumer-temporal-activation-ra-2h-p3-successor-manifest.mjs";
 
 const root=process.cwd(), require_=createRequire(import.meta.url), ts=require_("typescript");
 const checks=[],failures=[];
@@ -17,6 +18,7 @@ const requestModule=fromRoot("supabase/functions/_shared/meal-buddy-candidate-ap
 const candidateRef=fromRoot("supabase/functions/_shared/social-candidate-ref/index.ts");
 const cardRef=fromRoot("supabase/functions/_shared/meal-buddy-card-ref/index.ts");
 const handlerModule=fromRoot("supabase/functions/meal-buddy-candidate-list/handler.ts");
+const hasExactP3TemporalSuccessor=hasExactRa2hP3TemporalSuccessor();
 
 const ACTOR="00000000-0000-4000-8000-0000000000aa",SOURCE_CARD="00000000-0000-4000-9000-0000000000a1";
 const owner=(i)=>`00000000-0000-4000-8000-${String(i).padStart(12,"0")}`;
@@ -56,7 +58,10 @@ const threw=async(fn)=>{try{await fn();return false;}catch{return true;}};
 try{
  const nonGeoCapture={};const nonGeo=await compose({capture:nonGeoCapture});
  check("no location preserves frozen candidate set and order",JSON.stringify(names(nonGeo))===JSON.stringify([...OWNERS].sort().slice(0,10).map((id)=>`Name ${id.slice(-2)}`)));
- check("no location performs no branch or GEO read",JSON.stringify(nonGeoCapture.calls)===JSON.stringify(["pool","taste","profile","interests"]),nonGeoCapture.calls);
+ const noLocationCalls=hasExactP3TemporalSuccessor
+  ? ["pool","branch-context","taste","profile","interests"]
+  : ["pool","taste","profile","interests"];
+ check("no location permits only the exact P3 temporal branch read and no GEO work",JSON.stringify(nonGeoCapture.calls)===JSON.stringify(noLocationCalls),{hasExactP3TemporalSuccessor,calls:nonGeoCapture.calls});
  const noGeoRequest=await parse({sourceCardRef:"mbc1.test"});
  check("no-location request is accepted as explicit not-applied",noGeoRequest.ok&&noGeoRequest.value.geoOrigin===null);
  const validRequest=await parse({sourceCardRef:"mbc1.test",geo:{latitude:ORIGIN.latitude,longitude:ORIGIN.longitude}});
