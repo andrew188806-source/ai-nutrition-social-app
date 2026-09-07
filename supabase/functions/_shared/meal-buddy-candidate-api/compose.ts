@@ -61,18 +61,26 @@ const EMPTY: MealBuddyCandidateApiResponse = Object.freeze({
   candidates: Object.freeze([])
 });
 
+type MealBuddyCardBranchContextsResult =
+  | Readonly<{ ok: true; contexts: ReadonlyMap<string, { restaurantId: string; branchId: string }> }>
+  | Readonly<{ ok: false }>;
+
 async function applyMealBuddyGeoEligibility(
   transport: SocialRuntimeExecutorTransport,
   selectedCards: readonly MealBuddySelectedCard[],
-  geoOrigin: GeoPoint | null
+  geoOrigin: GeoPoint | null,
+  contextsResult: MealBuddyCardBranchContextsResult
 ): Promise<MealBuddyGeoApplication> {
   if (geoOrigin === null) return Object.freeze({ status: "not_applied", cards: selectedCards });
+  // The shared context read already failed before this stage even ran: treat it exactly as this
+  // stage's own read failure always has -- one fallback, cards unchanged, never an exclusion.
+  if (!contextsResult.ok) return Object.freeze({ status: "fallback", cards: selectedCards });
+  const contexts = contextsResult.contexts;
 
   try {
     // The reader receives only the cards already selected by frozen Social/Meal Context authority.
     // A missing row is an unbound historical card and therefore an applied exclusion, not a reason
     // to infer another branch or to enter fallback.
-    const contexts = await readMealBuddyCandidateBranchContexts(transport, selectedCards);
     if (contexts.size === 0) return Object.freeze({ status: "empty", cards: Object.freeze([]) });
 
     const query = parseGeoQuery({
@@ -112,11 +120,16 @@ async function applyMealBuddyGeoEligibility(
 // must never silently turn a branch into CLOSED.
 async function applyMealBuddyTemporalEligibility(
   transport: SocialRuntimeExecutorTransport,
-  selectedCards: readonly MealBuddySelectedCard[]
+  selectedCards: readonly MealBuddySelectedCard[],
+  contextsResult: MealBuddyCardBranchContextsResult
 ): Promise<MealBuddyTemporalApplication> {
+  if (!contextsResult.ok) return Object.freeze({ status: "fallback", cards: selectedCards });
+  const contexts = contextsResult.contexts;
+
   try {
-    const contexts = await readMealBuddyCandidateBranchContexts(transport, selectedCards);
-    const branchIds = [...contexts.values()].map((context) => context.branchId);
+    const branchIds = [...new Set(
+      selectedCards.map((card) => contexts.get(card.cardId)?.branchId).filter((id): id is string => id !== undefined)
+    )];
     const states = await readMealBuddyCandidateBranchTemporalStates(transport, branchIds);
 
     const survivors = Object.freeze(selectedCards.filter((card) => {
@@ -161,16 +174,28 @@ export async function composeMealBuddyCandidateList(
   );
   if (baseSelectedCards.length === 0) return EMPTY;
 
+  // The P0 branch binding is read once and shared by both GEO-1D and RA-2H-P3 below: both stages
+  // need only the (restaurantId, branchId) each already-selected card is bound to, and reading it
+  // twice would be a wasted round trip over the identical pool. A read failure here is not fatal to
+  // the whole request -- it is handed to each stage as its own familiar read-failure case, which
+  // each already resolves as one fallback (cards unchanged), never as a forced exclusion.
+  const contextsResult: MealBuddyCardBranchContextsResult = await readMealBuddyCandidateBranchContexts(
+    transport, baseSelectedCards
+  ).then(
+    (contexts) => Object.freeze({ ok: true as const, contexts }),
+    () => Object.freeze({ ok: false as const })
+  );
+
   // GEO-1D runs over the complete frozen person/card pool before ranking and exposure. The exact
   // selected card is never changed; only its P0 branch binding may allow that person to survive.
-  const geoApplication = await applyMealBuddyGeoEligibility(transport, baseSelectedCards, geoOrigin);
+  const geoApplication = await applyMealBuddyGeoEligibility(transport, baseSelectedCards, geoOrigin, contextsResult);
   const afterGeo = geoApplication.cards;
   if (afterGeo.length === 0) return EMPTY;
 
   // RA-2H-P3 runs immediately after GEO-1D, over the surviving pool, before ranking and exposure. A
   // CLOSED branch's card cannot survive as a currently recommendable candidate; OPEN/UNKNOWN and any
   // unbound card are preserved unchanged.
-  const temporalApplication = await applyMealBuddyTemporalEligibility(transport, afterGeo);
+  const temporalApplication = await applyMealBuddyTemporalEligibility(transport, afterGeo, contextsResult);
   const selectedCards = temporalApplication.cards;
   if (selectedCards.length === 0) return EMPTY;
 
