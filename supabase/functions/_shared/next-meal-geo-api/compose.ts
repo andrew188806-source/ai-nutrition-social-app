@@ -62,6 +62,8 @@ function emptyResponse(geoCandidateCount: number): NextMealGeoResponse {
   });
 }
 
+const KNOWN_BRANCH_TEMPORAL_STATES = new Set(["OPEN", "CLOSED", "UNKNOWN"]);
+
 function validRow(row: NextMealGeoCandidateRow): boolean {
   const requiredStrings = [row.candidate_id, row.restaurant_id, row.branch_id, row.menu_item_id,
     row.meal_name, row.restaurant_name, row.branch_name, row.nutrition_source_public,
@@ -71,5 +73,9 @@ function validRow(row: NextMealGeoCandidateRow): boolean {
     && Number.isFinite(row.calories)
     && optionalNumbers.every((value) => value === null || Number.isFinite(value))
     && (row.district === null || typeof row.district === "string")
-    && (row.public_image_url === null || typeof row.public_image_url === "string");
+    && (row.public_image_url === null || typeof row.public_image_url === "string")
+    // RA-2H-P3: a malformed/unrecognized temporal state must fail this row's validity outright, never
+    // be silently coerced into CLOSED or dropped in isolation -- see next_meal_geo_candidate_invalid.
+    && typeof row.branch_temporal_state === "string"
+    && KNOWN_BRANCH_TEMPORAL_STATES.has(row.branch_temporal_state);
 }

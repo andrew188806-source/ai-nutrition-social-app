@@ -29,6 +29,9 @@ export type NextMealGeoCandidateRow = Readonly<{
   nutrition_source_public: string;
   nutrition_updated_at: string;
   availability: string;
+  // RA-2H-P3. Canonical evaluator state, composed at the view producer -- never OPEN/CLOSED/UNKNOWN
+  // logic reimplemented here. See restaurant_internal.evaluate_branch_temporal_state_v1.
+  branch_temporal_state: string;
 }>;
 
 export type NextMealGeoResponse = Readonly<{

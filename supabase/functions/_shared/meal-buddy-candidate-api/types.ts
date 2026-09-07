@@ -21,6 +21,14 @@ export type MealBuddyCardBranchContext = Readonly<{
   branchId: string;
 }>;
 
+// RA-2H-P3. One row from the batch canonical-evaluator wrapper. state is the exact closed vocabulary
+// (OPEN/CLOSED/UNKNOWN) the frozen evaluator returns -- never a score, never a reason, never audit
+// detail, and it never reaches the client DTO; it is consumed only to exclude CLOSED before ranking.
+export type MealBuddyCardBranchTemporalStateRow = Readonly<{
+  branch_id: string;
+  state: string;
+}>;
+
 export type MealBuddyCandidateCardRow = Readonly<{
   candidate_owner_user_id: string;
   candidate_card_id: string;

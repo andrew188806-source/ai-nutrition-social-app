@@ -119,6 +119,9 @@ function toRow(
     saturated_fat: publicSource ? nutrition?.saturatedFat ?? null : null,
     serving_size: publicSource ? nutrition?.servingSize ?? null : null,
     nutrition_source_public: publicSource,
-    nutrition_updated_at: publicSource ? nutrition?.updatedAt ?? null : null
+    nutrition_updated_at: publicSource ? nutrition?.updatedAt ?? null : null,
+    // Mock/demo source: no canonical evaluator backs it. null maps to a display-neutral state, never
+    // CLOSED, so mock behavior is unchanged from before RA-2H-P3.
+    branch_temporal_state: null
   };
 }

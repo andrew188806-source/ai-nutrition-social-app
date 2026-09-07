@@ -3,6 +3,7 @@ import { mealBuddyCandidateApiContractViolation } from "./policy.ts";
 import type {
   MealBuddyCardBranchContext,
   MealBuddyCardBranchContextRow,
+  MealBuddyCardBranchTemporalStateRow,
   MealBuddyCandidateCardRow,
   MealBuddySelectedCard
 } from "./types.ts";
@@ -46,6 +47,17 @@ const CARD_BRANCH_CONTEXTS = defineSocialRuntimeExecutorStatement<MealBuddyCardB
   from social_internal.read_meal_buddy_card_branch_context($1::uuid[])
 `;
 const CARD_BRANCH_CONTEXT_READ_LIMIT = 200;
+
+// RA-2H-P3. The batch Consumer-facing wrapper around the frozen RA-2H-P1 canonical evaluator. State
+// only (OPEN/CLOSED/UNKNOWN) -- never reason, audit or internal detail -- evaluated against the DB's
+// own now(), never a client-supplied instant. This composes the SAME wrapper GEO already calls this
+// executor role for, so no second privileged grant is introduced for this stage.
+const BRANCH_TEMPORAL_STATES = defineSocialRuntimeExecutorStatement<MealBuddyCardBranchTemporalStateRow>`
+  select branch_id, state
+  from restaurant_internal.consumer_branch_current_temporal_states_v1($1::text[])
+`;
+const BRANCH_TEMPORAL_STATE_READ_LIMIT = 200;
+const KNOWN_BRANCH_TEMPORAL_STATES = new Set(["OPEN", "CLOSED", "UNKNOWN"]);
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 
@@ -142,6 +154,40 @@ export async function readMealBuddyCandidateBranchContexts(
     }));
   }
   return contexts;
+}
+
+// RA-2H-P3. Reads the current canonical temporal state for exactly the given branch ids. A state
+// outside the closed vocabulary fails the request rather than being coerced into a default: coercing
+// toward CLOSED would silently exclude a branch that was never proven closed, and coercing toward
+// OPEN/UNKNOWN would silently include one it should not.
+export async function readMealBuddyCandidateBranchTemporalStates(
+  transport: SocialRuntimeExecutorTransport,
+  branchIds: readonly string[]
+): Promise<ReadonlyMap<string, string>> {
+  if (!Array.isArray(branchIds)) return mealBuddyCandidateApiContractViolation();
+  const uniqueIds = [...new Set(branchIds)];
+  if (uniqueIds.length === 0) return new Map();
+
+  const rows = await transport.withTransaction(async (transaction) => {
+    const result: MealBuddyCardBranchTemporalStateRow[] = [];
+    for (let index = 0; index < uniqueIds.length; index += BRANCH_TEMPORAL_STATE_READ_LIMIT) {
+      result.push(...await transaction.query(
+        BRANCH_TEMPORAL_STATES,
+        [uniqueIds.slice(index, index + BRANCH_TEMPORAL_STATE_READ_LIMIT)]
+      ));
+    }
+    return result;
+  });
+
+  const states = new Map<string, string>();
+  for (const row of rows) {
+    if (!isNonEmptyString(row.branch_id) || !isNonEmptyString(row.state)
+      || !KNOWN_BRANCH_TEMPORAL_STATES.has(row.state) || states.has(row.branch_id)) {
+      return mealBuddyCandidateApiContractViolation();
+    }
+    states.set(row.branch_id, row.state);
+  }
+  return states;
 }
 
 // Reads the CURRENT profile interests for exactly the exposed candidate owners. Nothing here reads a

@@ -26,6 +26,7 @@ import type {
   ConsumerNutritionSnapshot
 } from "../types";
 import {
+  isConsumerBranchTemporalState,
   SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW,
   type SupabaseConsumerNextMealCandidateRow,
   type SupabaseRestaurantMenuClientLike
@@ -132,8 +133,12 @@ export class SupabaseConsumerNextMealRecommendationRepository
       if (ingredientAvoidanceResult.candidates.length === 0) {
         return { status: "empty", reason: "ingredient_avoidance_eligibility" };
       }
+      const temporallyEligible = applyBranchTemporalEligibility(ingredientAvoidanceResult.candidates);
+      if (temporallyEligible.length === 0) {
+        return { status: "empty", reason: "branch_temporal_eligibility" };
+      }
       const ranked = rankNextMealCandidatesByNutrition(
-        ingredientAvoidanceResult.candidates,
+        temporallyEligible,
         input.nutritionRanking,
         input.nutritionRankingPolicy
       );
@@ -465,8 +470,23 @@ function mapRowToCandidate(
       reasonCode: "neutral_nutrition_fallback",
       detailSummaries: []
     },
-    rankOrdinal: index
+    rankOrdinal: index,
+    // A malformed/unrecognized value is never coerced into a state -- it is left undefined, which the
+    // temporal eligibility filter below treats as "not provably CLOSED" and therefore keeps.
+    branchTemporalState: isConsumerBranchTemporalState(row.branch_temporal_state)
+      ? row.branch_temporal_state : undefined
   };
+}
+
+// RA-2H-P3. The one, canonical exclusion point for "currently CLOSED" across both the direct and the
+// GEO-mediated read paths, which converge here before ranking. UNKNOWN and OPEN are both preserved
+// (legacy behavior); only a PROVEN CLOSED result is excluded. Taste scoring is untouched -- this runs
+// strictly before rankNextMealCandidatesByNutrition / applyTasteRanking, alongside the existing
+// allergy/ingredient-avoidance eligibility gates.
+function applyBranchTemporalEligibility(
+  candidates: readonly ConsumerNextMealCandidate[]
+): readonly ConsumerNextMealCandidate[] {
+  return Object.freeze(candidates.filter((candidate) => candidate.branchTemporalState !== "CLOSED"));
 }
 
 function mapNutritionSource(value: string): ConsumerNextMealCandidate["nutritionSource"] {

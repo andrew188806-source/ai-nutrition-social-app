@@ -1,6 +1,6 @@
 import type { NextMealGeoCandidateRow, NextMealGeoCandidateRowSource } from "./types.ts";
 
-export const NEXT_MEAL_GEO_CANDIDATES_VIEW = "consumer_public_next_meal_candidates_v1" as const;
+export const NEXT_MEAL_GEO_CANDIDATES_VIEW = "consumer_public_next_meal_candidates_v2" as const;
 
 type CandidateQueryResponse = Readonly<{
   data: NextMealGeoCandidateRow[] | null;

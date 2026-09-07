@@ -1,5 +1,5 @@
 import type { ConsumerNextMealGeoInput } from "../types";
-import type { SupabaseConsumerNextMealCandidateRow } from "./supabaseRestaurantMenuRows";
+import { isConsumerBranchTemporalState, type SupabaseConsumerNextMealCandidateRow } from "./supabaseRestaurantMenuRows";
 
 export const SUPABASE_NEXT_MEAL_GEO_FUNCTION = "next-meal-geo-candidates" as const;
 
@@ -48,5 +48,7 @@ function isCandidateRow(value: unknown): value is SupabaseConsumerNextMealCandid
     && nullableNumbers.every((key) => row[key] === null
       || (typeof row[key] === "number" && Number.isFinite(row[key])))
     && (row.district === null || typeof row.district === "string")
-    && (row.public_image_url === null || typeof row.public_image_url === "string");
+    && (row.public_image_url === null || typeof row.public_image_url === "string")
+    // RA-2H-P3: an unrecognized branch_temporal_state fails the whole row, never becomes CLOSED.
+    && isConsumerBranchTemporalState(row.branch_temporal_state);
 }

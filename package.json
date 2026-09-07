@@ -435,6 +435,7 @@
     ,"test:auth-scoped-client-state-isolation": "node scripts/auth-scoped-client-state-isolation-smoke.mjs"
     ,"test:meal-buddy-late-response-actor-boundary": "node scripts/meal-buddy-late-response-actor-boundary-smoke.mjs"
     ,"test:meal-buddy-auth-fix-live-development-validation": "node scripts/meal-buddy-auth-fix-live-development-validation.mjs"
+    ,"test:consumer-temporal-activation-ra-2h-p3": "node scripts/consumer-temporal-activation-ra-2h-p3-guard.mjs"
   },
   "workspaces": [
     "apps/*",

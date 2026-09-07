@@ -1,5 +1,5 @@
 export const SUPABASE_CONSUMER_RESTAURANT_CATALOG_VIEW =
-  "consumer_public_restaurant_catalog_v1" as const;
+  "consumer_public_restaurant_catalog_v2" as const;
 
 export type SupabaseRestaurantCatalogRow = {
   restaurant_id: unknown;
@@ -36,6 +36,9 @@ export type SupabaseRestaurantCatalogRow = {
   serving_size: unknown;
   nutrition_source_public: unknown;
   nutrition_updated_at: unknown;
+  // RA-2H-P3. Canonical evaluator state, composed at the view producer -- never OPEN/CLOSED/UNKNOWN
+  // logic reimplemented here. See restaurant_internal.evaluate_branch_temporal_state_v1.
+  branch_temporal_state: unknown;
 };
 
 export type SupabaseRestaurantCatalogResponse = {

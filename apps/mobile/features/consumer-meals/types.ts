@@ -700,6 +700,13 @@ export type ConsumerNextMealCandidate = {
   reason: ConsumerNextMealCandidateReason;
   rankOrdinal: number;
   recommendationLane?: "nutrition_primary" | "taste_forward" | "nutrition_fallback";
+  /**
+   * RA-2H-P3. The branch's current canonical temporal state (OPEN/CLOSED/UNKNOWN), composed from the
+   * frozen evaluator at the view producer. Present only on canonical rows; absent on demo/mock
+   * sources. A CLOSED branch is excluded from the eligible candidate set upstream of this DTO -- this
+   * field is presentational only by the time a UI ever sees it.
+   */
+  branchTemporalState?: "OPEN" | "CLOSED" | "UNKNOWN";
 };
 
 /** Internal REC-A evaluation. Raw score and gap evidence never cross into UI view models. */
@@ -793,7 +800,8 @@ export type ConsumerNextMealRecommendationRepositoryResult =
     }
   | {
       status: "empty";
-      reason?: "no_candidates" | "allergy_eligibility" | "ingredient_avoidance_eligibility";
+      reason?: "no_candidates" | "allergy_eligibility" | "ingredient_avoidance_eligibility"
+        | "branch_temporal_eligibility";
     }
   | { status: "disabled" }
   | { status: "read_failed"; errorCode: string };
@@ -813,7 +821,8 @@ export type ConsumerNextMealRecommendationResult =
       source: ConsumerNextMealRecommendationSource;
       date: string;
       geoStatus: ConsumerNextMealGeoStatus;
-      reason: "no_candidates" | "allergy_eligibility" | "ingredient_avoidance_eligibility";
+      reason: "no_candidates" | "allergy_eligibility" | "ingredient_avoidance_eligibility"
+        | "branch_temporal_eligibility";
     }
   | { status: "disabled"; source: ConsumerNextMealRecommendationSource }
   | { status: "intake_unavailable"; source: ConsumerNextMealRecommendationSource; errorCode: string }

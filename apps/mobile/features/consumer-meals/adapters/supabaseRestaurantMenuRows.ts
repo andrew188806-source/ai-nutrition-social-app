@@ -1,5 +1,5 @@
 export const SUPABASE_CONSUMER_NEXT_MEAL_CANDIDATES_VIEW =
-  "consumer_public_next_meal_candidates_v1" as const;
+  "consumer_public_next_meal_candidates_v2" as const;
 
 export type SupabaseConsumerNextMealCandidateRow = {
   candidate_id: string;
@@ -19,7 +19,19 @@ export type SupabaseConsumerNextMealCandidateRow = {
   nutrition_source_public: string;
   nutrition_updated_at: string;
   availability: string;
+  // RA-2H-P3. Canonical evaluator state, composed at the view producer -- never OPEN/CLOSED/UNKNOWN
+  // logic reimplemented here. See restaurant_internal.evaluate_branch_temporal_state_v1.
+  branch_temporal_state: string;
 };
+
+// RA-2H-P3. The exact, closed vocabulary the canonical evaluator can return. A value outside this
+// set is never coerced into CLOSED -- it fails validation, so a caller sees a typed error instead of
+// a silently misrepresented branch state.
+export type ConsumerBranchTemporalState = "OPEN" | "CLOSED" | "UNKNOWN";
+const KNOWN_BRANCH_TEMPORAL_STATES: ReadonlySet<string> = new Set(["OPEN", "CLOSED", "UNKNOWN"]);
+export function isConsumerBranchTemporalState(value: unknown): value is ConsumerBranchTemporalState {
+  return typeof value === "string" && KNOWN_BRANCH_TEMPORAL_STATES.has(value);
+}
 
 export type SupabaseRestaurantMenuQueryResponse = {
   data: SupabaseConsumerNextMealCandidateRow[] | null;

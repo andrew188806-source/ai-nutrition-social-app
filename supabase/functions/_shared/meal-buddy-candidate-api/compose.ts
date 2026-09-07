@@ -9,6 +9,7 @@ import { mealBuddyCandidateApiContractViolation } from "./policy.ts";
 import {
   readExposedCandidateInterests,
   readMealBuddyCandidateBranchContexts,
+  readMealBuddyCandidateBranchTemporalStates,
   readMealBuddyCandidateCards
 } from "./readCandidateCards.ts";
 import { toMealBuddyCandidateApiResponse } from "./toCandidateDto.ts";
@@ -46,6 +47,12 @@ export type MealBuddyCandidateListComposition = Readonly<{
 export type MealBuddyGeoApplicationStatus = "not_applied" | "applied" | "empty" | "fallback";
 type MealBuddyGeoApplication = Readonly<{
   status: MealBuddyGeoApplicationStatus;
+  cards: readonly MealBuddySelectedCard[];
+}>;
+
+export type MealBuddyTemporalApplicationStatus = "applied" | "empty" | "fallback";
+type MealBuddyTemporalApplication = Readonly<{
+  status: MealBuddyTemporalApplicationStatus;
   cards: readonly MealBuddySelectedCard[];
 }>;
 
@@ -95,6 +102,34 @@ async function applyMealBuddyGeoEligibility(
   }
 }
 
+// RA-2H-P3. A CLOSED branch must not survive as a currently recommendable Meal Buddy candidate. This
+// stage runs at the same "hard eligibility, pre-ranking" position as GEO-1D above, over the SAME
+// person/card pool, and changes only WHO survives -- never Taste comparison, ranking, exposure or
+// context classification, none of which are touched here. UNKNOWN and OPEN are both preserved
+// (legacy behavior); only a PROVEN CLOSED result excludes a card. A read failure or an unbound
+// (contextless) card is never coerced into an exclusion -- it fails open, exactly like GEO's own
+// "fallback"/unbound handling, per the RA-2H-P3 rule that malformed/unavailable temporal metadata
+// must never silently turn a branch into CLOSED.
+async function applyMealBuddyTemporalEligibility(
+  transport: SocialRuntimeExecutorTransport,
+  selectedCards: readonly MealBuddySelectedCard[]
+): Promise<MealBuddyTemporalApplication> {
+  try {
+    const contexts = await readMealBuddyCandidateBranchContexts(transport, selectedCards);
+    const branchIds = [...contexts.values()].map((context) => context.branchId);
+    const states = await readMealBuddyCandidateBranchTemporalStates(transport, branchIds);
+
+    const survivors = Object.freeze(selectedCards.filter((card) => {
+      const context = contexts.get(card.cardId);
+      if (context === undefined) return true; // unbound card: never excluded by this stage
+      return states.get(context.branchId) !== "CLOSED";
+    }));
+    return Object.freeze({ status: survivors.length === 0 ? "empty" : "applied", cards: survivors });
+  } catch {
+    return Object.freeze({ status: "fallback", cards: selectedCards });
+  }
+}
+
 export async function composeMealBuddyCandidateList(
   composition: MealBuddyCandidateListComposition
 ): Promise<MealBuddyCandidateApiResponse> {
@@ -129,7 +164,14 @@ export async function composeMealBuddyCandidateList(
   // GEO-1D runs over the complete frozen person/card pool before ranking and exposure. The exact
   // selected card is never changed; only its P0 branch binding may allow that person to survive.
   const geoApplication = await applyMealBuddyGeoEligibility(transport, baseSelectedCards, geoOrigin);
-  const selectedCards = geoApplication.cards;
+  const afterGeo = geoApplication.cards;
+  if (afterGeo.length === 0) return EMPTY;
+
+  // RA-2H-P3 runs immediately after GEO-1D, over the surviving pool, before ranking and exposure. A
+  // CLOSED branch's card cannot survive as a currently recommendable candidate; OPEN/UNKNOWN and any
+  // unbound card are preserved unchanged.
+  const temporalApplication = await applyMealBuddyTemporalEligibility(transport, afterGeo);
+  const selectedCards = temporalApplication.cards;
   if (selectedCards.length === 0) return EMPTY;
 
   // The owner -> card binding, fixed here and never renegotiated. Ranking and exposure operate on

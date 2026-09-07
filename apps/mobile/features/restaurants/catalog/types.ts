@@ -51,6 +51,13 @@ export type CatalogBranchViewModel = {
   district: string;
   address: string;
   menus: readonly CatalogMenuViewModel[];
+  /**
+   * RA-2H-P3. The branch's current canonical temporal state (OPEN/CLOSED/UNKNOWN), composed from the
+   * frozen evaluator at the view producer. Presentational only: a CLOSED branch remains fully
+   * discoverable here -- this field never hides or removes a restaurant/branch from the catalogue.
+   * null when the value could not be validated (never coerced into a state).
+   */
+  temporalState: "OPEN" | "CLOSED" | "UNKNOWN" | null;
 };
 
 export type CatalogRestaurantViewModel = RestaurantCardViewModel & {

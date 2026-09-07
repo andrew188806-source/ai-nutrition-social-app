@@ -61,7 +61,8 @@ export function mapRestaurantCatalogRows(
         name: requiredString(row.branch_name, "branch_name"),
         district: optionalString(row.branch_district) ?? "",
         address: optionalString(row.branch_address) ?? "",
-        menus: []
+        menus: [],
+        temporalState: optionalTemporalState(row.branch_temporal_state)
       };
       restaurant.branches.push(branch);
     }
@@ -221,6 +222,14 @@ function requiredNumber(value: unknown, field: string): number {
 
 function nullableNumber(value: unknown, field: string): number | null {
   return value == null ? null : requiredNumber(value, field);
+}
+
+const KNOWN_TEMPORAL_STATES = new Set(["OPEN", "CLOSED", "UNKNOWN"]);
+// RA-2H-P3: a malformed/unrecognized value is never coerced into a state -- it is null, which is
+// display-neutral and never treated as CLOSED by any consumer of this DTO.
+function optionalTemporalState(value: unknown): "OPEN" | "CLOSED" | "UNKNOWN" | null {
+  return typeof value === "string" && KNOWN_TEMPORAL_STATES.has(value)
+    ? (value as "OPEN" | "CLOSED" | "UNKNOWN") : null;
 }
 
 function stringArray(value: unknown, field: string): string[] {
