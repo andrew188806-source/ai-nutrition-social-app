@@ -1,7 +1,7 @@
 export const RESTAURANT_OWNER_PUBLIC_WEBSITE_PREVIEW_RPC =
   "restaurant_owner_preview_public_website_v1" as const;
 export const RESTAURANT_OWNER_PUBLIC_WEBSITE_MUTATION_RPC =
-  "restaurant_owner_set_public_website_v1" as const;
+  "restaurant_owner_set_public_website_v2" as const;
 export const RESTAURANT_OWNER_PUBLIC_WEBSITE_BODY_LIMIT = 16384 as const;
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;

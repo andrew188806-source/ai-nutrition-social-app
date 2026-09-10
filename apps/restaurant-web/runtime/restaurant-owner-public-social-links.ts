@@ -13,7 +13,7 @@ const HOSTS: Record<PublicSocialProvider,readonly string[]> = {
   youtube:["youtube.com","www.youtube.com"]
 };
 export const RESTAURANT_OWNER_PUBLIC_SOCIAL_PREVIEW_RPC="restaurant_owner_preview_public_social_link_v1" as const;
-export const RESTAURANT_OWNER_PUBLIC_SOCIAL_MUTATION_RPC="restaurant_owner_set_public_social_link_v1" as const;
+export const RESTAURANT_OWNER_PUBLIC_SOCIAL_MUTATION_RPC="restaurant_owner_set_public_social_link_v2" as const;
 export const RESTAURANT_OWNER_PUBLIC_SOCIAL_BODY_LIMIT=16384 as const;
 const VERSION=/^(0|[1-9][0-9]{0,18})$/,CONTROL=/[\x00-\x1F\x7F-\x9F]/;
 const ID=/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;

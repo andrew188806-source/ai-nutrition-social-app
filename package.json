@@ -448,6 +448,10 @@
     ,"test:restaurant-owner-public-social-links-ra-2i-p2-smoke": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-smoke.mjs"
     ,"test:restaurant-owner-public-social-links-ra-2i-p2-mutations": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-mutations.mjs"
     ,"test:restaurant-owner-public-social-links-ra-2i-p2-postgres": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-postgres-apply.mjs"
+    ,"test:restaurant-url-mutation-authority-ra-2i-r2": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-guard.mjs"
+    ,"test:restaurant-url-mutation-authority-ra-2i-r2-smoke": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-smoke.mjs"
+    ,"test:restaurant-url-mutation-authority-ra-2i-r2-mutations": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-mutations.mjs"
+    ,"test:restaurant-url-mutation-authority-ra-2i-r2-postgres": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

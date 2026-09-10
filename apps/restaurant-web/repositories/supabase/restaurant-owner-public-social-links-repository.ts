@@ -1,5 +1,6 @@
 import "server-only";
 import {createRestaurantSupabaseServerClient} from "../../auth/supabase-server";
+import {createRestaurantSupabaseServiceClient} from "../../auth/supabase-service-server";
 import {parsePublicSocialMutation,parsePublicSocialPreview,RESTAURANT_OWNER_PUBLIC_SOCIAL_MUTATION_RPC,RESTAURANT_OWNER_PUBLIC_SOCIAL_PREVIEW_RPC,type PublicSocialInput,type PublicSocialProvider} from "../../runtime/restaurant-owner-public-social-links";
 export function createRestaurantOwnerPublicSocialLinksRepository(){
   const client=createRestaurantSupabaseServerClient();
@@ -9,8 +10,9 @@ export function createRestaurantOwnerPublicSocialLinksRepository(){
       if(result.error)throw new Error("public-social unavailable");
       return parsePublicSocialPreview(result.data)??{state:"internal_failure" as const};
     },
-    async mutate(restaurantId:string,provider:PublicSocialProvider,input:PublicSocialInput){
-      const result=await client.rpc(RESTAURANT_OWNER_PUBLIC_SOCIAL_MUTATION_RPC,{
+    async mutate(actorAuthUserId:string,restaurantId:string,provider:PublicSocialProvider,input:PublicSocialInput){
+      const result=await createRestaurantSupabaseServiceClient().rpc(RESTAURANT_OWNER_PUBLIC_SOCIAL_MUTATION_RPC,{
+        p_actor_auth_user_id:actorAuthUserId,
         p_restaurant_id:restaurantId,p_provider:provider,p_operation:input.action,
         p_expected_public_url:input.expectedUrl,p_next_public_url:input.action==="set"?input.url:null,
         p_expected_version:input.expectedVersion

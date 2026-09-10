@@ -17,14 +17,14 @@ const statuses = { ready: 200, applied: 200, unauthenticated: 401, permission_de
 const json = (result: Result) => Response.json(result, { status: statuses[result.state], headers });
 async function authenticate() {
   if (getRestaurantDataSourceConfig().dataSource !== "supabase") return "dependency_unavailable" as const;
-  try { return await getVerifiedRestaurantClaims() ? "verified" as const : "unauthenticated" as const; }
+  try { return await getVerifiedRestaurantClaims() ?? "unauthenticated" as const; }
   catch { return "dependency_unavailable" as const; }
 }
 
 export async function previewPublicWebsite(request: Request) {
   if ([...new URL(request.url).searchParams.keys()].length) return json({ state: "invalid_request" });
   const auth = await authenticate();
-  if (auth !== "verified") return json({ state: auth });
+  if (typeof auth === "string") return json({ state: auth });
   try {
     const access = await loadRestaurantAccessContext();
     if (access.state !== "selected") return json({
@@ -46,7 +46,7 @@ export async function mutatePublicWebsite(request: Request) {
     return json({ state: "invalid_request" });
   }
   const auth = await authenticate();
-  if (auth !== "verified") return json({ state: auth });
+  if (typeof auth === "string") return json({ state: auth });
   let input: PublicWebsiteInput | null;
   try {
     const body = await request.text();
@@ -61,7 +61,8 @@ export async function mutatePublicWebsite(request: Request) {
     if (access.state !== "selected") return json({
       state: access.state === "missing-identity" ? "unauthenticated" : "permission_denied"
     });
-    const result = await createRestaurantOwnerPublicWebsiteRepository().mutate(access.restaurant.id, input);
+    const result = await createRestaurantOwnerPublicWebsiteRepository().mutate(
+      auth.subject, access.restaurant.id, input);
     return result.state === "applied" && result.restaurantId !== access.restaurant.id
       ? json({ state: "internal_failure" }) : json(result);
   } catch { return json({ state: "dependency_unavailable" }); }
