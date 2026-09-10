@@ -2,6 +2,7 @@ import { SupabaseMappingError } from "../adapters/supabase/errors";
 import type {
   OwnerBranch, OwnerBranchMenuItem, OwnerMenu, OwnerMenuCategory, OwnerMenuItem, OwnerNutrition, OwnerRestaurant
 } from "./restaurant-rpc-contracts";
+import { isCanonicalPublicWebsiteUrl } from "./restaurant-owner-public-website";
 
 type Row = Record<string, unknown>;
 
@@ -31,6 +32,13 @@ function version(value: unknown, entity: string, field: string): string {
   }
   return value;
 }
+function nullablePublicWebsite(value: unknown, entity: string, field: string): string | null {
+  if (value === null) return null;
+  if (!isCanonicalPublicWebsiteUrl(value)) {
+    throw new SupabaseMappingError(`Malformed ${entity}.${field}`, entity, field);
+  }
+  return value;
+}
 function number(value: unknown, entity: string, field: string): number {
   const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
   if (!Number.isFinite(parsed)) throw new SupabaseMappingError(`Malformed ${entity}.${field}`, entity, field);
@@ -53,7 +61,7 @@ function assertTenant(actual: string, expected: string, entity: string) {
 
 export function mapOwnerRestaurant(value: unknown): OwnerRestaurant {
   const r = row(value, "OwnerRestaurant");
-  return { id: string(r.restaurant_id,"OwnerRestaurant","restaurant_id"), name:string(r.name,"OwnerRestaurant","name"), city:nullableString(r.city,"OwnerRestaurant","city"), category:nullableString(r.category,"OwnerRestaurant","category"), status:string(r.status,"OwnerRestaurant","status") };
+  return { id: string(r.restaurant_id,"OwnerRestaurant","restaurant_id"), name:string(r.name,"OwnerRestaurant","name"), city:nullableString(r.city,"OwnerRestaurant","city"), category:nullableString(r.category,"OwnerRestaurant","category"), status:string(r.status,"OwnerRestaurant","status"), publicWebsiteUrl:nullablePublicWebsite(r.public_website_url,"OwnerRestaurant","public_website_url"), publicWebsiteUrlVersion:version(r.public_website_url_version,"OwnerRestaurant","public_website_url_version") };
 }
 export function mapOwnerBranch(value: unknown, expected: string): OwnerBranch {
   const r=row(value,"OwnerBranch"); const restaurantId=string(r.restaurant_id,"OwnerBranch","restaurant_id"); assertTenant(restaurantId,expected,"OwnerBranch");

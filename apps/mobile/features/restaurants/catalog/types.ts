@@ -62,6 +62,7 @@ export type CatalogBranchViewModel = {
 };
 
 export type CatalogRestaurantViewModel = RestaurantCardViewModel & {
+  restaurantPublicWebsiteUrl: string | null;
   branches: readonly CatalogBranchViewModel[];
 };
 

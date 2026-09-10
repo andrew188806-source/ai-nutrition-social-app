@@ -1,0 +1,35 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import child from "node:child_process";
+import { BASELINE, MIGRATION, PATHS, SUBJECT } from "./restaurant-owner-public-website-ra-2i-p1b-contract.mjs";
+const read=(p)=>fs.readFileSync(p,"utf8").replace(/\r\n/g,"\n");
+const git=(args)=>child.execFileSync("git",args,{encoding:"utf8"}).trim();
+const lines=(v)=>v?v.split(/\r?\n/).filter(Boolean).sort():[];
+const head=git(["rev-parse","HEAD"]); const frozen=head!==BASELINE;
+const manifest=frozen?lines(git(["diff-tree","--no-commit-id","--name-only","--no-renames","-r","HEAD"]))
+  :[...new Set([...lines(git(["diff","--name-only"])),...lines(git(["ls-files","--others","--exclude-standard"]))])].sort();
+const sql=read(MIGRATION); const bare=sql.replace(/^\s*--.*$/gm,"");
+const scripts=JSON.parse(read("package.json")).scripts;
+const tests=[]; const check=(n,p)=>{tests.push([n,!!p]);console.log(`${p?"PASS":"FAIL"} ${n}`)};
+check("baseline remains frozen origin",git(["rev-parse","origin/main"])===BASELINE);
+check("candidate or one freeze commit",frozen?git(["rev-parse","HEAD^"])===BASELINE&&git(["log","-1","--pretty=%s"])===SUBJECT:head===BASELINE);
+check("exact P1B path manifest",JSON.stringify(manifest)===JSON.stringify([...PATHS].sort()));
+check("one successor migration sorts last",fs.readdirSync("supabase/migrations").filter(f=>f.endsWith(".sql")).sort().at(-1)===MIGRATION.split("/").at(-1));
+check("four dedicated scripts registered",["test:restaurant-owner-public-website-ra-2i-p1b","test:restaurant-owner-public-website-ra-2i-p1b-smoke","test:restaurant-owner-public-website-ra-2i-p1b-mutations","test:restaurant-owner-public-website-ra-2i-p1b-postgres"].every(k=>typeof scripts[k]==="string"));
+check("one restaurant-global URL and independent version",/alter table public\.restaurants[\s\S]*add column public_website_url text[\s\S]*add column public_website_url_version bigint not null default 0/.test(sql)&&!/alter table public\.restaurant_branches[\s\S]*website/i.test(bare));
+check("database invariant is bounded and rejects controls",/public_website_url is null[\s\S]*char_length\(public_website_url\) between 1 and 2048[\s\S]*public_website_url !~/.test(sql));
+check("dedicated owner restaurant permission",sql.includes("restaurant.profile.public_website.write")&&sql.includes("permission_scope = 'restaurant'"));
+check("sealed role and website-only update",/create role restaurant_owner_public_website_write_authority\s+nologin noinherit nobypassrls/.test(sql)&&sql.includes("grant update (public_website_url)\n  on public.restaurants"));
+check("restrictive restaurant tenant policies",(sql.match(/on public\.restaurants as restrictive/g)??[]).length===2);
+check("sealed RPC configuration",(sql.match(/security definer\nset search_path = '' set row_security = 'on'/g)??[]).length>=2);
+check("authenticated RPC execute only",sql.includes("grant execute on function public.restaurant_owner_preview_public_website_v1(text) to authenticated")&&sql.includes("from public, anon, authenticated, authenticator, service_role"));
+check("CAS and no-change explicit",sql.includes("is distinct from p_expected_public_website_url")&&sql.includes("public_website_url_version <> p_expected_version")&&sql.includes("'no_change'"));
+check("private branchless append-only audit",sql.includes("restaurant_public_website_audit_log")&&!/create table restaurant_internal\.restaurant_public_website_audit_log[\s\S]{0,800}branch_id/.test(sql));
+check("restaurant owner-read v2",sql.includes("restaurant_internal_restaurants_v2")&&sql.includes("public_website_url_version::text"));
+const view=sql.slice(sql.indexOf("create view public.consumer_public_restaurant_catalog_v4"),sql.indexOf("revoke all on public.consumer_public_restaurant_catalog_v4"));
+check("catalog v4 adds website without filtering",view.includes("r.public_website_url as restaurant_public_website_url")&&!/where[^;]*public_website_url/i.test(view));
+check("P1A public phone projection unchanged",view.includes("rb.public_phone as branch_public_phone"));
+check("temporal producer unchanged",view.includes("consumer_branch_current_temporal_state_v1(rb.id) as branch_temporal_state"));
+check("no social email generic mutation",!/instagram|facebook|contact_email|profile_json|contact_json|\bpatch\b/i.test(bare));
+check("no credential material",!/service_role[^\n]{0,40}(key|secret)\s*[:=]|-----BEGIN PRIVATE KEY-----/i.test(PATHS.filter((p)=>!p.endsWith("ra-2i-p1b-guard.mjs")).map(read).join("\n")));
+const failed=tests.filter(([,p])=>!p);console.log(JSON.stringify({suite:"ra-2i-p1b-guard",total:tests.length,passed:tests.length-failed.length,failed:failed.length},null,2));if(failed.length)process.exitCode=1;

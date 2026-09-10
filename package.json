@@ -440,6 +440,10 @@
     ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-smoke": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-smoke.mjs"
     ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-mutations": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-mutations.mjs"
     ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-postgres": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-postgres-apply.mjs"
+    ,"test:restaurant-owner-public-website-ra-2i-p1b": "node scripts/restaurant-owner-public-website-ra-2i-p1b-guard.mjs"
+    ,"test:restaurant-owner-public-website-ra-2i-p1b-smoke": "node scripts/restaurant-owner-public-website-ra-2i-p1b-smoke.mjs"
+    ,"test:restaurant-owner-public-website-ra-2i-p1b-mutations": "node scripts/restaurant-owner-public-website-ra-2i-p1b-mutations.mjs"
+    ,"test:restaurant-owner-public-website-ra-2i-p1b-postgres": "node scripts/restaurant-owner-public-website-ra-2i-p1b-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

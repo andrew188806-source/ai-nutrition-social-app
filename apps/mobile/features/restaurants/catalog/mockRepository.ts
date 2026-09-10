@@ -91,6 +91,7 @@ function toRow(
     restaurant_city: restaurant.city,
     restaurant_category: restaurant.category,
     restaurant_tags: restaurant.tags,
+    restaurant_public_website_url: null,
     branch_id: branch.id,
     branch_name: branch.name,
     branch_district: branch.district,

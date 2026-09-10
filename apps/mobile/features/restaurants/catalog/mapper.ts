@@ -32,6 +32,7 @@ export function mapRestaurantCatalogRows(
     const menuCategoryId = requiredString(row.menu_category_id, "menu_category_id");
     const menuItemId = requiredString(row.menu_item_id, "menu_item_id");
     const branchMenuItemId = requiredString(row.branch_menu_item_id, "branch_menu_item_id");
+    const restaurantPublicWebsiteUrl = nullablePublicWebsiteUrl(row.restaurant_public_website_url);
 
     let restaurant = restaurants.get(restaurantId);
     if (!restaurant) {
@@ -48,9 +49,12 @@ export function mapRestaurantCatalogRows(
         priceRange: "NT$--",
         score: "—",
         menuItems: [],
+        restaurantPublicWebsiteUrl,
         branches: []
       };
       restaurants.set(restaurantId, restaurant);
+    } else if (restaurant.restaurantPublicWebsiteUrl !== restaurantPublicWebsiteUrl) {
+      throw new Error("Catalog restaurant website relationship is inconsistent.");
     }
 
     let branch = restaurant.branches.find((candidate) => candidate.branchId === branchId) as MutableBranch | undefined;
@@ -220,6 +224,24 @@ function nullablePublicPhone(value: unknown): string | null {
     || [...value].length > 32
     || /[\x00-\x1F\x7F-\x9F]/.test(value)) {
     throw new Error("Catalog branch_public_phone field is malformed.");
+  }
+  return value;
+}
+
+function nullablePublicWebsiteUrl(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || /[\x00-\x1F\x7F-\x9F]/.test(value)
+    || [...value].length > 2048) {
+    throw new Error("Catalog restaurant_public_website_url field is malformed.");
+  }
+  try {
+    const parsed = new URL(value);
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:")
+      || !parsed.hostname || parsed.username || parsed.password || parsed.href !== value) {
+      throw new Error("invalid");
+    }
+  } catch {
+    throw new Error("Catalog restaurant_public_website_url field is malformed.");
   }
   return value;
 }

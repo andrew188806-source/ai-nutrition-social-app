@@ -119,6 +119,7 @@ check("missing nutrition remains nullable", mockItem?.publishedNutrition === nul
 
 const catalogRow = {
     restaurant_id: "restaurant-db-2", restaurant_name: "Nutrition", restaurant_city: "Taipei", restaurant_category: "Cafe", restaurant_tags: [],
+    restaurant_public_website_url: "https://example.com/menu?a=1",
     branch_id: "branch-db-3", branch_name: "Branch", branch_district: "D", branch_address: "A", branch_public_phone: "+886 2-1234  5678 #9",
     menu_id: "menu-db-2", menu_name: "Menu", menu_category_id: "category-db-2", menu_category_name: "Main", menu_category_sort_order: 1,
     branch_menu_item_id: "branch-menu-item-db-3", menu_item_id: "menu-item-db-2", menu_item_name: "Item", menu_item_description: "", menu_item_image_url: null,
@@ -137,6 +138,15 @@ try {
   malformedPhoneRejected = true;
 }
 check("malformed public phone fails closed", malformedPhoneRejected);
+check("canonical restaurant website maps once", mappedWithNutrition[0]?.restaurantPublicWebsiteUrl === "https://example.com/menu?a=1");
+check("NULL restaurant website remains NULL", mapRestaurantCatalogRows([{ ...catalogRow, restaurant_public_website_url: null }])[0]?.restaurantPublicWebsiteUrl === null);
+let malformedWebsiteRejected = false;
+try {
+  mapRestaurantCatalogRows([{ ...catalogRow, restaurant_public_website_url: "javascript:alert(1)" }]);
+} catch {
+  malformedWebsiteRejected = true;
+}
+check("malformed restaurant website fails closed", malformedWebsiteRejected);
 
 const emptyResult = await new SupabaseRestaurantCatalogRepository({
   from() { return { select() { return { order: async () => ({ data: [], error: null }) }; } }; }

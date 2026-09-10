@@ -4,6 +4,8 @@ export interface OwnerRestaurant {
   city: string | null;
   category: string | null;
   status: string;
+  publicWebsiteUrl: string | null;
+  publicWebsiteUrlVersion: string;
 }
 
 export interface OwnerBranch {

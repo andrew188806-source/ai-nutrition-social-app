@@ -765,6 +765,12 @@ function RestaurantDetailModal({
                   ))}
                 </View>
 
+                {restaurant.restaurantPublicWebsiteUrl ? (
+                  <Text selectable style={styles.restaurantMetaSnow}>
+                    官方網站：{restaurant.restaurantPublicWebsiteUrl}
+                  </Text>
+                ) : null}
+
                 {restaurant.branches.length > 1 ? (
                   <>
                     <Text style={styles.detailSectionLabel}>選擇分店</Text>
