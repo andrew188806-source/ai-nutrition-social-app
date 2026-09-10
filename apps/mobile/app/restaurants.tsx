@@ -22,6 +22,7 @@ import {
   type CatalogRestaurantViewModel
 } from "../features/restaurants/catalog";
 import { RESTAURANT_SOCIAL_PROVIDER_LABELS, useRestaurantSocialLinks } from "../features/restaurants/social-links";
+import { useRestaurantAbout } from "../features/restaurants/about";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -688,6 +689,7 @@ function RestaurantDetailModal({
   restaurant: Restaurant | null;
 }) {
   const socialLinks = useRestaurantSocialLinks(restaurant?.restaurantId);
+  const about = useRestaurantAbout(restaurant?.restaurantId);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedBranchId(restaurant?.branches[0]?.branchId ?? null);
@@ -771,6 +773,17 @@ function RestaurantDetailModal({
                   <Text selectable style={styles.restaurantMetaSnow}>
                     官方網站：{restaurant.restaurantPublicWebsiteUrl}
                   </Text>
+                ) : null}
+
+                {about.state.status === "loading" ? (
+                  <Text style={styles.restaurantMetaSnow}>正在讀取店家介紹…</Text>
+                ) : about.state.status === "error" || about.state.status === "unavailable" ? (
+                  <Text style={styles.restaurantMetaSnow}>店家介紹目前無法使用</Text>
+                ) : about.state.status === "success" ? (
+                  <View>
+                    <Text style={styles.detailSectionLabel}>店家介紹</Text>
+                    <Text selectable style={styles.restaurantMetaSnow}>{about.state.about}</Text>
+                  </View>
                 ) : null}
 
                 {socialLinks.state.status === "loading" ? (
