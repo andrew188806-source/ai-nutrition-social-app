@@ -9,7 +9,7 @@ import type { RestaurantOwnerReadRepository } from "../../runtime/restaurant-rpc
 
 const RPC = {
   restaurants: "restaurant_internal_restaurants_v1",
-  branches: "restaurant_internal_branches_v1",
+  branches: "restaurant_internal_branches_v2",
   menus: "restaurant_internal_menus_v1",
   categories: "restaurant_internal_menu_categories_v1",
   items: "restaurant_internal_menu_items_v1",

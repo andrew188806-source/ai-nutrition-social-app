@@ -782,9 +782,16 @@ function RestaurantDetailModal({
                 ) : null}
 
                 {selectedBranch ? (
-                  <Text style={styles.restaurantMetaSnow}>
-                    {selectedBranch.name} · {selectedBranch.district} · {selectedBranch.address}
-                  </Text>
+                  <View>
+                    <Text style={styles.restaurantMetaSnow}>
+                      {selectedBranch.name} · {selectedBranch.district} · {selectedBranch.address}
+                    </Text>
+                    {selectedBranch.branchPublicPhone ? (
+                      <Text style={styles.restaurantMetaSnow}>
+                        公開電話：{selectedBranch.branchPublicPhone}
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : null}
 
                 <Text style={styles.detailSectionLabel}>公開菜單</Text>

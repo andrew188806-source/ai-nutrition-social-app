@@ -13,6 +13,8 @@ export interface OwnerBranch {
   district: string | null;
   address: string | null;
   status: string;
+  publicPhone: string | null;
+  publicPhoneVersion: string;
 }
 
 export interface OwnerMenu { id: string; restaurantId: string; name: string; status: string; }

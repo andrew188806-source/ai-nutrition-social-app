@@ -16,6 +16,21 @@ function string(value: unknown, entity: string, field: string): string {
 function nullableString(value: unknown, entity: string, field: string): string | null {
   return value === null ? null : string(value, entity, field);
 }
+function nullablePublicPhone(value: unknown, entity: string, field: string): string | null {
+  if (value === null) return null;
+  const phone = string(value, entity, field);
+  if (phone !== phone.trim() || [...phone].length < 1 || [...phone].length > 32
+    || /[\x00-\x1F\x7F-\x9F]/.test(phone)) {
+    throw new SupabaseMappingError(`Malformed ${entity}.${field}`, entity, field);
+  }
+  return phone;
+}
+function version(value: unknown, entity: string, field: string): string {
+  if (typeof value !== "string" || !/^(0|[1-9][0-9]{0,18})$/.test(value)) {
+    throw new SupabaseMappingError(`Malformed ${entity}.${field}`, entity, field);
+  }
+  return value;
+}
 function number(value: unknown, entity: string, field: string): number {
   const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
   if (!Number.isFinite(parsed)) throw new SupabaseMappingError(`Malformed ${entity}.${field}`, entity, field);
@@ -42,7 +57,7 @@ export function mapOwnerRestaurant(value: unknown): OwnerRestaurant {
 }
 export function mapOwnerBranch(value: unknown, expected: string): OwnerBranch {
   const r=row(value,"OwnerBranch"); const restaurantId=string(r.restaurant_id,"OwnerBranch","restaurant_id"); assertTenant(restaurantId,expected,"OwnerBranch");
-  return { id:string(r.branch_id,"OwnerBranch","branch_id"), restaurantId, name:string(r.name,"OwnerBranch","name"), district:nullableString(r.district,"OwnerBranch","district"), address:nullableString(r.address,"OwnerBranch","address"), status:string(r.status,"OwnerBranch","status") };
+  return { id:string(r.branch_id,"OwnerBranch","branch_id"), restaurantId, name:string(r.name,"OwnerBranch","name"), district:nullableString(r.district,"OwnerBranch","district"), address:nullableString(r.address,"OwnerBranch","address"), status:string(r.status,"OwnerBranch","status"), publicPhone:nullablePublicPhone(r.public_phone,"OwnerBranch","public_phone"), publicPhoneVersion:version(r.public_phone_version,"OwnerBranch","public_phone_version") };
 }
 export function mapOwnerMenu(value: unknown, expected: string): OwnerMenu {
   const r=row(value,"OwnerMenu"); const restaurantId=string(r.restaurant_id,"OwnerMenu","restaurant_id"); assertTenant(restaurantId,expected,"OwnerMenu");

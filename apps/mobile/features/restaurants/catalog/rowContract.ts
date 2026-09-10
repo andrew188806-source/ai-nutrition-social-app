@@ -1,5 +1,5 @@
 export const SUPABASE_CONSUMER_RESTAURANT_CATALOG_VIEW =
-  "consumer_public_restaurant_catalog_v2" as const;
+  "consumer_public_restaurant_catalog_v3" as const;
 
 export type SupabaseRestaurantCatalogRow = {
   restaurant_id: unknown;
@@ -11,6 +11,7 @@ export type SupabaseRestaurantCatalogRow = {
   branch_name: unknown;
   branch_district: unknown;
   branch_address: unknown;
+  branch_public_phone: unknown;
   menu_id: unknown;
   menu_name: unknown;
   menu_category_id: unknown;

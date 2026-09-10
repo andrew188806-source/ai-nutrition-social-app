@@ -95,6 +95,7 @@ function toRow(
     branch_name: branch.name,
     branch_district: branch.district,
     branch_address: branch.address,
+    branch_public_phone: null,
     menu_id: menu.id,
     menu_name: menu.name,
     menu_category_id: category.id,

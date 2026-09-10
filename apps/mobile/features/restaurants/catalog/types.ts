@@ -50,6 +50,7 @@ export type CatalogBranchViewModel = {
   name: string;
   district: string;
   address: string;
+  branchPublicPhone: string | null;
   menus: readonly CatalogMenuViewModel[];
   /**
    * RA-2H-P3. The branch's current canonical temporal state (OPEN/CLOSED/UNKNOWN), composed from the

@@ -117,18 +117,26 @@ check("mock preserves menu/category/item identities", mockItem?.menuId === "menu
 check("branch-menu-item ID remains distinct", mockItem?.branchMenuItemId === "branch-menu-item-db-1" && mockItem.menuItemId !== mockItem.branchMenuItemId);
 check("missing nutrition remains nullable", mockItem?.publishedNutrition === null);
 
-const mappedWithNutrition = mapRestaurantCatalogRows([
-  {
+const catalogRow = {
     restaurant_id: "restaurant-db-2", restaurant_name: "Nutrition", restaurant_city: "Taipei", restaurant_category: "Cafe", restaurant_tags: [],
-    branch_id: "branch-db-3", branch_name: "Branch", branch_district: "D", branch_address: "A",
+    branch_id: "branch-db-3", branch_name: "Branch", branch_district: "D", branch_address: "A", branch_public_phone: "+886 2-1234  5678 #9",
     menu_id: "menu-db-2", menu_name: "Menu", menu_category_id: "category-db-2", menu_category_name: "Main", menu_category_sort_order: 1,
     branch_menu_item_id: "branch-menu-item-db-3", menu_item_id: "menu-item-db-2", menu_item_name: "Item", menu_item_description: "", menu_item_image_url: null,
     menu_item_tags: [], menu_item_allergens: [], branch_price: 120, branch_availability: "available",
     calories: 300, protein: null, carbohydrates: null, fat: null, fiber: null, sugar: null, sodium: null, saturated_fat: null, serving_size: null,
-    nutrition_source_public: "restaurant_confirmed", nutrition_updated_at: "2026-07-23T00:00:00Z"
-  }
-]);
+    nutrition_source_public: "restaurant_confirmed", nutrition_updated_at: "2026-07-23T00:00:00Z", branch_temporal_state: "OPEN"
+};
+const mappedWithNutrition = mapRestaurantCatalogRows([catalogRow]);
 check("safe nutrition maps without inventing null macros", mappedWithNutrition[0]?.menuItems[0]?.publishedNutrition?.protein === null);
+check("public phone maps as preserved display text", mappedWithNutrition[0]?.branches[0]?.branchPublicPhone === "+886 2-1234  5678 #9");
+check("NULL public phone remains NULL", mapRestaurantCatalogRows([{ ...catalogRow, branch_public_phone: null }])[0]?.branches[0]?.branchPublicPhone === null);
+let malformedPhoneRejected = false;
+try {
+  mapRestaurantCatalogRows([{ ...catalogRow, branch_public_phone: " 02-1234" }]);
+} catch {
+  malformedPhoneRejected = true;
+}
+check("malformed public phone fails closed", malformedPhoneRejected);
 
 const emptyResult = await new SupabaseRestaurantCatalogRepository({
   from() { return { select() { return { order: async () => ({ data: [], error: null }) }; } }; }

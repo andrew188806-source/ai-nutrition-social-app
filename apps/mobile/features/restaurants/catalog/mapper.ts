@@ -61,6 +61,7 @@ export function mapRestaurantCatalogRows(
         name: requiredString(row.branch_name, "branch_name"),
         district: optionalString(row.branch_district) ?? "",
         address: optionalString(row.branch_address) ?? "",
+        branchPublicPhone: nullablePublicPhone(row.branch_public_phone),
         menus: [],
         temporalState: optionalTemporalState(row.branch_temporal_state)
       };
@@ -209,6 +210,18 @@ function optionalString(value: unknown): string | null {
   if (typeof value !== "string") throw new Error("Catalog optional string field is malformed.");
   const normalized = value.trim();
   return normalized || null;
+}
+
+function nullablePublicPhone(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string"
+    || value !== value.trim()
+    || [...value].length < 1
+    || [...value].length > 32
+    || /[\x00-\x1F\x7F-\x9F]/.test(value)) {
+    throw new Error("Catalog branch_public_phone field is malformed.");
+  }
+  return value;
 }
 
 function requiredNumber(value: unknown, field: string): number {

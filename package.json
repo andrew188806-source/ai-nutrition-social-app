@@ -436,6 +436,10 @@
     ,"test:meal-buddy-late-response-actor-boundary": "node scripts/meal-buddy-late-response-actor-boundary-smoke.mjs"
     ,"test:meal-buddy-auth-fix-live-development-validation": "node scripts/meal-buddy-auth-fix-live-development-validation.mjs"
     ,"test:consumer-temporal-activation-ra-2h-p3": "node scripts/consumer-temporal-activation-ra-2h-p3-guard.mjs"
+    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-guard.mjs"
+    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-smoke": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-smoke.mjs"
+    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-mutations": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-mutations.mjs"
+    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-postgres": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",
