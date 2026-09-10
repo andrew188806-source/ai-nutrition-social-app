@@ -21,6 +21,7 @@ import {
   type CatalogMenuItemViewModel,
   type CatalogRestaurantViewModel
 } from "../features/restaurants/catalog";
+import { RESTAURANT_SOCIAL_PROVIDER_LABELS, useRestaurantSocialLinks } from "../features/restaurants/social-links";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -686,6 +687,7 @@ function RestaurantDetailModal({
   onIdentifyMeal: (params: AnalysisRestaurantHandoffParams) => void;
   restaurant: Restaurant | null;
 }) {
+  const socialLinks = useRestaurantSocialLinks(restaurant?.restaurantId);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   useEffect(() => {
     setSelectedBranchId(restaurant?.branches[0]?.branchId ?? null);
@@ -769,6 +771,21 @@ function RestaurantDetailModal({
                   <Text selectable style={styles.restaurantMetaSnow}>
                     官方網站：{restaurant.restaurantPublicWebsiteUrl}
                   </Text>
+                ) : null}
+
+                {socialLinks.state.status === "loading" ? (
+                  <Text style={styles.restaurantMetaSnow}>正在讀取公開社群連結…</Text>
+                ) : socialLinks.state.status === "error" || socialLinks.state.status === "unavailable" ? (
+                  <Text style={styles.restaurantMetaSnow}>公開社群連結目前無法使用</Text>
+                ) : socialLinks.state.status === "success" ? (
+                  <View>
+                    <Text style={styles.detailSectionLabel}>公開社群連結</Text>
+                    {socialLinks.state.links.map((link) => (
+                      <Text selectable key={link.provider} style={styles.restaurantMetaSnow}>
+                        {RESTAURANT_SOCIAL_PROVIDER_LABELS[link.provider]}：{link.publicUrl}
+                      </Text>
+                    ))}
+                  </View>
                 ) : null}
 
                 {restaurant.branches.length > 1 ? (

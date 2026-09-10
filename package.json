@@ -444,6 +444,10 @@
     ,"test:restaurant-owner-public-website-ra-2i-p1b-smoke": "node scripts/restaurant-owner-public-website-ra-2i-p1b-smoke.mjs"
     ,"test:restaurant-owner-public-website-ra-2i-p1b-mutations": "node scripts/restaurant-owner-public-website-ra-2i-p1b-mutations.mjs"
     ,"test:restaurant-owner-public-website-ra-2i-p1b-postgres": "node scripts/restaurant-owner-public-website-ra-2i-p1b-postgres-apply.mjs"
+    ,"test:restaurant-owner-public-social-links-ra-2i-p2": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-guard.mjs"
+    ,"test:restaurant-owner-public-social-links-ra-2i-p2-smoke": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-smoke.mjs"
+    ,"test:restaurant-owner-public-social-links-ra-2i-p2-mutations": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-mutations.mjs"
+    ,"test:restaurant-owner-public-social-links-ra-2i-p2-postgres": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",
