@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Disposable local PostgreSQL gate. It never connects to Development or Production.
 import fs from "node:fs"; import path from "node:path"; import net from "node:net"; import child from "node:child_process"; import { createRequire } from "node:module";
-const SUITE = "restaurant-owner-about-ra-2g-p1-postgres-apply", ROOT = process.cwd(), MIGRATIONS = path.join(ROOT, "supabase/migrations"), CANDIDATE = "20260910060000_restaurant_owner_about_authority.sql";
+const SUITE = "restaurant-owner-about-ra-2g-p1-postgres-apply", ROOT = process.cwd(), MIGRATIONS = path.join(ROOT, "supabase/migrations"), CANDIDATE = "20260910060000_restaurant_owner_about_authority.sql", CANDIDATE_R1 = "20260910070000_restaurant_owner_about_visibility_universe_r1.sql";
 const PG_BIN = (process.env.RA2GP1_PG_BIN ?? process.env.RA2IURLR2_PG_BIN ?? process.env.RA2IP2_PG_BIN ?? process.env.RA2HP1_PG_BIN)?.trim();
 const PG_MODULES = (process.env.RA2GP1_PG_MODULES ?? process.env.RA2IURLR2_PG_MODULES ?? process.env.RA2IP2_PG_MODULES ?? process.env.RA2HP1_PG_MODULES)?.trim();
 if (!PG_BIN || !PG_MODULES || (!fs.existsSync(path.join(PG_BIN, "initdb.exe")) && !fs.existsSync(path.join(PG_BIN, "initdb")))) {
@@ -81,7 +81,9 @@ try {
     try { await runner.query(fs.readFileSync(path.join(MIGRATIONS, file), "utf8")); applied += 1; }
     catch (error) { check(`migration applies: ${file}`, false, { code: error.code, position: error.position, message: String(error.message).slice(0, 500) }); throw error; }
   }
-  check("1. migration applies and About is the sole last successor", applied === files.length && files.at(-1) === CANDIDATE, { applied, total: files.length, last: files.at(-1) });
+  check("1. migration applies and About-R1 is the sole last successor", applied === files.length && files.at(-1) === CANDIDATE_R1, { applied, total: files.length, last: files.at(-1) });
+  check("1b. P1 migration is still present unmodified, immediately before R1", files.includes(CANDIDATE)
+    && files[files.indexOf(CANDIDATE_R1) - 1] === CANDIDATE, { files: files.slice(-3) });
 
   const permission = (await q("select count(*)::int n from public.role_permissions p join public.restaurant_roles r on r.id=p.role_id where p.permission_key='restaurant.profile.about.write' and p.permission_scope='restaurant' and r.role_key='owner' and r.status='active'"))[0].n;
   check("2. exact owner permission exists", permission === 1, { permission });
@@ -229,6 +231,79 @@ try {
   check("58. does not create moderation authority (no review/approval objects)", !migrationBare.match(/review_queue|pending_review|moderat|reviewer|review_state|approve_description|reject_description|claim_approval|content_moderator/i));
 
   await mutate(A, "g1-a", "clear", claimSet.restaurantAbout, null, claimSet.restaurantAboutVersion);
+
+  // ===================== RA-2G-P1-R1: public visibility universe closure =====================
+  const publicAbout = (restaurantId) => q("select restaurant_about from public.consumer_public_restaurant_about_v1 where restaurant_id=$1", [restaurantId]);
+  const catalogueRows = (restaurantId) => q("select count(*)::int n from public.consumer_public_restaurant_catalog_v4 where restaurant_id=$1", [restaurantId]);
+
+  // A. Active restaurant with an eligible catalogue row + About -> catalogue present, About present.
+  // g1-a has an extensive mutation history from the checks above (this is a shared fixture, not a
+  // fresh one), so read its actual live state rather than assuming NULL/version 0.
+  const aBeforeSet = await preview(A, "g1-a");
+  const aSet = await mutate(A, "g1-a", "set", aBeforeSet.restaurantAbout, "Restaurant A is catalogue-eligible.", aBeforeSet.restaurantAboutVersion);
+  check("A. eligible restaurant: catalogue present", (await catalogueRows("g1-a"))[0].n >= 1);
+  check("A. eligible restaurant: About present", aSet.ok === true && (await publicAbout("g1-a"))[0]?.restaurant_about === "Restaurant A is catalogue-eligible.", { aSet, aBeforeSet });
+
+  // B. Active restaurant with About but NO eligible catalogue row -> catalogue absent, About absent.
+  await q("insert into public.restaurant_memberships(restaurant_user_id,restaurant_id,role_id,status) select id,'g1-b',(select id from public.restaurant_roles where role_key='owner'),'active' from public.restaurant_users where auth_user_id=$1", [A]);
+  const bSet = await mutate(A, "g1-b", "set", null, "Restaurant B has no catalogue-eligible rows.", "0");
+  check("B. About SET succeeds even though restaurant is catalogue-ineligible", bSet.ok === true, bSet);
+  check("B. catalogue-ineligible restaurant: catalogue absent", (await catalogueRows("g1-b"))[0].n === 0);
+  check("B. catalogue-ineligible restaurant: About absent from public projection (THE DEFECT CLOSED)", (await publicAbout("g1-b")).length === 0, await publicAbout("g1-b"));
+
+  // C. Draft/inactive restaurant with About -> catalogue absent, About absent.
+  const cState = (await q("select restaurant_about,restaurant_about_version from public.restaurants where id='g1-hidden'"))[0];
+  const cSet = cState.restaurant_about ? { ok: true } : await mutate(A, "g1-hidden", "set", cState.restaurant_about, "Draft restaurant C.", cState.restaurant_about_version);
+  check("C. draft restaurant: catalogue absent", (await catalogueRows("g1-hidden"))[0].n === 0);
+  check("C. draft restaurant: About absent from public projection", (await publicAbout("g1-hidden")).length === 0, { cSet, publicC: await publicAbout("g1-hidden") });
+
+  // D. Restaurant with catalogue eligibility but About NULL -> catalogue present, About absent.
+  await q("insert into public.restaurants(id,name,status) values ('g1-d','D','active')");
+  await q("insert into public.restaurant_branches(id,restaurant_id,name,status,timezone_name,public_phone) values ('g1-d-ba','g1-d','D Branch','active','Asia/Taipei',null)");
+  await q("insert into public.menus(id,restaurant_id,name,status) values ('g1-d-m','g1-d','Menu','published')");
+  await q("insert into public.menu_categories(id,menu_id,name) values ('g1-d-c','g1-d-m','Main')");
+  await q("insert into public.menu_items(id,restaurant_id,menu_category_id,name,status) values ('g1-d-i','g1-d','g1-d-c','Item','active')");
+  await q("insert into public.branch_menu_items(id,restaurant_id,branch_id,menu_item_id,price,availability,sold_out,branch_specific_status) values ('g1-d-bi','g1-d','g1-d-ba','g1-d-i',100,'available',false,'available')");
+  check("D. catalogue-eligible, About NULL: catalogue present", (await catalogueRows("g1-d"))[0].n >= 1);
+  check("D. catalogue-eligible, About NULL: About absent", (await publicAbout("g1-d")).length === 0);
+
+  // E. Multiple eligible catalogue rows for restaurant A -> About projection still exactly ONE row.
+  await q("insert into public.menu_items(id,restaurant_id,menu_category_id,name,status) values ('g1-i2','g1-a','g1-c','Item Two','active')");
+  await q("insert into public.branch_menu_items(id,restaurant_id,branch_id,menu_item_id,price,availability,sold_out,branch_specific_status) values ('g1-bi2','g1-a','g1-ba','g1-i2',150,'available',false,'available')");
+  const aCatalogueRowsAfter = (await catalogueRows("g1-a"))[0].n;
+  check("E. restaurant A now has multiple catalogue rows", aCatalogueRowsAfter >= 2, { aCatalogueRowsAfter });
+  check("E. About projection returns exactly ONE row for restaurant A", (await publicAbout("g1-a")).length === 1, await publicAbout("g1-a"));
+
+  // F. SET/CLEAR/version/audit behavior unchanged (identical CAS semantics as before R1).
+  const aCurrent = await preview(A, "g1-a");
+  const fClear = await mutate(A, "g1-a", "clear", aCurrent.restaurantAbout, null, aCurrent.restaurantAboutVersion);
+  check("F. CLEAR still succeeds with unchanged CAS/version/audit semantics", fClear.ok === true && fClear.restaurantAbout === null, fClear);
+  check("F. About absent from public projection after CLEAR (still catalogue-eligible)", (await publicAbout("g1-a")).length === 0);
+
+  // G. public About columns unchanged.
+  const projectionColumnsR1 = (await q("select column_name from information_schema.columns where table_schema='public' and table_name='consumer_public_restaurant_about_v1' order by ordinal_position")).map((r) => r.column_name);
+  check("G. public About columns unchanged", JSON.stringify(projectionColumnsR1) === JSON.stringify(["restaurant_id", "restaurant_about"]), projectionColumnsR1);
+
+  // H. anon/authenticated grants unchanged.
+  const r1Acl = (await q("select has_table_privilege('anon','public.consumer_public_restaurant_about_v1','SELECT') anon_r, has_table_privilege('authenticated','public.consumer_public_restaurant_about_v1','SELECT') auth_r"))[0];
+  check("H. anon/authenticated grants unchanged", r1Acl.anon_r && r1Acl.auth_r, r1Acl);
+
+  // I. catalogue v4 definition unchanged (row count for the whole disposable dataset stable).
+  const catalogueDefinition = (await q("select pg_get_viewdef('public.consumer_public_restaurant_catalog_v4'::regclass) def"))[0].def;
+  check("I. catalogue v4 definition unchanged (no reference to About)", !catalogueDefinition.toLowerCase().includes("restaurant_about"));
+
+  // J. catalogue cardinality unchanged (About mutations above never altered catalogue row counts).
+  check("J. catalogue cardinality for A unchanged by About mutations", (await catalogueRows("g1-a"))[0].n === aCatalogueRowsAfter);
+
+  // K. phone/website/social unchanged.
+  check("K. P1A phone unchanged", (await q("select public_phone from public.restaurant_branches where id='g1-ba'"))[0].public_phone === null);
+  check("K. P1B website unchanged", (await q("select public_website_url from public.restaurants where id='g1-a'"))[0].public_website_url === null);
+  const socialCountR1 = (await q("select count(*)::int n from public.restaurant_public_social_links where restaurant_id='g1-a'"))[0].n;
+  check("K. P2 social unchanged", socialCountR1 === 0, { socialCountR1 });
+
+  // L. no moderation authority introduced.
+  check("L. no moderation authority introduced (R1 migration text)", !fs.readFileSync(path.join(MIGRATIONS, CANDIDATE_R1), "utf8")
+    .replace(/^\s*--.*$/gm, "").match(/review_queue|pending_review|moderat|reviewer|approve_description|reject_description/i));
 } catch (error) {
   if (!failures.length) check("harness completed without unexpected error", false, { code: error.code, message: String(error.message).slice(0, 500) });
 } finally {

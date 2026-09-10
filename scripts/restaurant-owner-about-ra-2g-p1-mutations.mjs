@@ -51,6 +51,26 @@ for (const x of [
   "contactEmail", "審核", "送審", "退件", "平台認證", "reviewer", "approvalState"
 ]) check(`application forbidden ${x}`, !app.includes(x));
 
+// RA-2G-P1-R1: public visibility universe closure.
+const r1 = read("supabase/migrations/20260910070000_restaurant_owner_about_visibility_universe_r1.sql");
+for (const x of [
+  "create or replace view public.consumer_public_restaurant_about_v1",
+  "select r.id as restaurant_id, r.restaurant_about",
+  "exists (",
+  "from public.consumer_public_restaurant_catalog_v4",
+  "r.status = 'active'",
+  "r.restaurant_about is not null",
+  "security_barrier = true",
+  "grant select on public.consumer_public_restaurant_about_v1 to anon, authenticated"
+]) check(`r1 required ${x}`, r1.includes(x));
+check("r1 forbidden join to catalogue (must use EXISTS, not JOIN, to avoid row multiplication)",
+  !r1.toLowerCase().includes("join public.consumer_public_restaurant_catalog_v4"));
+for (const x of [
+  "create role", "create policy", "grant execute", "grant update", "grant insert",
+  "drop table", "drop function", "alter table public.restaurants", "update public.restaurants",
+  "public_website_url", "public_phone", "review_queue", "moderator"
+]) check(`r1 forbidden ${x}`, !r1.toLowerCase().includes(x.toLowerCase()));
+
 const failed = tests.filter(([, p]) => !p);
-console.log(JSON.stringify({ suite: "ra-2g-p1-mutations", total: tests.length, killed: tests.length - failed.length, survivors: failed.length }, null, 2));
+console.log(JSON.stringify({ suite: "ra-2g-p1-r1-mutations", total: tests.length, killed: tests.length - failed.length, survivors: failed.length }, null, 2));
 if (failed.length) process.exitCode = 1;
