@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Disposable local PostgreSQL gate. It never connects to Development or Production.
 import fs from "node:fs";import path from "node:path";import net from "node:net";import child from "node:child_process";import {createRequire} from "node:module";
-const SUITE="restaurant-owner-public-social-links-ra-2i-p2-postgres-apply",ROOT=process.cwd(),MIGRATIONS=path.join(ROOT,"supabase/migrations"),CANDIDATE="20260910030000_restaurant_owner_public_social_links_authority.sql";
+const SUITE="restaurant-owner-public-social-links-ra-2i-p2-postgres-apply",ROOT=process.cwd(),MIGRATIONS=path.join(ROOT,"supabase/migrations"),CANDIDATE="20260910030000_restaurant_owner_public_social_links_authority.sql",CANDIDATE_R1="20260910040000_restaurant_owner_public_social_links_canonical_storage_r1.sql";
 const PG_BIN=(process.env.RA2IP2_PG_BIN??process.env.RA2IP1B_PG_BIN??process.env.RA2HP1_PG_BIN)?.trim(),PG_MODULES=(process.env.RA2IP2_PG_MODULES??process.env.RA2IP1B_PG_MODULES??process.env.RA2HP1_PG_MODULES)?.trim();
 if(!PG_BIN||!PG_MODULES||(!fs.existsSync(path.join(PG_BIN,"initdb.exe"))&&!fs.existsSync(path.join(PG_BIN,"initdb")))){console.log(JSON.stringify({suite:SUITE,status:"skipped",reason:"set RA2IP2_PG_BIN and RA2IP2_PG_MODULES"},null,2));process.exit(0)}
 const exe=n=>path.join(PG_BIN,process.platform==="win32"?`${n}.exe`:n),{Client}=createRequire(path.join(PG_MODULES,"package.json"))("pg");
@@ -19,7 +19,7 @@ try{
   const identity=(await runner.query("select current_user,current_setting('is_superuser') superuser")).rows[0];check("runner is non-superuser",identity.current_user==="postgres"&&identity.superuser==="off",identity);
   const files=fs.readdirSync(MIGRATIONS).filter(f=>f.endsWith(".sql")).sort();
   for(const file of files){try{await runner.query(fs.readFileSync(path.join(MIGRATIONS,file),"utf8"));applied++}catch(error){check(`migration applies: ${file}`,false,{code:error.code,position:error.position,message:String(error.message).slice(0,500)});throw error}}
-  check("full chain applies with P2 last",applied===files.length&&files.at(-1)===CANDIDATE,{applied,total:files.length,last:files.at(-1)});
+  check("full chain applies with P2-R1 last",applied===files.length&&files.at(-1)===CANDIDATE_R1,{applied,total:files.length,last:files.at(-1)});
   const privileges=(await q(`select
     has_table_privilege('authenticated','public.restaurant_public_social_links','INSERT') auth_insert,
     has_table_privilege('authenticated','public.restaurant_public_social_links','UPDATE') auth_update,
@@ -95,6 +95,27 @@ try{
   const invariant=(await q("select public_website_url from public.restaurants where id='p2-a'"))[0],phone=(await q("select public_phone from public.restaurant_branches where id='p2-ba'"))[0];
   check("P1B website and P1A phone remain unchanged",invariant.public_website_url==="https://a.example/"&&phone.public_phone==="02-1",{invariant,phone});
   const key=(await q("select count(*)::int n from information_schema.table_constraints where table_schema='public' and table_name='restaurant_public_social_links' and constraint_type in ('PRIMARY KEY','UNIQUE')"))[0].n;check("one restaurant/provider identity is unique",key>=1,key);
+
+  // RA-2I-P2-R1: canonical social URL storage closure -- live proof on a fresh provider (tiktok).
+  const r1NonCanonical=await mutate(A,"p2-a","tiktok","set",null,"https://TikTok.com/a","0");
+  check("R1 direct RPC rejects case-variant host, cannot persist non-canonical storage",r1NonCanonical.errorCode==="invalid_request",r1NonCanonical);
+  check("R1 rejected non-canonical attempt created no row",(await rows()).every(r=>r.provider!=="tiktok"));
+  const r1Canonical=await mutate(A,"p2-a","tiktok","set",null,"https://tiktok.com/a","0");
+  check("R1 canonical-form SET succeeds and stores the exact canonical URL",r1Canonical.ok&&r1Canonical.publicUrl==="https://tiktok.com/a",r1Canonical);
+  const r1Equivalent=await mutate(A,"p2-a","tiktok","set",r1Canonical.publicUrl,r1Canonical.publicUrl,r1Canonical.publicUrlVersion);
+  check("R1 equivalent canonical URL remains deterministic no_change",r1Equivalent.errorCode==="no_change",r1Equivalent);
+  check("R1 stale expected VALUE still rejected",(await mutate(A,"p2-a","tiktok","set","https://wrong-stale.example/","https://tiktok.com/b",r1Canonical.publicUrlVersion)).errorCode==="stale_state");
+  check("R1 stale expected VERSION still rejected",(await mutate(A,"p2-a","tiktok","set",r1Canonical.publicUrl,"https://tiktok.com/b","0")).errorCode==="stale_state");
+  check("R1 wrong provider host binding still rejected",(await mutate(A,"p2-a","tiktok","set",r1Canonical.publicUrl,"https://instagram.com/x",r1Canonical.publicUrlVersion)).errorCode==="invalid_request");
+  check("R1 HTTP still rejected",(await mutate(A,"p2-a","tiktok","set",r1Canonical.publicUrl,"http://tiktok.com/a",r1Canonical.publicUrlVersion)).errorCode==="invalid_request");
+  const r1Cleared=await mutate(A,"p2-a","tiktok","clear",r1Canonical.publicUrl,null,r1Canonical.publicUrlVersion);
+  check("R1 cleanup CLEAR restores the fixture to NULL",r1Cleared.ok&&r1Cleared.publicUrl===null,r1Cleared);
+  const r1Invariant=(await q("select public_website_url from public.restaurants where id='p2-a'"))[0],r1Phone=(await q("select public_phone from public.restaurant_branches where id='p2-ba'"))[0];
+  check("R1 P1B website and P1A phone remain unchanged",r1Invariant.public_website_url==="https://a.example/"&&r1Phone.public_phone==="02-1",{r1Invariant,r1Phone});
+  const r1Catalogue=Number((await q("select count(*) n from public.consumer_public_restaurant_catalog_v4 where restaurant_id='p2-a'"))[0].n);
+  check("R1 catalogue v4 cardinality remains unchanged",r1Catalogue===catalogAfter,{r1Catalogue,catalogAfter});
+  const r1Projection=(await q("select count(*)::int n from public.consumer_public_restaurant_social_links_v1 where restaurant_id='p2-a'"))[0].n;
+  check("R1 public projection unaffected by the fix (still row-filtered on NOT NULL)",r1Projection===Number((await q("select count(*)::int n from public.restaurant_public_social_links where restaurant_id='p2-a' and public_url is not null"))[0].n));
 }catch(error){
   if(!failures.length)check("harness completes",false,{code:error.code,message:String(error.message).slice(0,500)});
 }finally{

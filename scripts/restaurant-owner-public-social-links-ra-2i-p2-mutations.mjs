@@ -13,4 +13,10 @@ for(const x of ["PATCH","service_role_key","demo@tastkind.app","6f41d663-026a-46
 // check to the P2-owned files so it cannot false-positive on that pre-existing, unrelated integration.
 const p2OwnFiles=["apps/restaurant-web/runtime/restaurant-owner-public-social-links.ts","apps/restaurant-web/server/restaurant-owner-public-social-links-runtime.ts","apps/restaurant-web/repositories/supabase/restaurant-owner-public-social-links-repository.ts","apps/restaurant-web/runtime/restaurant-owner-public-social-links-client.ts","apps/restaurant-web/components/settings/RestaurantOwnerPublicSocialLinksControl.tsx","apps/mobile/features/restaurants/social-links/rowContract.ts","apps/mobile/features/restaurants/social-links/repository.ts","apps/mobile/features/restaurants/social-links/mapper.ts"].map(read).join("\n");
 check("application forbidden MealBuddy",!p2OwnFiles.includes("MealBuddy"));
-const failed=tests.filter(([,p])=>!p);console.log(JSON.stringify({suite:"ra-2i-p2-mutations",total:tests.length,killed:tests.length-failed.length,survivors:failed.length},null,2));if(failed.length)process.exitCode=1;
+
+// RA-2I-P2-R1: canonical social URL storage closure.
+const r1=read("supabase/migrations/20260910040000_restaurant_owner_public_social_links_canonical_storage_r1.sql");
+for(const x of ["create or replace function restaurant_internal.restaurant_public_social_link_url_allowed_v1","pg_catalog.left(p_url,8)='https://'","=any(case p_provider","case-variant host still passes","case-variant scheme still passes","has_function_privilege("])check(`r1 required ${x}`,r1.includes(x));
+check("r1 forbidden lower() around the host allowlist comparison",!r1.includes("pg_catalog.lower("));
+for(const x of ["create role","create policy","grant delete","alter table public.restaurants","alter table public.restaurant_branches","update(public_website_url)","update(public_phone)","drop function","revoke execute"])check(`r1 forbidden ${x}`,!r1.toLowerCase().includes(x.toLowerCase()));
+const failed=tests.filter(([,p])=>!p);console.log(JSON.stringify({suite:"ra-2i-p2-r1-mutations",total:tests.length,killed:tests.length-failed.length,survivors:failed.length},null,2));if(failed.length)process.exitCode=1;
