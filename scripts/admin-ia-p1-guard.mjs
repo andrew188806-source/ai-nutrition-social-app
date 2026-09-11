@@ -6,8 +6,10 @@ import assert from "node:assert/strict";
 import ts from "typescript";
 
 const BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
+const P1_FREEZE = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const SUBJECT = "Define canonical Admin information architecture";
-const EXPECTED_ROUTE_COUNT = 55;
+const P2_SUBJECT = "Build canonical Admin workspace shell";
+const EXPECTED_ROUTE_COUNT = 57;
 const ALLOWED_PATHS = [
   "apps/admin-web/auth/admin-route-registry.ts",
   "docs/admin-information-architecture-ra-3-ia-p1.md",
@@ -58,16 +60,24 @@ const head = git("rev-parse", "HEAD");
 const origin = git("rev-parse", "origin/main");
 const [behind, ahead] = git("rev-list", "--left-right", "--count", "origin/main...HEAD").split(/\s+/).map(Number);
 const untracked = lines(git("ls-files", "--others", "--exclude-standard"));
-const changed = [...new Set([...lines(git("diff", "--name-only", BASELINE)), ...untracked])].sort();
+const changedFromBaseline = [...new Set([...lines(git("diff", "--name-only", BASELINE)), ...untracked])].sort();
+const changedFromP1 = [...new Set([...lines(git("diff", "--name-only", P1_FREEZE)), ...untracked])].sort();
+const p1FreezePaths = lines(git("diff-tree", "--no-commit-id", "--name-only", "-r", P1_FREEZE)).sort();
 const candidate = head === BASELINE && origin === BASELINE && ahead === 0 && behind === 0;
-const frozen = head !== BASELINE && git("rev-parse", "HEAD^") === BASELINE && origin === BASELINE
+const frozen = head === P1_FREEZE && git("rev-parse", "HEAD^") === BASELINE && origin === BASELINE
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === SUBJECT
   && git("status", "--short") === "";
+const successorCandidate = head === P1_FREEZE && origin === BASELINE && ahead === 1 && behind === 0;
+const successorFrozen = head !== P1_FREEZE && git("rev-parse", "HEAD^") === P1_FREEZE && origin === BASELINE
+  && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P2_SUBJECT
+  && git("status", "--short") === "";
+const successor = successorCandidate || successorFrozen;
+const changed = successor ? changedFromP1 : changedFromBaseline;
 
-check("lifecycle is the clean baseline candidate or one local IA-P1 freeze", candidate || frozen,
+check("lifecycle is the P1 candidate/freeze or its bounded P2 successor", candidate || frozen || successor,
   { head, origin, ahead, behind });
-check("the IA-P1 change set is exactly the four approved paths",
-  JSON.stringify(changed) === JSON.stringify(ALLOWED_PATHS), { expected: ALLOWED_PATHS, actual: changed });
+check("the frozen IA-P1 commit is exactly the four approved paths",
+  JSON.stringify(p1FreezePaths) === JSON.stringify(ALLOWED_PATHS), { expected: ALLOWED_PATHS, actual: p1FreezePaths });
 check("the registry transpiles without syntax errors", transpileErrors.length === 0,
   transpileErrors.map((diagnostic) => String(diagnostic.messageText)));
 
@@ -145,7 +155,9 @@ if (transpileErrors.length === 0) {
     "/admin", "/admin/operations", "/admin/operations/ads", "/admin/operations/sponsored",
     "/admin/restaurants", "/admin/restaurants/verification", "/admin/restaurants/reviews", "/admin/restaurants/[restaurantId]",
     "/admin/restaurants/[restaurantId]/about", "/admin/restaurants/[restaurantId]/contact", "/admin/restaurants/[restaurantId]/menus",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]/items",
     "/admin/restaurants/[restaurantId]/branches", "/admin/restaurants/[restaurantId]/branches/[branchId]/status",
+    "/admin/restaurants/[restaurantId]/branches/[branchId]",
     "/admin/restaurants/[restaurantId]/branches/[branchId]/hours", "/admin/restaurants/[restaurantId]/branches/[branchId]/contact",
     "/admin/restaurants/[restaurantId]/branches/[branchId]/geo", "/admin/restaurants/[restaurantId]/branches/[branchId]/menu-items",
     "/admin/members", "/admin/members/cases", "/admin/members/[memberRef]", "/admin/members/[memberRef]/consents",
@@ -166,16 +178,24 @@ if (transpileErrors.length === 0) {
 
 check("old Platform Admin API sources remain byte-equivalent to the baseline",
   API_PATHS.every((file) => read(file).trimEnd() === git("show", `${BASELINE}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
-check("no page, API, redirect, AdminShell, database, migration, lockfile, or environment file changed",
-  changed.every((file) => ALLOWED_PATHS.includes(file))
-    && changed.every((file) => !/^apps\/admin-web\/app\//.test(file))
+const p2SuccessorPath = (file) => file === "apps/admin-web/auth/admin-route-registry.ts"
+  || file === "scripts/admin-ia-p1-guard.mjs" || file === "scripts/admin-ia-p2-guard.mjs"
+  || file === "package.json" || file.startsWith("apps/admin-web/app/admin/")
+  || file.startsWith("apps/admin-web/components/admin-shell/");
+check("P1 authority remains bounded and its P2 successor changes only presentation paths",
+  (successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
     && changed.every((file) => !/^supabase\//.test(file))
     && !changed.includes("apps/admin-web/components/AdminShell.tsx")
     && changed.every((file) => !/lock|\.env/i.test(file)), changed);
 
 const pkg = JSON.parse(read("package.json"));
 const baselinePkg = JSON.parse(git("show", `${BASELINE}:package.json`));
-const expectedPkg = { ...baselinePkg, scripts: { ...baselinePkg.scripts, "test:admin-ia-p1": "node scripts/admin-ia-p1-guard.mjs" } };
+const expectedScripts = {
+  ...baselinePkg.scripts,
+  "test:admin-ia-p1": "node scripts/admin-ia-p1-guard.mjs",
+  ...(successor ? { "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs" } : {})
+};
+const expectedPkg = { ...baselinePkg, scripts: expectedScripts };
 let packageMatches = true;
 try { assert.deepEqual(pkg, expectedPkg); } catch { packageMatches = false; }
 check("package.json adds only the IA-P1 guard command and no dependency", packageMatches);
@@ -191,7 +211,7 @@ check("the canonical document records all required authority separations",
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p1-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : successorCandidate ? "p2_candidate" : successorFrozen ? "p2_frozen_local" : "invalid",
   expectedRouteCount: EXPECTED_ROUTE_COUNT,
   actualRouteCount: ia.ADMIN_ROUTE_REGISTRY?.length ?? 0,
   total: checks.length,
