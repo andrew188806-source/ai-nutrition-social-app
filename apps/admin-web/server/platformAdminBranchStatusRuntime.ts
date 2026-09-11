@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   PLATFORM_ADMIN_BRANCH_STATUS_BODY_LIMIT,
+  PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION,
   parseMutationRequest,
   parseMutationResult,
   parsePreviewRows,
@@ -18,11 +19,16 @@ import type {
   PlatformAdminBranchStatusMutationResult,
   PlatformAdminBranchStatusPreview
 } from "../view-models/platform-admin-branch-status";
+import {
+  acceptsAdminApiCookieMutationOrigin,
+  resolveAdminApiAuthorization,
+  type AdminApiAuthorization
+} from "../auth/admin-api-authorization";
 
 type RuntimeFailure = Exclude<PlatformAdminBranchStatusPreview, { state: "ready" }>;
 const RESPONSE_HEADERS = {
   "Cache-Control": "private, no-store",
-  Vary: "Authorization",
+  Vary: "Authorization, Cookie",
   "X-Content-Type-Options": "nosniff"
 } as const;
 
@@ -112,18 +118,32 @@ function json(result: PlatformAdminBranchStatusPreview | PlatformAdminBranchStat
   return Response.json(result, { status: responseStatus(result.state), headers: RESPONSE_HEADERS });
 }
 
+function authorizationFailure(
+  result: Exclude<AdminApiAuthorization, { state: "authorized" }>
+): RuntimeFailure {
+  if (result.state === "unauthenticated") return { state: "unauthenticated" };
+  if (result.state === "forbidden") return { state: "permission_denied" };
+  return { state: "dependency_unavailable" };
+}
+
 export async function handlePlatformAdminBranchStatusPreviewRequest(
   request: Request,
   branchId: string,
   env: NodeJS.ProcessEnv = process.env,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  resolveAuthorization: typeof resolveAdminApiAuthorization = resolveAdminApiAuthorization
 ): Promise<Response> {
   const query = new URL(request.url).searchParams;
   if ([...query.keys()].some((key) => key !== "restaurantId") || query.getAll("restaurantId").length !== 1) {
     return json({ state: "invalid_request" });
   }
+  const authorization = await resolveAuthorization(
+    request.headers.get("authorization"),
+    PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION
+  );
+  if (authorization.state !== "authorized") return json(authorizationFailure(authorization));
   return json(await readPlatformAdminBranchStatus(
-    request.headers.get("authorization"), query.get("restaurantId"), branchId,
+    authorization.authorization, query.get("restaurantId"), branchId,
     getPlatformAdminBranchStatusConfig(env), fetchImpl
   ));
 }
@@ -132,10 +152,18 @@ export async function handlePlatformAdminBranchStatusMutationRequest(
   request: Request,
   branchId: string,
   env: NodeJS.ProcessEnv = process.env,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  resolveAuthorization: typeof resolveAdminApiAuthorization = resolveAdminApiAuthorization
 ): Promise<Response> {
-  const authorization = request.headers.get("authorization");
-  if (!readVerifiedBearer(authorization)) return json({ state: "unauthenticated" });
+  const authorization = await resolveAuthorization(
+    request.headers.get("authorization"),
+    PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION
+  );
+  if (authorization.state !== "authorized") return json(authorizationFailure(authorization));
+  if (!readVerifiedBearer(authorization.authorization)) return json({ state: "unauthenticated" });
+  if (authorization.mode === "browser_cookie_session" && !acceptsAdminApiCookieMutationOrigin(request)) {
+    return json({ state: "permission_denied" });
+  }
   const length = request.headers.get("content-length");
   if (length !== null && (!/^[0-9]+$/.test(length) || Number(length) > PLATFORM_ADMIN_BRANCH_STATUS_BODY_LIMIT)) {
     return json({ state: "invalid_request" });
@@ -150,6 +178,6 @@ export async function handlePlatformAdminBranchStatusMutationRequest(
   try { body = JSON.parse(text); }
   catch { return json({ state: "invalid_request" }); }
   return json(await mutatePlatformAdminBranchStatus(
-    authorization, branchId, body, getPlatformAdminBranchStatusConfig(env), fetchImpl
+    authorization.authorization, branchId, body, getPlatformAdminBranchStatusConfig(env), fetchImpl
   ));
 }

@@ -11,6 +11,8 @@ const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
 const P3_P3_SUBJECT = "Enforce current Admin route permissions";
 const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
 const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
+const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
+const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -45,8 +47,12 @@ const p3P3Frozen = head !== P3_P2_HEAD && git("rev-parse", "HEAD^") === P3_P2_HE
 const p3P3Pushed = head === P3_P3_HEAD && origin === P3_P3_HEAD && ahead === 0 && behind === 0;
 const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HEAD && origin === P3_P3_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P4_SUBJECT && git("status", "--short") === "";
-const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen || p3P3Pushed || p3P4Frozen;
-check("baseline predecessor through the exact P3-P4 successor is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
+const p3P4Pushed = head === P3_P4_HEAD && origin === P3_P4_HEAD && ahead === 0 && behind === 0;
+const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HEAD && origin === P3_P4_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_SUBJECT && git("status", "--short") === "";
+const p3P5Phase = p3P4Pushed || p3P5Frozen;
+const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen || p3P3Pushed || p3P4Frozen || p3P5Phase;
+check("baseline predecessor through the exact P3-P5 successor is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
 
 const adminPackage = JSON.parse(read("apps/admin-web/package.json"));
 const predecessorPackage = JSON.parse(git("show", `${PREDECESSOR}:apps/admin-web/package.json`));
@@ -140,7 +146,7 @@ check("contextual dynamic routes are protected", protectedPages.filter((file) =>
 check("login remains outside protected content factory", !loginPage.includes("createAdminRegistryPage") && !loginPage.includes("getVerifiedAdminContext"));
 check("unknown-route component is byte-identical to predecessor", read("apps/admin-web/app/admin/not-found.tsx").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/app/admin/not-found.tsx`).replace(/\r\n/g, "\n").trimEnd());
 
-check("Sidebar is unfiltered in P3-P1 or consumes exact P3-P4 server visibility", (p3P3Pushed || p3P4Frozen)
+check("Sidebar is unfiltered in P3-P1 or consumes exact P3-P4 server visibility", (p3P3Pushed || p3P4Frozen || p3P5Phase)
   ? read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation(visibleRouteIds, linkRouteIds)")
   : read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation()"));
 const predecessorRegistry = git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-route-registry.ts`).replace(/\r\n/g, "\n");
@@ -161,7 +167,11 @@ const acceptedApis = [
   "apps/admin-web/server/platformAdminBranchStatusTransport.ts",
   "apps/admin-web/server/platformAdminBranchStatusAuthority.ts"
 ];
-check("accepted Admin APIs remain byte-identical and bearer-only", acceptedApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
+const preservedBearerApis = acceptedApis.filter((file) => !file.endsWith("Runtime.ts"));
+check("accepted Admin APIs remain bearer-compatible through exact P3-P5 composition", p3P5Phase
+  ? preservedBearerApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd())
+    && acceptedApis.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
+  : acceptedApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 check("no database migration changed", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).length === 0);
 
 const changed = new Set([...lines(git("diff", "--name-only", PREDECESSOR)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
@@ -174,6 +184,9 @@ const allowed = (file) => file === "package.json" || file === "package-lock.json
   || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs"
   || file === "scripts/admin-route-authorization-p3-p3-guard.mjs" || file === "scripts/admin-route-authorization-p3-p3-smoke.mjs"
   || file === "scripts/admin-navigation-p3-p4-guard.mjs" || file === "scripts/admin-navigation-p3-p4-smoke.mjs"
+  || file === "apps/admin-web/server/platformAdminAuditRuntime.ts"
+  || file === "apps/admin-web/server/platformAdminBranchStatusRuntime.ts"
+  || file === "scripts/admin-api-session-p3-p5-guard.mjs" || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
 check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
@@ -186,7 +199,8 @@ console.log("\n" + JSON.stringify({
   suite: "admin-session-p3-p1-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
     : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
-      : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local" : "invalid",
+      : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
+        : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

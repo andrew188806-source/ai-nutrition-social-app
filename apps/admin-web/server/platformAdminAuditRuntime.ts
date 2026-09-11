@@ -3,6 +3,10 @@ import "server-only";
 import { getPlatformAdminAuditConfig } from "./platformAdminAuditTransport";
 import { readPlatformAdminAudit } from "./platformAdminAuditRead";
 import type { PlatformAdminAuditResult } from "../view-models/platform-admin-audit";
+import {
+  resolveAdminApiAuthorization,
+  type AdminApiAuthorization
+} from "../auth/admin-api-authorization";
 
 export type AuditTrailComposition =
   | Readonly<{ mode: "mock" }>
@@ -23,15 +27,22 @@ export async function loadAuditTrail(
 export async function handlePlatformAdminAuditRequest(
   request: Request,
   env: NodeJS.ProcessEnv = process.env,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  resolveAuthorization: typeof resolveAdminApiAuthorization = resolveAdminApiAuthorization
 ): Promise<Response> {
-  const result = await readPlatformAdminAudit(
-    request.headers.get("authorization"), new URL(request.url).searchParams,
-    getPlatformAdminAuditConfig(env), fetchImpl
+  const authorization: AdminApiAuthorization = await resolveAuthorization(
+    request.headers.get("authorization"),
+    "admin_audit.read"
   );
+  const result: PlatformAdminAuditResult = authorization.state === "authorized"
+    ? await readPlatformAdminAudit(
+        authorization.authorization, new URL(request.url).searchParams,
+        getPlatformAdminAuditConfig(env), fetchImpl
+      )
+    : { state: authorization.state };
   const status = { ready: 200, unauthenticated: 401, forbidden: 403, unavailable: 503, invalid_request: 400 }[result.state];
   return Response.json(result, {
     status,
-    headers: { "Cache-Control": "private, no-store", Vary: "Authorization", "X-Content-Type-Options": "nosniff" }
+    headers: { "Cache-Control": "private, no-store", Vary: "Authorization, Cookie", "X-Content-Type-Options": "nosniff" }
   });
 }

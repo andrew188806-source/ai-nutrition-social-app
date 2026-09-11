@@ -10,6 +10,8 @@ const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
 const P3_P3_SUBJECT = "Enforce current Admin route permissions";
 const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
 const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
+const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
+const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
 const CURRENT_KEYS = ["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
@@ -53,7 +55,11 @@ const p3P3Frozen = head !== P3_P2_HEAD && git("rev-parse", "HEAD^") === P3_P2_HE
 const p3P3Pushed = head === P3_P3_HEAD && origin === P3_P3_HEAD && ahead === 0 && behind === 0;
 const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HEAD && origin === P3_P3_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P4_SUBJECT && status === "";
-const p3P4Phase = p3P3Pushed || p3P4Frozen;
+const p3P4Pushed = head === P3_P4_HEAD && origin === P3_P4_HEAD && ahead === 0 && behind === 0;
+const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HEAD && origin === P3_P4_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_SUBJECT && status === "";
+const p3P5Phase = p3P4Pushed || p3P5Frozen;
+const p3P4Phase = p3P3Pushed || p3P4Frozen || p3P5Phase;
 const p3P3Phase = pushed || p3P3Frozen || p3P4Phase;
 check("P3-P1 through exact P3-P4 lifecycle is recognized", candidate || frozen || p3P3Phase, { head, origin, ahead, behind, status });
 
@@ -123,7 +129,11 @@ const apiPaths = [
   "apps/admin-web/server/platformAdminBranchStatusTransport.ts",
   "apps/admin-web/server/platformAdminBranchStatusAuthority.ts"
 ];
-check("existing Admin APIs are byte-identical and bearer-only", apiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()) && /readVerifiedBearer|authorization/i.test(apiPaths.map(read).join("\n")));
+const preservedBearerApiPaths = apiPaths.filter((file) => !file.endsWith("Runtime.ts"));
+check("existing Admin APIs remain bearer-compatible through exact P3-P5 composition", p3P5Phase
+  ? preservedBearerApiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd())
+    && apiPaths.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
+  : apiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()) && /readVerifiedBearer|authorization/i.test(apiPaths.map(read).join("\n")));
 const frozenSessionPaths = [
   "apps/admin-web/auth/admin-session-gate.ts",
   "apps/admin-web/auth/supabase-server.ts",
@@ -144,6 +154,7 @@ const allowed = (file) =>
   || file === "apps/admin-web/auth/admin-context.ts"
   || file === "apps/admin-web/auth/admin-current-permission-context.ts"
   || file === "apps/admin-web/auth/admin-current-permission-vocabulary.ts"
+  || file === "apps/admin-web/auth/admin-api-authorization.ts"
   || file === "apps/admin-web/auth/admin-route-registry.ts"
   || file === "scripts/admin-current-permissions-p3-p2-guard.mjs"
   || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs"
@@ -155,6 +166,10 @@ const allowed = (file) =>
   || file === "scripts/admin-route-authorization-p3-p3-smoke.mjs"
   || file === "scripts/admin-navigation-p3-p4-guard.mjs"
   || file === "scripts/admin-navigation-p3-p4-smoke.mjs"
+  || file === "apps/admin-web/server/platformAdminAuditRuntime.ts"
+  || file === "apps/admin-web/server/platformAdminBranchStatusRuntime.ts"
+  || file === "scripts/admin-api-session-p3-p5-guard.mjs"
+  || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs"].includes(file);
 check("diff remains inside the exact P3-P2 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P1_HEAD}:package.json`)).dependencies ?? {}));
@@ -164,7 +179,8 @@ const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-current-permissions-p3-p2-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "pushed" : p3P3Frozen ? "p3_p3_frozen_local"
-    : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local" : "invalid",
+    : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
+      : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,
