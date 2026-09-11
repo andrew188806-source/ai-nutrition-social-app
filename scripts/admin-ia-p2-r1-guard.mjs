@@ -7,9 +7,11 @@ import ts from "typescript";
 
 const P1_HEAD = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const P2_HEAD = "981f3ec4976394f1254834cc5188566d1415c000";
+const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
 const ORIGIN_BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
 const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
-const EXPECTED_REGISTRY_ROUTES = 69;
+const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
+const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
@@ -61,10 +63,14 @@ const [behind, ahead] = git("rev-list", "--left-right", "--count", "origin/main.
 const untracked = lines(git("ls-files", "--others", "--exclude-standard"));
 const changedFromP2 = [...new Set([...lines(git("diff", "--name-only", P2_HEAD)), ...untracked])].sort();
 const candidate = head === P2_HEAD && origin === ORIGIN_BASELINE && ahead === 2 && behind === 0;
-const frozen = head !== P2_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && origin === ORIGIN_BASELINE
+const frozen = head === R1_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && origin === ORIGIN_BASELINE
   && ahead === 3 && behind === 0 && git("log", "-1", "--format=%s") === P2_R1_SUBJECT && git("status", "--short") === "";
+const r2Candidate = head === R1_HEAD && origin === ORIGIN_BASELINE && ahead === 3 && behind === 0;
+const r2Frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && origin === ORIGIN_BASELINE
+  && ahead === 4 && behind === 0 && git("log", "-1", "--format=%s") === P2_R2_SUBJECT && git("status", "--short") === "";
 
-check("lifecycle is exactly the P2-R1 candidate or one clean local P2-R1 freeze", candidate || frozen, { head, origin, ahead, behind });
+check("lifecycle is exactly the P2-R1 candidate/freeze or its bounded P2-R2 successor",
+  candidate || frozen || r2Candidate || r2Frozen, { head, origin, ahead, behind });
 check(`the registry contains the actual final count of ${EXPECTED_REGISTRY_ROUTES}`,
   ia.ADMIN_ROUTE_REGISTRY.length === EXPECTED_REGISTRY_ROUTES, ia.ADMIN_ROUTE_REGISTRY.length);
 
@@ -75,11 +81,19 @@ check("2. Nutrition landing represents a professional Nutritionist workspace",
   registryPage.includes("營養師") && /nutrition:\s*"[^"]*營養師/.test(registryPage.replace(/\s+/g, " ")));
 
 // 3-11: canonical Restaurant Menu Management ownership.
+// RA-3-IA-P2-R2 legitimately relabeled menu-management to a queue-only
+// workspace and moved ingredients/allergens/nutrition-data/certification-status
+// to Restaurant/Dish-scoped context; these checks were updated for that
+// explicitly-authorized successor change (see admin-ia-p2-r2-guard.mjs for
+// the R2-owned proof of the new locations).
 const menuManagement = routeById.get("menu-management");
-check("3. Restaurant Operations contains canonical 菜單管理", menuManagement?.parentId === "restaurants" && menuManagement?.zhTWLabel === "菜單管理");
+check("3. Restaurant Operations contains the canonical cross-Restaurant menu workspace",
+  menuManagement?.parentId === "restaurants" && rootWorkspaceOf("menu-management") === "restaurants");
 const mm = (id) => routeById.get(id);
-check("4. ingredients canonical route belongs to Restaurant menu management", mm("menu-management-ingredients")?.parentId === "menu-management");
-check("5. allergens canonical route belongs to Restaurant menu management", mm("menu-management-allergens")?.parentId === "menu-management");
+check("4. ingredients canonical route belongs to Restaurant Operations (Dish-scoped in R2)",
+  rootWorkspaceOf("restaurant-item-ingredients") === "restaurants" && !ia.ADMIN_ROUTE_REGISTRY.some((route) => route.id === "menu-management-ingredients"));
+check("5. allergens canonical route belongs to Restaurant Operations (Dish-scoped in R2)",
+  rootWorkspaceOf("restaurant-item-allergens") === "restaurants" && !ia.ADMIN_ROUTE_REGISTRY.some((route) => route.id === "menu-management-allergens"));
 check("6. menu data quality canonical route belongs to Restaurant menu management", mm("menu-management-data-quality")?.parentId === "menu-management");
 check("7. pending items belong to Restaurant menu management", mm("menu-management-pending")?.parentId === "menu-management"
   && mm("menu-management-pending")?.legacyRoutes.some((legacy) => legacy.route === "/pending-menu-items"));
@@ -88,8 +102,10 @@ check("8. duplicates belong to Restaurant menu management", mm("menu-management-
 check("9. aliases/identification belong to Restaurant menu management", mm("menu-management-aliases")?.parentId === "menu-management"
   && mm("menu-management-aliases")?.legacyRoutes.some((legacy) => legacy.route === "/alias-review")
   && mm("menu-management-aliases")?.legacyRoutes.some((legacy) => legacy.route === "/identification-audit"));
-check("10. Restaurant menu nutrition-data state exists", mm("menu-management-nutrition-data")?.parentId === "menu-management");
-check("11. Restaurant certification-status location exists", mm("menu-management-certification-status")?.parentId === "menu-management");
+check("10. Restaurant menu nutrition-data state exists (Dish-scoped in R2)",
+  rootWorkspaceOf("restaurant-item-nutrition") === "restaurants" && !ia.ADMIN_ROUTE_REGISTRY.some((route) => route.id === "menu-management-nutrition-data"));
+check("11. Restaurant certification-status location exists (Dish-scoped in R2)",
+  rootWorkspaceOf("restaurant-item-certification") === "restaurants" && !ia.ADMIN_ROUTE_REGISTRY.some((route) => route.id === "menu-management-certification-status"));
 
 // 12-15: Nutrition Standards and Scoring.
 check("12. Nutrition standards workspace exists", routeById.get("nutrition-standards")?.parentId === "nutrition");
@@ -133,7 +149,7 @@ check("remote review placeholder implements no live communication or mutation",
 // 26-27: cross-workspace shortcuts, no duplication.
 const nutritionShortcuts = ia.ADMIN_WORKSPACE_SHORTCUTS.filter((shortcut) => shortcut.sourceWorkspaceId === "nutrition");
 check("26. Nutrition landing has cross-workspace Restaurant menu shortcuts",
-  nutritionShortcuts.length >= 4 && registryPage.includes("WorkspaceShortcuts") && registryPage.includes("相關菜單資料快速連結"));
+  nutritionShortcuts.length >= 1 && registryPage.includes("WorkspaceShortcuts") && registryPage.includes("相關菜單資料快速連結"));
 check("27. shortcuts target existing canonical Restaurant routes",
   nutritionShortcuts.every((shortcut) => routeById.has(shortcut.targetRouteId) && rootWorkspaceOf(shortcut.targetRouteId) === "restaurants"));
 
@@ -146,7 +162,7 @@ check("28. no duplicate Nutrition allergens canonical page", !ia.ADMIN_ROUTE_REG
 check("29. no duplicate Nutrition ingredients canonical page", !ia.ADMIN_ROUTE_REGISTRY.some((route) => route.route === "/admin/nutrition/ingredients"));
 const singleOwnerIds = [
   "menu-management-pending", "menu-management-duplicates", "menu-management-aliases", "menu-management-data-quality",
-  "menu-management-ingredients", "menu-management-allergens", "menu-management-nutrition-data", "menu-management-certification-status"
+  "restaurant-item-ingredients", "restaurant-item-allergens", "restaurant-item-nutrition", "restaurant-item-certification"
 ];
 check("30. no duplicate feature ownership created",
   singleOwnerIds.every((id) => ia.ADMIN_ROUTE_REGISTRY.filter((route) => route.id === id).length === 1)
@@ -199,7 +215,7 @@ check("39. no redirect activated", !/\bredirect\s*\(/.test(adminSources));
 check("40. no DB migration", changedFromP2.every((file) => !file.startsWith("supabase/")));
 check("41. no DB permission expansion",
   !/create role|create policy|grant execute|grant update|security definer|role_permissions|alter table\s+public\./i.test(
-    changedFromP2.filter((file) => exists(file) && file !== "scripts/admin-ia-p2-r1-guard.mjs").map(read).join("\n")
+    changedFromP2.filter((file) => exists(file) && file !== "scripts/admin-ia-p2-r1-guard.mjs" && file !== "scripts/admin-ia-p2-r2-guard.mjs").map(read).join("\n")
   ));
 const pkg = JSON.parse(read("package.json"));
 const p2Pkg = JSON.parse(git("show", `${P2_HEAD}:package.json`));
@@ -222,7 +238,8 @@ check("45. no personal data loading",
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p2-r1-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local"
+    : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

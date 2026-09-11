@@ -1,8 +1,9 @@
 import type { AdminRouteDefinition } from "../../auth/admin-route-registry";
 
 const staffLabels: Readonly<Record<string, string>> = {
-  PLATFORM_OPERATIONS: "平台營運", RESTAURANT_OPERATIONS: "餐廳營運", MEMBER_SUPPORT: "會員支援",
-  SOCIAL_OPERATIONS: "社交安全", NUTRITION_OPERATIONS: "營養營運", DATA_CONTENT_QUALITY: "資料與內容品質",
+  BUSINESS_DEVELOPMENT: "商務拓展", PLATFORM_OPERATIONS: "平台營運／行銷", RESTAURANT_OPERATIONS: "餐廳營運", MEMBER_SUPPORT: "會員支援",
+  SOCIAL_OPERATIONS: "社交安全", NUTRITION_OPERATIONS: "營養營運", NUTRITION_OPERATIONS_LEAD: "營養營運主管",
+  DATA_CONTENT_QUALITY: "資料與內容品質",
   AUDIT_SECURITY: "稽核與資安", PLATFORM_MANAGEMENT: "平台管理", ENGINEERING_MAINTAINER: "工程維運",
   HIGHEST_PRIVILEGE_BREAK_GLASS: "緊急權限"
 };
@@ -12,7 +13,7 @@ const dataClassLabels: Readonly<Record<string, string>> = {
   MEMBER_ACCOUNT: "會員帳戶資料", USER_PRIVATE: "使用者私密資料", HEALTH_PERSONAL_NUTRITION: "健康／個人營養資料",
   PRIVATE_SOCIAL: "私密社交資料", SECURITY_AUTH: "資安／身分驗證資料", AUDIT: "稽核資料",
   ENGINEERING_DIAGNOSTIC: "工程診斷資料", BREAK_GLASS_ONLY: "僅限緊急權限資料",
-  NUTRITION_GOVERNANCE: "營養治理設定資料"
+  NUTRITION_GOVERNANCE: "營養治理設定資料", COMMERCIAL_RELATIONSHIP: "商業關係資料"
 };
 
 const migrationCopy: Readonly<Record<AdminRouteDefinition["availability"], string>> = {

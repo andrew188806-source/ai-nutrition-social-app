@@ -19,7 +19,7 @@ export function AdminSidebarSection({
   depth?: number;
 }) {
   const active = activeIds.has(node.id);
-  const [expanded, setExpanded] = useState(active || depth === 0);
+  const [expanded, setExpanded] = useState(active);
   const hasChildren = node.children.length > 0;
   return (
     <li className={separated ? "mt-4 border-t border-slate-200 pt-4" : undefined}>

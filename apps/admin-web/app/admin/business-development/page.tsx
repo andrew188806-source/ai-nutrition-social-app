@@ -1,2 +1,2 @@
 import { createAdminRegistryPage } from "apps/admin-web/components/admin-shell/AdminRegistryPage";
-export default createAdminRegistryPage("menu-management-items");
+export default createAdminRegistryPage("business-development");

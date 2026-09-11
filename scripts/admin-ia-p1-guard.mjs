@@ -10,8 +10,10 @@ const P1_FREEZE = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const SUBJECT = "Define canonical Admin information architecture";
 const P2_HEAD = "981f3ec4976394f1254834cc5188566d1415c000";
 const P2_SUBJECT = "Build canonical Admin workspace shell";
+const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
 const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
-const EXPECTED_ROUTE_COUNT = 69;
+const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
+const EXPECTED_ROUTE_COUNT = 95;
 const ALLOWED_PATHS = [
   "apps/admin-web/auth/admin-route-registry.ts",
   "docs/admin-information-architecture-ra-3-ia-p1.md",
@@ -74,13 +76,17 @@ const successorFrozen = head === P2_HEAD && git("rev-parse", "HEAD^") === P1_FRE
   && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P2_SUBJECT
   && git("status", "--short") === "";
 const r1Candidate = head === P2_HEAD && origin === BASELINE && ahead === 2 && behind === 0;
-const r1Frozen = head !== P2_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && origin === BASELINE
+const r1Frozen = head === R1_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && origin === BASELINE
   && ahead === 3 && behind === 0 && git("log", "-1", "--format=%s") === P2_R1_SUBJECT
   && git("status", "--short") === "";
-const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen;
+const r2Candidate = head === R1_HEAD && origin === BASELINE && ahead === 3 && behind === 0;
+const r2Frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && origin === BASELINE
+  && ahead === 4 && behind === 0 && git("log", "-1", "--format=%s") === P2_R2_SUBJECT
+  && git("status", "--short") === "";
+const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen;
 const changed = successor ? changedFromP1 : changedFromBaseline;
 
-check("lifecycle is the P1 candidate/freeze or its bounded P2/P2-R1 successor", candidate || frozen || successor,
+check("lifecycle is the P1 candidate/freeze or its bounded P2/P2-R1/P2-R2 successor", candidate || frozen || successor,
   { head, origin, ahead, behind });
 check("the frozen IA-P1 commit is exactly the four approved paths",
   JSON.stringify(p1FreezePaths) === JSON.stringify(ALLOWED_PATHS), { expected: ALLOWED_PATHS, actual: p1FreezePaths });
@@ -95,7 +101,7 @@ if (transpileErrors.length === 0) {
   check("the canonical root is /admin", ia.ADMIN_CANONICAL_ROOT === "/admin");
 
   const expectedTopLevel = [
-    "dashboard", "operations", "restaurants", "members", "social", "nutrition", "audit", "management", "engineering"
+    "dashboard", "business-development", "operations", "restaurants", "nutrition", "members", "social", "audit", "management", "engineering"
   ];
   check("all approved top-level workspaces exist in deterministic order",
     JSON.stringify(ia.ADMIN_TOP_LEVEL_WORKSPACE_IDS) === JSON.stringify(expectedTopLevel));
@@ -158,16 +164,24 @@ if (transpileErrors.length === 0) {
       && !ia.isAdminRouteCurrentlyAuthorized(unavailableChild, ["admin.management.roles.read"]));
 
   const approvedRoutes = [
-    "/admin", "/admin/operations", "/admin/operations/ads", "/admin/operations/sponsored",
+    "/admin",
+    "/admin/business-development", "/admin/business-development/prospects", "/admin/business-development/pipeline",
+    "/admin/business-development/follow-ups", "/admin/business-development/contacts", "/admin/business-development/contracts",
+    "/admin/business-development/renewals", "/admin/business-development/assignments", "/admin/business-development/history",
+    "/admin/operations", "/admin/operations/campaigns", "/admin/operations/promotions", "/admin/operations/ads",
+    "/admin/operations/sponsored", "/admin/operations/placements", "/admin/operations/communications", "/admin/operations/performance",
     "/admin/restaurants", "/admin/restaurants/verification", "/admin/restaurants/reviews",
-    "/admin/restaurants/menu-management", "/admin/restaurants/menu-management/items", "/admin/restaurants/menu-management/pending",
-    "/admin/restaurants/menu-management/duplicates", "/admin/restaurants/menu-management/aliases",
-    "/admin/restaurants/menu-management/ingredients", "/admin/restaurants/menu-management/allergens",
-    "/admin/restaurants/menu-management/data-quality", "/admin/restaurants/menu-management/nutrition-data",
-    "/admin/restaurants/menu-management/certification-status",
+    "/admin/restaurants/menu-management", "/admin/restaurants/menu-management/pending", "/admin/restaurants/menu-management/duplicates",
+    "/admin/restaurants/menu-management/aliases", "/admin/restaurants/menu-management/nutrition-discrepancy",
+    "/admin/restaurants/menu-management/data-quality",
     "/admin/restaurants/[restaurantId]",
     "/admin/restaurants/[restaurantId]/about", "/admin/restaurants/[restaurantId]/contact", "/admin/restaurants/[restaurantId]/menus",
-    "/admin/restaurants/[restaurantId]/menus/[menuId]/items",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]", "/admin/restaurants/[restaurantId]/menus/[menuId]/items",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/nutrition",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/ingredients",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/allergens",
+    "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/certification",
     "/admin/restaurants/[restaurantId]/branches", "/admin/restaurants/[restaurantId]/branches/[branchId]/status",
     "/admin/restaurants/[restaurantId]/branches/[branchId]",
     "/admin/restaurants/[restaurantId]/branches/[branchId]/hours", "/admin/restaurants/[restaurantId]/branches/[branchId]/contact",
@@ -175,11 +189,14 @@ if (transpileErrors.length === 0) {
     "/admin/members", "/admin/members/cases", "/admin/members/[memberRef]", "/admin/members/[memberRef]/consents",
     "/admin/members/[memberRef]/access-history", "/admin/social", "/admin/social/reports", "/admin/social/policies",
     "/admin/nutrition", "/admin/nutrition/self-cooked-quality",
+    "/admin/nutrition/my-work", "/admin/nutrition/my-work/restaurants", "/admin/nutrition/my-work/cases", "/admin/nutrition/my-work/members",
     "/admin/nutrition/standards", "/admin/nutrition/standards/scoring", "/admin/nutrition/standards/recommendation",
     "/admin/nutrition/standards/parameters",
     "/admin/nutrition/members", "/admin/nutrition/members/[memberRef]",
     "/admin/nutrition/certification", "/admin/nutrition/certification/pending", "/admin/nutrition/certification/discrepancy-reports",
     "/admin/nutrition/certification/remote-review", "/admin/nutrition/certification/history", "/admin/nutrition/certification/re-review",
+    "/admin/nutrition/assignments", "/admin/nutrition/assignments/nutritionists", "/admin/nutrition/assignments/regions",
+    "/admin/nutrition/assignments/restaurants", "/admin/nutrition/assignments/cases", "/admin/nutrition/assignments/workload",
     "/admin/audit", "/admin/audit/platform-memberships",
     "/admin/audit/operations", "/admin/audit/data-access", "/admin/management", "/admin/management/roles",
     "/admin/management/permissions", "/admin/management/settings", "/admin/engineering", "/admin/engineering/health",
@@ -195,10 +212,10 @@ check("old Platform Admin API sources remain byte-equivalent to the baseline",
   API_PATHS.every((file) => read(file).trimEnd() === git("show", `${BASELINE}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 const p2SuccessorPath = (file) => file === "apps/admin-web/auth/admin-route-registry.ts"
   || file === "scripts/admin-ia-p1-guard.mjs" || file === "scripts/admin-ia-p2-guard.mjs"
-  || file === "scripts/admin-ia-p2-r1-guard.mjs"
+  || file === "scripts/admin-ia-p2-r1-guard.mjs" || file === "scripts/admin-ia-p2-r2-guard.mjs"
   || file === "package.json" || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
-check("P1 authority remains bounded and its P2/P2-R1 successors change only presentation paths",
+check("P1 authority remains bounded and its P2/P2-R1/P2-R2 successors change only presentation paths",
   (successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
     && changed.every((file) => !/^supabase\//.test(file))
     && !changed.includes("apps/admin-web/components/AdminShell.tsx")
@@ -210,7 +227,8 @@ const expectedScripts = {
   ...baselinePkg.scripts,
   "test:admin-ia-p1": "node scripts/admin-ia-p1-guard.mjs",
   ...(successor ? { "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs" } : {}),
-  ...((r1Candidate || r1Frozen) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {})
+  ...((r1Candidate || r1Frozen || r2Candidate || r2Frozen) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {}),
+  ...((r2Candidate || r2Frozen) ? { "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs" } : {})
 };
 const expectedPkg = { ...baselinePkg, scripts: expectedScripts };
 let packageMatches = true;
@@ -230,7 +248,8 @@ console.log("\n" + JSON.stringify({
   suite: "admin-ia-p1-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local"
     : successorCandidate ? "p2_candidate" : successorFrozen ? "p2_frozen_local"
-      : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local" : "invalid",
+      : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local"
+        : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local" : "invalid",
   expectedRouteCount: EXPECTED_ROUTE_COUNT,
   actualRouteCount: ia.ADMIN_ROUTE_REGISTRY?.length ?? 0,
   total: checks.length,
