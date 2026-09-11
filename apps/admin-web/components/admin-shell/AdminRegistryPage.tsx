@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   ADMIN_ROUTE_REGISTRY,
   ADMIN_TOP_LEVEL_WORKSPACE_IDS,
@@ -13,6 +14,10 @@ import { AdminAvailabilityBadge } from "./AdminAvailabilityBadge";
 import { getAdminDescendants, getAdminRoute } from "./admin-ia-navigation";
 import { AdminRoutePlaceholder } from "./AdminRoutePlaceholder";
 import { AdminWorkspaceHeader } from "./AdminWorkspaceHeader";
+import { getVerifiedAdminContext } from "../../auth/admin-context";
+import { decideAdminSessionGate } from "../../auth/admin-session-gate";
+import { AdminAccessDenied, AdminAuthorityUnavailable } from "./AdminAccessState";
+import { AdminShell } from "./AdminShell";
 
 // RA-3-IA-P2-R2: multi-child hub pages that need the full workspace-landing
 // layout (status counts + child module grid) even though they are not
@@ -228,8 +233,11 @@ export function AdminRegistryPage({ routeId }: { routeId: AdminRouteId }) {
 }
 
 export function createAdminRegistryPage(routeId: AdminRouteId) {
-  return function AdminCanonicalRoutePage() {
-    return <AdminRegistryPage routeId={routeId} />;
+  return async function AdminCanonicalRoutePage() {
+    const decision = decideAdminSessionGate(await getVerifiedAdminContext());
+    if (decision.state === "redirect_login") redirect("/admin/login?reason=session");
+    if (decision.state === "access_denied") return <AdminAccessDenied />;
+    if (decision.state === "authority_unavailable") return <AdminAuthorityUnavailable />;
+    return <AdminShell><AdminRegistryPage routeId={routeId} /></AdminShell>;
   };
 }
-

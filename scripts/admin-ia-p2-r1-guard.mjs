@@ -11,6 +11,8 @@ const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
 const ORIGIN_BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
 const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
 const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
+const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
+const P3_P1_SUBJECT = "Add Admin browser session gate";
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -68,9 +70,13 @@ const frozen = head === R1_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && orig
 const r2Candidate = head === R1_HEAD && origin === ORIGIN_BASELINE && ahead === 3 && behind === 0;
 const r2Frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && origin === ORIGIN_BASELINE
   && ahead === 4 && behind === 0 && git("log", "-1", "--format=%s") === P2_R2_SUBJECT && git("status", "--short") === "";
+const p3Candidate = head === P2_R2_HEAD && origin === P2_R2_HEAD && ahead === 0 && behind === 0;
+const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD && origin === P2_R2_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P1_SUBJECT && git("status", "--short") === "";
+const p3Phase = p3Candidate || p3Frozen;
 
-check("lifecycle is exactly the P2-R1 candidate/freeze or its bounded P2-R2 successor",
-  candidate || frozen || r2Candidate || r2Frozen, { head, origin, ahead, behind });
+check("lifecycle is exactly the P2-R1 candidate/freeze or its bounded P2-R2/P3-P1 successor",
+  candidate || frozen || r2Candidate || r2Frozen || p3Phase, { head, origin, ahead, behind });
 check(`the registry contains the actual final count of ${EXPECTED_REGISTRY_ROUTES}`,
   ia.ADMIN_ROUTE_REGISTRY.length === EXPECTED_REGISTRY_ROUTES, ia.ADMIN_ROUTE_REGISTRY.length);
 
@@ -207,9 +213,15 @@ const acceptedApis = [
 ];
 check("38. accepted APIs unchanged", acceptedApis.every((file) => exists(file)
   && read(file).trimEnd() === git("show", `${P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
-const adminSources = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
-  .filter((file) => /\.(?:ts|tsx)$/.test(file)).map(read).join("\n");
-check("39. no redirect activated", !/\bredirect\s*\(/.test(adminSources));
+const adminSourceFiles = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
+  .filter((file) => /\.(?:ts|tsx)$/.test(file));
+const adminSources = adminSourceFiles.map(read).join("\n");
+const redirectFiles = adminSourceFiles.filter((file) => /\bredirect\s*\(/.test(read(file)));
+check("39. redirects stay absent historically and are bounded to the P3-P1 gate successor",
+  p3Phase
+    ? redirectFiles.every((file) => ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file))
+    : redirectFiles.length === 0,
+  redirectFiles);
 
 // 40-43: no authority/dependency expansion.
 check("40. no DB migration", changedFromP2.every((file) => !file.startsWith("supabase/")));
@@ -222,11 +234,13 @@ const p2Pkg = JSON.parse(git("show", `${P2_HEAD}:package.json`));
 check("42. no dependency change",
   JSON.stringify(pkg.dependencies ?? {}) === JSON.stringify(p2Pkg.dependencies ?? {})
     && JSON.stringify(pkg.devDependencies ?? {}) === JSON.stringify(p2Pkg.devDependencies ?? {}));
-check("43. no lockfile churn", changedFromP2.every((file) => !/lock/i.test(file)));
+check("43. no lockfile churn before the exact dependency-authorized P3-P1 successor",
+  changedFromP2.every((file) => !/lock/i.test(file) || (p3Phase && file === "package-lock.json")));
 
 // 44-45: no auth/session implementation, no personal data loading.
-check("44. no auth/session implementation",
-  !/document\.cookie\s*=|setCookie\s*\(|createSession\s*\(|signIn\s*\(|jwt\.sign\s*\(|Authorization["'\s:]*[:=]\s*["'`]Bearer/i.test(adminSources));
+check("44. no hand-written auth/session implementation",
+  !/document\.cookie\s*=|setCookie\s*\(|createSession\s*\(|jwt\.sign\s*\(|Authorization["'\s:]*[:=]\s*["'`]Bearer/i.test(adminSources)
+    && (!p3Phase || exists("scripts/admin-session-p3-p1-guard.mjs")));
 const memberNutritionSources = [
   "apps/admin-web/app/admin/nutrition/members/page.tsx",
   "apps/admin-web/app/admin/nutrition/members/[memberRef]/page.tsx"
@@ -239,7 +253,8 @@ const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p2-r1-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local"
-    : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local" : "invalid",
+    : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local"
+      : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

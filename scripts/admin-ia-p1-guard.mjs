@@ -13,6 +13,8 @@ const P2_SUBJECT = "Build canonical Admin workspace shell";
 const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
 const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
 const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
+const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
+const P3_P1_SUBJECT = "Add Admin browser session gate";
 const EXPECTED_ROUTE_COUNT = 95;
 const ALLOWED_PATHS = [
   "apps/admin-web/auth/admin-route-registry.ts",
@@ -83,10 +85,15 @@ const r2Candidate = head === R1_HEAD && origin === BASELINE && ahead === 3 && be
 const r2Frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && origin === BASELINE
   && ahead === 4 && behind === 0 && git("log", "-1", "--format=%s") === P2_R2_SUBJECT
   && git("status", "--short") === "";
-const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen;
+const p3Candidate = head === P2_R2_HEAD && origin === P2_R2_HEAD && ahead === 0 && behind === 0;
+const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD && origin === P2_R2_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P1_SUBJECT
+  && git("status", "--short") === "";
+const p3Phase = p3Candidate || p3Frozen;
+const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen || p3Phase;
 const changed = successor ? changedFromP1 : changedFromBaseline;
 
-check("lifecycle is the P1 candidate/freeze or its bounded P2/P2-R1/P2-R2 successor", candidate || frozen || successor,
+check("lifecycle is the P1 candidate/freeze or its bounded P2/P2-R1/P2-R2/P3-P1 successor", candidate || frozen || successor,
   { head, origin, ahead, behind });
 check("the frozen IA-P1 commit is exactly the four approved paths",
   JSON.stringify(p1FreezePaths) === JSON.stringify(ALLOWED_PATHS), { expected: ALLOWED_PATHS, actual: p1FreezePaths });
@@ -215,11 +222,16 @@ const p2SuccessorPath = (file) => file === "apps/admin-web/auth/admin-route-regi
   || file === "scripts/admin-ia-p2-r1-guard.mjs" || file === "scripts/admin-ia-p2-r2-guard.mjs"
   || file === "package.json" || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
-check("P1 authority remains bounded and its P2/P2-R1/P2-R2 successors change only presentation paths",
-  (successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
+const p3SuccessorPath = (file) => p2SuccessorPath(file)
+  || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
+  || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
+  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs";
+check("P1 authority remains bounded through its exact P3-P1 successor",
+  (p3Phase ? changed.every(p3SuccessorPath)
+    : successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
     && changed.every((file) => !/^supabase\//.test(file))
     && !changed.includes("apps/admin-web/components/AdminShell.tsx")
-    && changed.every((file) => !/lock|\.env/i.test(file)), changed);
+    && changed.every((file) => !/\.env/i.test(file) && (!/lock/i.test(file) || (p3Phase && file === "package-lock.json"))), changed);
 
 const pkg = JSON.parse(read("package.json"));
 const baselinePkg = JSON.parse(git("show", `${BASELINE}:package.json`));
@@ -227,8 +239,12 @@ const expectedScripts = {
   ...baselinePkg.scripts,
   "test:admin-ia-p1": "node scripts/admin-ia-p1-guard.mjs",
   ...(successor ? { "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs" } : {}),
-  ...((r1Candidate || r1Frozen || r2Candidate || r2Frozen) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {}),
-  ...((r2Candidate || r2Frozen) ? { "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs" } : {})
+  ...((r1Candidate || r1Frozen || r2Candidate || r2Frozen || p3Phase) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {}),
+  ...((r2Candidate || r2Frozen || p3Phase) ? { "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs" } : {}),
+  ...(p3Phase ? {
+    "test:admin-session-p3-p1": "node scripts/admin-session-p3-p1-guard.mjs",
+    "test:admin-session-p3-p1-smoke": "node scripts/admin-session-p3-p1-smoke.mjs"
+  } : {})
 };
 const expectedPkg = { ...baselinePkg, scripts: expectedScripts };
 let packageMatches = true;
@@ -249,7 +265,8 @@ console.log("\n" + JSON.stringify({
   phase: candidate ? "candidate" : frozen ? "frozen_local"
     : successorCandidate ? "p2_candidate" : successorFrozen ? "p2_frozen_local"
       : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local"
-        : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local" : "invalid",
+        : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local"
+          : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local" : "invalid",
   expectedRouteCount: EXPECTED_ROUTE_COUNT,
   actualRouteCount: ia.ADMIN_ROUTE_REGISTRY?.length ?? 0,
   total: checks.length,

@@ -1,17 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ADMIN_CANONICAL_ROOT } from "../../auth/admin-route-registry";
 import { AdminBreadcrumbs } from "./AdminBreadcrumbs";
 import { AdminIaScaffoldNotice } from "./AdminIaScaffoldNotice";
 import { AdminSidebar } from "./AdminSidebar";
+import { signOutAdmin } from "../../app/admin/login/actions";
 
 export function AdminShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  if (pathname === "/admin/login") return <>{children}</>;
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
       <a className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-white focus:px-4 focus:py-2" href="#admin-main">
@@ -39,8 +37,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </aside>
         <div className="min-w-0 flex-1">
-          <header className="border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+          <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
             <AdminBreadcrumbs />
+            <form action={signOutAdmin}>
+              <button className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500" type="submit">登出</button>
+            </form>
           </header>
           <main className="mx-auto max-w-6xl space-y-5 px-5 py-6 sm:px-8 sm:py-8" id="admin-main">
             <AdminIaScaffoldNotice />
@@ -51,4 +52,3 @@ export function AdminShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

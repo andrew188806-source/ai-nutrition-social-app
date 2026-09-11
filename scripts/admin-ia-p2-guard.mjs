@@ -12,6 +12,8 @@ const P2_SUBJECT = "Build canonical Admin workspace shell";
 const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
 const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
 const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
+const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
+const P3_P1_SUBJECT = "Add Admin browser session gate";
 const EXPECTED_REGISTRY_ROUTES = 95;
 const EXPECTED_PHYSICAL_PAGES = 94;
 const root = process.cwd();
@@ -72,6 +74,10 @@ const r1Frozen = head === R1_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && or
 const r2Candidate = head === R1_HEAD && origin === ORIGIN_BASELINE && ahead === 3 && behind === 0;
 const r2Frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && origin === ORIGIN_BASELINE
   && ahead === 4 && behind === 0 && git("log", "-1", "--format=%s") === P2_R2_SUBJECT && git("status", "--short") === "";
+const p3Candidate = head === P2_R2_HEAD && origin === P2_R2_HEAD && ahead === 0 && behind === 0;
+const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD && origin === P2_R2_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P1_SUBJECT && git("status", "--short") === "";
+const p3Phase = p3Candidate || p3Frozen;
 
 const allowedP2Path = (file) =>
   file === "apps/admin-web/auth/admin-route-registry.ts"
@@ -82,13 +88,18 @@ const allowedP2Path = (file) =>
   || file === "package.json"
   || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
+const allowedP3Path = (file) => allowedP2Path(file)
+  || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
+  || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
+  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs";
 
-check("lifecycle is exactly the P2 candidate/freeze or its bounded P2-R1/P2-R2 successor",
-  candidate || frozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen, { head, origin, ahead, behind });
+check("lifecycle is exactly the P2 candidate/freeze or its bounded P2-R1/P2-R2/P3-P1 successor",
+  candidate || frozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen || p3Phase, { head, origin, ahead, behind });
 check("the P1 registry remains the single canonical route and authority metadata source",
   read("apps/admin-web/components/admin-shell/admin-ia-navigation.ts").includes("../../auth/admin-route-registry")
     && !exists("apps/admin-web/components/admin-shell/admin-route-registry.ts"));
-check("the bounded P2 diff contains only approved paths", changed.every(allowedP2Path), changed.filter((file) => !allowedP2Path(file)));
+check("the bounded P2 diff contains only approved successor paths",
+  changed.every(p3Phase ? allowedP3Path : allowedP2Path), changed.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedP2Path(file))));
 check(`the registry contains the actual final count of ${EXPECTED_REGISTRY_ROUTES}`,
   ia.ADMIN_ROUTE_REGISTRY.length === EXPECTED_REGISTRY_ROUTES, ia.ADMIN_ROUTE_REGISTRY.length);
 check("the canonical /admin root physically exists", exists("apps/admin-web/app/admin/page.tsx") && exists("apps/admin-web/app/admin/layout.tsx"));
@@ -193,18 +204,28 @@ const p1Pkg = JSON.parse(git("show", `${P1_HEAD}:package.json`));
 const expectedScripts = {
   ...p1Pkg.scripts,
   "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs",
-  ...((r1Candidate || r1Frozen || r2Candidate || r2Frozen) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {}),
-  ...((r2Candidate || r2Frozen) ? { "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs" } : {})
+  ...((r1Candidate || r1Frozen || r2Candidate || r2Frozen || p3Phase) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {}),
+  ...((r2Candidate || r2Frozen || p3Phase) ? { "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs" } : {}),
+  ...(p3Phase ? {
+    "test:admin-session-p3-p1": "node scripts/admin-session-p3-p1-guard.mjs",
+    "test:admin-session-p3-p1-smoke": "node scripts/admin-session-p3-p1-smoke.mjs"
+  } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
 let packageMatches = true;
 try { assert.deepEqual(pkg, expectedPkg); } catch { packageMatches = false; }
 check("package.json adds only the P2/P2-R1/P2-R2 guard commands with no dependency or lockfile churn",
-  packageMatches && changed.every((file) => !/lock/i.test(file)));
+  packageMatches && changed.every((file) => !/lock/i.test(file) || (p3Phase && file === "package-lock.json")));
 
-const adminSources = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
-  .filter((file) => /\.(?:ts|tsx)$/.test(file)).map(read).join("\n");
-check("no redirect is activated", !/\bredirect\s*\(/.test(adminSources));
+const adminSourceFiles = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
+  .filter((file) => /\.(?:ts|tsx)$/.test(file));
+const adminSources = adminSourceFiles.map(read).join("\n");
+const redirectFiles = adminSourceFiles.filter((file) => /\bredirect\s*\(/.test(read(file)));
+check("redirect stays absent historically and is bounded to the P3-P1 gate successor",
+  p3Phase
+    ? redirectFiles.every((file) => ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file))
+    : redirectFiles.length === 0,
+  redirectFiles);
 check("the legacy AdminShell remains byte-equivalent", read("apps/admin-web/components/AdminShell.tsx").trimEnd()
   === git("show", `${P1_HEAD}:apps/admin-web/components/AdminShell.tsx`).replace(/\r\n/g, "\n").trimEnd());
 check("no token-in-URL or localStorage authentication workaround exists",
@@ -217,7 +238,8 @@ console.log("\n" + JSON.stringify({
   suite: "admin-ia-p2-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local"
     : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local"
-      : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local" : "invalid",
+      : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local"
+        : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   expectedPhysicalPages: EXPECTED_PHYSICAL_PAGES,
@@ -233,4 +255,3 @@ console.log("\n" + JSON.stringify({
   pushed: false
 }, null, 2));
 if (failures.length > 0) process.exitCode = 1;
-

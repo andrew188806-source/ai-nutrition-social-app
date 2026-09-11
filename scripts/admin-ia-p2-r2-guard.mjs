@@ -9,6 +9,8 @@ const P1_HEAD = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
 const ORIGIN_BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
 const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
+const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
+const P3_P1_SUBJECT = "Add Admin browser session gate";
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -63,8 +65,13 @@ const changedFromR1 = [...new Set([...lines(git("diff", "--name-only", R1_HEAD))
 const candidate = head === R1_HEAD && origin === ORIGIN_BASELINE && ahead === 3 && behind === 0;
 const frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && origin === ORIGIN_BASELINE
   && ahead === 4 && behind === 0 && git("log", "-1", "--format=%s") === P2_R2_SUBJECT && git("status", "--short") === "";
+const p3Candidate = head === P2_R2_HEAD && origin === P2_R2_HEAD && ahead === 0 && behind === 0;
+const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD && origin === P2_R2_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P1_SUBJECT && git("status", "--short") === "";
+const p3Phase = p3Candidate || p3Frozen;
 
-check("lifecycle is exactly the P2-R2 candidate or one clean local P2-R2 freeze", candidate || frozen, { head, origin, ahead, behind });
+check("lifecycle is exactly the P2-R2 candidate/freeze or its bounded P3-P1 successor",
+  candidate || frozen || p3Phase, { head, origin, ahead, behind });
 check(`the registry contains the actual final count of ${EXPECTED_REGISTRY_ROUTES}`,
   ia.ADMIN_ROUTE_REGISTRY.length === EXPECTED_REGISTRY_ROUTES, ia.ADMIN_ROUTE_REGISTRY.length);
 
@@ -251,13 +258,20 @@ const acceptedApis = [
 check("76. accepted APIs unchanged", acceptedApis.every((file) => exists(file)
   && read(file).trimEnd() === git("show", `${P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 
-const adminSources = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
-  .filter((file) => /\.(?:ts|tsx)$/.test(file)).map(read).join("\n");
-check("77. no redirects", !/\bredirect\s*\(/.test(adminSources));
+const adminSourceFiles = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
+  .filter((file) => /\.(?:ts|tsx)$/.test(file));
+const adminSources = adminSourceFiles.map(read).join("\n");
+const redirectFiles = adminSourceFiles.filter((file) => /\bredirect\s*\(/.test(read(file)));
+check("77. redirects stay absent historically and are bounded to the P3-P1 gate successor",
+  p3Phase
+    ? redirectFiles.every((file) => ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file))
+    : redirectFiles.length === 0,
+  redirectFiles);
 check("78. no DB migration", changedFromR1.every((file) => !file.startsWith("supabase/")));
 const guardScriptFiles = new Set([
   "scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs",
-  "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"
+  "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs"
 ]);
 check("79. no DB permission expansion",
   !/create role|create policy|grant execute|grant update|security definer|role_permissions|alter table\s+public\./i.test(
@@ -292,9 +306,11 @@ const r1Pkg = JSON.parse(git("show", `${R1_HEAD}:package.json`));
 check("88. no dependency changes",
   JSON.stringify(pkg.dependencies ?? {}) === JSON.stringify(r1Pkg.dependencies ?? {})
     && JSON.stringify(pkg.devDependencies ?? {}) === JSON.stringify(r1Pkg.devDependencies ?? {}));
-check("89. no lockfile churn", changedFromR1.every((file) => !/lock/i.test(file)));
-check("90. no auth/session implementation",
-  !/document\.cookie\s*=|setCookie\s*\(|createSession\s*\(|signIn\s*\(|jwt\.sign\s*\(|Authorization["'\s:]*[:=]\s*["'`]Bearer/i.test(adminSources));
+check("89. no lockfile churn before the exact dependency-authorized P3-P1 successor",
+  changedFromR1.every((file) => !/lock/i.test(file) || (p3Phase && file === "package-lock.json")));
+check("90. no hand-written auth/session implementation",
+  !/document\.cookie\s*=|setCookie\s*\(|createSession\s*\(|jwt\.sign\s*\(|Authorization["'\s:]*[:=]\s*["'`]Bearer/i.test(adminSources)
+    && (!p3Phase || exists("scripts/admin-session-p3-p1-guard.mjs")));
 
 const allowedR2Path = (file) =>
   file === "apps/admin-web/auth/admin-route-registry.ts"
@@ -303,14 +319,24 @@ const allowedR2Path = (file) =>
   || file === "package.json"
   || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
-check("the bounded P2-R2 diff contains only approved paths", changedFromR1.every(allowedR2Path), changedFromR1.filter((file) => !allowedR2Path(file)));
+const allowedP3Path = (file) => allowedR2Path(file)
+  || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
+  || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
+  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs";
+check("the bounded P2-R2 diff contains only approved successor paths",
+  changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
+  changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
 
 const p1Pkg = JSON.parse(git("show", `${P1_HEAD}:package.json`));
 const expectedScripts = {
   ...p1Pkg.scripts,
   "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs",
   "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs",
-  "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs"
+  "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs",
+  ...(p3Phase ? {
+    "test:admin-session-p3-p1": "node scripts/admin-session-p3-p1-guard.mjs",
+    "test:admin-session-p3-p1-smoke": "node scripts/admin-session-p3-p1-smoke.mjs"
+  } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
 let packageMatches = true;
@@ -320,7 +346,8 @@ check("package.json adds only the P2/P2-R1/P2-R2 guard commands with no dependen
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p2-r2-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local"
+    : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

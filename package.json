@@ -371,6 +371,8 @@
     "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs",
     "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs",
     "test:admin-ia-p2-r2": "node scripts/admin-ia-p2-r2-guard.mjs",
+    "test:admin-session-p3-p1": "node scripts/admin-session-p3-p1-guard.mjs",
+    "test:admin-session-p3-p1-smoke": "node scripts/admin-session-p3-p1-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1": "node scripts/restaurant-owner-sold-out-ra-2a-p1-guard.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-smoke": "node scripts/restaurant-owner-sold-out-ra-2a-p1-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-mutations": "node scripts/restaurant-owner-sold-out-ra-2a-p1-mutations.mjs",
