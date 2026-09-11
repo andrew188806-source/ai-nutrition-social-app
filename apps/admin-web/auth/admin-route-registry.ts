@@ -39,7 +39,8 @@ export const ADMIN_DATA_CLASSES = [
   "SECURITY_AUTH",
   "AUDIT",
   "ENGINEERING_DIAGNOSTIC",
-  "BREAK_GLASS_ONLY"
+  "BREAK_GLASS_ONLY",
+  "NUTRITION_GOVERNANCE"
 ] as const;
 export type AdminDataClass = (typeof ADMIN_DATA_CLASSES)[number];
 
@@ -63,7 +64,7 @@ export const ADMIN_WORKSPACES = [
   "RESTAURANT_OPERATIONS",
   "MEMBER_SUPPORT",
   "SOCIAL_SAFETY",
-  "NUTRITION_CONTENT_QUALITY",
+  "NUTRITION_PROFESSIONAL_MANAGEMENT",
   "AUDIT_SECURITY",
   "PLATFORM_MANAGEMENT",
   "ENGINEERING_MAINTENANCE",
@@ -85,62 +86,62 @@ export const ADMIN_ROLE_WORKSPACE_MATRIX: Readonly<
 > = {
   PLATFORM_OPERATIONS: {
     DASHBOARD: "FULL", PLATFORM_OPERATIONS: "FULL", RESTAURANT_OPERATIONS: "LIMITED",
-    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_CONTENT_QUALITY: "READ",
+    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_PROFESSIONAL_MANAGEMENT: "READ",
     AUDIT_SECURITY: "LIMITED", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "NONE",
     BREAK_GLASS: "NONE"
   },
   RESTAURANT_OPERATIONS: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "NONE", RESTAURANT_OPERATIONS: "FULL",
-    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_CONTENT_QUALITY: "LIMITED",
+    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_PROFESSIONAL_MANAGEMENT: "LIMITED",
     AUDIT_SECURITY: "LIMITED", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "NONE",
     BREAK_GLASS: "NONE"
   },
   MEMBER_SUPPORT: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "NONE", RESTAURANT_OPERATIONS: "NONE",
-    MEMBER_SUPPORT: "FULL", SOCIAL_SAFETY: "LIMITED", NUTRITION_CONTENT_QUALITY: "NONE",
+    MEMBER_SUPPORT: "FULL", SOCIAL_SAFETY: "LIMITED", NUTRITION_PROFESSIONAL_MANAGEMENT: "NONE",
     AUDIT_SECURITY: "LIMITED", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "NONE",
     BREAK_GLASS: "NONE"
   },
   SOCIAL_OPERATIONS: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "NONE", RESTAURANT_OPERATIONS: "NONE",
-    MEMBER_SUPPORT: "LIMITED", SOCIAL_SAFETY: "FULL", NUTRITION_CONTENT_QUALITY: "NONE",
+    MEMBER_SUPPORT: "LIMITED", SOCIAL_SAFETY: "FULL", NUTRITION_PROFESSIONAL_MANAGEMENT: "NONE",
     AUDIT_SECURITY: "LIMITED", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "NONE",
     BREAK_GLASS: "NONE"
   },
   NUTRITION_OPERATIONS: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "NONE", RESTAURANT_OPERATIONS: "READ",
-    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_CONTENT_QUALITY: "FULL",
+    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_PROFESSIONAL_MANAGEMENT: "FULL",
     AUDIT_SECURITY: "LIMITED", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "NONE",
     BREAK_GLASS: "NONE"
   },
   DATA_CONTENT_QUALITY: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "LIMITED", RESTAURANT_OPERATIONS: "LIMITED",
-    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_CONTENT_QUALITY: "FULL",
+    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_PROFESSIONAL_MANAGEMENT: "FULL",
     AUDIT_SECURITY: "LIMITED", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "NONE",
     BREAK_GLASS: "NONE"
   },
   AUDIT_SECURITY: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "READ", RESTAURANT_OPERATIONS: "READ",
-    MEMBER_SUPPORT: "LIMITED", SOCIAL_SAFETY: "LIMITED", NUTRITION_CONTENT_QUALITY: "READ",
+    MEMBER_SUPPORT: "LIMITED", SOCIAL_SAFETY: "LIMITED", NUTRITION_PROFESSIONAL_MANAGEMENT: "READ",
     AUDIT_SECURITY: "FULL", PLATFORM_MANAGEMENT: "LIMITED", ENGINEERING_MAINTENANCE: "READ",
     BREAK_GLASS: "NONE"
   },
   PLATFORM_MANAGEMENT: {
     DASHBOARD: "READ", PLATFORM_OPERATIONS: "READ", RESTAURANT_OPERATIONS: "READ",
-    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_CONTENT_QUALITY: "READ",
+    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_PROFESSIONAL_MANAGEMENT: "READ",
     AUDIT_SECURITY: "READ", PLATFORM_MANAGEMENT: "FULL", ENGINEERING_MAINTENANCE: "READ",
     BREAK_GLASS: "NONE"
   },
   ENGINEERING_MAINTAINER: {
     DASHBOARD: "LIMITED", PLATFORM_OPERATIONS: "NONE", RESTAURANT_OPERATIONS: "NONE",
-    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_CONTENT_QUALITY: "NONE",
+    MEMBER_SUPPORT: "NONE", SOCIAL_SAFETY: "NONE", NUTRITION_PROFESSIONAL_MANAGEMENT: "NONE",
     AUDIT_SECURITY: "READ", PLATFORM_MANAGEMENT: "NONE", ENGINEERING_MAINTENANCE: "FULL",
     BREAK_GLASS: "NONE"
   },
   HIGHEST_PRIVILEGE_BREAK_GLASS: {
     DASHBOARD: "NONE", PLATFORM_OPERATIONS: "BREAK_GLASS", RESTAURANT_OPERATIONS: "BREAK_GLASS",
     MEMBER_SUPPORT: "BREAK_GLASS", SOCIAL_SAFETY: "BREAK_GLASS",
-    NUTRITION_CONTENT_QUALITY: "BREAK_GLASS", AUDIT_SECURITY: "BREAK_GLASS",
+    NUTRITION_PROFESSIONAL_MANAGEMENT: "BREAK_GLASS", AUDIT_SECURITY: "BREAK_GLASS",
     PLATFORM_MANAGEMENT: "BREAK_GLASS", ENGINEERING_MAINTENANCE: "BREAK_GLASS",
     BREAK_GLASS: "BREAK_GLASS"
   }
@@ -180,18 +181,30 @@ export const ADMIN_PERMISSION_REGISTRY = [
   { key: "admin.social.read", status: "PLANNED", description: "Enter the Social Safety workspace." },
   { key: "admin.social.reports.read", status: "PLANNED", description: "Read assigned social safety reports and minimum evidence." },
   { key: "admin.social.policies.read", status: "PLANNED", description: "Read Social policy metadata." },
-  { key: "admin.nutrition.read", status: "PLANNED", description: "Enter the Nutrition Operations workspace." },
-  { key: "admin.nutrition.review.read", status: "PLANNED", description: "Read governed nutrition review work." },
-  { key: "admin.nutrition.identification_quality.read", status: "PLANNED", description: "Read scoped meal-identification quality cases." },
-  { key: "admin.nutrition.self_cooked_quality.read", status: "PLANNED", description: "Read scoped self-cooked quality cases." },
-  { key: "admin.nutrition.allergens.read", status: "PLANNED", description: "Read governed allergen content." },
-  { key: "admin.nutrition.ingredients.read", status: "PLANNED", description: "Read governed ingredient content." },
-  { key: "admin.data_quality.read", status: "PLANNED", description: "Enter the Data and Content Quality workspace." },
-  { key: "admin.data_quality.pending_items.read", status: "PLANNED", description: "Read pending menu-item quality work." },
-  { key: "admin.data_quality.duplicates.read", status: "PLANNED", description: "Read duplicate menu-item quality work." },
-  { key: "admin.data_quality.aliases.read", status: "PLANNED", description: "Read alias quality work." },
-  { key: "admin.data_quality.recommendations.read", status: "PLANNED", description: "Read recommendation-quality aggregates." },
-  { key: "admin.data_quality.tags.read", status: "PLANNED", description: "Read governed content-tag work." },
+  { key: "admin.nutrition.read", status: "PLANNED", description: "Enter the Nutrition Professional Management workspace." },
+  { key: "admin.nutrition.self_cooked_quality.read", status: "PLANNED", description: "Read scoped self-cooked estimation-quality cases." },
+  { key: "admin.nutrition.standards.read", status: "PLANNED", description: "Enter the Nutrition Standards and Scoring area." },
+  { key: "admin.nutrition.standards.scoring.read", status: "PLANNED", description: "Read the governed nutrition scoring basis; no editable settings in this phase." },
+  { key: "admin.nutrition.standards.recommendation.read", status: "PLANNED", description: "Read the governed recommendation-determination criteria; no editable settings in this phase." },
+  { key: "admin.nutrition.standards.parameters.read", status: "PLANNED", description: "Read the governed set of important nutrition parameters; no editable settings in this phase." },
+  { key: "admin.nutrition.members.read", status: "PLANNED", description: "Enter the consent-scoped Member Nutrition Management area; lists only explicitly authorized members." },
+  { key: "admin.nutrition.members.detail.read", status: "PLANNED", description: "Read one consent-authorized member's allowlisted nutrition fields; grants no field write in this phase." },
+  { key: "admin.nutrition.certification.read", status: "PLANNED", description: "Enter the Restaurant Nutrition Certification workspace." },
+  { key: "admin.nutrition.certification.pending.read", status: "PLANNED", description: "Read the queue of dishes awaiting professional nutrition certification." },
+  { key: "admin.nutrition.certification.discrepancy_reports.read", status: "PLANNED", description: "Read reports of a materially different system-recommended dish nutrition value." },
+  { key: "admin.nutrition.certification.remote_review.read", status: "PLANNED", description: "Read the future Restaurant-Nutritionist remote review workflow location; grants no live review session." },
+  { key: "admin.nutrition.certification.history.read", status: "PLANNED", description: "Read the record of past certification outcomes." },
+  { key: "admin.nutrition.certification.re_review.read", status: "PLANNED", description: "Read dishes whose prior certification now requires re-review." },
+  { key: "admin.restaurants.menu_management.read", status: "PLANNED", description: "Enter the cross-restaurant Menu Management area." },
+  { key: "admin.restaurants.menu_management.items.read", status: "PLANNED", description: "Read the cross-restaurant menu-item and dish queue." },
+  { key: "admin.restaurants.menu_management.pending.read", status: "PLANNED", description: "Read pending menu-item quality work." },
+  { key: "admin.restaurants.menu_management.duplicates.read", status: "PLANNED", description: "Read duplicate menu-item quality work." },
+  { key: "admin.restaurants.menu_management.aliases.read", status: "PLANNED", description: "Read menu-item alias and identification quality work." },
+  { key: "admin.restaurants.menu_management.ingredients.read", status: "PLANNED", description: "Read governed ingredient content." },
+  { key: "admin.restaurants.menu_management.allergens.read", status: "PLANNED", description: "Read governed allergen content." },
+  { key: "admin.restaurants.menu_management.data_quality.read", status: "PLANNED", description: "Read menu and content data-quality work." },
+  { key: "admin.restaurants.menu_management.nutrition_data.read", status: "PLANNED", description: "Read the operational state of menu nutrition data." },
+  { key: "admin.restaurants.menu_management.certification_status.read", status: "PLANNED", description: "Read the current professional nutrition-certification status of menu items; grants no certification authority." },
   { key: "admin.audit.operations.read", status: "PLANNED", description: "Read bounded operational audit projections." },
   { key: "admin.audit.data_access.read", status: "PLANNED", description: "Read bounded data-access audit projections." },
   { key: "admin.security.read", status: "PLANNED", description: "Read approved security posture projections." },
@@ -260,6 +273,18 @@ export const ADMIN_ROUTE_REGISTRY = [
   defineRoute({ id: "restaurants", parentId: null, zhTWLabel: "餐廳營運", internalName: "Restaurant Operations", route: "/admin/restaurants", requiredPermissions: ["admin.restaurants.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS"], legacyRoutes: [{ route: "/menu-review", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 30 }),
   defineRoute({ id: "restaurant-verification", parentId: "restaurants", zhTWLabel: "餐廳身分驗證", internalName: "Restaurant Verification", route: "/admin/restaurants/verification", requiredPermissions: ["admin.restaurants.verification.read"], availability: "DEMO", dataClass: "RESTAURANT_PRIVATE", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "AUDIT_SECURITY"], legacyRoutes: [{ route: "/verification", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 10 }),
   defineRoute({ id: "restaurant-reviews", parentId: "restaurants", zhTWLabel: "餐廳審查", internalName: "Restaurant Reviews", route: "/admin/restaurants/reviews", requiredPermissions: ["admin.restaurants.reviews.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS"], legacyRoutes: [{ route: "/restaurant-review", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 20 }),
+
+  defineRoute({ id: "menu-management", parentId: "restaurants", zhTWLabel: "菜單管理", internalName: "Restaurant Menu Management", route: "/admin/restaurants/menu-management", requiredPermissions: ["admin.restaurants.menu_management.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 25 }),
+  defineRoute({ id: "menu-management-items", parentId: "menu-management", zhTWLabel: "菜單與餐點", internalName: "Menu Items and Dishes", route: "/admin/restaurants/menu-management/items", requiredPermissions: ["admin.restaurants.menu_management.items.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 10 }),
+  defineRoute({ id: "menu-management-pending", parentId: "menu-management", zhTWLabel: "待新增餐點", internalName: "Pending Menu Items", route: "/admin/restaurants/menu-management/pending", requiredPermissions: ["admin.restaurants.menu_management.pending.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/pending-menu-items", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 20 }),
+  defineRoute({ id: "menu-management-duplicates", parentId: "menu-management", zhTWLabel: "重複餐點", internalName: "Duplicate Menu Items", route: "/admin/restaurants/menu-management/duplicates", requiredPermissions: ["admin.restaurants.menu_management.duplicates.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/duplicate-menu-items", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 30 }),
+  defineRoute({ id: "menu-management-aliases", parentId: "menu-management", zhTWLabel: "別名／辨識", internalName: "Aliases and Identification", route: "/admin/restaurants/menu-management/aliases", requiredPermissions: ["admin.restaurants.menu_management.aliases.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/alias-review", semantics: "ONE_TO_ONE" }, { route: "/identification-audit", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 40 }),
+  defineRoute({ id: "menu-management-ingredients", parentId: "menu-management", zhTWLabel: "食材", internalName: "Ingredients", route: "/admin/restaurants/menu-management/ingredients", requiredPermissions: ["admin.restaurants.menu_management.ingredients.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 50 }),
+  defineRoute({ id: "menu-management-allergens", parentId: "menu-management", zhTWLabel: "過敏原", internalName: "Allergens", route: "/admin/restaurants/menu-management/allergens", requiredPermissions: ["admin.restaurants.menu_management.allergens.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 60 }),
+  defineRoute({ id: "menu-management-data-quality", parentId: "menu-management", zhTWLabel: "菜單資料品質", internalName: "Menu Data Quality", route: "/admin/restaurants/menu-management/data-quality", requiredPermissions: ["admin.restaurants.menu_management.data_quality.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/data-quality", semantics: "ONE_TO_ONE" }, { route: "/menu-review", semantics: "SPLIT" }, { route: "/tags", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 70 }),
+  defineRoute({ id: "menu-management-nutrition-data", parentId: "menu-management", zhTWLabel: "營養資料", internalName: "Nutrition Data", route: "/admin/restaurants/menu-management/nutrition-data", requiredPermissions: ["admin.restaurants.menu_management.nutrition_data.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 80 }),
+  defineRoute({ id: "menu-management-certification-status", parentId: "menu-management", zhTWLabel: "營養認證狀態", internalName: "Nutrition Certification Status", route: "/admin/restaurants/menu-management/certification-status", requiredPermissions: ["admin.restaurants.menu_management.certification_status.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS", "NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 90 }),
+
   defineRoute({ id: "restaurant-detail", parentId: "restaurants", zhTWLabel: "餐廳詳情", internalName: "Restaurant Detail", route: "/admin/restaurants/[restaurantId]", requiredPermissions: ["admin.restaurants.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "CONTEXTUAL", order: 30 }),
   defineRoute({ id: "restaurant-about", parentId: "restaurant-detail", zhTWLabel: "餐廳介紹", internalName: "Restaurant About", route: "/admin/restaurants/[restaurantId]/about", requiredPermissions: ["admin.restaurants.about.read"], availability: "NOT_ENABLED", dataClass: "PUBLIC", intendedStaffDomains: ["RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "CONTEXTUAL", order: 10 }),
   defineRoute({ id: "restaurant-contact", parentId: "restaurant-detail", zhTWLabel: "餐廳聯絡資料", internalName: "Restaurant Contact", route: "/admin/restaurants/[restaurantId]/contact", requiredPermissions: ["admin.restaurants.contact.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "CONTEXTUAL", order: 20 }),
@@ -283,19 +308,24 @@ export const ADMIN_ROUTE_REGISTRY = [
   defineRoute({ id: "social-reports", parentId: "social", zhTWLabel: "檢舉案件", internalName: "Social Reports", route: "/admin/social/reports", requiredPermissions: ["admin.social.reports.read"], availability: "NOT_ENABLED", dataClass: "PRIVATE_SOCIAL", intendedStaffDomains: ["SOCIAL_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 10 }),
   defineRoute({ id: "social-policies", parentId: "social", zhTWLabel: "社交安全政策", internalName: "Social Safety Policies", route: "/admin/social/policies", requiredPermissions: ["admin.social.policies.read"], availability: "DEMO", dataClass: "PUBLIC", intendedStaffDomains: ["SOCIAL_OPERATIONS", "AUDIT_SECURITY"], legacyRoutes: [{ route: "/tags", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 20 }),
 
-  defineRoute({ id: "nutrition", parentId: null, zhTWLabel: "營養與內容品質", internalName: "Nutrition and Content Quality", route: "/admin/nutrition", requiredPermissions: ["admin.nutrition.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/menu-review", semantics: "SPLIT" }, { route: "/exercise-governance", semantics: "DEFER" }], navigationVisibility: "ORDINARY", order: 60 }),
-  defineRoute({ id: "nutrition-review", parentId: "nutrition", zhTWLabel: "營養審查", internalName: "Nutrition Review", route: "/admin/nutrition/review", requiredPermissions: ["admin.nutrition.review.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [{ route: "/nutrition-review", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 10 }),
-  defineRoute({ id: "nutrition-identification-quality", parentId: "nutrition", zhTWLabel: "辨識品質", internalName: "Identification Quality", route: "/admin/nutrition/identification-quality", requiredPermissions: ["admin.nutrition.identification_quality.read"], availability: "DEMO", dataClass: "HEALTH_PERSONAL_NUTRITION", intendedStaffDomains: ["NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/identification-audit", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 20 }),
-  defineRoute({ id: "nutrition-self-cooked-quality", parentId: "nutrition", zhTWLabel: "自煮辨識品質", internalName: "Self-Cooked Quality", route: "/admin/nutrition/self-cooked-quality", requiredPermissions: ["admin.nutrition.self_cooked_quality.read"], availability: "DEMO", dataClass: "HEALTH_PERSONAL_NUTRITION", intendedStaffDomains: ["NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/self-cooked-audit", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 30 }),
-  defineRoute({ id: "nutrition-allergens", parentId: "nutrition", zhTWLabel: "過敏原", internalName: "Allergens", route: "/admin/nutrition/allergens", requiredPermissions: ["admin.nutrition.allergens.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 40 }),
-  defineRoute({ id: "nutrition-ingredients", parentId: "nutrition", zhTWLabel: "食材", internalName: "Ingredients", route: "/admin/nutrition/ingredients", requiredPermissions: ["admin.nutrition.ingredients.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "DATA_CONTENT_QUALITY"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 50 }),
+  defineRoute({ id: "nutrition", parentId: null, zhTWLabel: "營養專業管理", internalName: "Nutrition Professional Management", route: "/admin/nutrition", requiredPermissions: ["admin.nutrition.read"], availability: "DEMO", dataClass: "NUTRITION_GOVERNANCE", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [{ route: "/exercise-governance", semantics: "DEFER" }], navigationVisibility: "ORDINARY", order: 60 }),
 
-  defineRoute({ id: "data-quality", parentId: "nutrition", zhTWLabel: "資料與內容品質", internalName: "Data and Content Quality", route: "/admin/data-quality", requiredPermissions: ["admin.data_quality.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["DATA_CONTENT_QUALITY", "NUTRITION_OPERATIONS"], legacyRoutes: [{ route: "/data-quality", semantics: "ONE_TO_ONE" }, { route: "/menu-review", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 60 }),
-  defineRoute({ id: "data-quality-pending-items", parentId: "data-quality", zhTWLabel: "待處理菜單品項", internalName: "Pending Menu Items", route: "/admin/data-quality/menu-items/pending", requiredPermissions: ["admin.data_quality.pending_items.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["DATA_CONTENT_QUALITY", "RESTAURANT_OPERATIONS"], legacyRoutes: [{ route: "/pending-menu-items", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 10 }),
-  defineRoute({ id: "data-quality-duplicates", parentId: "data-quality", zhTWLabel: "重複菜單品項", internalName: "Duplicate Menu Items", route: "/admin/data-quality/menu-items/duplicates", requiredPermissions: ["admin.data_quality.duplicates.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/duplicate-menu-items", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 20 }),
-  defineRoute({ id: "data-quality-aliases", parentId: "data-quality", zhTWLabel: "別名審查", internalName: "Menu Item Aliases", route: "/admin/data-quality/menu-items/aliases", requiredPermissions: ["admin.data_quality.aliases.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/alias-review", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 30 }),
-  defineRoute({ id: "data-quality-recommendations", parentId: "data-quality", zhTWLabel: "推薦品質", internalName: "Recommendation Quality", route: "/admin/data-quality/recommendations", requiredPermissions: ["admin.data_quality.recommendations.read"], availability: "DEMO", dataClass: "AUDIT", intendedStaffDomains: ["DATA_CONTENT_QUALITY", "NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 40 }),
-  defineRoute({ id: "data-quality-tags", parentId: "data-quality", zhTWLabel: "內容標籤", internalName: "Content Tags", route: "/admin/data-quality/tags", requiredPermissions: ["admin.data_quality.tags.read"], availability: "DEMO", dataClass: "PUBLIC", intendedStaffDomains: ["DATA_CONTENT_QUALITY"], legacyRoutes: [{ route: "/tags", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 50 }),
+  defineRoute({ id: "nutrition-standards", parentId: "nutrition", zhTWLabel: "營養標準與評分", internalName: "Nutrition Standards and Scoring", route: "/admin/nutrition/standards", requiredPermissions: ["admin.nutrition.standards.read"], availability: "NOT_ENABLED", dataClass: "NUTRITION_GOVERNANCE", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 10 }),
+  defineRoute({ id: "nutrition-standards-scoring", parentId: "nutrition-standards", zhTWLabel: "營養評分依據", internalName: "Scoring Basis", route: "/admin/nutrition/standards/scoring", requiredPermissions: ["admin.nutrition.standards.scoring.read"], availability: "NOT_ENABLED", dataClass: "NUTRITION_GOVERNANCE", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 10 }),
+  defineRoute({ id: "nutrition-standards-recommendation", parentId: "nutrition-standards", zhTWLabel: "推薦判定規則", internalName: "Recommendation Criteria", route: "/admin/nutrition/standards/recommendation", requiredPermissions: ["admin.nutrition.standards.recommendation.read"], availability: "NOT_ENABLED", dataClass: "NUTRITION_GOVERNANCE", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 20 }),
+  defineRoute({ id: "nutrition-standards-parameters", parentId: "nutrition-standards", zhTWLabel: "重要營養參數", internalName: "Important Nutrition Parameters", route: "/admin/nutrition/standards/parameters", requiredPermissions: ["admin.nutrition.standards.parameters.read"], availability: "NOT_ENABLED", dataClass: "NUTRITION_GOVERNANCE", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 30 }),
+
+  defineRoute({ id: "nutrition-members", parentId: "nutrition", zhTWLabel: "會員營養管理", internalName: "Member Nutrition Management", route: "/admin/nutrition/members", requiredPermissions: ["admin.nutrition.members.read"], availability: "NOT_ENABLED", dataClass: "HEALTH_PERSONAL_NUTRITION", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 20 }),
+  defineRoute({ id: "nutrition-member-detail", parentId: "nutrition-members", zhTWLabel: "會員營養管理", internalName: "Member Nutrition Case Detail", route: "/admin/nutrition/members/[memberRef]", requiredPermissions: ["admin.nutrition.members.detail.read"], availability: "NOT_ENABLED", dataClass: "HEALTH_PERSONAL_NUTRITION", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [], navigationVisibility: "CONTEXTUAL", order: 10 }),
+
+  defineRoute({ id: "nutrition-certification", parentId: "nutrition", zhTWLabel: "餐廳營養認證", internalName: "Restaurant Nutrition Certification", route: "/admin/nutrition/certification", requiredPermissions: ["admin.nutrition.certification.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 30 }),
+  defineRoute({ id: "nutrition-certification-pending", parentId: "nutrition-certification", zhTWLabel: "待認證餐點", internalName: "Pending Certification", route: "/admin/nutrition/certification/pending", requiredPermissions: ["admin.nutrition.certification.pending.read"], availability: "DEMO", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "RESTAURANT_OPERATIONS"], legacyRoutes: [{ route: "/nutrition-review", semantics: "ONE_TO_ONE" }, { route: "/menu-review", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 10 }),
+  defineRoute({ id: "nutrition-certification-discrepancy", parentId: "nutrition-certification", zhTWLabel: "營養差距申報", internalName: "Nutrition Discrepancy Reports", route: "/admin/nutrition/certification/discrepancy-reports", requiredPermissions: ["admin.nutrition.certification.discrepancy_reports.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 20 }),
+  defineRoute({ id: "nutrition-certification-remote-review", parentId: "nutrition-certification", zhTWLabel: "遠端餐廳審核", internalName: "Remote Restaurant Review", route: "/admin/nutrition/certification/remote-review", requiredPermissions: ["admin.nutrition.certification.remote_review.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 30 }),
+  defineRoute({ id: "nutrition-certification-history", parentId: "nutrition-certification", zhTWLabel: "認證紀錄", internalName: "Certification History", route: "/admin/nutrition/certification/history", requiredPermissions: ["admin.nutrition.certification.history.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 40 }),
+  defineRoute({ id: "nutrition-certification-re-review", parentId: "nutrition-certification", zhTWLabel: "需重新審核", internalName: "Requires Re-Review", route: "/admin/nutrition/certification/re-review", requiredPermissions: ["admin.nutrition.certification.re_review.read"], availability: "NOT_ENABLED", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["NUTRITION_OPERATIONS", "RESTAURANT_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 50 }),
+
+  defineRoute({ id: "nutrition-self-cooked-quality", parentId: "nutrition", zhTWLabel: "自煮辨識品質", internalName: "Self-Cooked Estimation Quality", route: "/admin/nutrition/self-cooked-quality", requiredPermissions: ["admin.nutrition.self_cooked_quality.read"], availability: "DEMO", dataClass: "HEALTH_PERSONAL_NUTRITION", intendedStaffDomains: ["NUTRITION_OPERATIONS"], legacyRoutes: [{ route: "/self-cooked-audit", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 40 }),
 
   defineRoute({ id: "audit", parentId: null, zhTWLabel: "稽核與資安", internalName: "Audit and Security", route: "/admin/audit", requiredPermissions: ["admin_audit.read"], availability: "NOT_ENABLED", dataClass: "AUDIT", intendedStaffDomains: ["AUDIT_SECURITY"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 70 }),
   defineRoute({ id: "audit-platform-memberships", parentId: "audit", zhTWLabel: "平台管理員成員稽核", internalName: "Platform Admin Membership Audit", route: "/admin/audit/platform-memberships", requiredPermissions: ["admin_audit.read"], availability: "LIVE", dataClass: "AUDIT", intendedStaffDomains: ["AUDIT_SECURITY"], legacyRoutes: [{ route: "/audit-trail", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 10 }),
@@ -332,6 +362,68 @@ export const ADMIN_TOP_LEVEL_WORKSPACE_IDS = [
   "management",
   "engineering"
 ] as const satisfies readonly AdminRouteId[];
+
+/**
+ * Cross-workspace shortcuts. A shortcut is a typed pointer to an EXISTING
+ * canonical route ID -- it never defines a new route, never duplicates a
+ * page implementation, and never creates a second authority for the same
+ * feature. `targetRouteId` is typed as `AdminRouteId`, so a shortcut can only
+ * ever reference a route already declared in `ADMIN_ROUTE_REGISTRY`.
+ */
+export type AdminWorkspaceShortcut = Readonly<{
+  id: string;
+  sourceWorkspaceId: AdminRouteId;
+  targetRouteId: AdminRouteId;
+  label: string;
+  order: number;
+}>;
+
+export const ADMIN_WORKSPACE_SHORTCUTS: readonly AdminWorkspaceShortcut[] = [
+  { id: "nutrition-shortcut-menu-management", sourceWorkspaceId: "nutrition", targetRouteId: "menu-management", label: "菜單管理", order: 10 },
+  { id: "nutrition-shortcut-ingredients", sourceWorkspaceId: "nutrition", targetRouteId: "menu-management-ingredients", label: "食材", order: 20 },
+  { id: "nutrition-shortcut-allergens", sourceWorkspaceId: "nutrition", targetRouteId: "menu-management-allergens", label: "過敏原", order: 30 },
+  { id: "nutrition-shortcut-data-quality", sourceWorkspaceId: "nutrition", targetRouteId: "menu-management-data-quality", label: "菜單資料品質", order: 40 },
+  { id: "nutrition-shortcut-nutrition-data", sourceWorkspaceId: "nutrition", targetRouteId: "menu-management-nutrition-data", label: "營養資料", order: 50 },
+  { id: "nutrition-shortcut-certification-status", sourceWorkspaceId: "nutrition", targetRouteId: "menu-management-certification-status", label: "營養認證狀態", order: 60 }
+];
+
+export const MENU_IDENTIFICATION_VS_NUTRITION_ESTIMATION_BOUNDARY = {
+  menuItemIdentificationAndAliasQuality: "Restaurant/menu-item identity and alias quality is menu content, owned by Restaurant Operations -> Menu Management (aliases/identification).",
+  selfCookedEstimationQuality: "Self-cooked meal identification and nutrition-estimation quality concerns professional nutrition-estimation accuracy, not restaurant menu content; it remains under Nutrition Professional Management.",
+  rationale: "Similar naming ('identification quality' vs 'self-cooked quality') does not imply shared ownership. Ownership follows subject matter, not label similarity."
+} as const;
+
+export const FUTURE_MEMBER_NUTRITION_FIELD_ADJUSTMENT_PRINCIPLES = {
+  requiresExplicitMemberConsent: true,
+  requiresAssignedAuthorizedNutritionist: true,
+  editableFieldsAreFixedAllowlist: true,
+  noGenericProfileEditor: true,
+  recordsOldAndNewValue: true,
+  recordsReason: true,
+  recordsNutritionistIdentity: true,
+  recordsTimestamp: true,
+  usesVersionOrCasWhereApplicable: true,
+  writesArePrivatelyAudited: true,
+  accessIsRevocable: true
+} as const;
+
+export const NUTRITION_CERTIFICATION_QUEUE_SEMANTICS = {
+  dishExistenceAloneDoesNotImplyReview: true,
+  entryTriggers: [
+    "restaurant requests professional nutrition certification",
+    "platform policy requires professional certification for a specific case",
+    "a user/report indicates the system-recommended dish nutrition value may differ materially from expected reality",
+    "an already-certified dish changes in a way requiring re-review"
+  ],
+  futureGovernedOutcomes: ["approve", "correct", "request more information", "require recalculation", "require re-review"],
+  implementedInThisPhase: "workspace/placeholder semantics only; no certification mutation authority exists"
+} as const;
+
+export const REMOTE_RESTAURANT_REVIEW_BOUNDARY = {
+  canonicalRoute: "/admin/nutrition/certification/remote-review",
+  description: "Future professional Restaurant-Nutritionist remote review workflow.",
+  notImplemented: ["video calling", "chat", "real-time collaboration", "restaurant access", "nutrition writes", "certification mutation"]
+} as const;
 
 export const RESTAURANT_VERIFICATION_BOUNDARY = {
   means: ["restaurant identity", "operator legitimacy"],
@@ -461,6 +553,29 @@ export function validateAdminIaRegistry(): readonly string[] {
       if (legacy.semantics !== "ONE_TO_ONE") continue;
       if (oneToOneLegacyRoutes.has(legacy.route)) errors.push(`duplicate one-to-one legacy route: ${legacy.route}`);
       oneToOneLegacyRoutes.add(legacy.route);
+    }
+  }
+
+  const shortcutIds = new Set<string>();
+  const shortcutOrdersBySource = new Map<string, number[]>();
+  for (const shortcut of ADMIN_WORKSPACE_SHORTCUTS) {
+    if (shortcutIds.has(shortcut.id)) errors.push(`duplicate shortcut id: ${shortcut.id}`);
+    shortcutIds.add(shortcut.id);
+    if (!ids.has(shortcut.sourceWorkspaceId)) errors.push(`shortcut source route missing: ${shortcut.id}`);
+    if (!ids.has(shortcut.targetRouteId)) errors.push(`shortcut target route missing: ${shortcut.id}`);
+    if (shortcut.targetRouteId === shortcut.sourceWorkspaceId) errors.push(`shortcut self-cycle: ${shortcut.id}`);
+    let ancestor: AdminRouteDefinition | undefined = routeById.get(shortcut.targetRouteId);
+    while (ancestor && ancestor.parentId !== null) ancestor = routeById.get(ancestor.parentId);
+    if (ancestor && ancestor.id === shortcut.sourceWorkspaceId) {
+      errors.push(`shortcut does not cross workspaces (target already under source): ${shortcut.id}`);
+    }
+    const orders = shortcutOrdersBySource.get(shortcut.sourceWorkspaceId) ?? [];
+    orders.push(shortcut.order);
+    shortcutOrdersBySource.set(shortcut.sourceWorkspaceId, orders);
+  }
+  for (const [sourceWorkspaceId, orders] of shortcutOrdersBySource) {
+    if (!orders.every((order, index) => index === 0 || order > orders[index - 1]!)) {
+      errors.push(`shortcut ordering is not deterministic for source: ${sourceWorkspaceId}`);
     }
   }
 

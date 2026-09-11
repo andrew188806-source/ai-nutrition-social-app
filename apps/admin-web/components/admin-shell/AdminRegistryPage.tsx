@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ADMIN_ROUTE_REGISTRY,
   ADMIN_TOP_LEVEL_WORKSPACE_IDS,
+  ADMIN_WORKSPACE_SHORTCUTS,
   ENGINEERING_WORKSPACE_BOUNDARY,
   type AdminAvailability,
   type AdminRouteId
@@ -11,14 +12,22 @@ import { getAdminDescendants, getAdminRoute } from "./admin-ia-navigation";
 import { AdminRoutePlaceholder } from "./AdminRoutePlaceholder";
 import { AdminWorkspaceHeader } from "./AdminWorkspaceHeader";
 
+// RA-3-IA-P2-R1: multi-child hub pages that need the full workspace-landing
+// layout (status counts + child module grid) even though they are not
+// themselves one of the nine top-level workspaces.
+const NESTED_HUB_ROUTE_IDS: readonly AdminRouteId[] = ["menu-management", "nutrition-standards", "nutrition-members", "nutrition-certification"];
+
 const descriptions: Readonly<Record<string, string>> = {
   dashboard: "管理後台的工作區目錄與接入狀態；本頁不呈現虛構營運指標。",
   operations: "廣告、贊助內容與平台層級營運工作的預定位置。",
-  restaurants: "餐廳驗證、審查、菜單、分店與營運資料的工作區。",
+  restaurants: "餐廳驗證、審查、菜單管理、分店與營運資料的工作區。",
+  "menu-management": "跨餐廳的菜單與餐點內容治理：新增、重複、別名／辨識、食材、過敏原與資料品質。",
   members: "以支援案件為界，只提供處理案件所需的最小會員資訊。",
   social: "以檢舉與安全案件為界，只提供處理案件所需的範圍資料。",
-  nutrition: "營養審查、辨識品質與內容治理的獨立工作區。",
-  "data-quality": "菜單品項、別名、重複資料、推薦與標籤品質的工作區。",
+  nutrition: "營養師的專業工作台：營養標準與評分、會員營養管理與餐廳營養認證。",
+  "nutrition-standards": "營養評分依據、推薦判定規則與重要營養參數的治理設定；本階段僅為唯讀預覽，尚無可編輯設定。",
+  "nutrition-members": "經會員明確同意授權後，Nutritionist 才能存取的會員營養管理工作區。",
+  "nutrition-certification": "餐廳菜點的專業營養認證與遠端 Restaurant／Nutritionist 審核工作區。",
   audit: "例行稽核與未來資安管理的分層入口。",
   management: "角色、權限與平台設定的預定位置；目前尚無 UI 管理權限。",
   engineering: "系統健康、版本、工作佇列與安全化診斷的獨立工程工作區。"
@@ -27,7 +36,13 @@ const descriptions: Readonly<Record<string, string>> = {
 const boundaryCopy: Readonly<Record<string, string>> = {
   "restaurant-verification": "店家驗證只代表店家身分／經營權確認，不代表營養認證、品質推薦、食安認證或過敏原認證。",
   "restaurant-about": "Restaurant About 是店家提供的介紹文字，不是平台營養認證。",
+  "menu-management": "菜單管理是餐廳營運的 canonical 功能；Nutritionist 於專業審核時可透過快速連結參考這裡的資料，但不會另外複製一份。",
   nutrition: "營養認證屬於獨立治理資訊；Nutritionist 的個人資料諮詢權限仍是未來、目的限定且需同意的權限。",
+  "nutrition-standards": "未來調整營養評分、推薦判定或重要參數皆須透過允許清單欄位、版本紀錄、稽核與有限的專業權限；本頁不提供任何可編輯設定，也不會直接開放推薦引擎設定或任意資料庫編輯。",
+  "nutrition-members": "僅會員明確同意並指派給特定 Nutritionist 後，該會員才會出現在此清單；可調整欄位為固定允許清單，異動會記錄新舊值、原因、操作者與時間並可隨時撤銷存取，本頁不是全會員瀏覽器或健康資料搜尋工具。",
+  "nutrition-certification": "餐點不會僅因存在就進入專業審查佇列；本階段僅代表工作區位置，未建立任何認證權限或資料寫入。",
+  "nutrition-certification-remote-review": "遠端 Restaurant／Nutritionist 審核為未來工作流程；本階段不包含視訊、即時通訊、餐廳存取權限或任何營養資料寫入／認證異動。",
+  "nutrition-self-cooked-quality": "自煮辨識品質屬於專業營養估算準確度，不是餐廳菜單內容，因此保留在營養專業管理，而非餐廳營運的菜單管理；與「別名／辨識」等菜單身分品質是不同性質的工作。",
   members: "未來僅提供案件所需的最小資訊，不提供任意瀏覽會員或健康資料。",
   social: "未來僅提供檢舉／案件所需的範圍資料，不提供任意瀏覽聊天、精確位置或推播 token。",
   engineering: `工程診斷不代表可存取使用者私密內容。初始範圍僅限：${ENGINEERING_WORKSPACE_BOUNDARY.safeInitialAreas.join("、")}。`,
@@ -85,7 +100,36 @@ function WorkspaceLanding({ routeId }: { routeId: AdminRouteId }) {
           })}
         </div>
       </section>
+      <WorkspaceShortcuts sourceWorkspaceId={routeId} />
     </article>
+  );
+}
+
+function WorkspaceShortcuts({ sourceWorkspaceId }: { sourceWorkspaceId: AdminRouteId }) {
+  const shortcuts = ADMIN_WORKSPACE_SHORTCUTS
+    .filter((shortcut) => shortcut.sourceWorkspaceId === sourceWorkspaceId)
+    .slice()
+    .sort((left, right) => left.order - right.order);
+  if (shortcuts.length === 0) return null;
+  return (
+    <section aria-labelledby="workspace-shortcuts" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-lg font-bold text-slate-950" id="workspace-shortcuts">相關菜單資料快速連結</h2>
+      <p className="mt-1 text-xs text-slate-500">這些連結指向餐廳營運的 canonical 功能，供專業審查時參考；不會另外建立第二份資料或權限。</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {shortcuts.map((shortcut) => {
+          const target = getAdminRoute(shortcut.targetRouteId);
+          return (
+            <Link className="rounded-lg border border-slate-200 p-4 hover:border-sky-300 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500" href={target.route} key={shortcut.id}>
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="font-bold text-slate-900">{shortcut.label}</h3>
+                <AdminAvailabilityBadge availability={target.availability} />
+              </div>
+              <p className="mt-2 text-xs text-slate-500">{target.internalName}</p>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -116,14 +160,18 @@ function Dashboard() {
 
 export function AdminRegistryPage({ routeId }: { routeId: AdminRouteId }) {
   if (routeId === "dashboard") return <Dashboard />;
-  if (ADMIN_TOP_LEVEL_WORKSPACE_IDS.includes(routeId as typeof ADMIN_TOP_LEVEL_WORKSPACE_IDS[number]) || routeId === "data-quality") {
+  if (ADMIN_TOP_LEVEL_WORKSPACE_IDS.includes(routeId as typeof ADMIN_TOP_LEVEL_WORKSPACE_IDS[number]) || NESTED_HUB_ROUTE_IDS.includes(routeId)) {
     return <WorkspaceLanding routeId={routeId} />;
   }
   const entry = getAdminRoute(routeId);
   const ancestorBoundary = routeId.startsWith("member-") ? boundaryCopy.members
     : routeId.startsWith("social-") ? boundaryCopy.social
-      : routeId.startsWith("nutrition-") ? boundaryCopy.nutrition
-        : undefined;
+      : routeId.startsWith("menu-management-") ? boundaryCopy["menu-management"]
+        : routeId.startsWith("nutrition-standards-") ? boundaryCopy["nutrition-standards"]
+          : routeId === "nutrition-member-detail" ? boundaryCopy["nutrition-members"]
+            : routeId.startsWith("nutrition-certification-") ? boundaryCopy["nutrition-certification"]
+              : routeId.startsWith("nutrition-") ? boundaryCopy.nutrition
+                : undefined;
   return (
     <article className="space-y-5">
       <AdminWorkspaceHeader description={`${entry.zhTWLabel}的 canonical 工作位置。`} entry={entry} />

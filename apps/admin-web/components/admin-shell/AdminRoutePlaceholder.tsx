@@ -11,7 +11,8 @@ const dataClassLabels: Readonly<Record<string, string>> = {
   PUBLIC: "公開資料", RESTAURANT_OPERATIONAL: "餐廳營運資料", RESTAURANT_PRIVATE: "餐廳私密資料",
   MEMBER_ACCOUNT: "會員帳戶資料", USER_PRIVATE: "使用者私密資料", HEALTH_PERSONAL_NUTRITION: "健康／個人營養資料",
   PRIVATE_SOCIAL: "私密社交資料", SECURITY_AUTH: "資安／身分驗證資料", AUDIT: "稽核資料",
-  ENGINEERING_DIAGNOSTIC: "工程診斷資料", BREAK_GLASS_ONLY: "僅限緊急權限資料"
+  ENGINEERING_DIAGNOSTIC: "工程診斷資料", BREAK_GLASS_ONLY: "僅限緊急權限資料",
+  NUTRITION_GOVERNANCE: "營養治理設定資料"
 };
 
 const migrationCopy: Readonly<Record<AdminRouteDefinition["availability"], string>> = {

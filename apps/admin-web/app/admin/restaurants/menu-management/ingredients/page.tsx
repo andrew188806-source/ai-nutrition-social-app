@@ -1,3 +1,2 @@
 import { createAdminRegistryPage } from "apps/admin-web/components/admin-shell/AdminRegistryPage";
-export default createAdminRegistryPage("nutrition-allergens");
-
+export default createAdminRegistryPage("menu-management-ingredients");

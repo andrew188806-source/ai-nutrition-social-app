@@ -7,9 +7,11 @@ import ts from "typescript";
 
 const P1_HEAD = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const ORIGIN_BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
+const P2_HEAD = "981f3ec4976394f1254834cc5188566d1415c000";
 const P2_SUBJECT = "Build canonical Admin workspace shell";
-const EXPECTED_REGISTRY_ROUTES = 57;
-const EXPECTED_PHYSICAL_PAGES = 56;
+const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
+const EXPECTED_REGISTRY_ROUTES = 69;
+const EXPECTED_PHYSICAL_PAGES = 68;
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -60,18 +62,22 @@ const [behind, ahead] = git("rev-list", "--left-right", "--count", "origin/main.
 const untracked = lines(git("ls-files", "--others", "--exclude-standard"));
 const changed = [...new Set([...lines(git("diff", "--name-only", P1_HEAD)), ...untracked])].sort();
 const candidate = head === P1_HEAD && origin === ORIGIN_BASELINE && ahead === 1 && behind === 0;
-const frozen = head !== P1_HEAD && git("rev-parse", "HEAD^") === P1_HEAD && origin === ORIGIN_BASELINE
+const frozen = head === P2_HEAD && git("rev-parse", "HEAD^") === P1_HEAD && origin === ORIGIN_BASELINE
   && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P2_SUBJECT && git("status", "--short") === "";
+const r1Candidate = head === P2_HEAD && origin === ORIGIN_BASELINE && ahead === 2 && behind === 0;
+const r1Frozen = head !== P2_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && origin === ORIGIN_BASELINE
+  && ahead === 3 && behind === 0 && git("log", "-1", "--format=%s") === P2_R1_SUBJECT && git("status", "--short") === "";
 
 const allowedP2Path = (file) =>
   file === "apps/admin-web/auth/admin-route-registry.ts"
   || file === "scripts/admin-ia-p1-guard.mjs"
   || file === "scripts/admin-ia-p2-guard.mjs"
+  || file === "scripts/admin-ia-p2-r1-guard.mjs"
   || file === "package.json"
   || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
 
-check("lifecycle is exactly the P2 candidate or one clean local P2 freeze", candidate || frozen, { head, origin, ahead, behind });
+check("lifecycle is exactly the P2 candidate/freeze or its bounded P2-R1 successor", candidate || frozen || r1Candidate || r1Frozen, { head, origin, ahead, behind });
 check("the P1 registry remains the single canonical route and authority metadata source",
   read("apps/admin-web/components/admin-shell/admin-ia-navigation.ts").includes("../../auth/admin-route-registry")
     && !exists("apps/admin-web/components/admin-shell/admin-route-registry.ts"));
@@ -80,9 +86,9 @@ check(`the registry contains the actual final count of ${EXPECTED_REGISTRY_ROUTE
   ia.ADMIN_ROUTE_REGISTRY.length === EXPECTED_REGISTRY_ROUTES, ia.ADMIN_ROUTE_REGISTRY.length);
 check("the canonical /admin root physically exists", exists("apps/admin-web/app/admin/page.tsx") && exists("apps/admin-web/app/admin/layout.tsx"));
 
-const topLevelPages = ["operations", "restaurants", "members", "social", "nutrition", "data-quality", "audit", "management", "engineering"]
+const topLevelPages = ["operations", "restaurants", "members", "social", "nutrition", "audit", "management", "engineering"]
   .map((segment) => `apps/admin-web/app/admin/${segment}/page.tsx`);
-check("all nine ordinary workspace page locations physically exist", topLevelPages.every(exists), topLevelPages.filter((file) => !exists(file)));
+check("all eight non-dashboard top-level workspace page locations physically exist", topLevelPages.every(exists), topLevelPages.filter((file) => !exists(file)));
 check("Engineering is physically present and structurally separate", exists("apps/admin-web/app/admin/engineering/page.tsx")
   && read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes('node.id === "engineering"'));
 check("Break-glass has no page implementation", !exists("apps/admin-web/app/admin/break-glass/page.tsx"));
@@ -177,10 +183,15 @@ check("no database or migration path changed", changed.every((file) => !file.sta
 
 const pkg = JSON.parse(read("package.json"));
 const p1Pkg = JSON.parse(git("show", `${P1_HEAD}:package.json`));
-const expectedPkg = { ...p1Pkg, scripts: { ...p1Pkg.scripts, "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs" } };
+const expectedScripts = {
+  ...p1Pkg.scripts,
+  "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs",
+  ...((r1Candidate || r1Frozen) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {})
+};
+const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
 let packageMatches = true;
 try { assert.deepEqual(pkg, expectedPkg); } catch { packageMatches = false; }
-check("package.json adds only the P2 guard command with no dependency or lockfile churn",
+check("package.json adds only the P2/P2-R1 guard commands with no dependency or lockfile churn",
   packageMatches && changed.every((file) => !/lock/i.test(file)));
 
 const adminSources = [...walk("apps/admin-web/app/admin"), ...walk("apps/admin-web/components/admin-shell")]
@@ -196,7 +207,8 @@ check("the scaffold uses registry status counts and adds no fake business metric
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p2-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local"
+    : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   expectedPhysicalPages: EXPECTED_PHYSICAL_PAGES,

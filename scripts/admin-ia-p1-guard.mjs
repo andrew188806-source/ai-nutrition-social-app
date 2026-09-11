@@ -8,8 +8,10 @@ import ts from "typescript";
 const BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
 const P1_FREEZE = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const SUBJECT = "Define canonical Admin information architecture";
+const P2_HEAD = "981f3ec4976394f1254834cc5188566d1415c000";
 const P2_SUBJECT = "Build canonical Admin workspace shell";
-const EXPECTED_ROUTE_COUNT = 57;
+const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
+const EXPECTED_ROUTE_COUNT = 69;
 const ALLOWED_PATHS = [
   "apps/admin-web/auth/admin-route-registry.ts",
   "docs/admin-information-architecture-ra-3-ia-p1.md",
@@ -68,13 +70,17 @@ const frozen = head === P1_FREEZE && git("rev-parse", "HEAD^") === BASELINE && o
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === SUBJECT
   && git("status", "--short") === "";
 const successorCandidate = head === P1_FREEZE && origin === BASELINE && ahead === 1 && behind === 0;
-const successorFrozen = head !== P1_FREEZE && git("rev-parse", "HEAD^") === P1_FREEZE && origin === BASELINE
+const successorFrozen = head === P2_HEAD && git("rev-parse", "HEAD^") === P1_FREEZE && origin === BASELINE
   && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P2_SUBJECT
   && git("status", "--short") === "";
-const successor = successorCandidate || successorFrozen;
+const r1Candidate = head === P2_HEAD && origin === BASELINE && ahead === 2 && behind === 0;
+const r1Frozen = head !== P2_HEAD && git("rev-parse", "HEAD^") === P2_HEAD && origin === BASELINE
+  && ahead === 3 && behind === 0 && git("log", "-1", "--format=%s") === P2_R1_SUBJECT
+  && git("status", "--short") === "";
+const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen;
 const changed = successor ? changedFromP1 : changedFromBaseline;
 
-check("lifecycle is the P1 candidate/freeze or its bounded P2 successor", candidate || frozen || successor,
+check("lifecycle is the P1 candidate/freeze or its bounded P2/P2-R1 successor", candidate || frozen || successor,
   { head, origin, ahead, behind });
 check("the frozen IA-P1 commit is exactly the four approved paths",
   JSON.stringify(p1FreezePaths) === JSON.stringify(ALLOWED_PATHS), { expected: ALLOWED_PATHS, actual: p1FreezePaths });
@@ -153,7 +159,13 @@ if (transpileErrors.length === 0) {
 
   const approvedRoutes = [
     "/admin", "/admin/operations", "/admin/operations/ads", "/admin/operations/sponsored",
-    "/admin/restaurants", "/admin/restaurants/verification", "/admin/restaurants/reviews", "/admin/restaurants/[restaurantId]",
+    "/admin/restaurants", "/admin/restaurants/verification", "/admin/restaurants/reviews",
+    "/admin/restaurants/menu-management", "/admin/restaurants/menu-management/items", "/admin/restaurants/menu-management/pending",
+    "/admin/restaurants/menu-management/duplicates", "/admin/restaurants/menu-management/aliases",
+    "/admin/restaurants/menu-management/ingredients", "/admin/restaurants/menu-management/allergens",
+    "/admin/restaurants/menu-management/data-quality", "/admin/restaurants/menu-management/nutrition-data",
+    "/admin/restaurants/menu-management/certification-status",
+    "/admin/restaurants/[restaurantId]",
     "/admin/restaurants/[restaurantId]/about", "/admin/restaurants/[restaurantId]/contact", "/admin/restaurants/[restaurantId]/menus",
     "/admin/restaurants/[restaurantId]/menus/[menuId]/items",
     "/admin/restaurants/[restaurantId]/branches", "/admin/restaurants/[restaurantId]/branches/[branchId]/status",
@@ -162,10 +174,13 @@ if (transpileErrors.length === 0) {
     "/admin/restaurants/[restaurantId]/branches/[branchId]/geo", "/admin/restaurants/[restaurantId]/branches/[branchId]/menu-items",
     "/admin/members", "/admin/members/cases", "/admin/members/[memberRef]", "/admin/members/[memberRef]/consents",
     "/admin/members/[memberRef]/access-history", "/admin/social", "/admin/social/reports", "/admin/social/policies",
-    "/admin/nutrition", "/admin/nutrition/review", "/admin/nutrition/identification-quality", "/admin/nutrition/self-cooked-quality",
-    "/admin/nutrition/allergens", "/admin/nutrition/ingredients", "/admin/data-quality",
-    "/admin/data-quality/menu-items/pending", "/admin/data-quality/menu-items/duplicates", "/admin/data-quality/menu-items/aliases",
-    "/admin/data-quality/recommendations", "/admin/data-quality/tags", "/admin/audit", "/admin/audit/platform-memberships",
+    "/admin/nutrition", "/admin/nutrition/self-cooked-quality",
+    "/admin/nutrition/standards", "/admin/nutrition/standards/scoring", "/admin/nutrition/standards/recommendation",
+    "/admin/nutrition/standards/parameters",
+    "/admin/nutrition/members", "/admin/nutrition/members/[memberRef]",
+    "/admin/nutrition/certification", "/admin/nutrition/certification/pending", "/admin/nutrition/certification/discrepancy-reports",
+    "/admin/nutrition/certification/remote-review", "/admin/nutrition/certification/history", "/admin/nutrition/certification/re-review",
+    "/admin/audit", "/admin/audit/platform-memberships",
     "/admin/audit/operations", "/admin/audit/data-access", "/admin/management", "/admin/management/roles",
     "/admin/management/permissions", "/admin/management/settings", "/admin/engineering", "/admin/engineering/health",
     "/admin/engineering/versions", "/admin/engineering/jobs", "/admin/engineering/push", "/admin/engineering/geo",
@@ -180,9 +195,10 @@ check("old Platform Admin API sources remain byte-equivalent to the baseline",
   API_PATHS.every((file) => read(file).trimEnd() === git("show", `${BASELINE}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 const p2SuccessorPath = (file) => file === "apps/admin-web/auth/admin-route-registry.ts"
   || file === "scripts/admin-ia-p1-guard.mjs" || file === "scripts/admin-ia-p2-guard.mjs"
+  || file === "scripts/admin-ia-p2-r1-guard.mjs"
   || file === "package.json" || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
-check("P1 authority remains bounded and its P2 successor changes only presentation paths",
+check("P1 authority remains bounded and its P2/P2-R1 successors change only presentation paths",
   (successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
     && changed.every((file) => !/^supabase\//.test(file))
     && !changed.includes("apps/admin-web/components/AdminShell.tsx")
@@ -193,7 +209,8 @@ const baselinePkg = JSON.parse(git("show", `${BASELINE}:package.json`));
 const expectedScripts = {
   ...baselinePkg.scripts,
   "test:admin-ia-p1": "node scripts/admin-ia-p1-guard.mjs",
-  ...(successor ? { "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs" } : {})
+  ...(successor ? { "test:admin-ia-p2": "node scripts/admin-ia-p2-guard.mjs" } : {}),
+  ...((r1Candidate || r1Frozen) ? { "test:admin-ia-p2-r1": "node scripts/admin-ia-p2-r1-guard.mjs" } : {})
 };
 const expectedPkg = { ...baselinePkg, scripts: expectedScripts };
 let packageMatches = true;
@@ -211,7 +228,9 @@ check("the canonical document records all required authority separations",
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p1-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : successorCandidate ? "p2_candidate" : successorFrozen ? "p2_frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local"
+    : successorCandidate ? "p2_candidate" : successorFrozen ? "p2_frozen_local"
+      : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local" : "invalid",
   expectedRouteCount: EXPECTED_ROUTE_COUNT,
   actualRouteCount: ia.ADMIN_ROUTE_REGISTRY?.length ?? 0,
   total: checks.length,

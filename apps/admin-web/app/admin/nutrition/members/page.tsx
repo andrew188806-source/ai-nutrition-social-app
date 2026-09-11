@@ -1,3 +1,2 @@
 import { createAdminRegistryPage } from "apps/admin-web/components/admin-shell/AdminRegistryPage";
-export default createAdminRegistryPage("data-quality-recommendations");
-
+export default createAdminRegistryPage("nutrition-members");
