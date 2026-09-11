@@ -1,3 +1,11 @@
+import {
+  CURRENT_ADMIN_PERMISSION_KEYS,
+  type CurrentAdminPermissionKey
+} from "./admin-current-permission-vocabulary";
+
+export { CURRENT_ADMIN_PERMISSION_KEYS };
+export type { CurrentAdminPermissionKey };
+
 /**
  * Canonical Admin information architecture for RA-3-IA-P1.
  *
@@ -268,12 +276,6 @@ export const ADMIN_PERMISSION_REGISTRY = [
 ] as const satisfies readonly AdminPermissionDefinition[];
 
 export type AdminPermissionKey = (typeof ADMIN_PERMISSION_REGISTRY)[number]["key"];
-
-export const CURRENT_ADMIN_PERMISSION_KEYS = [
-  "admin_context.read",
-  "admin_audit.read",
-  "admin_restaurant_branch.status.write"
-] as const satisfies readonly AdminPermissionKey[];
 
 export const PLANNED_ADMIN_PERMISSION_KEYS = ADMIN_PERMISSION_REGISTRY
   .filter((permission) => permission.status === "PLANNED")

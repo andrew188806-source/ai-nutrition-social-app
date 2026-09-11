@@ -20,7 +20,11 @@ function executeTypeScript(file, requireModule = () => { throw new Error(`Unexpe
 }
 
 const gate = executeTypeScript("apps/admin-web/auth/admin-session-gate.ts");
-const ia = executeTypeScript("apps/admin-web/auth/admin-route-registry.ts");
+const permissionVocabulary = executeTypeScript("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
+const ia = executeTypeScript("apps/admin-web/auth/admin-route-registry.ts", (request) => {
+  if (request === "./admin-current-permission-vocabulary") return permissionVocabulary;
+  throw new Error(`Unexpected registry import: ${request}`);
+});
 const navigation = executeTypeScript(
   "apps/admin-web/components/admin-shell/admin-ia-navigation.ts",
   (request) => {

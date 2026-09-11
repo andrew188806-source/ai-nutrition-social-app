@@ -11,6 +11,8 @@ const ORIGIN_BASELINE = "500c122a5cfcd806e5d253731033f65727fdc4c0";
 const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
 const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
 const P3_P1_SUBJECT = "Add Admin browser session gate";
+const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
+const P3_P2_SUBJECT = "Resolve current Admin permissions";
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -48,7 +50,11 @@ function executeTypeScript(file, requireModule = () => { throw new Error(`Unexpe
   return module.exports;
 }
 
-const ia = executeTypeScript("apps/admin-web/auth/admin-route-registry.ts");
+const permissionVocabulary = executeTypeScript("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
+const ia = executeTypeScript("apps/admin-web/auth/admin-route-registry.ts", (request) => {
+  if (request === "./admin-current-permission-vocabulary") return permissionVocabulary;
+  throw new Error(`Unexpected registry import: ${request}`);
+});
 const registryPage = read("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx");
 const routeById = new Map(ia.ADMIN_ROUTE_REGISTRY.map((route) => [route.id, route]));
 const rootWorkspaceOf = (routeId) => {
@@ -68,7 +74,11 @@ const frozen = head !== R1_HEAD && git("rev-parse", "HEAD^") === R1_HEAD && orig
 const p3Candidate = head === P2_R2_HEAD && origin === P2_R2_HEAD && ahead === 0 && behind === 0;
 const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD && origin === P2_R2_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P1_SUBJECT && git("status", "--short") === "";
-const p3Phase = p3Candidate || p3Frozen;
+const p3Pushed = head === P3_P1_HEAD && origin === P3_P1_HEAD && ahead === 0 && behind === 0;
+const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HEAD && origin === P3_P1_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P2_SUBJECT && git("status", "--short") === "";
+const p3P2Phase = p3Pushed || p3P2Frozen;
+const p3Phase = p3Candidate || p3Frozen || p3P2Phase;
 
 check("lifecycle is exactly the P2-R2 candidate/freeze or its bounded P3-P1 successor",
   candidate || frozen || p3Phase, { head, origin, ahead, behind });
@@ -322,7 +332,8 @@ const allowedR2Path = (file) =>
 const allowedP3Path = (file) => allowedR2Path(file)
   || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
   || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
-  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs";
+  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
+  || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs";
 check("the bounded P2-R2 diff contains only approved successor paths",
   changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
   changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
@@ -336,6 +347,10 @@ const expectedScripts = {
   ...(p3Phase ? {
     "test:admin-session-p3-p1": "node scripts/admin-session-p3-p1-guard.mjs",
     "test:admin-session-p3-p1-smoke": "node scripts/admin-session-p3-p1-smoke.mjs"
+  } : {}),
+  ...(p3P2Phase ? {
+    "test:admin-current-permissions-p3-p2": "node scripts/admin-current-permissions-p3-p2-guard.mjs",
+    "test:admin-current-permissions-p3-p2-smoke": "node scripts/admin-current-permissions-p3-p2-smoke.mjs"
   } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
@@ -347,7 +362,8 @@ const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-ia-p2-r2-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local"
-    : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local" : "invalid",
+    : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local"
+      : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

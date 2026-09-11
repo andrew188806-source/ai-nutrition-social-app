@@ -15,6 +15,8 @@ const P2_R1_SUBJECT = "Realign Admin nutrition and menu workspaces";
 const P2_R2_SUBJECT = "Realign Admin sales marketing restaurant and nutrition workspaces";
 const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
 const P3_P1_SUBJECT = "Add Admin browser session gate";
+const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
+const P3_P2_SUBJECT = "Resolve current Admin permissions";
 const EXPECTED_ROUTE_COUNT = 95;
 const ALLOWED_PATHS = [
   "apps/admin-web/auth/admin-route-registry.ts",
@@ -44,6 +46,16 @@ const check = (name, pass, detail) => {
   if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1000)}`);
 };
 
+const vocabularySource = read("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
+const vocabularyTranspiled = ts.transpileModule(vocabularySource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+  fileName: "admin-current-permission-vocabulary.ts",
+  reportDiagnostics: true
+});
+const vocabularyModule = { exports: {} };
+new Function("exports", "module", "require", vocabularyTranspiled.outputText)(
+  vocabularyModule.exports, vocabularyModule, () => { throw new Error("The permission vocabulary must have no runtime imports."); }
+);
 const source = read("apps/admin-web/auth/admin-route-registry.ts");
 const transpiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -58,7 +70,10 @@ const transpileErrors = (transpiled.diagnostics ?? []).filter((diagnostic) => di
 const module = { exports: {} };
 if (transpileErrors.length === 0) {
   const execute = new Function("exports", "module", "require", transpiled.outputText);
-  execute(module.exports, module, () => { throw new Error("The IA registry must have no runtime imports."); });
+  execute(module.exports, module, (request) => {
+    if (request === "./admin-current-permission-vocabulary") return vocabularyModule.exports;
+    throw new Error(`Unexpected IA registry import: ${request}`);
+  });
 }
 const ia = module.exports;
 
@@ -89,7 +104,11 @@ const p3Candidate = head === P2_R2_HEAD && origin === P2_R2_HEAD && ahead === 0 
 const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD && origin === P2_R2_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P1_SUBJECT
   && git("status", "--short") === "";
-const p3Phase = p3Candidate || p3Frozen;
+const p3Pushed = head === P3_P1_HEAD && origin === P3_P1_HEAD && ahead === 0 && behind === 0;
+const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HEAD && origin === P3_P1_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P2_SUBJECT && git("status", "--short") === "";
+const p3P2Phase = p3Pushed || p3P2Frozen;
+const p3Phase = p3Candidate || p3Frozen || p3P2Phase;
 const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen || p3Phase;
 const changed = successor ? changedFromP1 : changedFromBaseline;
 
@@ -225,7 +244,8 @@ const p2SuccessorPath = (file) => file === "apps/admin-web/auth/admin-route-regi
 const p3SuccessorPath = (file) => p2SuccessorPath(file)
   || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
   || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
-  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs";
+  || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
+  || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs";
 check("P1 authority remains bounded through its exact P3-P1 successor",
   (p3Phase ? changed.every(p3SuccessorPath)
     : successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
@@ -244,6 +264,10 @@ const expectedScripts = {
   ...(p3Phase ? {
     "test:admin-session-p3-p1": "node scripts/admin-session-p3-p1-guard.mjs",
     "test:admin-session-p3-p1-smoke": "node scripts/admin-session-p3-p1-smoke.mjs"
+  } : {}),
+  ...(p3P2Phase ? {
+    "test:admin-current-permissions-p3-p2": "node scripts/admin-current-permissions-p3-p2-guard.mjs",
+    "test:admin-current-permissions-p3-p2-smoke": "node scripts/admin-current-permissions-p3-p2-smoke.mjs"
   } : {})
 };
 const expectedPkg = { ...baselinePkg, scripts: expectedScripts };
@@ -266,7 +290,8 @@ console.log("\n" + JSON.stringify({
     : successorCandidate ? "p2_candidate" : successorFrozen ? "p2_frozen_local"
       : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local"
         : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local"
-          : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local" : "invalid",
+          : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local"
+            : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local" : "invalid",
   expectedRouteCount: EXPECTED_ROUTE_COUNT,
   actualRouteCount: ia.ADMIN_ROUTE_REGISTRY?.length ?? 0,
   total: checks.length,

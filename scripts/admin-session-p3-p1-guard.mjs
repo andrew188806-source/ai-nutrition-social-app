@@ -5,6 +5,8 @@ import child from "node:child_process";
 
 const PREDECESSOR = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
 const SUBJECT = "Add Admin browser session gate";
+const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
+const P3_P2_SUBJECT = "Resolve current Admin permissions";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -30,7 +32,11 @@ const [behind, ahead] = git("rev-list", "--left-right", "--count", "origin/main.
 const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 && behind === 0;
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR && origin === PREDECESSOR
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === SUBJECT && git("status", "--short") === "";
-check("baseline predecessor or one clean local P3-P1 freeze is recognized", candidate || frozen, { head, origin, ahead, behind });
+const pushed = head === P3_P1_HEAD && origin === P3_P1_HEAD && ahead === 0 && behind === 0;
+const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HEAD && origin === P3_P1_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P2_SUBJECT && git("status", "--short") === "";
+const p3P2Phase = pushed || p3P2Frozen;
+check("baseline predecessor, P3-P1 freeze/push, or one exact P3-P2 freeze is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
 
 const adminPackage = JSON.parse(read("apps/admin-web/package.json"));
 const predecessorPackage = JSON.parse(git("show", `${PREDECESSOR}:apps/admin-web/package.json`));
@@ -125,7 +131,13 @@ check("login remains outside protected content factory", !loginPage.includes("cr
 check("unknown-route component is byte-identical to predecessor", read("apps/admin-web/app/admin/not-found.tsx").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/app/admin/not-found.tsx`).replace(/\r\n/g, "\n").trimEnd());
 
 check("Sidebar permission filtering is not implemented in P3-P1", read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation()"));
-check("permission registry is byte-identical to predecessor", read("apps/admin-web/auth/admin-route-registry.ts").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-route-registry.ts`).replace(/\r\n/g, "\n").trimEnd());
+const predecessorRegistry = git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-route-registry.ts`).replace(/\r\n/g, "\n");
+const expectedP3P2Registry = predecessorRegistry
+  .replace("/**", 'import {\n  CURRENT_ADMIN_PERMISSION_KEYS,\n  type CurrentAdminPermissionKey\n} from "./admin-current-permission-vocabulary";\n\nexport { CURRENT_ADMIN_PERMISSION_KEYS };\nexport type { CurrentAdminPermissionKey };\n\n/**')
+  .replace('export const CURRENT_ADMIN_PERMISSION_KEYS = [\n  "admin_context.read",\n  "admin_audit.read",\n  "admin_restaurant_branch.status.write"\n] as const satisfies readonly AdminPermissionKey[];\n\n', "");
+check("permission registry is historical or has only the exact P3-P2 vocabulary extraction", p3P2Phase
+  ? read("apps/admin-web/auth/admin-route-registry.ts").trimEnd() === expectedP3P2Registry.trimEnd()
+  : read("apps/admin-web/auth/admin-route-registry.ts").trimEnd() === predecessorRegistry.trimEnd());
 
 const acceptedApis = [
   "apps/admin-web/app/api/platform-admin/audit/route.ts",
@@ -147,6 +159,7 @@ const allowed = (file) => file === "package.json" || file === "package-lock.json
   || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
   || file.startsWith("apps/admin-web/app/admin/login/") || file.startsWith("apps/admin-web/components/admin-shell/")
   || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
+  || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
 check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
@@ -157,7 +170,7 @@ check("changed sources contain no secret value pattern", !secretPatterns.some((p
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-session-p3-p1-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "pushed" : p3P2Frozen ? "p3_p2_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,
