@@ -381,6 +381,8 @@
     "test:admin-navigation-p3-p4-smoke": "node scripts/admin-navigation-p3-p4-smoke.mjs",
     "test:admin-api-session-p3-p5": "node scripts/admin-api-session-p3-p5-guard.mjs",
     "test:admin-api-session-p3-p5-smoke": "node scripts/admin-api-session-p3-p5-smoke.mjs",
+    "test:admin-api-session-p3-p5-r1": "node scripts/admin-api-session-p3-p5-r1-guard.mjs",
+    "test:admin-api-session-p3-p5-r1-smoke": "node scripts/admin-api-session-p3-p5-r1-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1": "node scripts/restaurant-owner-sold-out-ra-2a-p1-guard.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-smoke": "node scripts/restaurant-owner-sold-out-ra-2a-p1-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-mutations": "node scripts/restaurant-owner-sold-out-ra-2a-p1-mutations.mjs",

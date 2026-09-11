@@ -13,6 +13,8 @@ const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
 const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
+const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
+const P3_P5_R1_SUBJECT = "Classify missing Admin sessions as unauthenticated";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -50,7 +52,11 @@ const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HE
 const p3P4Pushed = head === P3_P4_HEAD && origin === P3_P4_HEAD && ahead === 0 && behind === 0;
 const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HEAD && origin === P3_P4_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_SUBJECT && git("status", "--short") === "";
-const p3P5Phase = p3P4Pushed || p3P5Frozen;
+const p3P5R1Candidate = head === P3_P5_HEAD && origin === P3_P4_HEAD && ahead === 1 && behind === 0;
+const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_HEAD && origin === P3_P4_HEAD
+  && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_R1_SUBJECT && git("status", "--short") === "";
+const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen;
+const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen || p3P3Pushed || p3P4Frozen || p3P5Phase;
 check("baseline predecessor through the exact P3-P5 successor is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
 
@@ -187,6 +193,7 @@ const allowed = (file) => file === "package.json" || file === "package-lock.json
   || file === "apps/admin-web/server/platformAdminAuditRuntime.ts"
   || file === "apps/admin-web/server/platformAdminBranchStatusRuntime.ts"
   || file === "scripts/admin-api-session-p3-p5-guard.mjs" || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
+  || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs" || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
 check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
@@ -200,7 +207,8 @@ console.log("\n" + JSON.stringify({
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
     : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
       : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
-        : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local" : "invalid",
+        : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
+          : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

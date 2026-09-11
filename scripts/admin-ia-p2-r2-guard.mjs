@@ -19,6 +19,8 @@ const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
 const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
+const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
+const P3_P5_R1_SUBJECT = "Classify missing Admin sessions as unauthenticated";
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -92,7 +94,11 @@ const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HE
 const p3P4Pushed = head === P3_P4_HEAD && origin === P3_P4_HEAD && ahead === 0 && behind === 0;
 const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HEAD && origin === P3_P4_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_SUBJECT && git("status", "--short") === "";
-const p3P5Phase = p3P4Pushed || p3P5Frozen;
+const p3P5R1Candidate = head === P3_P5_HEAD && origin === P3_P4_HEAD && ahead === 1 && behind === 0;
+const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_HEAD && origin === P3_P4_HEAD
+  && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_R1_SUBJECT && git("status", "--short") === "";
+const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen;
+const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P4Phase = p3P3Pushed || p3P4Frozen || p3P5Phase;
 const p3P3Phase = p3P2Pushed || p3P3Frozen || p3P4Phase;
 const p3P2Phase = p3Pushed || p3P2Frozen || p3P3Phase;
@@ -356,7 +362,8 @@ const allowedP3Path = (file) => allowedR2Path(file)
   || file === "scripts/admin-navigation-p3-p4-guard.mjs" || file === "scripts/admin-navigation-p3-p4-smoke.mjs"
   || file === "apps/admin-web/server/platformAdminAuditRuntime.ts"
   || file === "apps/admin-web/server/platformAdminBranchStatusRuntime.ts"
-  || file === "scripts/admin-api-session-p3-p5-guard.mjs" || file === "scripts/admin-api-session-p3-p5-smoke.mjs";
+  || file === "scripts/admin-api-session-p3-p5-guard.mjs" || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
+  || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs" || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs";
 check("the bounded P2-R2 diff contains only approved successor paths",
   changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
   changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
@@ -386,6 +393,10 @@ const expectedScripts = {
   ...(p3P5Phase ? {
     "test:admin-api-session-p3-p5": "node scripts/admin-api-session-p3-p5-guard.mjs",
     "test:admin-api-session-p3-p5-smoke": "node scripts/admin-api-session-p3-p5-smoke.mjs"
+  } : {}),
+  ...(p3P5R1Phase ? {
+    "test:admin-api-session-p3-p5-r1": "node scripts/admin-api-session-p3-p5-r1-guard.mjs",
+    "test:admin-api-session-p3-p5-r1-smoke": "node scripts/admin-api-session-p3-p5-r1-smoke.mjs"
   } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
@@ -401,7 +412,8 @@ console.log("\n" + JSON.stringify({
       : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
         : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
           : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
-            : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local" : "invalid",
+            : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
+              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

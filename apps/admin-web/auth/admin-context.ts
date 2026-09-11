@@ -2,7 +2,10 @@ import "server-only";
 
 import { unstable_noStore as noStore } from "next/cache";
 import { cache } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  isAuthSessionMissingError,
+  type SupabaseClient
+} from "@supabase/supabase-js";
 import {
   PLATFORM_ADMIN_CONTEXT_FUNCTION,
   PLATFORM_ADMIN_HAS_PERMISSION_FUNCTION,
@@ -33,6 +36,11 @@ type VerifiedAdminAuthorityResolution = Readonly<{
   context: PlatformAdminContext;
 }>;
 
+/** Distinguishes an expected absent session from an Auth authority failure. */
+export function isMissingAdminAuthSessionError(error: unknown): boolean {
+  return isAuthSessionMissingError(error);
+}
+
 async function resolveVerifiedAdminAuthority(client: SupabaseClient): Promise<VerifiedAdminAuthorityResolution> {
   let userResult: Awaited<ReturnType<typeof client.auth.getUser>>;
   try {
@@ -50,7 +58,12 @@ async function resolveVerifiedAdminAuthority(client: SupabaseClient): Promise<Ve
     || !UUID.test(subject)
     || userResult.data.user?.is_anonymous === true
   ) {
-    if (userResult.error && userResult.error.status !== 401 && userResult.error.status !== 403) {
+    if (
+      userResult.error
+      && !isMissingAdminAuthSessionError(userResult.error)
+      && userResult.error.status !== 401
+      && userResult.error.status !== 403
+    ) {
       return Object.freeze({
         subject: null,
         context: Object.freeze({ state: "unavailable" as const, reason: "authority_unreachable" as const })

@@ -10,6 +10,9 @@ const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
 const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
+const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
+const P3_P5_R1_SUBJECT = "Classify missing Admin sessions as unauthenticated";
+const P3_P5_R1_CONTEXT_BLOB = "1d4d98975b574fec0ce8b22a301d248668e7df89";
 const CURRENT_KEYS = ["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
@@ -57,7 +60,11 @@ const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HE
 const p3P4Pushed = head === P3_P4_HEAD && origin === P3_P4_HEAD && ahead === 0 && behind === 0;
 const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HEAD && origin === P3_P4_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_SUBJECT && status === "";
-const p3P5Phase = p3P4Pushed || p3P5Frozen;
+const p3P5R1Candidate = head === P3_P5_HEAD && origin === P3_P4_HEAD && ahead === 1 && behind === 0;
+const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_HEAD && origin === P3_P4_HEAD
+  && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_R1_SUBJECT && status === "";
+const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen;
+const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P4Phase = pushed || p3P4Frozen || p3P5Phase;
 check("exact P3-P2 through P3-P4 lifecycle or one local P3-P5 freeze is recognized", candidate || frozen || p3P4Phase, { head, origin, ahead, behind, status });
 
@@ -97,7 +104,11 @@ const expectedCurrentRouteFacts = [
 
 check("P3-P1 base session gate is byte-identical", read("apps/admin-web/auth/admin-session-gate.ts").trimEnd() === git("show", `${P3_P2_HEAD}:apps/admin-web/auth/admin-session-gate.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("P3-P2 verified current-permission context is reused", factory.includes("getVerifiedAdminPermissionContext") && factory.includes("resolveAdminRouteAuthorization"));
-check("P3-P2 permission resolver remains byte-identical", ["apps/admin-web/auth/admin-context.ts", "apps/admin-web/auth/admin-current-permission-context.ts"].every((file) => read(file).trimEnd() === git("show", `${P3_P2_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
+check("P3-P2 permission resolver remains exact through the bounded R1 classification repair",
+  read("apps/admin-web/auth/admin-current-permission-context.ts").trimEnd() === git("show", `${P3_P2_HEAD}:apps/admin-web/auth/admin-current-permission-context.ts`).replace(/\r\n/g, "\n").trimEnd()
+    && (p3P5R1Phase
+      ? git("hash-object", "apps/admin-web/auth/admin-context.ts") === P3_P5_R1_CONTEXT_BLOB
+      : read("apps/admin-web/auth/admin-context.ts").trimEnd() === git("show", `${P3_P2_HEAD}:apps/admin-web/auth/admin-context.ts`).replace(/\r\n/g, "\n").trimEnd()));
 check("no second permission resolver was introduced", !/auth\.getUser|client\.rpc|createAdminSupabaseServerClient/.test(routeAuthority));
 check("canonical route metadata resolves before authority I/O", factory.indexOf("getAdminRoute(routeId)") < factory.indexOf("getVerifiedAdminPermissionContext()") && factory.indexOf("resolveAdminRouteRequirement(route)") < factory.indexOf("getVerifiedAdminContext()"));
 check("unknown canonical decision remains not registered", authorization.resolveAdminRouteRequirement(null).state === "not_registered" && factory.includes("notFound()"));
@@ -156,6 +167,7 @@ check("permission-denied UX exposes no authority internals", !/platform_admin|pe
 
 const allowed = (file) =>
   file === "package.json"
+  || file === "apps/admin-web/auth/admin-context.ts"
   || file === "apps/admin-web/auth/admin-route-authorization.ts"
   || file === "apps/admin-web/auth/admin-navigation-visibility.ts"
   || file === "apps/admin-web/auth/admin-api-authorization.ts"
@@ -169,6 +181,8 @@ const allowed = (file) =>
   || file === "scripts/admin-navigation-p3-p4-smoke.mjs"
   || file === "scripts/admin-api-session-p3-p5-guard.mjs"
   || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
+  || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+  || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-current-permissions-p3-p2-smoke.mjs"].includes(file);
 check("diff remains inside the exact P3-P3 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P2_HEAD}:package.json`)).dependencies ?? {}));
@@ -179,7 +193,8 @@ const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-route-authorization-p3-p3-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
-    : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local" : "invalid",
+    : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
+      : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

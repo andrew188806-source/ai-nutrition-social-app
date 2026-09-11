@@ -8,6 +8,9 @@ const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
 const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
+const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
+const P3_P5_R1_SUBJECT = "Classify missing Admin sessions as unauthenticated";
+const P3_P5_R1_CONTEXT_BLOB = "1d4d98975b574fec0ce8b22a301d248668e7df89";
 const CURRENT_KEYS = ["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
@@ -46,7 +49,11 @@ const frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HEAD &
 const pushed = head === P3_P4_HEAD && origin === P3_P4_HEAD && ahead === 0 && behind === 0;
 const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HEAD && origin === P3_P4_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_SUBJECT && status === "";
-const p3P5Phase = pushed || p3P5Frozen;
+const p3P5R1Candidate = head === P3_P5_HEAD && origin === P3_P4_HEAD && ahead === 1 && behind === 0;
+const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_HEAD && origin === P3_P4_HEAD
+  && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_R1_SUBJECT && status === "";
+const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen;
+const p3P5Phase = pushed || p3P5Frozen || p3P5R1Phase;
 check("exact P3-P3/P3-P4 lifecycle or one local P3-P5 freeze is recognized", candidate || frozen || p3P5Phase, { head, origin, ahead, behind, status });
 
 const vocabulary = executeTypeScript("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
@@ -88,7 +95,11 @@ const structural = visibility.deriveAdminNavigationVisibility(admin(["admin_cont
 const empty = visibility.deriveAdminNavigationVisibility(admin(["admin_context.read"]), [fixtureParent, { ...fixtureChild, requiredPermissions: ["admin_audit.read"] }]);
 
 check("P3-P3 route authorization remains the independent server boundary", factory.includes("resolveAdminRouteAuthorization") && factory.indexOf("const decision") < factory.indexOf("const visibility = deriveAdminNavigationVisibility") && factory.indexOf("permission_denied") < factory.indexOf("<AdminShell"));
-check("P3-P2 permission resolver is reused unchanged", ["apps/admin-web/auth/admin-context.ts", "apps/admin-web/auth/admin-current-permission-context.ts"].every((file) => read(file).trimEnd() === git("show", `${P3_P3_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
+check("P3-P2 permission resolver remains exact through the bounded R1 classification repair",
+  read("apps/admin-web/auth/admin-current-permission-context.ts").trimEnd() === git("show", `${P3_P3_HEAD}:apps/admin-web/auth/admin-current-permission-context.ts`).replace(/\r\n/g, "\n").trimEnd()
+    && (p3P5R1Phase
+      ? git("hash-object", "apps/admin-web/auth/admin-context.ts") === P3_P5_R1_CONTEXT_BLOB
+      : read("apps/admin-web/auth/admin-context.ts").trimEnd() === git("show", `${P3_P3_HEAD}:apps/admin-web/auth/admin-context.ts`).replace(/\r\n/g, "\n").trimEnd()));
 check("browser-provided permissions are never accepted", !/permissionContext|permissionKey|currentPermission|hasCurrentAdminPermission/.test(shell + sidebar + sidebarSection));
 check("navigation visibility is derived at the protected server seam", !visibilitySource.startsWith('"use client"') && factory.includes("deriveAdminNavigationVisibility(") && factory.indexOf("deriveAdminNavigationVisibility(") < factory.indexOf("<AdminShell"));
 check("Sidebar performs no authority resolution", !/getVerified|resolveAdminRouteAuthorization|deriveAdminNavigationVisibility|auth\.getUser|\.rpc\(/.test(sidebar));
@@ -142,6 +153,7 @@ check("future staff roles and bundles are not implemented", !/roleBundle|permiss
 check("predecessor guards contain exact P3-P4 successor awareness", ["admin-ia-p1", "admin-ia-p2", "admin-ia-p2-r1", "admin-ia-p2-r2", "admin-session-p3-p1", "admin-current-permissions-p3-p2", "admin-route-authorization-p3-p3"].every((name) => read(`scripts/${name}-guard.mjs`).includes(P3_P4_SUBJECT)));
 
 const allowed = (file) => file === "package.json"
+  || file === "apps/admin-web/auth/admin-context.ts"
   || file === "apps/admin-web/auth/admin-navigation-visibility.ts"
   || file === "apps/admin-web/auth/admin-route-authorization.ts"
   || file === "apps/admin-web/auth/admin-api-authorization.ts"
@@ -152,6 +164,8 @@ const allowed = (file) => file === "package.json"
   || file === "scripts/admin-navigation-p3-p4-smoke.mjs"
   || file === "scripts/admin-api-session-p3-p5-guard.mjs"
   || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
+  || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+  || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs"].includes(file);
 check("diff remains inside the exact P3-P4 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P3_HEAD}:package.json`)).dependencies ?? {}));
@@ -161,7 +175,8 @@ check("P3-P4 guard and smoke scripts are registered", pkg.scripts["test:admin-na
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-navigation-p3-p4-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
+    : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,
