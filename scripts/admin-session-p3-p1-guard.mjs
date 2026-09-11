@@ -9,6 +9,8 @@ const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
 const P3_P2_SUBJECT = "Resolve current Admin permissions";
 const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
 const P3_P3_SUBJECT = "Enforce current Admin route permissions";
+const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
+const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -40,8 +42,11 @@ const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HE
 const p3P2Pushed = head === P3_P2_HEAD && origin === P3_P2_HEAD && ahead === 0 && behind === 0;
 const p3P3Frozen = head !== P3_P2_HEAD && git("rev-parse", "HEAD^") === P3_P2_HEAD && origin === P3_P2_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P3_SUBJECT && git("status", "--short") === "";
-const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen;
-check("baseline predecessor through the exact P3-P3 successor is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
+const p3P3Pushed = head === P3_P3_HEAD && origin === P3_P3_HEAD && ahead === 0 && behind === 0;
+const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HEAD && origin === P3_P3_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P4_SUBJECT && git("status", "--short") === "";
+const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen || p3P3Pushed || p3P4Frozen;
+check("baseline predecessor through the exact P3-P4 successor is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
 
 const adminPackage = JSON.parse(read("apps/admin-web/package.json"));
 const predecessorPackage = JSON.parse(git("show", `${PREDECESSOR}:apps/admin-web/package.json`));
@@ -121,11 +126,11 @@ check("middleware performs no DB role or permission decision", !/admin_context\.
 check("unknown Admin paths bypass auth transformation", middleware.includes("if (!routeMatch") && exists("apps/admin-web/app/admin/not-found.tsx"));
 
 check("canonical page factory performs server authorization before content", factory.includes("await getVerifiedAdminContext()")
-  && factory.indexOf("await getVerifiedAdminContext()") < factory.indexOf("<AdminShell>")
+  && factory.indexOf("await getVerifiedAdminContext()") < factory.indexOf("<AdminShell")
   && factory.indexOf("await getVerifiedAdminContext()") < factory.indexOf("<AdminRegistryPage routeId={routeId}"));
 check("canonical gate is server-side", !factory.startsWith('"use client"') && !gate.startsWith('"use client"'));
 check("Sidebar shell renders only after the membership gate allows", !adminLayout.includes("AdminShell")
-  && factory.indexOf("decision.state") < factory.indexOf("<AdminShell>"));
+  && factory.indexOf("decision.state") < factory.indexOf("<AdminShell"));
 const pages = walk("apps/admin-web/app/admin").filter((file) => file.endsWith("/page.tsx"));
 const protectedPages = pages.filter((file) => file !== "apps/admin-web/app/admin/login/page.tsx");
 const escapedPages = protectedPages.filter((file) => !read(file).includes("createAdminRegistryPage"));
@@ -135,7 +140,9 @@ check("contextual dynamic routes are protected", protectedPages.filter((file) =>
 check("login remains outside protected content factory", !loginPage.includes("createAdminRegistryPage") && !loginPage.includes("getVerifiedAdminContext"));
 check("unknown-route component is byte-identical to predecessor", read("apps/admin-web/app/admin/not-found.tsx").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/app/admin/not-found.tsx`).replace(/\r\n/g, "\n").trimEnd());
 
-check("Sidebar permission filtering is not implemented in P3-P1", read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation()"));
+check("Sidebar is unfiltered in P3-P1 or consumes exact P3-P4 server visibility", (p3P3Pushed || p3P4Frozen)
+  ? read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation(visibleRouteIds, linkRouteIds)")
+  : read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation()"));
 const predecessorRegistry = git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-route-registry.ts`).replace(/\r\n/g, "\n");
 const expectedP3P2Registry = predecessorRegistry
   .replace("/**", 'import {\n  CURRENT_ADMIN_PERMISSION_KEYS,\n  type CurrentAdminPermissionKey\n} from "./admin-current-permission-vocabulary";\n\nexport { CURRENT_ADMIN_PERMISSION_KEYS };\nexport type { CurrentAdminPermissionKey };\n\n/**')
@@ -166,6 +173,7 @@ const allowed = (file) => file === "package.json" || file === "package-lock.json
   || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
   || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs"
   || file === "scripts/admin-route-authorization-p3-p3-guard.mjs" || file === "scripts/admin-route-authorization-p3-p3-smoke.mjs"
+  || file === "scripts/admin-navigation-p3-p4-guard.mjs" || file === "scripts/admin-navigation-p3-p4-smoke.mjs"
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
 check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
@@ -177,7 +185,8 @@ const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-session-p3-p1-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
-    : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local" : "invalid",
+    : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
+      : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

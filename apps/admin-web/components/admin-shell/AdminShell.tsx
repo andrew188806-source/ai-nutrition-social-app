@@ -7,8 +7,17 @@ import { AdminBreadcrumbs } from "./AdminBreadcrumbs";
 import { AdminIaScaffoldNotice } from "./AdminIaScaffoldNotice";
 import { AdminSidebar } from "./AdminSidebar";
 import { signOutAdmin } from "../../app/admin/login/actions";
+import type { AdminRouteId } from "../../auth/admin-route-registry";
 
-export function AdminShell({ children }: { children: ReactNode }) {
+export function AdminShell({
+  children,
+  visibleRouteIds,
+  linkRouteIds
+}: {
+  children: ReactNode;
+  visibleRouteIds: readonly AdminRouteId[];
+  linkRouteIds: readonly AdminRouteId[];
+}) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
@@ -33,7 +42,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             </button>
           </div>
           <div className={`${mobileNavOpen ? "block" : "hidden"} md:block`} id="admin-mobile-nav">
-            <AdminSidebar />
+            <AdminSidebar visibleRouteIds={visibleRouteIds} linkRouteIds={linkRouteIds} />
           </div>
         </aside>
         <div className="min-w-0 flex-1">

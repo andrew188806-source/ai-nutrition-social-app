@@ -15,6 +15,8 @@ const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
 const P3_P2_SUBJECT = "Resolve current Admin permissions";
 const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
 const P3_P3_SUBJECT = "Enforce current Admin route permissions";
+const P3_P3_HEAD = "abb747551a9dd5c97988b44cff0c16f6f555eed8";
+const P3_P4_SUBJECT = "Filter Admin navigation by current permissions";
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -82,7 +84,11 @@ const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HE
 const p3P2Pushed = head === P3_P2_HEAD && origin === P3_P2_HEAD && ahead === 0 && behind === 0;
 const p3P3Frozen = head !== P3_P2_HEAD && git("rev-parse", "HEAD^") === P3_P2_HEAD && origin === P3_P2_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P3_SUBJECT && git("status", "--short") === "";
-const p3P3Phase = p3P2Pushed || p3P3Frozen;
+const p3P3Pushed = head === P3_P3_HEAD && origin === P3_P3_HEAD && ahead === 0 && behind === 0;
+const p3P4Frozen = head !== P3_P3_HEAD && git("rev-parse", "HEAD^") === P3_P3_HEAD && origin === P3_P3_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P4_SUBJECT && git("status", "--short") === "";
+const p3P4Phase = p3P3Pushed || p3P4Frozen;
+const p3P3Phase = p3P2Pushed || p3P3Frozen || p3P4Phase;
 const p3P2Phase = p3Pushed || p3P2Frozen || p3P3Phase;
 const p3Phase = p3Candidate || p3Frozen || p3P2Phase;
 
@@ -340,7 +346,8 @@ const allowedP3Path = (file) => allowedR2Path(file)
   || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
   || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
   || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs"
-  || file === "scripts/admin-route-authorization-p3-p3-guard.mjs" || file === "scripts/admin-route-authorization-p3-p3-smoke.mjs";
+  || file === "scripts/admin-route-authorization-p3-p3-guard.mjs" || file === "scripts/admin-route-authorization-p3-p3-smoke.mjs"
+  || file === "scripts/admin-navigation-p3-p4-guard.mjs" || file === "scripts/admin-navigation-p3-p4-smoke.mjs";
 check("the bounded P2-R2 diff contains only approved successor paths",
   changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
   changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
@@ -362,6 +369,10 @@ const expectedScripts = {
   ...(p3P3Phase ? {
     "test:admin-route-authorization-p3-p3": "node scripts/admin-route-authorization-p3-p3-guard.mjs",
     "test:admin-route-authorization-p3-p3-smoke": "node scripts/admin-route-authorization-p3-p3-smoke.mjs"
+  } : {}),
+  ...(p3P4Phase ? {
+    "test:admin-navigation-p3-p4": "node scripts/admin-navigation-p3-p4-guard.mjs",
+    "test:admin-navigation-p3-p4-smoke": "node scripts/admin-navigation-p3-p4-smoke.mjs"
   } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
@@ -375,7 +386,8 @@ console.log("\n" + JSON.stringify({
   phase: candidate ? "candidate" : frozen ? "frozen_local"
     : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local"
       : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
-        : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local" : "invalid",
+        : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
+          : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

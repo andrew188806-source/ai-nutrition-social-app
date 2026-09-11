@@ -377,6 +377,8 @@
     "test:admin-current-permissions-p3-p2-smoke": "node scripts/admin-current-permissions-p3-p2-smoke.mjs",
     "test:admin-route-authorization-p3-p3": "node scripts/admin-route-authorization-p3-p3-guard.mjs",
     "test:admin-route-authorization-p3-p3-smoke": "node scripts/admin-route-authorization-p3-p3-smoke.mjs",
+    "test:admin-navigation-p3-p4": "node scripts/admin-navigation-p3-p4-guard.mjs",
+    "test:admin-navigation-p3-p4-smoke": "node scripts/admin-navigation-p3-p4-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1": "node scripts/restaurant-owner-sold-out-ra-2a-p1-guard.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-smoke": "node scripts/restaurant-owner-sold-out-ra-2a-p1-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-mutations": "node scripts/restaurant-owner-sold-out-ra-2a-p1-mutations.mjs",

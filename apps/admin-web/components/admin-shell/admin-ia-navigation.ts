@@ -21,7 +21,7 @@ export type AdminBreadcrumbItem = Readonly<{
 export type AdminScaffoldNavigationNode = Readonly<{
   id: AdminRouteId;
   label: string;
-  href: string;
+  href: string | null;
   availability: AdminAvailability;
   children: readonly AdminScaffoldNavigationNode[];
 }>;
@@ -131,9 +131,11 @@ export function getAdminBreadcrumbs(pathname: string): readonly AdminBreadcrumbI
 export function buildAdminScaffoldNavigation(
   visibleRouteIds: readonly AdminRouteId[] = ADMIN_ROUTE_REGISTRY
     .filter((entry) => entry.navigationVisibility === "ORDINARY")
-    .map((entry) => entry.id as AdminRouteId)
+    .map((entry) => entry.id as AdminRouteId),
+  linkRouteIds: readonly AdminRouteId[] = visibleRouteIds
 ): readonly AdminScaffoldNavigationNode[] {
   const visible = new Set<string>(visibleRouteIds);
+  const linked = new Set<string>(linkRouteIds);
   const buildNode = (entry: AdminRouteDefinition): AdminScaffoldNavigationNode | null => {
     if (entry.navigationVisibility !== "ORDINARY") return null;
     const children = ADMIN_ROUTE_REGISTRY
@@ -148,7 +150,7 @@ export function buildAdminScaffoldNavigation(
     return {
       id: entry.id as AdminRouteId,
       label: entry.zhTWLabel,
-      href: entry.route,
+      href: linked.has(entry.id) ? entry.route : null,
       availability: entry.availability,
       children
     };
@@ -170,4 +172,3 @@ export function getAdminDescendants(routeId: AdminRouteId): readonly AdminRouteD
   visit(routeId);
   return descendants;
 }
-

@@ -22,6 +22,10 @@ import {
   resolveAdminRouteAuthorization,
   resolveAdminRouteRequirement
 } from "../../auth/admin-route-authorization";
+import {
+  deriveAdminNavigationVisibility,
+  type AdminNavigationVisibilityModel
+} from "../../auth/admin-navigation-visibility";
 import { AdminAccessDenied, AdminAuthorityUnavailable, AdminPermissionDenied } from "./AdminAccessState";
 import { AdminShell } from "./AdminShell";
 
@@ -77,6 +81,7 @@ const restaurantItemContextBoundary =
   "此餐點層級資料（營養資料／食材／過敏原／營養認證狀態）僅屬於此餐廳、此菜單與此餐點，不是跨店共用的全域管理頁面；跨店待處理事項請至跨店菜單工作台查詢，實際維護仍在對應的餐廳／菜單／餐點內完成。";
 
 const staticRoute = (route: string) => !route.includes("[");
+type ReadyAdminNavigationVisibility = Extract<AdminNavigationVisibilityModel, { state: "ready" }>;
 
 function statusCounts(entries: readonly { availability: AdminAvailability }[]) {
   return entries.reduce<Record<AdminAvailability, number>>(
@@ -85,10 +90,21 @@ function statusCounts(entries: readonly { availability: AdminAvailability }[]) {
   );
 }
 
-function WorkspaceLanding({ routeId }: { routeId: AdminRouteId }) {
+function WorkspaceLanding({
+  routeId,
+  visibility
+}: {
+  routeId: AdminRouteId;
+  visibility: ReadyAdminNavigationVisibility;
+}) {
   const entry = getAdminRoute(routeId);
-  const descendants = getAdminDescendants(routeId);
-  const modules = ADMIN_ROUTE_REGISTRY.filter((candidate) => candidate.parentId === routeId && candidate.navigationVisibility === "ORDINARY");
+  const linked = new Set<string>(visibility.linkRouteIds);
+  const descendants = getAdminDescendants(routeId).filter((candidate) => linked.has(candidate.id));
+  const modules = ADMIN_ROUTE_REGISTRY.filter((candidate) =>
+    candidate.parentId === routeId
+    && candidate.navigationVisibility === "ORDINARY"
+    && linked.has(candidate.id)
+  );
   const counts = statusCounts(descendants);
   return (
     <article className="space-y-5">
@@ -128,7 +144,7 @@ function WorkspaceLanding({ routeId }: { routeId: AdminRouteId }) {
           })}
         </div>
       </section>
-      <WorkspaceShortcuts sourceWorkspaceId={routeId} />
+      <WorkspaceShortcuts sourceWorkspaceId={routeId} visibility={visibility} />
     </article>
   );
 }
@@ -157,9 +173,16 @@ function RestaurantSelectionFlow() {
   );
 }
 
-function WorkspaceShortcuts({ sourceWorkspaceId }: { sourceWorkspaceId: AdminRouteId }) {
+function WorkspaceShortcuts({
+  sourceWorkspaceId,
+  visibility
+}: {
+  sourceWorkspaceId: AdminRouteId;
+  visibility: ReadyAdminNavigationVisibility;
+}) {
+  const linked = new Set<string>(visibility.linkRouteIds);
   const shortcuts = ADMIN_WORKSPACE_SHORTCUTS
-    .filter((shortcut) => shortcut.sourceWorkspaceId === sourceWorkspaceId)
+    .filter((shortcut) => shortcut.sourceWorkspaceId === sourceWorkspaceId && linked.has(shortcut.targetRouteId))
     .slice()
     .sort((left, right) => left.order - right.order);
   if (shortcuts.length === 0) return null;
@@ -185,16 +208,19 @@ function WorkspaceShortcuts({ sourceWorkspaceId }: { sourceWorkspaceId: AdminRou
   );
 }
 
-function Dashboard() {
+function Dashboard({ visibility }: { visibility: ReadyAdminNavigationVisibility }) {
   const entry = getAdminRoute("dashboard");
-  const workspaces = ADMIN_TOP_LEVEL_WORKSPACE_IDS.filter((id) => id !== "dashboard").map(getAdminRoute);
+  const linked = new Set<string>(visibility.linkRouteIds);
+  const workspaces = ADMIN_TOP_LEVEL_WORKSPACE_IDS
+    .filter((id) => id !== "dashboard" && linked.has(id))
+    .map(getAdminRoute);
   return (
     <article className="space-y-5">
       <AdminWorkspaceHeader description={descriptions.dashboard} entry={entry} />
       <section aria-labelledby="workspace-directory" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <h2 className="sr-only" id="workspace-directory">工作區目錄</h2>
         {workspaces.map((workspace) => {
-          const counts = statusCounts(getAdminDescendants(workspace.id as AdminRouteId));
+          const counts = statusCounts(getAdminDescendants(workspace.id as AdminRouteId).filter((route) => linked.has(route.id)));
           return (
             <Link className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-sky-300 hover:shadow focus:outline-none focus:ring-2 focus:ring-sky-500" href={workspace.route} key={workspace.id}>
               <div className="flex items-start justify-between gap-3">
@@ -210,10 +236,16 @@ function Dashboard() {
   );
 }
 
-export function AdminRegistryPage({ routeId }: { routeId: AdminRouteId }) {
-  if (routeId === "dashboard") return <Dashboard />;
+export function AdminRegistryPage({
+  routeId,
+  visibility
+}: {
+  routeId: AdminRouteId;
+  visibility: ReadyAdminNavigationVisibility;
+}) {
+  if (routeId === "dashboard") return <Dashboard visibility={visibility} />;
   if (ADMIN_TOP_LEVEL_WORKSPACE_IDS.includes(routeId as typeof ADMIN_TOP_LEVEL_WORKSPACE_IDS[number]) || NESTED_HUB_ROUTE_IDS.includes(routeId)) {
-    return <WorkspaceLanding routeId={routeId} />;
+    return <WorkspaceLanding routeId={routeId} visibility={visibility} />;
   }
   const entry = getAdminRoute(routeId);
   const ancestorBoundary = routeId.startsWith("member-") ? boundaryCopy.members
@@ -242,10 +274,13 @@ export function createAdminRegistryPage(routeId: AdminRouteId) {
   return async function AdminCanonicalRoutePage() {
     const route = getAdminRoute(routeId);
     const requirement = resolveAdminRouteRequirement(route);
+    const permissionContext = requirement.state === "current_permissions"
+      ? await getVerifiedAdminPermissionContext()
+      : null;
     const decision = requirement.state === "current_permissions"
       ? resolveAdminRouteAuthorization({
           requirement,
-          currentPermissionContext: await getVerifiedAdminPermissionContext()
+          currentPermissionContext: permissionContext
         })
       : resolveAdminRouteAuthorization({
           requirement,
@@ -256,6 +291,14 @@ export function createAdminRegistryPage(routeId: AdminRouteId) {
     if (decision.state === "permission_denied") return <AdminPermissionDenied />;
     if (decision.state === "authority_unavailable") return <AdminAuthorityUnavailable />;
     if (decision.state === "not_registered" || decision.state === "login_exempt") notFound();
-    return <AdminShell><AdminRegistryPage routeId={routeId} /></AdminShell>;
+    const visibility = deriveAdminNavigationVisibility(
+      permissionContext ?? await getVerifiedAdminPermissionContext()
+    );
+    if (visibility.state === "unavailable") return <AdminAuthorityUnavailable />;
+    return (
+      <AdminShell visibleRouteIds={visibility.visibleRouteIds} linkRouteIds={visibility.linkRouteIds}>
+        <AdminRegistryPage routeId={routeId} visibility={visibility} />
+      </AdminShell>
+    );
   };
 }

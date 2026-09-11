@@ -24,13 +24,19 @@ export function AdminSidebarSection({
   return (
     <li className={separated ? "mt-4 border-t border-slate-200 pt-4" : undefined}>
       <div className={`flex items-center gap-1 rounded-lg ${active ? "bg-sky-50" : "hover:bg-slate-50"}`}>
-        <Link
-          aria-current={currentId === node.id ? "page" : undefined}
-          className={`min-w-0 flex-1 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 ${active ? "text-sky-800" : "text-slate-700"}`}
-          href={node.href}
-        >
-          <span className="block truncate">{node.label}</span>
-        </Link>
+        {node.href === null ? (
+          <span className={`min-w-0 flex-1 px-3 py-2 text-sm font-semibold ${active ? "text-sky-800" : "text-slate-700"}`}>
+            <span className="block truncate">{node.label}</span>
+          </span>
+        ) : (
+          <Link
+            aria-current={currentId === node.id ? "page" : undefined}
+            className={`min-w-0 flex-1 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 ${active ? "text-sky-800" : "text-slate-700"}`}
+            href={node.href}
+          >
+            <span className="block truncate">{node.label}</span>
+          </Link>
+        )}
         {depth > 0 ? <AdminAvailabilityBadge availability={node.availability} /> : null}
         {hasChildren ? (
           <button

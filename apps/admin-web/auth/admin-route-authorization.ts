@@ -71,7 +71,9 @@ export function resolveAdminRouteRequirement(
   return Object.freeze({ state: "base_admin" as const });
 }
 
-function decideBaseAdmin(context: PlatformAdminContext | null): AdminRouteAuthorizationDecision {
+function decideBaseAdmin(
+  context: PlatformAdminContext | CurrentAdminPermissionContext | null
+): AdminRouteAuthorizationDecision {
   if (context === null || context.state === "unavailable") {
     return Object.freeze({ state: "authority_unavailable" as const });
   }
@@ -104,6 +106,8 @@ export function resolveAdminRouteAuthorization(input: Readonly<{
   if (input.requirement.state === "not_registered") return Object.freeze({ state: "not_registered" as const });
   if (input.requirement.state === "login_exempt") return Object.freeze({ state: "login_exempt" as const });
   if (input.requirement.state === "invalid_metadata") return Object.freeze({ state: "authority_unavailable" as const });
-  if (input.requirement.state === "base_admin") return decideBaseAdmin(input.baseContext ?? null);
+  if (input.requirement.state === "base_admin") {
+    return decideBaseAdmin(input.baseContext ?? input.currentPermissionContext ?? null);
+  }
   return decideCurrentPermissions(input.currentPermissionContext ?? null, input.requirement.permissions);
 }
