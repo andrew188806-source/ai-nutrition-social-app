@@ -17,6 +17,8 @@ const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
 const P3_P1_SUBJECT = "Add Admin browser session gate";
 const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
 const P3_P2_SUBJECT = "Resolve current Admin permissions";
+const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
+const P3_P3_SUBJECT = "Enforce current Admin route permissions";
 const EXPECTED_ROUTE_COUNT = 95;
 const ALLOWED_PATHS = [
   "apps/admin-web/auth/admin-route-registry.ts",
@@ -107,7 +109,11 @@ const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD
 const p3Pushed = head === P3_P1_HEAD && origin === P3_P1_HEAD && ahead === 0 && behind === 0;
 const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HEAD && origin === P3_P1_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P2_SUBJECT && git("status", "--short") === "";
-const p3P2Phase = p3Pushed || p3P2Frozen;
+const p3P2Pushed = head === P3_P2_HEAD && origin === P3_P2_HEAD && ahead === 0 && behind === 0;
+const p3P3Frozen = head !== P3_P2_HEAD && git("rev-parse", "HEAD^") === P3_P2_HEAD && origin === P3_P2_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P3_SUBJECT && git("status", "--short") === "";
+const p3P3Phase = p3P2Pushed || p3P3Frozen;
+const p3P2Phase = p3Pushed || p3P2Frozen || p3P3Phase;
 const p3Phase = p3Candidate || p3Frozen || p3P2Phase;
 const successor = successorCandidate || successorFrozen || r1Candidate || r1Frozen || r2Candidate || r2Frozen || p3Phase;
 const changed = successor ? changedFromP1 : changedFromBaseline;
@@ -245,7 +251,8 @@ const p3SuccessorPath = (file) => p2SuccessorPath(file)
   || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
   || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
   || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
-  || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs";
+  || file === "scripts/admin-current-permissions-p3-p2-guard.mjs" || file === "scripts/admin-current-permissions-p3-p2-smoke.mjs"
+  || file === "scripts/admin-route-authorization-p3-p3-guard.mjs" || file === "scripts/admin-route-authorization-p3-p3-smoke.mjs";
 check("P1 authority remains bounded through its exact P3-P1 successor",
   (p3Phase ? changed.every(p3SuccessorPath)
     : successor ? changed.every(p2SuccessorPath) : changed.every((file) => ALLOWED_PATHS.includes(file)))
@@ -268,6 +275,10 @@ const expectedScripts = {
   ...(p3P2Phase ? {
     "test:admin-current-permissions-p3-p2": "node scripts/admin-current-permissions-p3-p2-guard.mjs",
     "test:admin-current-permissions-p3-p2-smoke": "node scripts/admin-current-permissions-p3-p2-smoke.mjs"
+  } : {}),
+  ...(p3P3Phase ? {
+    "test:admin-route-authorization-p3-p3": "node scripts/admin-route-authorization-p3-p3-guard.mjs",
+    "test:admin-route-authorization-p3-p3-smoke": "node scripts/admin-route-authorization-p3-p3-smoke.mjs"
   } : {})
 };
 const expectedPkg = { ...baselinePkg, scripts: expectedScripts };
@@ -291,7 +302,8 @@ console.log("\n" + JSON.stringify({
       : r1Candidate ? "p2_r1_candidate" : r1Frozen ? "p2_r1_frozen_local"
         : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local"
           : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local"
-            : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local" : "invalid",
+            : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
+              : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local" : "invalid",
   expectedRouteCount: EXPECTED_ROUTE_COUNT,
   actualRouteCount: ia.ADMIN_ROUTE_REGISTRY?.length ?? 0,
   total: checks.length,

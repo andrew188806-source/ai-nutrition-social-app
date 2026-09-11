@@ -15,6 +15,8 @@ const P2_R2_HEAD = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
 const P3_P1_SUBJECT = "Add Admin browser session gate";
 const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
 const P3_P2_SUBJECT = "Resolve current Admin permissions";
+const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
+const P3_P3_SUBJECT = "Enforce current Admin route permissions";
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -82,7 +84,10 @@ const p3Frozen = head !== P2_R2_HEAD && git("rev-parse", "HEAD^") === P2_R2_HEAD
 const p3Pushed = head === P3_P1_HEAD && origin === P3_P1_HEAD && ahead === 0 && behind === 0;
 const p3P2Frozen = head !== P3_P1_HEAD && git("rev-parse", "HEAD^") === P3_P1_HEAD && origin === P3_P1_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P2_SUBJECT && git("status", "--short") === "";
-const p3Phase = p3Candidate || p3Frozen || p3Pushed || p3P2Frozen;
+const p3P2Pushed = head === P3_P2_HEAD && origin === P3_P2_HEAD && ahead === 0 && behind === 0;
+const p3P3Frozen = head !== P3_P2_HEAD && git("rev-parse", "HEAD^") === P3_P2_HEAD && origin === P3_P2_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P3_P3_SUBJECT && git("status", "--short") === "";
+const p3Phase = p3Candidate || p3Frozen || p3Pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen;
 
 check("lifecycle is exactly the P2-R1 candidate/freeze or its bounded P2-R2/P3-P1 successor",
   candidate || frozen || r2Candidate || r2Frozen || p3Phase, { head, origin, ahead, behind });
@@ -264,7 +269,8 @@ console.log("\n" + JSON.stringify({
   phase: candidate ? "candidate" : frozen ? "frozen_local"
     : r2Candidate ? "p2_r2_candidate" : r2Frozen ? "p2_r2_frozen_local"
       : p3Candidate ? "p3_p1_candidate" : p3Frozen ? "p3_p1_frozen_local"
-        : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local" : "invalid",
+        : p3Pushed ? "p3_p1_pushed" : p3P2Frozen ? "p3_p2_frozen_local"
+          : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

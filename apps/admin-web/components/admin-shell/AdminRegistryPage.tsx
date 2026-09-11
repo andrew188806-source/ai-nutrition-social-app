@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ADMIN_ROUTE_REGISTRY,
   ADMIN_TOP_LEVEL_WORKSPACE_IDS,
@@ -14,9 +14,15 @@ import { AdminAvailabilityBadge } from "./AdminAvailabilityBadge";
 import { getAdminDescendants, getAdminRoute } from "./admin-ia-navigation";
 import { AdminRoutePlaceholder } from "./AdminRoutePlaceholder";
 import { AdminWorkspaceHeader } from "./AdminWorkspaceHeader";
-import { getVerifiedAdminContext } from "../../auth/admin-context";
-import { decideAdminSessionGate } from "../../auth/admin-session-gate";
-import { AdminAccessDenied, AdminAuthorityUnavailable } from "./AdminAccessState";
+import {
+  getVerifiedAdminContext,
+  getVerifiedAdminPermissionContext
+} from "../../auth/admin-context";
+import {
+  resolveAdminRouteAuthorization,
+  resolveAdminRouteRequirement
+} from "../../auth/admin-route-authorization";
+import { AdminAccessDenied, AdminAuthorityUnavailable, AdminPermissionDenied } from "./AdminAccessState";
 import { AdminShell } from "./AdminShell";
 
 // RA-3-IA-P2-R2: multi-child hub pages that need the full workspace-landing
@@ -234,10 +240,22 @@ export function AdminRegistryPage({ routeId }: { routeId: AdminRouteId }) {
 
 export function createAdminRegistryPage(routeId: AdminRouteId) {
   return async function AdminCanonicalRoutePage() {
-    const decision = decideAdminSessionGate(await getVerifiedAdminContext());
+    const route = getAdminRoute(routeId);
+    const requirement = resolveAdminRouteRequirement(route);
+    const decision = requirement.state === "current_permissions"
+      ? resolveAdminRouteAuthorization({
+          requirement,
+          currentPermissionContext: await getVerifiedAdminPermissionContext()
+        })
+      : resolveAdminRouteAuthorization({
+          requirement,
+          baseContext: await getVerifiedAdminContext()
+        });
     if (decision.state === "redirect_login") redirect("/admin/login?reason=session");
     if (decision.state === "access_denied") return <AdminAccessDenied />;
+    if (decision.state === "permission_denied") return <AdminPermissionDenied />;
     if (decision.state === "authority_unavailable") return <AdminAuthorityUnavailable />;
+    if (decision.state === "not_registered" || decision.state === "login_exempt") notFound();
     return <AdminShell><AdminRegistryPage routeId={routeId} /></AdminShell>;
   };
 }
