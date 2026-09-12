@@ -7,6 +7,23 @@ import path from "node:path";
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
 const R1_SUBJECT = "Classify missing Admin sessions as unauthenticated";
+const P3_P5_R1_HEAD = "e79cca87fe2eea689251d86008b23edb6dc9d5d4";
+const P1A_SUBJECT = "Add staff authority identity foundation";
+const P1A_MIGRATION = "supabase/migrations/20260912010000_staff_authority_p3_p6_p1a_foundation.sql";
+const P1A_PATHS = [
+  P1A_MIGRATION,
+  "package.json",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p1a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p1a-mutations.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs",
+  "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs",
+  "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs",
+  "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -31,7 +48,11 @@ const changed = [...new Set([...lines(git("diff", "--name-only", P3_P5_HEAD)), .
 const candidate = head === P3_P5_HEAD && origin === P3_P4_HEAD && ahead === 1 && behind === 0;
 const frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_HEAD && origin === P3_P4_HEAD
   && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === R1_SUBJECT && status === "";
-check("exact P3-P5 local predecessor or one local R1 freeze is recognized", candidate || frozen, { head, origin, ahead, behind, status });
+const p1aCandidate = head === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD && ahead === 0 && behind === 0;
+const p1aFrozen = head !== P3_P5_R1_HEAD && git("rev-parse", "HEAD^") === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P1A_SUBJECT && status === "";
+const p1aPhase = p1aCandidate || p1aFrozen;
+check("exact P3-P5/R1 lifecycle through the exact P1A successor is recognized", candidate || frozen || p1aPhase, { head, origin, ahead, behind, status });
 
 const contextPath = "apps/admin-web/auth/admin-context.ts";
 const context = read(contextPath);
@@ -84,7 +105,7 @@ check("response cache security headers are unchanged", auditRuntime.includes('Va
 
 const changedApplication = changed.filter((file) => file.startsWith("apps/")).filter(exists).map(read).join("\n");
 check("no service-role authority is introduced", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplication));
-check("database migrations are unchanged", changed.every((file) => !file.startsWith("supabase/")), changed);
+check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && file === P1A_MIGRATION), changed.filter((file) => file.startsWith("supabase/")));
 check("current permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P5_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("Admin UI route navigation and session gate files are unchanged", [
   "apps/admin-web/auth/admin-route-authorization.ts",
@@ -99,14 +120,15 @@ const predecessorGuards = [
 ];
 check("P3-P1 through P3-P5 guards have exact R1 successor awareness", predecessorGuards.every((name) => read(`scripts/${name}-guard.mjs`).includes(R1_SUBJECT)));
 
-const allowed = [
+const allowed = [...new Set([
   contextPath,
   "package.json",
   "scripts/admin-api-session-p3-p5-r1-guard.mjs",
   "scripts/admin-api-session-p3-p5-r1-smoke.mjs",
-  ...predecessorGuards.map((name) => `scripts/${name}-guard.mjs`)
-].sort();
-check("diff contains exactly the bounded R1 paths", JSON.stringify(changed) === JSON.stringify(allowed), { changed, allowed });
+  ...predecessorGuards.map((name) => `scripts/${name}-guard.mjs`),
+  ...(p1aPhase ? P1A_PATHS : [])
+])].sort();
+check("diff contains exactly the bounded R1/P1A successor paths", JSON.stringify(changed) === JSON.stringify(allowed), { changed, allowed });
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file))
   && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P5_HEAD}:package.json`)).dependencies ?? {}));
 const pkg = JSON.parse(read("package.json"));
@@ -117,7 +139,7 @@ check("changed sources contain no secret value pattern", ![/sb_secret_[A-Za-z0-9
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-api-session-p3-p5-r1-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

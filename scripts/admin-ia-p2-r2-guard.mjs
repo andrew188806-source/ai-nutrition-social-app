@@ -21,6 +21,16 @@ const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_SUBJECT = "Allow Admin APIs from browser sessions";
 const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
 const P3_P5_R1_SUBJECT = "Classify missing Admin sessions as unauthenticated";
+const P3_P5_R1_HEAD = "e79cca87fe2eea689251d86008b23edb6dc9d5d4";
+const P1A_SUBJECT = "Add staff authority identity foundation";
+const P1A_MIGRATION = "supabase/migrations/20260912010000_staff_authority_p3_p6_p1a_foundation.sql";
+const P1A_PATHS = [
+  P1A_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1a-smoke.mjs", "scripts/staff-authority-p3-p6-p1a-mutations.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
 const EXPECTED_REGISTRY_ROUTES = 95;
 
 const root = process.cwd();
@@ -97,7 +107,11 @@ const p3P5Frozen = head !== P3_P4_HEAD && git("rev-parse", "HEAD^") === P3_P4_HE
 const p3P5R1Candidate = head === P3_P5_HEAD && origin === P3_P4_HEAD && ahead === 1 && behind === 0;
 const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_HEAD && origin === P3_P4_HEAD
   && ahead === 2 && behind === 0 && git("log", "-1", "--format=%s") === P3_P5_R1_SUBJECT && git("status", "--short") === "";
-const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen;
+const p1aCandidate = head === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD && ahead === 0 && behind === 0;
+const p1aFrozen = head !== P3_P5_R1_HEAD && git("rev-parse", "HEAD^") === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P1A_SUBJECT && git("status", "--short") === "";
+const p1aPhase = p1aCandidate || p1aFrozen;
+const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen || p1aPhase;
 const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P4Phase = p3P3Pushed || p3P4Frozen || p3P5Phase;
 const p3P3Phase = p3P2Pushed || p3P3Frozen || p3P4Phase;
@@ -301,7 +315,7 @@ check("77. redirects stay absent historically and are bounded to the P3-P1 gate 
     ? redirectFiles.every((file) => ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file))
     : redirectFiles.length === 0,
   redirectFiles);
-check("78. no DB migration", changedFromR1.every((file) => !file.startsWith("supabase/")));
+check("78. no DB migration except the exact P1A successor", changedFromR1.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && file === P1A_MIGRATION));
 const guardScriptFiles = new Set([
   "scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs",
   "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs",
@@ -309,7 +323,7 @@ const guardScriptFiles = new Set([
 ]);
 check("79. no DB permission expansion",
   !/create role|create policy|grant execute|grant update|security definer|role_permissions|alter table\s+public\./i.test(
-    changedFromR1.filter((file) => exists(file) && !guardScriptFiles.has(file)).map(read).join("\n")
+    changedFromR1.filter((file) => exists(file) && !guardScriptFiles.has(file) && !(p1aPhase && P1A_PATHS.includes(file))).map(read).join("\n")
   ));
 
 const expectedCurrent = ["admin_context.read", "admin_audit.read", "admin_restaurant_branch.status.write"].sort();
@@ -363,7 +377,8 @@ const allowedP3Path = (file) => allowedR2Path(file)
   || file === "apps/admin-web/server/platformAdminAuditRuntime.ts"
   || file === "apps/admin-web/server/platformAdminBranchStatusRuntime.ts"
   || file === "scripts/admin-api-session-p3-p5-guard.mjs" || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
-  || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs" || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs";
+  || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs" || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+  || (p1aPhase && P1A_PATHS.includes(file));
 check("the bounded P2-R2 diff contains only approved successor paths",
   changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
   changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
@@ -397,6 +412,11 @@ const expectedScripts = {
   ...(p3P5R1Phase ? {
     "test:admin-api-session-p3-p5-r1": "node scripts/admin-api-session-p3-p5-r1-guard.mjs",
     "test:admin-api-session-p3-p5-r1-smoke": "node scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+  } : {}),
+  ...(p1aPhase ? {
+    "test:staff-authority-p3-p6-p1a": "node scripts/staff-authority-p3-p6-p1a-guard.mjs",
+    "test:staff-authority-p3-p6-p1a-smoke": "node scripts/staff-authority-p3-p6-p1a-smoke.mjs",
+    "test:staff-authority-p3-p6-p1a-mutations": "node scripts/staff-authority-p3-p6-p1a-mutations.mjs"
   } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
@@ -413,7 +433,7 @@ console.log("\n" + JSON.stringify({
         : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
           : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
             : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : "invalid",
+              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,
