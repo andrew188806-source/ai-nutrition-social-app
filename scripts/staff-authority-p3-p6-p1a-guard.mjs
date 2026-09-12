@@ -19,11 +19,19 @@ const P1B_SCRIPTS = [
   "scripts/staff-authority-p3-p6-p1b-mutations.mjs"
 ];
 const P1C_SUBJECT = "Add sealed staff authority materializer";
+const P1C_HEAD = "78dcdaba1cebbbe3ec99a5d56b5361ba1a16a31a";
 const P1C_MIGRATION = "supabase/migrations/20260912030000_staff_authority_p3_p6_p1c_materializer_audit.sql";
 const P1C_SCRIPTS = [
   "scripts/staff-authority-p3-p6-p1c-guard.mjs",
   "scripts/staff-authority-p3-p6-p1c-smoke.mjs",
   "scripts/staff-authority-p3-p6-p1c-mutations.mjs"
+];
+const P2A_SUBJECT = "Add staff effective permission resolver";
+const P2A_MIGRATION = "supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql";
+const P2A_SCRIPTS = [
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2a-mutations.mjs"
 ];
 const OWN_SCRIPTS = [
   "scripts/staff-authority-p3-p6-p1a-guard.mjs",
@@ -67,11 +75,18 @@ const p1cCandidate = p1bPushed;
 const p1cFrozen = head !== P1B_HEAD && git("rev-parse", "HEAD^") === P1B_HEAD
   && origin === P1B_HEAD && ahead === 1 && behind === 0 && status.length === 0
   && git("log", "-1", "--format=%s") === P1C_SUBJECT;
-const p1cPhase = p1cCandidate || p1cFrozen;
+const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && behind === 0;
+const p2aCandidate = p1cPushed;
+const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD
+  && origin === P1C_HEAD && ahead === 1 && behind === 0 && status.length === 0
+  && git("log", "-1", "--format=%s") === P2A_SUBJECT;
+const p2aPhase = p2aCandidate || p2aFrozen;
+const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
 const allowed = new Set([MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS,
   ...(p1bPhase ? [P1B_MIGRATION, ...P1B_SCRIPTS] : []),
-  ...(p1cPhase ? [P1C_MIGRATION, ...P1C_SCRIPTS] : [])]);
+  ...(p1cPhase ? [P1C_MIGRATION, ...P1C_SCRIPTS] : []),
+  ...(p2aPhase ? [P2A_MIGRATION, ...P2A_SCRIPTS] : [])]);
 const sql = read(MIGRATION);
 const stripped = sql.replace(/(^|\s)--[^\n]*/g, "$1");
 
@@ -85,14 +100,14 @@ function check(name, pass, detail) {
   if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 600)}`);
 }
 
-check("exact predecessor through bounded P1B lifecycle", candidate || frozen || pushed || p1bPhase, { head, origin, ahead, behind, status });
+check("exact predecessor through bounded P2A lifecycle", candidate || frozen || pushed || p1bPhase, { head, origin, ahead, behind, status });
 check("P1A diff contains only the bounded manifest", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration inventory is exact for the recognized phase", migrations.length === (p1cPhase ? 112 : p1bPhase ? 111 : 110), migrations.length);
-check("latest migration is exact for the recognized phase", migrations.at(-1) === path.basename(p1cPhase ? P1C_MIGRATION : p1bPhase ? P1B_MIGRATION : MIGRATION), migrations.at(-1));
+check("migration inventory is exact for the recognized phase", migrations.length === (p2aPhase ? 113 : p1cPhase ? 112 : p1bPhase ? 111 : 110), migrations.length);
+check("latest migration is exact for the recognized phase", migrations.at(-1) === path.basename(p2aPhase ? P2A_MIGRATION : p1cPhase ? P1C_MIGRATION : p1bPhase ? P1B_MIGRATION : MIGRATION), migrations.at(-1));
 const changedMigrations = changed.filter((file) => file.startsWith("supabase/migrations/"));
-check("only the exact additive migrations are introduced", JSON.stringify(changedMigrations) === JSON.stringify(p1cPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION] : p1bPhase ? [MIGRATION, P1B_MIGRATION] : [MIGRATION]), changedMigrations);
-check("all frozen migrations remain byte-identical", git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations").split(/\r?\n/).filter(Boolean).every((file) => file === MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION)));
+check("only the exact additive migrations are introduced", JSON.stringify(changedMigrations) === JSON.stringify(p2aPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION] : p1cPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION] : p1bPhase ? [MIGRATION, P1B_MIGRATION] : [MIGRATION]), changedMigrations);
+check("all frozen migrations remain byte-identical", git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations").split(/\r?\n/).filter(Boolean).every((file) => file === MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION)));
 check("admin_internal is reused and no second private schema is created", !/create\s+schema/i.test(stripped) && /admin_internal\./.test(stripped));
 
 for (const role of ["staff_authority_context_reader", "staff_authority_write_authority"]) {
@@ -170,6 +185,10 @@ check("P1C package scripts are exact when the bounded successor is present", !p1
   || pkg.scripts?.["test:staff-authority-p3-p6-p1c"] === "node scripts/staff-authority-p3-p6-p1c-guard.mjs"
     && pkg.scripts?.["test:staff-authority-p3-p6-p1c-smoke"] === "node scripts/staff-authority-p3-p6-p1c-smoke.mjs"
     && pkg.scripts?.["test:staff-authority-p3-p6-p1c-mutations"] === "node scripts/staff-authority-p3-p6-p1c-mutations.mjs");
+check("P2A package scripts are exact when the bounded successor is present", !p2aPhase
+  || pkg.scripts?.["test:staff-authority-p3-p6-p2a"] === "node scripts/staff-authority-p3-p6-p2a-guard.mjs"
+    && pkg.scripts?.["test:staff-authority-p3-p6-p2a-smoke"] === "node scripts/staff-authority-p3-p6-p2a-smoke.mjs"
+    && pkg.scripts?.["test:staff-authority-p3-p6-p2a-mutations"] === "node scripts/staff-authority-p3-p6-p2a-mutations.mjs");
 check("bounded predecessor guard edits contain the exact P1A predecessor and migration",
   changed.filter((file) => SUCCESSOR_GUARDS.has(file)).every((file) => {
     const source = read(file);
@@ -184,7 +203,7 @@ const migrationSha256 = crypto.createHash("sha256").update(read(MIGRATION), "utf
 check("frozen P1A migration SHA-256 remains exact", migrationSha256 === P1A_SHA256, migrationSha256);
 console.log("\n" + JSON.stringify({
   suite: "staff-authority-p3-p6-p1a-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : pushed ? "pushed" : p1bPushed ? "p1b_pushed" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p1cPushed ? "p1c_pushed" : pushed ? "pushed" : p1bPushed ? "p1b_pushed" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,
