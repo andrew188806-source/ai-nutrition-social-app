@@ -57,6 +57,17 @@ const P2A_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P2A_HEAD = "8c8ab93fc091f76f8b0af535c910d8a5227d48cb";
+const P2B_SUBJECT = "Add Platform Admin staff compatibility bridge";
+const P2B_MIGRATION = "supabase/migrations/20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql";
+const P2B_PATHS = [
+  P2B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2b-smoke.mjs", "scripts/staff-authority-p3-p6-p2b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1a-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -113,7 +124,11 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT && status === "";
-const p2aPhase = p2aCandidate || p2aFrozen;
+const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
+const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
+const p2bPhase = p2bCandidate || p2bFrozen;
+const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
 const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
@@ -241,7 +256,7 @@ check("accepted Admin APIs remain bearer-compatible through exact P3-P5 composit
     && acceptedApis.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
   : acceptedApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 const changedMigrations = lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations"));
-check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION))), changedMigrations);
+check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION))), changedMigrations);
 
 const changed = new Set([...lines(git("diff", "--name-only", PREDECESSOR)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
 const allowed = (file) => file === "package.json" || file === "package-lock.json"
@@ -261,6 +276,7 @@ const allowed = (file) => file === "package.json" || file === "package-lock.json
   || (p1bPhase && P1B_PATHS.includes(file))
   || (p1cPhase && P1C_PATHS.includes(file))
   || (p2aPhase && P2A_PATHS.includes(file))
+  || (p2bPhase && P2B_PATHS.includes(file))
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
 check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
@@ -275,7 +291,7 @@ console.log("\n" + JSON.stringify({
     : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
       : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
         : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-          : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
+          : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

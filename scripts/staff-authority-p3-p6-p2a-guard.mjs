@@ -21,6 +21,14 @@ const OWN_SCRIPTS = [
   "scripts/staff-authority-p3-p6-p2a-smoke.mjs",
   "scripts/staff-authority-p3-p6-p2a-mutations.mjs"
 ];
+const P2A_HEAD = "8c8ab93fc091f76f8b0af535c910d8a5227d48cb";
+const P2B_SUBJECT = "Add Platform Admin staff compatibility bridge";
+const P2B_MIGRATION = "supabase/migrations/20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql";
+const P2B_SCRIPTS = [
+  "scripts/staff-authority-p3-p6-p2b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2b-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2b-mutations.mjs"
+];
 const SUCCESSOR_GUARDS = new Set([
   "scripts/staff-authority-p3-p6-p1a-guard.mjs",
   "scripts/staff-authority-p3-p6-p1b-guard.mjs",
@@ -52,19 +60,25 @@ const changed = [...new Set([...lines(git("diff", "--name-only", PREDECESSOR)), 
 const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 && behind === 0;
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR && origin === PREDECESSOR
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === SUBJECT;
-const allowed = new Set([MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS]);
+const pushed = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
+const p2bCandidate = pushed;
+const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT;
+const p2bPhase = p2bCandidate || p2bFrozen;
+const allowed = new Set([MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS,
+  ...(p2bPhase ? [P2B_MIGRATION, ...P2B_SCRIPTS] : [])]);
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1000)}`); }
 
-check("exact P1C predecessor and candidate/local-freeze lifecycle", candidate || frozen, { head, origin, ahead, behind, status });
+check("exact P1C predecessor through bounded P2B lifecycle", candidate || frozen || pushed || p2bPhase, { head, origin, ahead, behind, status });
 check("P2A diff contains only the bounded manifest", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 for (const [file, hash] of P1_HASHES) check(`${path.basename(file)} remains hash-pinned`, sha256(read(file)) === hash, sha256(read(file)));
 check("all three P1 migrations have no diff", git("diff", "--name-only", PREDECESSOR, "--", P1A, P1B, P1C) === "");
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration inventory is exactly 113", migrations.length === 113, migrations.length);
-check("P2A migration is the exact latest path", migrations.at(-1) === path.basename(MIGRATION), migrations.at(-1));
-check("exactly one additive migration is introduced", JSON.stringify(changed.filter((file) => file.startsWith("supabase/migrations/"))) === JSON.stringify([MIGRATION]));
-check("all 112 predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION));
+check("migration inventory is exact for recognized phase", migrations.length === (p2bPhase ? 114 : 113), migrations.length);
+check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(p2bPhase ? P2B_MIGRATION : MIGRATION), migrations.at(-1));
+check("only exact additive migrations are introduced", JSON.stringify(changed.filter((file) => file.startsWith("supabase/migrations/"))) === JSON.stringify(p2bPhase ? [MIGRATION, P2B_MIGRATION] : [MIGRATION]));
+check("all predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2bPhase && file === P2B_MIGRATION)));
 check("P1 table structures are not altered", !/alter table admin_internal\.staff_(?:permission_catalog|accounts|bundle_templates|bundle_template_permissions|bundle_assignments|permission_entitlements|authority_audit_log|authority_operation_receipts)\s+(?:add|drop|alter|rename)/i.test(bare));
 const seeds = [...(p1a.match(/insert into admin_internal\.staff_permission_catalog[\s\S]*?;\n/)?.[0] ?? "").matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'current'/g)].map((match) => match[1]).sort();
 check("permission catalog remains exactly three seeds", JSON.stringify(seeds) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"].sort()), seeds);
@@ -124,9 +138,10 @@ check("no Production configuration is changed", !changed.some((file) => /product
 check("package dependencies and lockfiles are unchanged", JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${PREDECESSOR}:package.json`)).dependencies ?? {}) && !changed.some((file) => /lock/i.test(file)));
 const pkg = JSON.parse(read("package.json"));
 check("P2A package scripts are exact", pkg.scripts?.["test:staff-authority-p3-p6-p2a"] === "node scripts/staff-authority-p3-p6-p2a-guard.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2a-smoke"] === "node scripts/staff-authority-p3-p6-p2a-smoke.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2a-mutations"] === "node scripts/staff-authority-p3-p6-p2a-mutations.mjs");
+check("P2B package scripts are exact when bounded successor is present", !p2bPhase || pkg.scripts?.["test:staff-authority-p3-p6-p2b"] === "node scripts/staff-authority-p3-p6-p2b-guard.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2b-smoke"] === "node scripts/staff-authority-p3-p6-p2b-smoke.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2b-mutations"] === "node scripts/staff-authority-p3-p6-p2b-mutations.mjs");
 check("bounded predecessor guards pin exact P2A awareness", changed.filter((file) => SUCCESSOR_GUARDS.has(file)).every((file) => read(file).includes(PREDECESSOR) && read(file).includes(MIGRATION)));
 const changedText = changed.filter(exists).map(read).join("\n");
 check("changed files contain no credential-shaped value", ![/github_pat_[A-Za-z0-9_]{20,}/, /gh[pousr]_[A-Za-z0-9]{20,}/, /sb_secret_[A-Za-z0-9_-]{20,}/, /sk-[A-Za-z0-9_-]{20,}/, /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/].some((pattern) => pattern.test(changedText)));
 
-console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p2a-guard", phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures: failures.map((item) => item.name), migrationSha256: sha256(sql), changedPaths: changed, developmentAccessed: false, productionAccessed: false, pushed: false }, null, 2));
+console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p2a-guard", phase: candidate ? "candidate" : frozen ? "frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : pushed ? "pushed" : "invalid", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures: failures.map((item) => item.name), migrationSha256: sha256(sql), changedPaths: changed, developmentAccessed: false, productionAccessed: false, pushed: false }, null, 2));
 process.exitCode = failures.length ? 1 : 0;

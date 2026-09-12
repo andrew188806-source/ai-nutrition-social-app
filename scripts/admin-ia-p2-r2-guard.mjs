@@ -65,6 +65,17 @@ const P2A_PATHS = [
 ];
 const EXPECTED_REGISTRY_ROUTES = 95;
 
+const P2A_HEAD = "8c8ab93fc091f76f8b0af535c910d8a5227d48cb";
+const P2B_SUBJECT = "Add Platform Admin staff compatibility bridge";
+const P2B_MIGRATION = "supabase/migrations/20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql";
+const P2B_PATHS = [
+  P2B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2b-smoke.mjs", "scripts/staff-authority-p3-p6-p2b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1a-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -155,7 +166,11 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT && status === "";
-const p2aPhase = p2aCandidate || p2aFrozen;
+const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
+const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
+const p2bPhase = p2bCandidate || p2bFrozen;
+const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
 const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
@@ -363,7 +378,7 @@ check("77. redirects stay absent historically and are bounded to the P3-P1 gate 
     ? redirectFiles.every((file) => ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file))
     : redirectFiles.length === 0,
   redirectFiles);
-check("78. no DB migration except the exact P1A successor", changedFromR1.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION))));
+check("78. no DB migration except the exact P1A successor", changedFromR1.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION))));
 const guardScriptFiles = new Set([
   "scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs",
   "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs",
@@ -374,7 +389,7 @@ check("79. no DB permission expansion",
     changedFromR1.filter((file) => exists(file) && !guardScriptFiles.has(file)
       && !(p1aPhase && P1A_PATHS.includes(file)) && !(p1bPhase && P1B_PATHS.includes(file))
       && !(p1cPhase && P1C_PATHS.includes(file))
-      && !(p2aPhase && P2A_PATHS.includes(file))).map(read).join("\n")
+      && !(p2aPhase && P2A_PATHS.includes(file)) && !(p2bPhase && P2B_PATHS.includes(file))).map(read).join("\n")
   ));
 
 const expectedCurrent = ["admin_context.read", "admin_audit.read", "admin_restaurant_branch.status.write"].sort();
@@ -432,7 +447,8 @@ const allowedP3Path = (file) => allowedR2Path(file)
   || (p1aPhase && P1A_PATHS.includes(file))
   || (p1bPhase && P1B_PATHS.includes(file))
   || (p1cPhase && P1C_PATHS.includes(file))
-  || (p2aPhase && P2A_PATHS.includes(file));
+  || (p2aPhase && P2A_PATHS.includes(file))
+  || (p2bPhase && P2B_PATHS.includes(file));
 check("the bounded P2-R2 diff contains only approved successor paths",
   changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
   changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
@@ -486,6 +502,11 @@ const expectedScripts = {
     "test:staff-authority-p3-p6-p2a": "node scripts/staff-authority-p3-p6-p2a-guard.mjs",
     "test:staff-authority-p3-p6-p2a-smoke": "node scripts/staff-authority-p3-p6-p2a-smoke.mjs",
     "test:staff-authority-p3-p6-p2a-mutations": "node scripts/staff-authority-p3-p6-p2a-mutations.mjs"
+  } : {}),
+  ...(p2bPhase ? {
+    "test:staff-authority-p3-p6-p2b": "node scripts/staff-authority-p3-p6-p2b-guard.mjs",
+    "test:staff-authority-p3-p6-p2b-smoke": "node scripts/staff-authority-p3-p6-p2b-smoke.mjs",
+    "test:staff-authority-p3-p6-p2b-mutations": "node scripts/staff-authority-p3-p6-p2b-mutations.mjs"
   } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
@@ -502,7 +523,7 @@ console.log("\n" + JSON.stringify({
         : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
           : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
             : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
+              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,
