@@ -25,6 +25,16 @@ const P1A_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P1A_HEAD = "0d60c787c1919aaf44d7714a1fd03b419469ba15";
+const P1B_SUBJECT = "Add staff bundle entitlement foundation";
+const P1B_MIGRATION = "supabase/migrations/20260912020000_staff_authority_p3_p6_p1b_entitlement_foundation.sql";
+const P1B_PATHS = [
+  P1B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1b-smoke.mjs", "scripts/staff-authority-p3-p6-p1b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs",
+  "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
+  "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -47,6 +57,7 @@ const check = (name, pass, detail) => {
 const head = git("rev-parse", "HEAD");
 const origin = git("rev-parse", "origin/main");
 const [behind, ahead] = git("rev-list", "--left-right", "--count", "origin/main...HEAD").split(/\s+/).map(Number);
+const status = git("status", "--short");
 const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 && behind === 0;
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR && origin === PREDECESSOR
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === SUBJECT && git("status", "--short") === "";
@@ -68,7 +79,12 @@ const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_
 const p1aCandidate = head === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD && ahead === 0 && behind === 0;
 const p1aFrozen = head !== P3_P5_R1_HEAD && git("rev-parse", "HEAD^") === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P1A_SUBJECT && git("status", "--short") === "";
-const p1aPhase = p1aCandidate || p1aFrozen;
+const p1aPushed = head === P1A_HEAD && origin === P1A_HEAD && ahead === 0 && behind === 0;
+const p1bCandidate = p1aPushed;
+const p1bFrozen = head !== P1A_HEAD && git("rev-parse", "HEAD^") === P1A_HEAD && origin === P1A_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P1B_SUBJECT && status === "";
+const p1bPhase = p1bCandidate || p1bFrozen;
+const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
 const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen || p1aPhase;
 const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen || p3P3Pushed || p3P4Frozen || p3P5Phase;
@@ -193,7 +209,7 @@ check("accepted Admin APIs remain bearer-compatible through exact P3-P5 composit
     && acceptedApis.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
   : acceptedApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 const changedMigrations = lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations"));
-check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && file === P1A_MIGRATION), changedMigrations);
+check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION))), changedMigrations);
 
 const changed = new Set([...lines(git("diff", "--name-only", PREDECESSOR)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
 const allowed = (file) => file === "package.json" || file === "package-lock.json"
@@ -210,6 +226,7 @@ const allowed = (file) => file === "package.json" || file === "package-lock.json
   || file === "scripts/admin-api-session-p3-p5-guard.mjs" || file === "scripts/admin-api-session-p3-p5-smoke.mjs"
   || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs" || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
   || (p1aPhase && P1A_PATHS.includes(file))
+  || (p1bPhase && P1B_PATHS.includes(file))
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
 check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
@@ -224,7 +241,7 @@ console.log("\n" + JSON.stringify({
     : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
       : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
         : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-          : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : "invalid",
+          : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

@@ -24,6 +24,16 @@ const P1A_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P1A_HEAD = "0d60c787c1919aaf44d7714a1fd03b419469ba15";
+const P1B_SUBJECT = "Add staff bundle entitlement foundation";
+const P1B_MIGRATION = "supabase/migrations/20260912020000_staff_authority_p3_p6_p1b_entitlement_foundation.sql";
+const P1B_PATHS = [
+  P1B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1b-smoke.mjs", "scripts/staff-authority-p3-p6-p1b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs",
+  "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
+  "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
 const CURRENT_KEYS = ["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
@@ -76,7 +86,12 @@ const p3P5R1Frozen = head !== P3_P5_HEAD && git("rev-parse", "HEAD^") === P3_P5_
 const p1aCandidate = head === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD && ahead === 0 && behind === 0;
 const p1aFrozen = head !== P3_P5_R1_HEAD && git("rev-parse", "HEAD^") === P3_P5_R1_HEAD && origin === P3_P5_R1_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P1A_SUBJECT && status === "";
-const p1aPhase = p1aCandidate || p1aFrozen;
+const p1aPushed = head === P1A_HEAD && origin === P1A_HEAD && ahead === 0 && behind === 0;
+const p1bCandidate = p1aPushed;
+const p1bFrozen = head !== P1A_HEAD && git("rev-parse", "HEAD^") === P1A_HEAD && origin === P1A_HEAD
+  && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P1B_SUBJECT && status === "";
+const p1bPhase = p1bCandidate || p1bFrozen;
+const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
 const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen || p1aPhase;
 const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P4Phase = p3P3Pushed || p3P4Frozen || p3P5Phase;
@@ -119,7 +134,7 @@ check("email is not accepted as authority", !/\.email\b|\bemail\s*[:=]/.test(per
 check("browser role or permission input is not accepted", !/searchParams|FormData|cookies\(\).*role|cookies\(\).*permission/i.test(permissionContext + serverContext));
 check("no service_role authority is used", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplicationSources));
 check("no direct admin_internal table access exists", !/\.from\(\s*["']admin_internal|admin_internal\./i.test(permissionContext + serverContext));
-check("no database migration changed except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && file === P1A_MIGRATION), changed.filter((file) => file.startsWith("supabase/migrations/")));
+check("no database migration changed except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
 check("membership RPC failures remain unavailable", serverContext.includes('reason: "authority_unreachable"') && serverContext.includes('reason: "authority_rejected"'));
 check("predicate transport failure is unavailable", serverContext.includes('reason: "permission_authority_unreachable"'));
 check("predicate malformed/error response is unavailable", serverContext.includes('reason: "permission_authority_rejected"') && serverContext.includes('typeof result.data !== "boolean"'));
@@ -193,6 +208,7 @@ const allowed = (file) =>
   || file === "scripts/admin-api-session-p3-p5-r1-guard.mjs"
   || file === "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
   || (p1aPhase && P1A_PATHS.includes(file))
+  || (p1bPhase && P1B_PATHS.includes(file))
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs"].includes(file);
 check("diff remains inside the exact P3-P2 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P1_HEAD}:package.json`)).dependencies ?? {}));
@@ -204,7 +220,7 @@ console.log("\n" + JSON.stringify({
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "pushed" : p3P3Frozen ? "p3_p3_frozen_local"
     : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
       : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-        : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : "invalid",
+        : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,
