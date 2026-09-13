@@ -151,7 +151,7 @@ const test = (name, run) => cases.push([name, run]);
 test("A default legacy selector", () => assert.deepEqual(selector.resolveAdminAuthorityMode({}), { state: "ready", mode: "legacy" }));
 test("B exact legacy selector", () => assert.deepEqual(selector.resolveAdminAuthorityMode({ TASTKIND_ADMIN_AUTHORITY_MODE: "legacy" }), { state: "ready", mode: "legacy" }));
 test("C exact staff transitional selector", () => assert.deepEqual(selector.resolveAdminAuthorityMode({ TASTKIND_ADMIN_AUTHORITY_MODE: "staff_permissions_legacy_admission" }), { state: "ready", mode: "staff_permissions_legacy_admission" }));
-for (const [label, value] of [["empty", ""], ["uppercase", "LEGACY"], ["leading space", " legacy"], ["trailing space", "legacy "], ["staff alias", "staff"], ["dual alias", "dual"], ["unknown", "unknown"]]) {
+for (const [label, value] of [["empty", ""], ["uppercase", "LEGACY"], ["leading space", " legacy"], ["trailing space", "legacy "], ["staff alias", "staff_native"], ["dual alias", "dual"], ["unknown", "unknown"]]) {
   test(`selector rejects ${label}`, () => assert.equal(selector.resolveAdminAuthorityMode({ TASTKIND_ADMIN_AUTHORITY_MODE: value }).state, "unavailable"));
 }
 test("D missing selector preserves exact legacy three", async () => {
@@ -197,11 +197,11 @@ test("U legacy unavailable cannot be rescued", async () => {
 });
 test("V staff-only identity is denied", async () => assert.equal((await resolve("staff_permissions_legacy_admission", { legacyNotAdmin: true, staffData: rows([base, audit]) })).context.state, "not_admin"));
 test("W invalid selector fails closed after verified identity", async () => {
-  const result = await resolve("staff");
+  const result = await resolve("staff_native");
   assert.deepEqual(result.context, { state: "unavailable", reason: "invalid_authority_mode" });
-  assert.deepEqual(result.calls.rpc, ["platform_admin_current_context_v1"]);
+  assert.deepEqual(result.calls.rpc, []);
 });
-test("X unauthenticated classification precedes invalid selector", async () => assert.equal((await resolve("staff", { unauthenticated: true })).context.state, "unauthenticated"));
+test("X unauthenticated classification precedes invalid selector", async () => assert.equal((await resolve("staff_native", { unauthenticated: true })).context.state, "unauthenticated"));
 test("Y staff mode plus shadow enabled makes one staff RPC", async () => {
   const result = await resolve("staff_permissions_legacy_admission", {}, "enabled");
   assert.equal(result.calls.rpc.filter((name) => name === "staff_current_context_v1").length, 1);

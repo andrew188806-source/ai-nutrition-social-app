@@ -148,7 +148,7 @@ test("F staff-only hypothetical user denied", async () => { const r = await reso
 test("G legacy not_admin unchanged", async () => assert.deepEqual((await resolve("legacy", { legacyNotAdmin: true })).context, { state: "not_admin" }));
 test("H legacy unavailable unchanged", async () => assert.equal((await resolve("legacy", { legacyError: true })).context.state, "unavailable"));
 test("I unauthenticated unchanged", async () => assert.deepEqual((await resolve("legacy", { unauthenticated: true })).context, { state: "unauthenticated" }));
-test("J invalid selector unchanged", async () => assert.deepEqual((await resolve("staff")).context, { state: "unavailable", reason: "invalid_authority_mode" }));
+test("J invalid selector unchanged", async () => assert.deepEqual((await resolve("staff_native")).context, { state: "unavailable", reason: "invalid_authority_mode" }));
 test("K hybrid staff technical failure unavailable", async () => assert.equal((await resolve("staff_permissions_legacy_admission", { staffError: true })).context.reason, "staff_authority_rejected"));
 test("L hybrid missing admin_context not_admin", async () => assert.equal((await resolve("staff_permissions_legacy_admission", { staffData: rows([audit]) })).context.state, "not_admin"));
 test("M exact permissions preserved", async () => assert.deepEqual((await resolve("staff_permissions_legacy_admission", { staffData: rows([branch, base]) })).context.permissions, [base, branch]));

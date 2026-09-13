@@ -26,6 +26,6 @@ export function resolveAdminProtectedReadAuthority(
   }
   return Object.freeze({
     state: "ready" as const,
-    authority: mode.mode === "staff_permissions_legacy_admission" ? "staff" as const : "legacy" as const
+    authority: mode.mode === "legacy" ? "legacy" as const : "staff" as const
   });
 }

@@ -81,6 +81,22 @@ const B1A_PATHS = [
 ];
 B0A_PATHS.push(...B0B_PATHS, ...B1A_PATHS);
 
+const B1A_FREEZE_HEAD = "8012fa1b11ec1824d512f8980276ef4114828a70";
+const B1B_SUBJECT = "Enable staff-native Admin admission";
+const B1B_PATHS = [
+  "apps/admin-web/auth/admin-authority-selector.ts", "apps/admin-web/auth/admin-context.ts",
+  "apps/admin-web/auth/admin-protected-read-authority.ts", "apps/admin-web/auth/admin-protected-mutation-authority.ts", "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b1-b-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b1-b-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b1-b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b1-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-mutations.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
+  "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
+B0A_PATHS.push(...B1B_PATHS);
+
 
 const FROZEN = new Map([
   ["supabase/migrations/20260912010000_staff_authority_p3_p6_p1a_foundation.sql", "68a938a04b898f8d25b2ee7c9176cd3e9c97b3f324e66cbc1b70b1ad61470ddf"],
@@ -112,7 +128,11 @@ const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("re
 const b0bPushed = head === B1A_HEAD && origin === B1A_HEAD && ahead === 0 && behind === 0;
 const b1aFrozen = head !== B1A_HEAD && git("rev-parse", "HEAD^") === B1A_HEAD && origin === B1A_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1A_SUBJECT;
-const b1aPhase = b0bPushed || b1aFrozen;
+const b1aPushed = head === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD && ahead === 0 && behind === 0;
+const b1bFrozen = head !== B1A_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1B_SUBJECT;
+const b1bPhase = b1aPushed || b1bFrozen;
+const b1aPhase = b0bPushed || b1aFrozen || b1bPhase;
 const b0bPhase = b0aPushed || b0bFrozen || b1aPhase;
 const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const allowed = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...TEST_AWARENESS, ...(b0aPhase ? B0A_PATHS : [])]);
@@ -148,27 +168,33 @@ check("authentication is resolved exactly once", (context.match(/auth\.getUser\(
 check("legacy admission RPC remains exact", (context.match(/client\.rpc\(PLATFORM_ADMIN_CONTEXT_FUNCTION\)/g) ?? []).length === 1);
 check("unauthenticated classification precedes selector", context.indexOf("if (authority.subject === null)") < context.indexOf("resolveAdminAuthorityMode()"));
 check("invalid selector fails closed", /mode\.state === "unavailable"[\s\S]*state: "unavailable" as const, reason: mode\.reason/.test(context));
-check("legacy not_admin and unavailable return before staff RPC", context.indexOf('authority.context.state !== "admin"') < context.indexOf('mode.mode === "staff_permissions_legacy_admission"'));
+check("legacy not_admin and unavailable return before staff RPC", b1bPhase
+  ? context.indexOf('mode.mode === "staff"') < context.indexOf("const authority = await resolveLegacyAdminAuthority")
+  : context.indexOf('authority.context.state !== "admin"') < context.indexOf('mode.mode === "staff_permissions_legacy_admission"'));
 check("legacy admin_context.read admission is mandatory", /!authority\.context\.permissions\.includes\("admin_context\.read"\)/.test(context));
 check("staff authority module is server-only", staff.startsWith('import "server-only";'));
 check("staff current-context RPC name is exact", /STAFF_PERMISSION_CONTEXT_FUNCTION = "staff_current_context_v1"/.test(staff));
-check("staff current-context is called once in staff branch", (staffBranch.match(/client\.rpc\(STAFF_PERMISSION_CONTEXT_FUNCTION\)/g) ?? []).length === 1);
+check("staff current-context is called once in staff branch", b1bPhase
+  ? (context.match(/client\.rpc\(STAFF_PERMISSION_CONTEXT_FUNCTION\)/g) ?? []).length === 1
+  : (staffBranch.match(/client\.rpc\(STAFF_PERMISSION_CONTEXT_FUNCTION\)/g) ?? []).length === 1);
 check("staff predicate fan-out is absent", !/staff_has_permission_v1|STAFF_HAS_PERMISSION/.test(staff + context));
 check("staff branch does not call legacy permission predicate", !/PLATFORM_ADMIN_HAS_PERMISSION_FUNCTION|branchStatusPermission/.test(staffBranch));
 check("staff resolver accepts no subject identity argument", /resolveAdminStaffPermissionSet\(\s*outcome:/.test(staff) && !/\bsubject\s*:/.test(staff));
 check("staff composer accepts no legacy permission input", !/legacyPermissions|PlatformAdminContext/.test(staff));
 check("staff permissions are not unioned", !/union|\.concat\(|legacyPermissions|authority\.context\.permissions[\s\S]*resolveAdminStaffPermissionSet/i.test(staffBranch));
 check("staff permissions are not intersected", !/legacyPermissions|authority\.context\.permissions/.test(staff + staffBranch));
-check("staff denial has no legacy fallback", /const staffPermissions = resolveAdminStaffPermissionSet\(outcome\);[\s\S]*if \(staffPermissions\.state !== "ready"\) return staffPermissions;/.test(staffBranch));
-check("staff RPC rejection is unavailable", /result\.error[\s\S]*staff_authority_rejected/.test(staffBranch));
-check("staff RPC throw is unavailable", /catch \{[\s\S]*staff_authority_unreachable/.test(staffBranch));
+check("staff denial has no legacy fallback", /const staffPermissions = resolveAdminStaffPermissionSet\(outcome\);[\s\S]*if \(staffPermissions\.state !== "ready"\) return staffPermissions;/.test(b1bPhase ? context : staffBranch));
+check("staff RPC rejection is unavailable", /result\.error[\s\S]*staff_authority_rejected/.test(b1bPhase ? context : staffBranch));
+check("staff RPC throw is unavailable", /catch \{[\s\S]*staff_authority_unreachable/.test(b1bPhase ? context : staffBranch));
 check("staff response requires an array", /if \(!Array\.isArray\(outcome\.data\)\)/.test(staff));
 check("staff row shape is strict", /typeof row !== "object"[\s\S]*row === null[\s\S]*!\("permission_key" in row\)[\s\S]*typeof row\.permission_key !== "string"/.test(staff));
 check("unknown current staff permission is unavailable", /!isCurrentAdminPermissionKey\(row\.permission_key\)[\s\S]*unrecognized_current_permission/.test(staff));
 check("duplicate staff rows deduplicate and sort", /new Set<CurrentAdminPermissionKey>\(\)[\s\S]*permissions\.add\(row\.permission_key\)[\s\S]*\[\.\.\.permissions\]\.sort\(\)/.test(staff));
 check("staff base permission is mandatory", /!permissions\.has\(BASE_PERMISSION\)[\s\S]*state: "not_admin"/.test(staff));
 check("zero staff permissions deny as not_admin", /if \(!permissions\.has\(BASE_PERMISSION\)\)/.test(staff));
-check("hybrid canonical admission remains legacy", /admissionAuthority: "legacy" as const/.test(staffBranch) && !/admissionAuthority: "staff"/.test(staffBranch));
+check("hybrid canonical admission remains legacy", b1bPhase
+  ? /resolveStaffAdminPermissionContext\(client, authority\.subject, "legacy"\)/.test(context)
+  : /admissionAuthority: "legacy" as const/.test(staffBranch) && !/admissionAuthority: "staff"/.test(staffBranch));
 check("canonical context no longer carries legacy roleKey", /admissionAuthority: "legacy" \| "staff"/.test(current) && !/\broleKey\b/.test(current));
 check("CurrentAdminPermissionContext remains canonical", /Promise<CurrentAdminPermissionContext>/.test(context) && /type CurrentAdminPermissionContext/.test(current));
 check("bounded staff failure reasons are represented", ["invalid_authority_mode", "staff_authority_unreachable", "staff_authority_rejected", "staff_authority_malformed"].every((reason) => current.includes(`"${reason}"`)));

@@ -43,12 +43,16 @@ type VerifiedAdminAuthorityResolution = Readonly<{
   context: PlatformAdminContext;
 }>;
 
+type VerifiedAdminIdentityResolution =
+  | Readonly<{ subject: string; context: null }>
+  | Readonly<{ subject: null; context: PlatformAdminContext }>;
+
 /** Distinguishes an expected absent session from an Auth authority failure. */
 export function isMissingAdminAuthSessionError(error: unknown): boolean {
   return isAuthSessionMissingError(error);
 }
 
-async function resolveVerifiedAdminAuthority(client: SupabaseClient): Promise<VerifiedAdminAuthorityResolution> {
+async function resolveVerifiedAdminIdentity(client: SupabaseClient): Promise<VerifiedAdminIdentityResolution> {
   let userResult: Awaited<ReturnType<typeof client.auth.getUser>>;
   try {
     userResult = await client.auth.getUser();
@@ -79,24 +83,38 @@ async function resolveVerifiedAdminAuthority(client: SupabaseClient): Promise<Ve
     return Object.freeze({ subject: null, context: resolvePlatformAdminContext({ ok: true, rows: [] }, false) });
   }
 
+  return Object.freeze({ subject, context: null });
+}
+
+async function resolveLegacyAdminAuthority(
+  client: SupabaseClient,
+  identity: VerifiedAdminIdentityResolution
+): Promise<VerifiedAdminAuthorityResolution> {
+  if (identity.subject === null) {
+    return Object.freeze({ subject: null, context: identity.context });
+  }
   try {
     const result = await client.rpc(PLATFORM_ADMIN_CONTEXT_FUNCTION);
     if (result.error || !Array.isArray(result.data) || !result.data.every(isContextRow)) {
       return Object.freeze({
-        subject,
+        subject: identity.subject,
         context: resolvePlatformAdminContext({ ok: false, reason: "authority_rejected" }, true)
       });
     }
     return Object.freeze({
-      subject,
+      subject: identity.subject,
       context: resolvePlatformAdminContext({ ok: true, rows: result.data }, true)
     });
   } catch {
     return Object.freeze({
-      subject,
+      subject: identity.subject,
       context: resolvePlatformAdminContext({ ok: false, reason: "authority_unreachable" }, true)
     });
   }
+}
+
+async function resolveVerifiedAdminAuthority(client: SupabaseClient): Promise<VerifiedAdminAuthorityResolution> {
+  return resolveLegacyAdminAuthority(client, await resolveVerifiedAdminIdentity(client));
 }
 
 export async function resolveVerifiedAdminContext(client: SupabaseClient): Promise<PlatformAdminContext> {
@@ -105,7 +123,8 @@ export async function resolveVerifiedAdminContext(client: SupabaseClient): Promi
 
 async function resolvePermissionsForAuthority(
   client: SupabaseClient,
-  authority: VerifiedAdminAuthorityResolution
+  authority: VerifiedAdminAuthorityResolution,
+  mode: "legacy" | "staff_permissions_legacy_admission"
 ): Promise<CurrentAdminPermissionContext> {
   if (authority.subject === null) {
     return resolveCurrentAdminPermissionContext({
@@ -113,11 +132,6 @@ async function resolvePermissionsForAuthority(
       membershipContext: authority.context,
       branchStatusPermission: null
     });
-  }
-
-  const mode = resolveAdminAuthorityMode();
-  if (mode.state === "unavailable") {
-    return Object.freeze({ state: "unavailable" as const, reason: mode.reason });
   }
 
   if (
@@ -131,24 +145,8 @@ async function resolvePermissionsForAuthority(
     });
   }
 
-  if (mode.mode === "staff_permissions_legacy_admission") {
-    let outcome: AdminStaffPermissionAuthorityOutcome;
-    try {
-      const result = await client.rpc(STAFF_PERMISSION_CONTEXT_FUNCTION);
-      outcome = result.error
-        ? Object.freeze({ ok: false as const, reason: "staff_authority_rejected" as const })
-        : Object.freeze({ ok: true as const, data: result.data });
-    } catch {
-      outcome = Object.freeze({ ok: false as const, reason: "staff_authority_unreachable" as const });
-    }
-    const staffPermissions = resolveAdminStaffPermissionSet(outcome);
-    if (staffPermissions.state !== "ready") return staffPermissions;
-    return Object.freeze({
-      state: "admin" as const,
-      subject: authority.subject,
-      admissionAuthority: "legacy" as const,
-      permissions: staffPermissions.permissions
-    });
+  if (mode === "staff_permissions_legacy_admission") {
+    return resolveStaffAdminPermissionContext(client, authority.subject, "legacy");
   }
 
   let branchStatusPermission: CurrentAdminPermissionPredicateOutcome | null = null;
@@ -174,43 +172,92 @@ async function resolvePermissionsForAuthority(
   return authoritativeContext;
 }
 
+async function resolveStaffAdminPermissionContext(
+  client: SupabaseClient,
+  subject: string,
+  admissionAuthority: "legacy" | "staff"
+): Promise<CurrentAdminPermissionContext> {
+  let outcome: AdminStaffPermissionAuthorityOutcome;
+  try {
+    const result = await client.rpc(STAFF_PERMISSION_CONTEXT_FUNCTION);
+    outcome = result.error
+      ? Object.freeze({ ok: false as const, reason: "staff_authority_rejected" as const })
+      : Object.freeze({ ok: true as const, data: result.data });
+  } catch {
+    outcome = Object.freeze({ ok: false as const, reason: "staff_authority_unreachable" as const });
+  }
+  const staffPermissions = resolveAdminStaffPermissionSet(outcome);
+  if (staffPermissions.state !== "ready") return staffPermissions;
+  return Object.freeze({
+    state: "admin" as const,
+    subject,
+    admissionAuthority,
+    permissions: staffPermissions.permissions
+  });
+}
+
+async function resolvePermissionsForIdentity(
+  client: SupabaseClient,
+  identity: VerifiedAdminIdentityResolution
+): Promise<CurrentAdminPermissionContext> {
+  if (identity.subject === null) {
+    return resolveCurrentAdminPermissionContext({
+      subject: null,
+      membershipContext: identity.context,
+      branchStatusPermission: null
+    });
+  }
+  const mode = resolveAdminAuthorityMode();
+  if (mode.state === "unavailable") {
+    return Object.freeze({ state: "unavailable" as const, reason: mode.reason });
+  }
+  if (mode.mode === "staff") {
+    return resolveStaffAdminPermissionContext(client, identity.subject, "staff");
+  }
+  const authority = await resolveLegacyAdminAuthority(client, identity);
+  return resolvePermissionsForAuthority(client, authority, mode.mode);
+}
+
 export async function resolveVerifiedAdminPermissionContext(
   client: SupabaseClient
 ): Promise<CurrentAdminPermissionContext> {
-  return resolvePermissionsForAuthority(client, await resolveVerifiedAdminAuthority(client));
+  return resolvePermissionsForIdentity(client, await resolveVerifiedAdminIdentity(client));
 }
 
-const getVerifiedAdminAuthorityRequest = cache(async (): Promise<Readonly<{
-  client: SupabaseClient | null;
-  authority: VerifiedAdminAuthorityResolution;
-}>> => {
+type VerifiedAdminAuthorityRequest =
+  | Readonly<{ client: null; identity: Readonly<{ subject: null; context: PlatformAdminContext }> }>
+  | Readonly<{ client: SupabaseClient; identity: VerifiedAdminIdentityResolution }>;
+
+const getVerifiedAdminAuthorityRequest = cache(async (): Promise<VerifiedAdminAuthorityRequest> => {
   noStore();
   const config = getAdminAuthConfig();
   if (config.state !== "ready") {
     return Object.freeze({
       client: null,
-      authority: Object.freeze({
+      identity: Object.freeze({
         subject: null,
         context: resolvePlatformAdminContext({ ok: false, reason: "authority_unreachable" }, true)
       })
     });
   }
   const client = createAdminSupabaseServerClient(config);
-  return Object.freeze({ client, authority: await resolveVerifiedAdminAuthority(client) });
+  return Object.freeze({ client, identity: await resolveVerifiedAdminIdentity(client) });
 });
 
-export const getVerifiedAdminContext = cache(async (): Promise<PlatformAdminContext> =>
-  (await getVerifiedAdminAuthorityRequest()).authority.context
-);
+export const getVerifiedAdminContext = cache(async (): Promise<PlatformAdminContext> => {
+  const request = await getVerifiedAdminAuthorityRequest();
+  if (request.client === null) return request.identity.context;
+  return (await resolveLegacyAdminAuthority(request.client, request.identity)).context;
+});
 
 export const getVerifiedAdminPermissionContext = cache(async (): Promise<CurrentAdminPermissionContext> => {
   const request = await getVerifiedAdminAuthorityRequest();
   if (request.client === null) {
     return resolveCurrentAdminPermissionContext({
-      subject: request.authority.subject,
-      membershipContext: request.authority.context,
+      subject: request.identity.subject,
+      membershipContext: request.identity.context,
       branchStatusPermission: null
     });
   }
-  return resolvePermissionsForAuthority(request.client, request.authority);
+  return resolvePermissionsForIdentity(request.client, request.identity);
 });

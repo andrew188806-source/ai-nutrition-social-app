@@ -115,6 +115,22 @@ const B1A_PATHS = [
 ];
 B0A_PATHS.push(...B0B_PATHS, ...B1A_PATHS);
 
+const B1A_FREEZE_HEAD = "8012fa1b11ec1824d512f8980276ef4114828a70";
+const B1B_SUBJECT = "Enable staff-native Admin admission";
+const B1B_PATHS = [
+  "apps/admin-web/auth/admin-authority-selector.ts", "apps/admin-web/auth/admin-context.ts",
+  "apps/admin-web/auth/admin-protected-read-authority.ts", "apps/admin-web/auth/admin-protected-mutation-authority.ts", "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b1-b-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b1-b-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b1-b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b1-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-mutations.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
+  "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
+];
+B0A_PATHS.push(...B1B_PATHS);
+
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
@@ -192,7 +208,11 @@ const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("re
 const b0bPushed = head === B1A_HEAD && origin === B1A_HEAD && ahead === 0 && behind === 0;
 const b1aFrozen = head !== B1A_HEAD && git("rev-parse", "HEAD^") === B1A_HEAD && origin === B1A_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1A_SUBJECT;
-const b1aPhase = b0bPushed || b1aFrozen;
+const b1aPushed = head === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD && ahead === 0 && behind === 0;
+const b1bFrozen = head !== B1A_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1B_SUBJECT;
+const b1bPhase = b1aPushed || b1bFrozen;
+const b1aPhase = b0bPushed || b1aFrozen || b1bPhase;
 const b0bPhase = b0aPushed || b0bFrozen || b1aPhase;
 const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts")) || b0aPhase;
@@ -217,7 +237,12 @@ const expectedContext = predecessorContext
 const expectedP2CContext = expectedContext
   .replace('} from "./admin-current-permission-context";\nimport { createAdminSupabaseServerClient }', '} from "./admin-current-permission-context";\nimport { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";\nimport { createAdminSupabaseServerClient }')
   .replace('  return resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });', '  const authoritativeContext = resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });\n  await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;');
-check("repair remains exact through the bounded P2D-A composition", p2dAPhase
+check("repair remains exact through the bounded P2D-A composition", b1bPhase
+  ? context.includes("isMissingAdminAuthSessionError(userResult.error)")
+    && context.includes('mode.mode === "staff"')
+    && context.includes('resolveStaffAdminPermissionContext(client, identity.subject, "staff")')
+    && (context.match(/auth\.getUser\(\)/g) ?? []).length === 1
+  : p2dAPhase
   ? context.includes("isMissingAdminAuthSessionError(userResult.error)")
     && context.includes('mode.mode === "staff_permissions_legacy_admission"')
     && context.includes("await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;")

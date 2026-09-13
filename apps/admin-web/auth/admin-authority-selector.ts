@@ -4,7 +4,8 @@ export const ADMIN_AUTHORITY_MODE_ENV = "TASTKIND_ADMIN_AUTHORITY_MODE" as const
 
 export type AdminAuthorityMode =
   | "legacy"
-  | "staff_permissions_legacy_admission";
+  | "staff_permissions_legacy_admission"
+  | "staff";
 
 export type AdminAuthorityModeResolution =
   | Readonly<{ state: "ready"; mode: AdminAuthorityMode }>
@@ -27,6 +28,9 @@ export function resolveAdminAuthorityMode(
       state: "ready" as const,
       mode: "staff_permissions_legacy_admission" as const
     });
+  }
+  if (value === "staff") {
+    return Object.freeze({ state: "ready" as const, mode: "staff" as const });
   }
   return Object.freeze({ state: "unavailable" as const, reason: "invalid_authority_mode" as const });
 }
