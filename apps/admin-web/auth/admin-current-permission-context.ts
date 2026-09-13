@@ -30,7 +30,7 @@ export type CurrentAdminPermissionContext =
   | Readonly<{
       state: "admin";
       subject: string;
-      roleKey: "platform_admin";
+      admissionAuthority: "legacy" | "staff";
       permissions: readonly CurrentAdminPermissionKey[];
     }>;
 
@@ -56,10 +56,6 @@ export function resolveCurrentAdminPermissionContext(
   if (composition.subject === null || !UUID.test(composition.subject)) {
     return Object.freeze({ state: "unavailable" as const, reason: "invalid_verified_subject" as const });
   }
-  if ((membershipContext as Readonly<{ roleKey?: unknown }>).roleKey !== "platform_admin") {
-    return Object.freeze({ state: "unavailable" as const, reason: "unrecognized_role" as const });
-  }
-
   const recognized = new Set<CurrentAdminPermissionKey>();
   for (const permission of membershipContext.permissions as readonly unknown[]) {
     if (!isCurrentAdminPermissionKey(permission) || permission === BRANCH_STATUS_PERMISSION) {
@@ -83,7 +79,7 @@ export function resolveCurrentAdminPermissionContext(
   return Object.freeze({
     state: "admin" as const,
     subject: composition.subject,
-    roleKey: membershipContext.roleKey,
+    admissionAuthority: "legacy" as const,
     permissions: Object.freeze([...recognized].sort())
   });
 }

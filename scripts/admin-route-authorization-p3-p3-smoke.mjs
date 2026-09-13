@@ -39,11 +39,11 @@ const navigation = executeTypeScript("apps/admin-web/components/admin-shell/admi
 });
 
 const byId = new Map(registry.ADMIN_ROUTE_REGISTRY.map((route) => [route.id, route]));
-const baseAdmin = { state: "admin", roleKey: "platform_admin", permissions: ["admin_context.read"] };
+const baseAdmin = { state: "admin", admissionAuthority: "legacy", permissions: ["admin_context.read"] };
 const currentAdmin = (permissions) => ({
   state: "admin",
   subject: "11111111-1111-4111-8111-111111111111",
-  roleKey: "platform_admin",
+  admissionAuthority: "legacy",
   permissions
 });
 const decide = (route, context, current = false) => {

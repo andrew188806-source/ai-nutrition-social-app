@@ -51,7 +51,7 @@ const byId = new Map(registry.ADMIN_ROUTE_REGISTRY.map((route) => [route.id, rou
 const admin = (permissions) => ({
   state: "admin",
   subject: "11111111-1111-4111-8111-111111111111",
-  roleKey: "platform_admin",
+  admissionAuthority: "legacy",
   permissions
 });
 const baseAdmin = admin(["admin_context.read"]);

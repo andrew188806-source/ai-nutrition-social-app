@@ -31,7 +31,7 @@ const permissions = executeTypeScript(
 const subject = "11111111-1111-4111-8111-111111111111";
 const admin = (historicalPermissions) => ({
   state: "admin",
-  roleKey: "platform_admin",
+  admissionAuthority: "legacy",
   permissions: historicalPermissions
 });
 const resolve = (membershipContext, branchStatusPermission, actor = subject) =>

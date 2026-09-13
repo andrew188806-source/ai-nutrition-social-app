@@ -68,7 +68,21 @@ const B0B_PATHS = [
   "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs",
   "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs"
 ];
-B0A_PATHS.push(...B0B_PATHS);
+
+const B1A_HEAD = "fc241a0bd2c4f0865fb9e60b488320cf99ea7716";
+const B1A_SUBJECT = "Generalize canonical Admin authority context";
+const B1A_PATHS = [
+  "apps/admin-web/auth/admin-context.ts", "apps/admin-web/auth/admin-current-permission-context.ts", "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b1-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-mutations.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs", "scripts/admin-current-permissions-p3-p2-smoke.mjs", "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-navigation-p3-p4-smoke.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-route-authorization-p3-p3-smoke.mjs", "scripts/admin-session-p3-p1-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs", "scripts/staff-authority-p3-p6-p2a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"
+];
+B0A_PATHS.push(...B0B_PATHS, ...B1A_PATHS);
+
 
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
@@ -135,7 +149,11 @@ const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_
 const b0aPushed = head === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813" && ahead === 0 && behind === 0;
 const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("rev-parse", "HEAD^") === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813"
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Add staff-native Admin branch mutation authority";
-const b0bPhase = b0aPushed || b0bFrozen;
+const b0bPushed = head === B1A_HEAD && origin === B1A_HEAD && ahead === 0 && behind === 0;
+const b1aFrozen = head !== B1A_HEAD && git("rev-parse", "HEAD^") === B1A_HEAD && origin === B1A_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1A_SUBJECT;
+const b1aPhase = b0bPushed || b1aFrozen;
+const b0bPhase = b0aPushed || b0bFrozen || b1aPhase;
 const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;

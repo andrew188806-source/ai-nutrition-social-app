@@ -208,7 +208,7 @@ test("Y staff mode plus shadow enabled makes one staff RPC", async () => {
   assert.ok(!result.calls.rpc.includes("platform_admin_has_permission_v1"));
 });
 test("Z one auth.getUser call", async () => assert.equal((await resolve("staff_permissions_legacy_admission")).calls.getUser, 1));
-test("AA session gate accepts canonical admin", () => assert.equal(sessionGate.decideAdminSessionGate({ state: "admin", subject, roleKey: "platform_admin", permissions: [base] }).state, "allow"));
+test("AA session gate accepts canonical admin", () => assert.equal(sessionGate.decideAdminSessionGate({ state: "admin", subject, admissionAuthority: "legacy", permissions: [base] }).state, "allow"));
 test("AB session gate denies canonical not_admin", () => assert.equal(sessionGate.decideAdminSessionGate({ state: "not_admin" }).state, "access_denied"));
 test("AC session gate preserves unavailable", () => assert.equal(sessionGate.decideAdminSessionGate({ state: "unavailable", reason: "staff_authority_rejected" }).state, "authority_unavailable"));
 test("AD login uses canonical resolver", () => {
@@ -221,7 +221,7 @@ test("AE base-route old bypass is closed", () => {
   assert.doesNotMatch(source, /getVerifiedAdminContext|baseContext:/);
   assert.match(source, /const permissionContext = await getVerifiedAdminPermissionContext\(\)/);
 });
-const staffSubset = Object.freeze({ state: "admin", subject, roleKey: "platform_admin", permissions: Object.freeze([audit, base]) });
+const staffSubset = Object.freeze({ state: "admin", subject, admissionAuthority: "legacy", permissions: Object.freeze([audit, base]) });
 const auditRoute = registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "audit");
 const branchRoute = registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "restaurant-branch-status");
 test("AF current Audit route follows staff subset", () => assert.equal(routeAuthorization.resolveAdminRouteAuthorization({ requirement: routeAuthorization.resolveAdminRouteRequirement(auditRoute), currentPermissionContext: staffSubset }).state, "allow_current_permission"));

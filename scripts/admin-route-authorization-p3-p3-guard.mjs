@@ -100,7 +100,20 @@ const B0B_PATHS = [
   "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs",
   "scripts/admin-api-session-p3-p5-smoke.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
 ];
-B0A_PATHS.push(...B0B_PATHS);
+
+const B1A_HEAD = "fc241a0bd2c4f0865fb9e60b488320cf99ea7716";
+const B1A_SUBJECT = "Generalize canonical Admin authority context";
+const B1A_PATHS = [
+  "apps/admin-web/auth/admin-context.ts", "apps/admin-web/auth/admin-current-permission-context.ts", "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b1-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b1-a-mutations.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs", "scripts/admin-current-permissions-p3-p2-smoke.mjs", "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-navigation-p3-p4-smoke.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-route-authorization-p3-p3-smoke.mjs", "scripts/admin-session-p3-p1-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs", "scripts/staff-authority-p3-p6-p2a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"
+];
+B0A_PATHS.push(...B0B_PATHS, ...B1A_PATHS);
 
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
@@ -201,7 +214,11 @@ const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_
 const b0aPushed = head === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813" && ahead === 0 && behind === 0;
 const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("rev-parse", "HEAD^") === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813"
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Add staff-native Admin branch mutation authority";
-const b0bPhase = b0aPushed || b0bFrozen;
+const b0bPushed = head === B1A_HEAD && origin === B1A_HEAD && ahead === 0 && behind === 0;
+const b1aFrozen = head !== B1A_HEAD && git("rev-parse", "HEAD^") === B1A_HEAD && origin === B1A_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1A_SUBJECT;
+const b1aPhase = b0bPushed || b1aFrozen;
+const b0bPhase = b0aPushed || b0bFrozen || b1aPhase;
 const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts")) || b0aPhase;
 const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
@@ -280,7 +297,7 @@ check("route authorization contains no wildcard", !/startsWith\(|endsWith\(|perm
 check("route authorization contains no namespace-prefix implication", !/split\(|substring\(|slice\(/.test(routeAuthority));
 check("PLANNED keys are classified without entering the current helper", routeAuthority.includes("plannedPermissionKeys.has(permission)") && routeAuthority.indexOf("plannedPermissionKeys.has(permission)") < routeAuthority.indexOf("decideCurrentPermissions"));
 check("PLANNED routes use temporary base-Admin policy", plannedRoutes.length === 89 && plannedRoutes.every((route) => authorization.resolveAdminRouteRequirement(route).state === "base_admin"), plannedRoutes.length);
-check("missing CURRENT permission produces permission denial", authorization.resolveAdminRouteAuthorization({ requirement: authorization.resolveAdminRouteRequirement(registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "audit")), currentPermissionContext: { state: "admin", subject: "11111111-1111-4111-8111-111111111111", roleKey: "platform_admin", permissions: ["admin_context.read"] } }).state === "permission_denied");
+check("missing CURRENT permission produces permission denial", authorization.resolveAdminRouteAuthorization({ requirement: authorization.resolveAdminRouteRequirement(registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "audit")), currentPermissionContext: { state: "admin", subject: "11111111-1111-4111-8111-111111111111", admissionAuthority: "legacy", permissions: ["admin_context.read"] } }).state === "permission_denied");
 check("current authority failure remains unavailable", authorization.resolveAdminRouteAuthorization({ requirement: authorization.resolveAdminRouteRequirement(registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "audit")), currentPermissionContext: { state: "unavailable", reason: "permission_authority_unreachable" } }).state === "authority_unavailable");
 check("permission denial is distinct server-rendered UX", factory.includes("<AdminPermissionDenied />") && accessState.includes("你沒有存取此管理功能的權限。") && !accessState.includes("admin_audit.read"));
 check("authorization decision precedes shell and protected page body", factory.indexOf("const decision") < factory.indexOf("<AdminShell") && factory.indexOf("permission_denied") < factory.indexOf("<AdminRegistryPage routeId={routeId}"));

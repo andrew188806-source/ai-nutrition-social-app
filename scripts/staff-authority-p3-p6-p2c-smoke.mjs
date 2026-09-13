@@ -67,7 +67,7 @@ const threeKeys = [...vocabulary.CURRENT_ADMIN_PERMISSION_KEYS];
 const authoritative = Object.freeze({
   state: "admin",
   subject,
-  roleKey: "platform_admin",
+  admissionAuthority: "legacy",
   permissions: Object.freeze([...threeKeys])
 });
 const rows = (permissions) => permissions.map((permission_key) => ({ permission_key }));

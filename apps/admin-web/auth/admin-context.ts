@@ -146,7 +146,7 @@ async function resolvePermissionsForAuthority(
     return Object.freeze({
       state: "admin" as const,
       subject: authority.subject,
-      roleKey: "platform_admin" as const,
+      admissionAuthority: "legacy" as const,
       permissions: staffPermissions.permissions
     });
   }

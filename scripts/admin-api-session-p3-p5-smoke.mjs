@@ -32,7 +32,7 @@ const helper = loadTypeScript("apps/admin-web/auth/admin-api-authorization.ts", 
 });
 
 const subject = "11111111-1111-4111-8111-111111111111";
-const admin = (permissions) => ({ state: "admin", subject, roleKey: "platform_admin", permissions });
+const admin = (permissions) => ({ state: "admin", subject, admissionAuthority: "legacy", permissions });
 const fullAdmin = admin(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]);
 const deps = (context, snapshot = { subject, accessToken: "fixture-token" }, counters = { context: 0, session: 0 }) => ({
   counters,
