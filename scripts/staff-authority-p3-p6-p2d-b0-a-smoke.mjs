@@ -16,6 +16,7 @@ const vocabulary = load("apps/admin-web/auth/admin-current-permission-vocabulary
 const staffPermission = load("apps/admin-web/auth/admin-staff-permission-authority.ts", (id) => id === "./admin-current-permission-vocabulary" ? vocabulary : {});
 const selector = load("apps/admin-web/auth/admin-authority-selector.ts");
 const readSelector = load("apps/admin-web/auth/admin-protected-read-authority.ts", (id) => id === "./admin-authority-selector" ? selector : {});
+const mutationSelector = load("apps/admin-web/auth/admin-protected-mutation-authority.ts", (id) => id === "./admin-authority-selector" ? selector : {});
 const auditTransport = load("apps/admin-web/server/platformAdminAuditTransport.ts");
 const auditConstants = load("apps/admin-web/server/platformAdminAuditRead.ts", (id) => id === "./platformAdminAuditTransport" ? auditTransport : {});
 const staffAuditTransport = load("apps/admin-web/server/staffAdminAuditTransport.ts", (id) => {
@@ -127,7 +128,9 @@ const branchRuntimeModule=load("apps/admin-web/server/platformAdminBranchStatusR
   "./platformAdminBranchStatusTransport":{BranchStatusTransportError:class extends Error{},getPlatformAdminBranchStatusConfig:()=>config,createPlatformAdminBranchStatusTransport:()=>({verifyIdentity:async()=>true,hasPermission:async()=>true,preview:async()=>{runtimeCalls.push("legacy-branch-get");return[branchRow];},mutate:async()=>{runtimeCalls.push("legacy-branch-post");return{};}})},
   "../auth/admin-api-authorization":{acceptsAdminApiCookieMutationOrigin:()=>true},
   "../auth/admin-protected-read-authority":readSelector,
-  "./staffAdminBranchStatusRead":{readStaffAdminBranchStatus:async()=>{runtimeCalls.push("staff-branch-get");return{state:"ready",restaurantId:"r",branchId:"b",branchName:"B",status:"active",statusVersion:"1"};}}
+  "./staffAdminBranchStatusRead":{readStaffAdminBranchStatus:async()=>{runtimeCalls.push("staff-branch-get");return{state:"ready",restaurantId:"r",branchId:"b",branchName:"B",status:"active",statusVersion:"1"};}},
+  "../auth/admin-protected-mutation-authority":mutationSelector,
+  "./staffAdminBranchStatusMutation":{mutateStaffAdminBranchStatus:async()=>{runtimeCalls.push("staff-branch-post");return{state:"ready",outcome:"applied",operation:"set_restaurant_branch_status",status:"inactive",statusVersion:"1",occurredAt:"2026-09-13T01:00:00Z",requestId:"11111111-1111-4111-8111-111111111111"};}}
 }[id]??{}));
 const authorization=mode=>async()=>({state:"authorized",mode,authorization:"Bearer token"});
 const auditRequest=()=>new Request("https://admin.invalid/api/platform-admin/audit");
@@ -139,7 +142,7 @@ await check("AM bearer invokes only legacy Audit even in staff mode",async()=>{r
 await check("AN legacy cookie invokes legacy Branch preview",async()=>{runtimeCalls.length=0;await branchRuntimeModule.handlePlatformAdminBranchStatusPreviewRequest(branchGet(),"b",{},fetch,authorization("browser_cookie_session"));assert.deepEqual(runtimeCalls,["legacy-branch-get"]);});
 await check("AO staff cookie invokes staff Branch preview",async()=>{runtimeCalls.length=0;await branchRuntimeModule.handlePlatformAdminBranchStatusPreviewRequest(branchGet(),"b",{TASTKIND_ADMIN_AUTHORITY_MODE:"staff_permissions_legacy_admission"},fetch,authorization("browser_cookie_session"));assert.deepEqual(runtimeCalls,["staff-branch-get"]);});
 await check("AP bearer invokes legacy Branch preview",async()=>{runtimeCalls.length=0;await branchRuntimeModule.handlePlatformAdminBranchStatusPreviewRequest(branchGet(),"b",{TASTKIND_ADMIN_AUTHORITY_MODE:"staff_permissions_legacy_admission"},fetch,authorization("bearer"));assert.deepEqual(runtimeCalls,["legacy-branch-get"]);});
-await check("AQ staff cookie POST remains legacy downstream",async()=>{runtimeCalls.length=0;await branchRuntimeModule.handlePlatformAdminBranchStatusMutationRequest(branchPost(),"b",{TASTKIND_ADMIN_AUTHORITY_MODE:"staff_permissions_legacy_admission"},fetch,authorization("browser_cookie_session"));assert.deepEqual(runtimeCalls,["legacy-branch-post"]);});
+await check("AQ exact B0-B successor selects staff cookie POST",async()=>{runtimeCalls.length=0;await branchRuntimeModule.handlePlatformAdminBranchStatusMutationRequest(branchPost(),"b",{TASTKIND_ADMIN_AUTHORITY_MODE:"staff_permissions_legacy_admission"},fetch,authorization("browser_cookie_session"));assert.deepEqual(runtimeCalls,["staff-branch-post"]);});
 await check("AR denied staff cookie POST never reaches downstream",async()=>{runtimeCalls.length=0;const response=await branchRuntimeModule.handlePlatformAdminBranchStatusMutationRequest(branchPost(),"b",{},fetch,async()=>({state:"forbidden"}));assert.equal(response.status,403);assert.deepEqual(runtimeCalls,[]);});
 await check("AS bearer POST remains legacy downstream",async()=>{runtimeCalls.length=0;await branchRuntimeModule.handlePlatformAdminBranchStatusMutationRequest(branchPost(),"b",{TASTKIND_ADMIN_AUTHORITY_MODE:"invalid"},fetch,authorization("bearer"));assert.deepEqual(runtimeCalls,["legacy-branch-post"]);});
 

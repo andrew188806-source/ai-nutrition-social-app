@@ -96,6 +96,8 @@ const branchRuntime = loadTypeScript("apps/admin-web/server/platformAdminBranchS
   if (request === "../auth/admin-api-authorization") return helper;
   if (request === "../auth/admin-protected-read-authority") return { resolveAdminProtectedReadAuthority: () => ({ state: "ready", authority: "legacy" }) };
   if (request === "./staffAdminBranchStatusRead") return { readStaffAdminBranchStatus: async () => { throw new Error("staff successor path not selected by this frozen smoke"); } };
+  if (request === "../auth/admin-protected-mutation-authority") return { resolveAdminProtectedMutationAuthority: () => ({ state: "ready", authority: "legacy" }) };
+  if (request === "./staffAdminBranchStatusMutation") return { mutateStaffAdminBranchStatus: async () => { throw new Error("staff successor path not selected by this frozen smoke"); } };
   throw new Error(`Unexpected branch runtime import: ${request}`);
 });
 

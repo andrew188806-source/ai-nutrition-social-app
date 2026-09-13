@@ -55,6 +55,22 @@ const B0A_PATHS = [
   "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
   "scripts/admin-api-session-p3-p5-smoke.mjs"
 ];
+const B0B_MIGRATION = "supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql";
+const B0B_PATHS = [
+  "apps/admin-web/auth/admin-protected-mutation-authority.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts",
+  "apps/admin-web/server/staffAdminBranchStatusMutation.ts",
+  "apps/admin-web/server/staffAdminBranchStatusMutationTransport.ts",
+  B0B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-postgres.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs"
+];
+B0A_PATHS.push(...B0B_PATHS);
+
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = [
@@ -115,7 +131,11 @@ const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C
 const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
 const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
-const b0aPhase = b0aCandidate || b0aFrozen;
+const b0aPushed = head === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813" && ahead === 0 && behind === 0;
+const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("rev-parse", "HEAD^") === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813"
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Add staff-native Admin branch mutation authority";
+const b0bPhase = b0aPushed || b0bFrozen;
+const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
 const p2bCandidate = pushed;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
@@ -131,10 +151,10 @@ check("P2A diff contains only the bounded manifest", changed.every((file) => all
 for (const [file, hash] of P1_HASHES) check(`${path.basename(file)} remains hash-pinned`, sha256(read(file)) === hash, sha256(read(file)));
 check("all three P1 migrations have no diff", git("diff", "--name-only", PREDECESSOR, "--", P1A, P1B, P1C) === "");
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration inventory is exact for recognized phase", migrations.length === (b0aPhase ? 115 : p2bPhase ? 114 : 113), migrations.length);
-check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : MIGRATION), migrations.at(-1));
-check("only exact additive migrations are introduced", JSON.stringify(changed.filter((file) => file.startsWith("supabase/migrations/"))) === JSON.stringify(b0aPhase ? [MIGRATION, P2B_MIGRATION, B0A_MIGRATION] : p2bPhase ? [MIGRATION, P2B_MIGRATION] : [MIGRATION]));
-check("all predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2bPhase && file === P2B_MIGRATION)));
+check("migration inventory is exact for recognized phase", migrations.length === (b0bPhase ? 116 : b0aPhase ? 115 : p2bPhase ? 114 : 113), migrations.length);
+check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : MIGRATION), migrations.at(-1));
+check("only exact additive migrations are introduced", JSON.stringify(changed.filter((file) => file.startsWith("supabase/migrations/"))) === JSON.stringify(b0bPhase ? [MIGRATION, P2B_MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, P2B_MIGRATION, B0A_MIGRATION] : p2bPhase ? [MIGRATION, P2B_MIGRATION] : [MIGRATION]));
+check("all predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION)));
 check("P1 table structures are not altered", !/alter table admin_internal\.staff_(?:permission_catalog|accounts|bundle_templates|bundle_template_permissions|bundle_assignments|permission_entitlements|authority_audit_log|authority_operation_receipts)\s+(?:add|drop|alter|rename)/i.test(bare));
 const seeds = [...(p1a.match(/insert into admin_internal\.staff_permission_catalog[\s\S]*?;\n/)?.[0] ?? "").matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'current'/g)].map((match) => match[1]).sort();
 check("permission catalog remains exactly three seeds", JSON.stringify(seeds) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"].sort()), seeds);

@@ -85,6 +85,24 @@ const B0A_PATHS = [
   "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-smoke.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
 ];
+const B0B_MIGRATION = "supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql";
+const B0B_PATHS = [
+  "apps/admin-web/auth/admin-protected-mutation-authority.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts",
+  "apps/admin-web/server/staffAdminBranchStatusMutation.ts",
+  "apps/admin-web/server/staffAdminBranchStatusMutationTransport.ts",
+  B0B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-b-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-b-postgres.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2d-a-guard.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
+  "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
+B0A_PATHS.push(...B0B_PATHS);
+
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
@@ -173,7 +191,11 @@ const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C
 const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
 const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
-const b0aPhase = b0aCandidate || b0aFrozen;
+const b0aPushed = head === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813" && ahead === 0 && behind === 0;
+const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("rev-parse", "HEAD^") === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813"
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Add staff-native Admin branch mutation authority";
+const b0bPhase = b0aPushed || b0bFrozen;
+const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts")) || b0aPhase;
 const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
@@ -311,7 +333,7 @@ check("accepted Admin APIs remain bearer-compatible through exact P3-P5 composit
     && acceptedApis.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
   : acceptedApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 const changedMigrations = lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations"));
-check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION))), changedMigrations);
+check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION))), changedMigrations);
 
 const changed = new Set([...lines(git("diff", "--name-only", PREDECESSOR)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
 const allowed = (file) => (b0aPhase && B0A_PATHS.includes(file)) || (p2cPhase && P2C_PATHS.includes(file))

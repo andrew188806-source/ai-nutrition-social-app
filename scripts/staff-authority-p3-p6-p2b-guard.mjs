@@ -20,6 +20,22 @@ const B0A_PATHS = [
   "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
   "scripts/admin-api-session-p3-p5-smoke.mjs"
 ];
+const B0B_MIGRATION = "supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql";
+const B0B_PATHS = [
+  "apps/admin-web/auth/admin-protected-mutation-authority.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts",
+  "apps/admin-web/server/staffAdminBranchStatusMutation.ts",
+  "apps/admin-web/server/staffAdminBranchStatusMutationTransport.ts",
+  B0B_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-b-postgres.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs"
+];
+B0A_PATHS.push(...B0B_PATHS);
+
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = [
@@ -97,7 +113,11 @@ const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C
 const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
 const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
-const b0aPhase = b0aCandidate || b0aFrozen;
+const b0aPushed = head === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813" && ahead === 0 && behind === 0;
+const b0bFrozen = head !== "79b4f92e568ea37becbbe0b502c07ef857108813" && git("rev-parse", "HEAD^") === "79b4f92e568ea37becbbe0b502c07ef857108813" && origin === "79b4f92e568ea37becbbe0b502c07ef857108813"
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Add staff-native Admin branch mutation authority";
+const b0bPhase = b0aPushed || b0bFrozen;
+const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
 const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
 const allowed = new Set([...OWN, ...SUCCESSOR_GUARDS, ...(p2cPhase ? P2C_PATHS : []), ...(b0aPhase ? B0A_PATHS : [])]);
 const checks = [], failures = [];
@@ -107,10 +127,10 @@ check("exact P2A predecessor through bounded P2C lifecycle", candidate || frozen
 check("P2B diff contains only bounded paths", changed.every((f) => allowed.has(f)), changed.filter((f) => !allowed.has(f)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
-check("migration inventory is exact through bounded B0-A", migrations.length === (b0aPhase ? 115 : 114), migrations.length);
-check("latest migration is exact through bounded B0-A", migrations.at(-1) === path.basename(b0aPhase ? B0A_MIGRATION : MIGRATION), migrations.at(-1));
-check("exact additive migrations follow P2A", JSON.stringify(changed.filter((f) => f.startsWith("supabase/migrations/"))) === JSON.stringify(b0aPhase ? [MIGRATION, B0A_MIGRATION] : [MIGRATION]));
-check("no frozen migration is modified", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((f) => f === MIGRATION || (b0aPhase && f === B0A_MIGRATION)));
+check("migration inventory is exact through bounded B0-A", migrations.length === (b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact through bounded B0-A", migrations.at(-1) === path.basename(b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : MIGRATION), migrations.at(-1));
+check("exact additive migrations follow P2A", JSON.stringify(changed.filter((f) => f.startsWith("supabase/migrations/"))) === JSON.stringify(b0bPhase ? [MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, B0A_MIGRATION] : [MIGRATION]));
+check("no frozen migration is modified", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((f) => f === MIGRATION || (b0aPhase && f === B0A_MIGRATION) || (b0bPhase && f === B0B_MIGRATION)));
 check("legacy grant and revoke definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+admin_internal\.(?:grant|revoke)_platform_admin/i.test(bare));
 check("legacy read resolver definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+public\.platform_admin_(?:current_context|has_permission)_v1/i.test(bare));
 check("P2A resolver definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+public\.staff_(?:current_context|has_permission)_v1/i.test(bare));

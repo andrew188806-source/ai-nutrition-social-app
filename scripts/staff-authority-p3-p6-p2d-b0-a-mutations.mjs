@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // P2D-B0-A mutation gate. Every mutant is in memory; repository files are never written.
 import fs from "node:fs";
+import child from "node:child_process";
 const read=(p)=>fs.readFileSync(p,"utf8").replace(/\r\n/g,"\n");
+const b0bPresent=fs.existsSync("supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql");
+const frozenB0A=(p)=>child.execFileSync("git",["show",`79b4f92e568ea37becbbe0b502c07ef857108813:${p}`],{encoding:"utf8"}).replace(/\r\n/g,"\n");
 const original={
   sql:read("supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql"),
   selector:read("apps/admin-web/auth/admin-protected-read-authority.ts"),
   audit:read("apps/admin-web/server/staffAdminAuditRead.ts"), auditTransport:read("apps/admin-web/server/staffAdminAuditTransport.ts"),
   auditRuntime:read("apps/admin-web/server/platformAdminAuditRuntime.ts"),
   branch:read("apps/admin-web/server/staffAdminBranchStatusRead.ts"), branchTransport:read("apps/admin-web/server/staffAdminBranchStatusTransport.ts"),
-  branchRuntime:read("apps/admin-web/server/platformAdminBranchStatusRuntime.ts"),
+  branchRuntime:b0bPresent?frozenB0A("apps/admin-web/server/platformAdminBranchStatusRuntime.ts"):read("apps/admin-web/server/platformAdminBranchStatusRuntime.ts"),
   vocabulary:read("apps/admin-web/auth/admin-current-permission-vocabulary.ts"),
   context:read("apps/admin-web/auth/admin-context.ts"), extraLegacyRewrite:false
 };

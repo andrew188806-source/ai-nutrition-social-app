@@ -26,6 +26,8 @@ import {
 } from "../auth/admin-api-authorization";
 import { resolveAdminProtectedReadAuthority } from "../auth/admin-protected-read-authority";
 import { readStaffAdminBranchStatus } from "./staffAdminBranchStatusRead";
+import { resolveAdminProtectedMutationAuthority } from "../auth/admin-protected-mutation-authority";
+import { mutateStaffAdminBranchStatus } from "./staffAdminBranchStatusMutation";
 
 type RuntimeFailure = Exclude<PlatformAdminBranchStatusPreview, { state: "ready" }>;
 const RESPONSE_HEADERS = {
@@ -184,7 +186,12 @@ export async function handlePlatformAdminBranchStatusMutationRequest(
   let body: unknown;
   try { body = JSON.parse(text); }
   catch { return json({ state: "invalid_request" }); }
-  return json(await mutatePlatformAdminBranchStatus(
+  const mutationAuthority = resolveAdminProtectedMutationAuthority(authorization.mode, env);
+  if (mutationAuthority.state === "unavailable") return json({ state: "dependency_unavailable" });
+  const mutate = mutationAuthority.authority === "staff"
+    ? mutateStaffAdminBranchStatus
+    : mutatePlatformAdminBranchStatus;
+  return json(await mutate(
     authorization.authorization, branchId, body, getPlatformAdminBranchStatusConfig(env), fetchImpl
   ));
 }
