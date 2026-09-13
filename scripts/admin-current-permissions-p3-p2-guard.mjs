@@ -69,10 +69,23 @@ const P2B_PATHS = [
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
+const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
 const P2C_PATHS = [
+  // Exact P2D-A successor awareness; no future path is admitted here.
+  "apps/admin-web/auth/admin-authority-selector.ts",
+  "apps/admin-web/auth/admin-staff-permission-authority.ts",
+  "apps/admin-web/auth/admin-current-permission-context.ts",
+  "apps/admin-web/auth/admin-session-gate.ts",
+  "apps/admin-web/app/admin/login/actions.ts",
+  "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx",
+  "scripts/staff-authority-p3-p6-p2d-a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs",
+  "scripts/admin-session-p3-p1-smoke.mjs",
   "package.json", ...P2C_APP_PATHS,
   "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
   "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
@@ -147,7 +160,11 @@ const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD &&
 const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
 const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
-const p2cPhase = p2cCandidate || p2cFrozen;
+const p2cPushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
+const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
+const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts"));
+const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
@@ -206,9 +223,17 @@ check("successful false predicate remains an ordinary denial", permissionContext
 check("permission output order is deterministic", permissionContext.includes("Object.freeze([...recognized].sort())"));
 check("duplicate permissions are removed with a Set", permissionContext.includes("new Set<CurrentAdminPermissionKey>()"));
 check("unknown current permission fails closed", permissionContext.includes('reason: "unrecognized_current_permission"'));
-check("admin_context.read remains the base console gate", read("apps/admin-web/auth/admin-session-gate.ts").includes('context.permissions.includes("admin_context.read")') && permissionContext.includes('reason: "missing_base_permission"'));
-check("P3-P1 session gate is byte-identical", read("apps/admin-web/auth/admin-session-gate.ts").trimEnd() === git("show", `${P3_P1_HEAD}:apps/admin-web/auth/admin-session-gate.ts`).replace(/\r\n/g, "\n").trimEnd());
-check("login still resolves only the historical base context", read("apps/admin-web/app/admin/login/actions.ts").includes("resolveVerifiedAdminContext") && !read("apps/admin-web/app/admin/login/actions.ts").includes("PermissionContext"));
+const sessionGate = read("apps/admin-web/auth/admin-session-gate.ts");
+const loginAction = read("apps/admin-web/app/admin/login/actions.ts");
+check("admin_context.read remains the base console gate", p2dAPhase
+  ? read("apps/admin-web/auth/admin-staff-permission-authority.ts").includes("!permissions.has(BASE_PERMISSION)") && serverContext.includes('authority.context.permissions.includes("admin_context.read")')
+  : sessionGate.includes('context.permissions.includes("admin_context.read")') && permissionContext.includes('reason: "missing_base_permission"'));
+check("P3-P1 session gate is byte-identical or the exact P2D-A canonical-context adapter", p2dAPhase
+  ? sessionGate.includes("CurrentAdminPermissionContext") && !sessionGate.includes("permissions.includes")
+  : sessionGate.trimEnd() === git("show", `${P3_P1_HEAD}:apps/admin-web/auth/admin-session-gate.ts`).replace(/\r\n/g, "\n").trimEnd());
+check("login resolves the phase-canonical Admin context", p2dAPhase
+  ? loginAction.includes("resolveVerifiedAdminPermissionContext") && !loginAction.includes("resolveVerifiedAdminContext")
+  : loginAction.includes("resolveVerifiedAdminContext") && !loginAction.includes("PermissionContext"));
 check("P3-P2 introduced no route enforcement and its exact P3-P3 successor owns the central enforcement seam", p3P3Phase
   ? read("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx").includes("resolveAdminRouteAuthorization")
   : !changed.some((file) => file.startsWith("apps/admin-web/app/admin/") && file !== "apps/admin-web/auth/admin-route-registry.ts"));
@@ -240,7 +265,9 @@ const frozenSessionPaths = [
   "apps/admin-web/app/admin/login/page.tsx",
   "apps/admin-web/app/admin/login/actions.ts"
 ];
-check("P3-P1 cookie login logout and middleware sources are preserved", frozenSessionPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
+check("P3-P1 cookie and middleware sources are preserved except exact P2D-A canonical seams", frozenSessionPaths.every((file) =>
+  (p2dAPhase && ["apps/admin-web/auth/admin-session-gate.ts", "apps/admin-web/app/admin/login/actions.ts"].includes(file))
+    || read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 check("no cross-request permission cache is introduced", !/new Map|setInterval|setTimeout|localStorage|sessionStorage|permission.*ttl|jwt.*permission/i.test(permissionContext + serverContext));
 check("request-local React cache is used", serverContext.includes('import { cache } from "react"') && serverContext.includes("getVerifiedAdminAuthorityRequest = cache"));
 check("pure permission helper performs exact includes matching", /context\.permissions\.includes\(permissionKey\)/.test(permissionContext));

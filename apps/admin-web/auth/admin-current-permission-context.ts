@@ -14,9 +14,13 @@ const BRANCH_STATUS_PERMISSION: CurrentAdminPermissionKey = "admin_restaurant_br
 export type CurrentAdminPermissionUnavailableReason =
   | PlatformAdminUnavailableReason
   | "invalid_verified_subject"
+  | "invalid_authority_mode"
   | "missing_base_permission"
   | "permission_authority_unreachable"
   | "permission_authority_rejected"
+  | "staff_authority_unreachable"
+  | "staff_authority_rejected"
+  | "staff_authority_malformed"
   | "unrecognized_current_permission";
 
 export type CurrentAdminPermissionContext =

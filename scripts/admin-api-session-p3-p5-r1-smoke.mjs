@@ -31,6 +31,15 @@ const currentPermissions = loadTypeScript("apps/admin-web/auth/admin-current-per
   if (request === "./admin-current-permission-vocabulary") return vocabulary;
   throw new Error(`Unexpected permission import: ${request}`);
 });
+const selector = loadTypeScript("apps/admin-web/auth/admin-authority-selector.ts", (request) => {
+  if (request === "server-only") return {};
+  throw new Error(`Unexpected selector import: ${request}`);
+});
+const staffAuthority = loadTypeScript("apps/admin-web/auth/admin-staff-permission-authority.ts", (request) => {
+  if (request === "server-only") return {};
+  if (request === "./admin-current-permission-vocabulary") return vocabulary;
+  throw new Error(`Unexpected staff authority import: ${request}`);
+});
 const adminContext = loadTypeScript("apps/admin-web/auth/admin-context.ts", (request) => {
   if (request === "server-only") return {};
   if (request === "next/cache") return { unstable_noStore: () => {}, default: () => {} };
@@ -41,7 +50,9 @@ const adminContext = loadTypeScript("apps/admin-web/auth/admin-context.ts", (req
     return { PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION: "admin_restaurant_branch.status.write" };
   }
   if (request === "../config/admin-auth") return { getAdminAuthConfig: () => ({ state: "unavailable" }) };
+  if (request === "./admin-authority-selector") return selector;
   if (request === "./admin-current-permission-context") return currentPermissions;
+  if (request === "./admin-staff-permission-authority") return staffAuthority;
   if (request === "./admin-staff-authority-shadow") return { resolveAdminStaffAuthorityShadow: async () => ({ state: "disabled" }) };
   if (request === "./supabase-server") return { createAdminSupabaseServerClient: () => { throw new Error("unused"); } };
   throw new Error(`Unexpected Admin context import: ${request}`);

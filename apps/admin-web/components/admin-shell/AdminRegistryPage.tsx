@@ -15,7 +15,6 @@ import { getAdminDescendants, getAdminRoute } from "./admin-ia-navigation";
 import { AdminRoutePlaceholder } from "./AdminRoutePlaceholder";
 import { AdminWorkspaceHeader } from "./AdminWorkspaceHeader";
 import {
-  getVerifiedAdminContext,
   getVerifiedAdminPermissionContext
 } from "../../auth/admin-context";
 import {
@@ -274,25 +273,18 @@ export function createAdminRegistryPage(routeId: AdminRouteId) {
   return async function AdminCanonicalRoutePage() {
     const route = getAdminRoute(routeId);
     const requirement = resolveAdminRouteRequirement(route);
-    const permissionContext = requirement.state === "current_permissions"
-      ? await getVerifiedAdminPermissionContext()
-      : null;
-    const decision = requirement.state === "current_permissions"
-      ? resolveAdminRouteAuthorization({
-          requirement,
-          currentPermissionContext: permissionContext
-        })
-      : resolveAdminRouteAuthorization({
-          requirement,
-          baseContext: await getVerifiedAdminContext()
-        });
+    const permissionContext = await getVerifiedAdminPermissionContext();
+    const decision = resolveAdminRouteAuthorization({
+      requirement,
+      currentPermissionContext: permissionContext
+    });
     if (decision.state === "redirect_login") redirect("/admin/login?reason=session");
     if (decision.state === "access_denied") return <AdminAccessDenied />;
     if (decision.state === "permission_denied") return <AdminPermissionDenied />;
     if (decision.state === "authority_unavailable") return <AdminAuthorityUnavailable />;
     if (decision.state === "not_registered" || decision.state === "login_exempt") notFound();
     const visibility = deriveAdminNavigationVisibility(
-      permissionContext ?? await getVerifiedAdminPermissionContext()
+      permissionContext
     );
     if (visibility.state === "unavailable") return <AdminAuthorityUnavailable />;
     return (

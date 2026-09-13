@@ -37,7 +37,7 @@ const decisions = [
   ["unauthenticated redirects", { state: "unauthenticated" }, "redirect_login"],
   ["non-admin is denied", { state: "not_admin" }, "access_denied"],
   ["authority failure is distinct", { state: "unavailable", reason: "authority_unreachable" }, "authority_unavailable"],
-  ["admin without context permission is denied", { state: "admin", roleKey: "platform_admin", permissions: ["admin_audit.read"] }, "access_denied"],
+  ["canonical admin is already base-admitted", { state: "admin", subject: "11111111-1111-4111-8111-111111111111", roleKey: "platform_admin", permissions: ["admin_context.read"] }, "allow"],
   ["admin with context permission is allowed", { state: "admin", roleKey: "platform_admin", permissions: ["admin_context.read"] }, "allow"]
 ];
 

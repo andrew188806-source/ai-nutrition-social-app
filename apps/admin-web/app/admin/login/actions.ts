@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getAdminAuthConfig } from "../../../config/admin-auth";
-import { resolveVerifiedAdminContext } from "../../../auth/admin-context";
+import { resolveVerifiedAdminPermissionContext } from "../../../auth/admin-context";
 import { decideAdminSessionGate } from "../../../auth/admin-session-gate";
 import { createAdminSupabaseServerClient } from "../../../auth/supabase-server";
 
@@ -43,7 +43,7 @@ export async function signInAdmin(formData: FormData) {
     redirect("/admin/login?error=credentials");
   }
 
-  const context = await resolveVerifiedAdminContext(client);
+  const context = await resolveVerifiedAdminPermissionContext(client);
   const decision = decideAdminSessionGate(context);
   if (decision.state === "allow") redirect("/admin");
 

@@ -68,10 +68,23 @@ const P2B_PATHS = [
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
+const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
 const P2C_PATHS = [
+  // Exact P2D-A successor awareness; no future path is admitted here.
+  "apps/admin-web/auth/admin-authority-selector.ts",
+  "apps/admin-web/auth/admin-staff-permission-authority.ts",
+  "apps/admin-web/auth/admin-current-permission-context.ts",
+  "apps/admin-web/auth/admin-session-gate.ts",
+  "apps/admin-web/app/admin/login/actions.ts",
+  "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx",
+  "scripts/staff-authority-p3-p6-p2d-a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs",
+  "scripts/admin-session-p3-p1-smoke.mjs",
   "package.json", ...P2C_APP_PATHS,
   "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
   "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
@@ -122,7 +135,11 @@ const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD &&
 const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
 const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
-const p2cPhase = p2cCandidate || p2cFrozen;
+const p2cPushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
+const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
+const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts"));
+const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
@@ -143,7 +160,12 @@ const expectedContext = predecessorContext
 const expectedP2CContext = expectedContext
   .replace('} from "./admin-current-permission-context";\nimport { createAdminSupabaseServerClient }', '} from "./admin-current-permission-context";\nimport { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";\nimport { createAdminSupabaseServerClient }')
   .replace('  return resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });', '  const authoritativeContext = resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });\n  await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;');
-check("repair remains exact through the bounded P2C shadow composition", context.trimEnd() === (p2cPhase ? expectedP2CContext : expectedContext).trimEnd());
+check("repair remains exact through the bounded P2D-A composition", p2dAPhase
+  ? context.includes("isMissingAdminAuthSessionError(userResult.error)")
+    && context.includes('mode.mode === "staff_permissions_legacy_admission"')
+    && context.includes("await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;")
+    && (context.match(/auth\.getUser\(\)/g) ?? []).length === 1
+  : context.trimEnd() === (p2cPhase ? expectedP2CContext : expectedContext).trimEnd());
 check("no broad all-status-400 unauthenticated rule exists", !/status\s*!==\s*400|status\s*===\s*400|\[400[^\]]*\]/.test(context));
 check("public Supabase missing-session predicate is imported", /import\s*{[\s\S]*isAuthSessionMissingError[\s\S]*}\s*from\s*"@supabase\/supabase-js"/.test(context));
 check("no private dependency source path is imported", !/node_modules|@supabase\/auth-js\/(?:src|dist)|@supabase\/supabase-js\/(?:src|dist)/.test(context));
@@ -160,7 +182,9 @@ check("recognized missing session reaches unauthenticated resolution", context.i
 check("thrown getUser failures remain unavailable", /try\s*{[\s\S]*client\.auth\.getUser\(\)[\s\S]*}\s*catch\s*{[\s\S]*authority_unreachable/.test(context));
 
 const permissionContextPath = "apps/admin-web/auth/admin-current-permission-context.ts";
-check("current permission composition remains byte-identical", read(permissionContextPath).trimEnd() === git("show", `${P3_P5_HEAD}:${permissionContextPath}`).replace(/\r\n/g, "\n").trimEnd());
+check("current permission composition remains byte-identical or adds only bounded P2D-A failure reasons", p2dAPhase
+  ? ["invalid_authority_mode", "staff_authority_unreachable", "staff_authority_rejected", "staff_authority_malformed"].every((reason) => read(permissionContextPath).includes(`"${reason}"`))
+  : read(permissionContextPath).trimEnd() === git("show", `${P3_P5_HEAD}:${permissionContextPath}`).replace(/\r\n/g, "\n").trimEnd());
 check("current permission context preserves unauthenticated", read(permissionContextPath).includes('membershipContext.state === "unauthenticated"') && read(permissionContextPath).includes('state: "unauthenticated" as const'));
 
 const auditRuntimePath = "apps/admin-web/server/platformAdminAuditRuntime.ts";
@@ -189,12 +213,22 @@ const changedApplication = changed.filter((file) => file.startsWith("apps/")).fi
 check("no service-role authority is introduced", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplication));
 check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION))), changed.filter((file) => file.startsWith("supabase/")));
 check("current permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P5_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
-check("Admin UI route navigation and session gate files are unchanged", [
+check("Admin UI route and navigation remain unchanged; session gate is the exact P2D-A adapter", [
   "apps/admin-web/auth/admin-route-authorization.ts",
-  "apps/admin-web/auth/admin-navigation-visibility.ts",
-  "apps/admin-web/auth/admin-session-gate.ts"
+  "apps/admin-web/auth/admin-navigation-visibility.ts"
 ].every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
-check("P3-P5 API composition is otherwise byte-identical", changed.filter((file) => file.startsWith("apps/")).every((file) => file === contextPath || (p2cPhase && file === P2C_SHADOW)), changed.filter((file) => file.startsWith("apps/")));
+const p2dAApplicationPaths = [
+  "apps/admin-web/app/admin/login/actions.ts",
+  "apps/admin-web/auth/admin-authority-selector.ts",
+  "apps/admin-web/auth/admin-context.ts",
+  "apps/admin-web/auth/admin-current-permission-context.ts",
+  "apps/admin-web/auth/admin-session-gate.ts",
+  "apps/admin-web/auth/admin-staff-authority-shadow.ts",
+  "apps/admin-web/auth/admin-staff-permission-authority.ts",
+  "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"
+];
+check("P3-P5 API composition is otherwise byte-identical", changed.filter((file) => file.startsWith("apps/")).every((file) =>
+  file === contextPath || (p2cPhase && file === P2C_SHADOW) || (p2dAPhase && p2dAApplicationPaths.includes(file))), changed.filter((file) => file.startsWith("apps/")));
 
 const predecessorGuards = [
   "admin-ia-p1", "admin-ia-p2", "admin-ia-p2-r1", "admin-ia-p2-r2", "admin-session-p3-p1",

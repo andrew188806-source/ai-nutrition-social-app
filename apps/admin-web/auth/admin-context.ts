@@ -15,11 +15,17 @@ import {
 } from "../server/platformAdminAuthority";
 import { PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION } from "../server/platformAdminBranchStatusAuthority";
 import { getAdminAuthConfig } from "../config/admin-auth";
+import { resolveAdminAuthorityMode } from "./admin-authority-selector";
 import {
   resolveCurrentAdminPermissionContext,
   type CurrentAdminPermissionContext,
   type CurrentAdminPermissionPredicateOutcome
 } from "./admin-current-permission-context";
+import {
+  resolveAdminStaffPermissionSet,
+  STAFF_PERMISSION_CONTEXT_FUNCTION,
+  type AdminStaffPermissionAuthorityOutcome
+} from "./admin-staff-permission-authority";
 import { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";
 import { createAdminSupabaseServerClient } from "./supabase-server";
 
@@ -101,21 +107,63 @@ async function resolvePermissionsForAuthority(
   client: SupabaseClient,
   authority: VerifiedAdminAuthorityResolution
 ): Promise<CurrentAdminPermissionContext> {
-  let branchStatusPermission: CurrentAdminPermissionPredicateOutcome | null = null;
-  if (authority.context.state === "admin" && authority.context.permissions.includes("admin_context.read")) {
+  if (authority.subject === null) {
+    return resolveCurrentAdminPermissionContext({
+      subject: null,
+      membershipContext: authority.context,
+      branchStatusPermission: null
+    });
+  }
+
+  const mode = resolveAdminAuthorityMode();
+  if (mode.state === "unavailable") {
+    return Object.freeze({ state: "unavailable" as const, reason: mode.reason });
+  }
+
+  if (
+    authority.context.state !== "admin"
+    || !authority.context.permissions.includes("admin_context.read")
+  ) {
+    return resolveCurrentAdminPermissionContext({
+      subject: authority.subject,
+      membershipContext: authority.context,
+      branchStatusPermission: null
+    });
+  }
+
+  if (mode.mode === "staff_permissions_legacy_admission") {
+    let outcome: AdminStaffPermissionAuthorityOutcome;
     try {
-      const result = await client.rpc(PLATFORM_ADMIN_HAS_PERMISSION_FUNCTION, {
-        requested_permission_key: PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION
-      });
-      branchStatusPermission = result.error || typeof result.data !== "boolean"
-        ? Object.freeze({ ok: false as const, reason: "permission_authority_rejected" as const })
-        : Object.freeze({ ok: true as const, granted: result.data });
+      const result = await client.rpc(STAFF_PERMISSION_CONTEXT_FUNCTION);
+      outcome = result.error
+        ? Object.freeze({ ok: false as const, reason: "staff_authority_rejected" as const })
+        : Object.freeze({ ok: true as const, data: result.data });
     } catch {
-      branchStatusPermission = Object.freeze({
-        ok: false as const,
-        reason: "permission_authority_unreachable" as const
-      });
+      outcome = Object.freeze({ ok: false as const, reason: "staff_authority_unreachable" as const });
     }
+    const staffPermissions = resolveAdminStaffPermissionSet(outcome);
+    if (staffPermissions.state !== "ready") return staffPermissions;
+    return Object.freeze({
+      state: "admin" as const,
+      subject: authority.subject,
+      roleKey: "platform_admin" as const,
+      permissions: staffPermissions.permissions
+    });
+  }
+
+  let branchStatusPermission: CurrentAdminPermissionPredicateOutcome | null = null;
+  try {
+    const result = await client.rpc(PLATFORM_ADMIN_HAS_PERMISSION_FUNCTION, {
+      requested_permission_key: PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION
+    });
+    branchStatusPermission = result.error || typeof result.data !== "boolean"
+      ? Object.freeze({ ok: false as const, reason: "permission_authority_rejected" as const })
+      : Object.freeze({ ok: true as const, granted: result.data });
+  } catch {
+    branchStatusPermission = Object.freeze({
+      ok: false as const,
+      reason: "permission_authority_unreachable" as const
+    });
   }
   const authoritativeContext = resolveCurrentAdminPermissionContext({
     subject: authority.subject,

@@ -7,10 +7,31 @@ import child from "node:child_process";
 
 const ROOT = process.cwd();
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
+const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
-const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
+const P2C_APP_PATHS = [
+  "apps/admin-web/auth/admin-context.ts", P2C_SHADOW,
+  "apps/admin-web/auth/admin-authority-selector.ts",
+  "apps/admin-web/auth/admin-staff-permission-authority.ts",
+  "apps/admin-web/auth/admin-current-permission-context.ts",
+  "apps/admin-web/auth/admin-session-gate.ts",
+  "apps/admin-web/app/admin/login/actions.ts",
+  "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"
+];
 const P2C_PATHS = [
+  // Exact P2D-A successor awareness; no future path is admitted here.
+  "apps/admin-web/auth/admin-authority-selector.ts",
+  "apps/admin-web/auth/admin-staff-permission-authority.ts",
+  "apps/admin-web/auth/admin-current-permission-context.ts",
+  "apps/admin-web/auth/admin-session-gate.ts",
+  "apps/admin-web/app/admin/login/actions.ts",
+  "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx",
+  "scripts/staff-authority-p3-p6-p2d-a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-mutations.mjs",
+  "scripts/admin-session-p3-p1-smoke.mjs",
   "package.json", ...P2C_APP_PATHS,
   "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
   "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
@@ -59,7 +80,10 @@ const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR
 const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
 const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
-const p2cPhase = p2cCandidate || p2cFrozen;
+const p2cPushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
+const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
+const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen;
 const allowed = new Set([...OWN, ...SUCCESSOR_GUARDS, ...(p2cPhase ? P2C_PATHS : [])]);
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1200)}`); }
