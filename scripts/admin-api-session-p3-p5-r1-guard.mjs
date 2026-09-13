@@ -67,6 +67,19 @@ const P2B_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
+const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
+const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
+const P2C_PATHS = [
+  "package.json", ...P2C_APP_PATHS,
+  "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -106,10 +119,14 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT && status === "";
+const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
+const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
+const p2cPhase = p2cCandidate || p2cFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
-const p2bPhase = p2bCandidate || p2bFrozen;
+const p2bPhase = p2bCandidate || p2bFrozen || p2cPhase;
 const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
@@ -123,7 +140,10 @@ const expectedContext = predecessorContext
   .replace('import type { SupabaseClient } from "@supabase/supabase-js";', 'import {\n  isAuthSessionMissingError,\n  type SupabaseClient\n} from "@supabase/supabase-js";')
   .replace('type VerifiedAdminAuthorityResolution = Readonly<{\n  subject: string | null;\n  context: PlatformAdminContext;\n}>;\n', 'type VerifiedAdminAuthorityResolution = Readonly<{\n  subject: string | null;\n  context: PlatformAdminContext;\n}>;\n\n/** Distinguishes an expected absent session from an Auth authority failure. */\nexport function isMissingAdminAuthSessionError(error: unknown): boolean {\n  return isAuthSessionMissingError(error);\n}\n')
   .replace('    if (userResult.error && userResult.error.status !== 401 && userResult.error.status !== 403) {', '    if (\n      userResult.error\n      && !isMissingAdminAuthSessionError(userResult.error)\n      && userResult.error.status !== 401\n      && userResult.error.status !== 403\n    ) {');
-check("repair is confined to the exact missing-session classification edit", context.trimEnd() === expectedContext.trimEnd());
+const expectedP2CContext = expectedContext
+  .replace('} from "./admin-current-permission-context";\nimport { createAdminSupabaseServerClient }', '} from "./admin-current-permission-context";\nimport { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";\nimport { createAdminSupabaseServerClient }')
+  .replace('  return resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });', '  const authoritativeContext = resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });\n  await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;');
+check("repair remains exact through the bounded P2C shadow composition", context.trimEnd() === (p2cPhase ? expectedP2CContext : expectedContext).trimEnd());
 check("no broad all-status-400 unauthenticated rule exists", !/status\s*!==\s*400|status\s*===\s*400|\[400[^\]]*\]/.test(context));
 check("public Supabase missing-session predicate is imported", /import\s*{[\s\S]*isAuthSessionMissingError[\s\S]*}\s*from\s*"@supabase\/supabase-js"/.test(context));
 check("no private dependency source path is imported", !/node_modules|@supabase\/auth-js\/(?:src|dist)|@supabase\/supabase-js\/(?:src|dist)/.test(context));
@@ -174,7 +194,7 @@ check("Admin UI route navigation and session gate files are unchanged", [
   "apps/admin-web/auth/admin-navigation-visibility.ts",
   "apps/admin-web/auth/admin-session-gate.ts"
 ].every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
-check("P3-P5 API composition is otherwise byte-identical", changed.filter((file) => file.startsWith("apps/")).every((file) => file === contextPath), changed.filter((file) => file.startsWith("apps/")));
+check("P3-P5 API composition is otherwise byte-identical", changed.filter((file) => file.startsWith("apps/")).every((file) => file === contextPath || (p2cPhase && file === P2C_SHADOW)), changed.filter((file) => file.startsWith("apps/")));
 
 const predecessorGuards = [
   "admin-ia-p1", "admin-ia-p2", "admin-ia-p2-r1", "admin-ia-p2-r2", "admin-session-p3-p1",
@@ -182,7 +202,7 @@ const predecessorGuards = [
 ];
 check("P3-P1 through P3-P5 guards have exact R1 successor awareness", predecessorGuards.every((name) => read(`scripts/${name}-guard.mjs`).includes(R1_SUBJECT)));
 
-const allowed = [...new Set([
+const allowed = [...new Set([...(p2cPhase ? P2C_PATHS : []),
   contextPath,
   "package.json",
   "scripts/admin-api-session-p3-p5-r1-guard.mjs",
@@ -205,7 +225,7 @@ check("changed sources contain no secret value pattern", ![/sb_secret_[A-Za-z0-9
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-api-session-p3-p5-r1-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p2cCandidate ? "p2c_candidate" : p2cFrozen ? "p2c_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

@@ -45,6 +45,19 @@ const SUCCESSOR_GUARDS = new Set([
   "scripts/admin-api-session-p3-p5-guard.mjs",
   "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ]);
+const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
+const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
+const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
+const P2C_PATHS = [
+  "package.json", ...P2C_APP_PATHS,
+  "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
 const ROOT = process.cwd();
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(ROOT, file));
@@ -69,12 +82,16 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT;
+const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
+const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
+const p2cPhase = p2cCandidate || p2cFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT;
-const p2bPhase = p2bCandidate || p2bFrozen;
+const p2bPhase = p2bCandidate || p2bFrozen || p2cPhase;
 const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
-const allowed = new Set([MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS,
+const allowed = new Set([...(p2cPhase ? P2C_PATHS : []), MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS,
   ...(p1cPhase ? [P1C_MIGRATION, ...P1C_SCRIPTS] : []),
   ...(p2aPhase ? [P2A_MIGRATION, ...P2A_SCRIPTS] : []), ...(p2bPhase ? [P2B_MIGRATION, ...P2B_SCRIPTS] : [])]);
 const checks = [], failures = [];
@@ -158,7 +175,7 @@ check("no staff context or permission predicate RPC", !/staff_current_context_v1
 check("no delegation, supervisor, audit, or receipt implementation", !/staff_delegation_scopes|supervisor_(?:grant|revoke)|staff_authority_(?:audit_log|operation_receipts)/.test(bare));
 check("migration is one transaction", /^begin;/m.test(bare) && /^commit;/m.test(bare));
 
-check("Admin application and route registry are unchanged", git("diff", "--name-only", PREDECESSOR, "--", "apps") === "");
+check("Admin application and route registry are unchanged", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item)));
 check("current permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("Admin APIs are unchanged", git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/app/api", "apps/admin-web/server") === "");
 const appSources = (() => { const out = []; const walk = (dir) => { for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) { if (["node_modules", ".next", "dist", "build"].includes(entry.name)) continue; const file = path.posix.join(dir, entry.name); if (entry.isDirectory()) walk(file); else if (/\.(?:ts|tsx|js|mjs)$/.test(file)) out.push(read(file)); } }; walk("apps"); return out.join("\n"); })();
@@ -175,7 +192,7 @@ const changedText = changed.filter(exists).map(read).join("\n");
 check("changed files contain no credential-shaped value", ![/github_pat_[A-Za-z0-9_]{20,}/, /gh[pousr]_[A-Za-z0-9]{20,}/, /sb_secret_[A-Za-z0-9_-]{20,}/, /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/].some((pattern) => pattern.test(changedText)));
 
 console.log("\n" + JSON.stringify({
-  suite: "staff-authority-p3-p6-p1b-guard", phase: candidate ? "candidate" : frozen ? "frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : pushed ? "pushed" : "invalid",
+  suite: "staff-authority-p3-p6-p1b-guard", phase: candidate ? "candidate" : frozen ? "frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p2cCandidate ? "p2c_candidate" : p2cFrozen ? "p2c_frozen_local" : p1cPushed ? "p1c_pushed" : pushed ? "pushed" : "invalid",
   total: checks.length, passed: checks.length - failures.length, failed: failures.length,
   failures: failures.map((item) => item.name), migrationSha256: sha256(sql), changedPaths: changed,
   developmentAccessed: false, productionAccessed: false, pushed: false

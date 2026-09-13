@@ -76,6 +76,19 @@ const P2B_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
+const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
+const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
+const P2C_PATHS = [
+  "package.json", ...P2C_APP_PATHS,
+  "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -166,10 +179,14 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT && status === "";
+const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
+const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
+const p2cPhase = p2cCandidate || p2cFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
-const p2bPhase = p2bCandidate || p2bFrozen;
+const p2bPhase = p2bCandidate || p2bFrozen || p2cPhase;
 const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
@@ -433,7 +450,8 @@ const allowedR2Path = (file) =>
   || file === "package.json"
   || file.startsWith("apps/admin-web/app/admin/")
   || file.startsWith("apps/admin-web/components/admin-shell/");
-const allowedP3Path = (file) => allowedR2Path(file)
+const allowedP3Path = (file) => (p2cPhase && P2C_PATHS.includes(file))
+  || allowedR2Path(file)
   || file === "package-lock.json" || file === "apps/admin-web/package.json" || file === "apps/admin-web/middleware.ts"
   || file.startsWith("apps/admin-web/auth/") || file.startsWith("apps/admin-web/config/")
   || file === "scripts/admin-session-p3-p1-guard.mjs" || file === "scripts/admin-session-p3-p1-smoke.mjs"
@@ -507,6 +525,11 @@ const expectedScripts = {
     "test:staff-authority-p3-p6-p2b": "node scripts/staff-authority-p3-p6-p2b-guard.mjs",
     "test:staff-authority-p3-p6-p2b-smoke": "node scripts/staff-authority-p3-p6-p2b-smoke.mjs",
     "test:staff-authority-p3-p6-p2b-mutations": "node scripts/staff-authority-p3-p6-p2b-mutations.mjs"
+  } : {}),
+  ...(p2cPhase ? {
+    "test:staff-authority-p3-p6-p2c": "node scripts/staff-authority-p3-p6-p2c-guard.mjs",
+    "test:staff-authority-p3-p6-p2c-smoke": "node scripts/staff-authority-p3-p6-p2c-smoke.mjs",
+    "test:staff-authority-p3-p6-p2c-mutations": "node scripts/staff-authority-p3-p6-p2c-mutations.mjs"
   } : {})
 };
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
@@ -523,7 +546,7 @@ console.log("\n" + JSON.stringify({
         : p3P2Pushed ? "p3_p2_pushed" : p3P3Frozen ? "p3_p3_frozen_local"
           : p3P3Pushed ? "p3_p3_pushed" : p3P4Frozen ? "p3_p4_frozen_local"
             : p3P4Pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
+              : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p2cCandidate ? "p2c_candidate" : p2cFrozen ? "p2c_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
   expectedRegistryRoutes: EXPECTED_REGISTRY_ROUTES,
   actualRegistryRoutes: ia.ADMIN_ROUTE_REGISTRY.length,
   total: checks.length,

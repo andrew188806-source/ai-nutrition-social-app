@@ -42,6 +42,7 @@ const adminContext = loadTypeScript("apps/admin-web/auth/admin-context.ts", (req
   }
   if (request === "../config/admin-auth") return { getAdminAuthConfig: () => ({ state: "unavailable" }) };
   if (request === "./admin-current-permission-context") return currentPermissions;
+  if (request === "./admin-staff-authority-shadow") return { resolveAdminStaffAuthorityShadow: async () => ({ state: "disabled" }) };
   if (request === "./supabase-server") return { createAdminSupabaseServerClient: () => { throw new Error("unused"); } };
   throw new Error(`Unexpected Admin context import: ${request}`);
 });

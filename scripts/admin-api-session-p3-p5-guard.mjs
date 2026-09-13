@@ -60,6 +60,19 @@ const P2B_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
+const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
+const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
+const P2C_PATHS = [
+  "package.json", ...P2C_APP_PATHS,
+  "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -100,10 +113,14 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT && status === "";
+const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
+const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
+const p2cPhase = p2cCandidate || p2cFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
-const p2bPhase = p2bCandidate || p2bFrozen;
+const p2bPhase = p2bCandidate || p2bFrozen || p2cPhase;
 const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
@@ -175,7 +192,8 @@ check("Admin cookie namespace and options are untouched", ["apps/admin-web/auth/
 
 const predecessorGuards = ["admin-ia-p1", "admin-ia-p2", "admin-ia-p2-r1", "admin-ia-p2-r2", "admin-session-p3-p1", "admin-current-permissions-p3-p2", "admin-route-authorization-p3-p3", "admin-navigation-p3-p4"];
 check("predecessor guards contain exact P3-P5 successor awareness", predecessorGuards.every((name) => read(`scripts/${name}-guard.mjs`).includes(P3_P5_SUBJECT)));
-const allowed = (file) => file === helperPath
+const allowed = (file) => (p2cPhase && P2C_PATHS.includes(file))
+  || file === helperPath
   || file === "apps/admin-web/auth/admin-context.ts"
   || file === auditRuntimePath
   || file === branchRuntimePath
@@ -198,7 +216,7 @@ check("P3-P5 guard and smoke scripts are registered", pkg.scripts["test:admin-ap
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-api-session-p3-p5-guard",
-  phase: candidate ? "candidate" : frozen ? "frozen_local" : r1Candidate ? "p3_p5_r1_candidate" : r1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
+  phase: candidate ? "candidate" : frozen ? "frozen_local" : r1Candidate ? "p3_p5_r1_candidate" : r1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p2cCandidate ? "p2c_candidate" : p2cFrozen ? "p2c_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

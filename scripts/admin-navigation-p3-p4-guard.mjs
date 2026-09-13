@@ -65,6 +65,19 @@ const P2B_PATHS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
+const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
+const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
+const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
+const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
+const P2C_PATHS = [
+  "package.json", ...P2C_APP_PATHS,
+  "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2c-smoke.mjs", "scripts/staff-authority-p3-p6-p2c-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs",
+  "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs",
+  "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n");
 const exists = (file) => fs.existsSync(path.join(root, file));
@@ -120,10 +133,14 @@ const p1cPushed = head === P1C_HEAD && origin === P1C_HEAD && ahead === 0 && beh
 const p2aCandidate = p1cPushed;
 const p2aFrozen = head !== P1C_HEAD && git("rev-parse", "HEAD^") === P1C_HEAD && origin === P1C_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2A_SUBJECT && status === "";
+const p2cCandidate = head === P2C_HEAD && origin === P2C_HEAD && ahead === 0 && behind === 0;
+const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD && origin === P2C_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2C_SUBJECT;
+const p2cPhase = p2cCandidate || p2cFrozen;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
-const p2bPhase = p2bCandidate || p2bFrozen;
+const p2bPhase = p2bCandidate || p2bFrozen || p2cPhase;
 const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
@@ -173,7 +190,11 @@ const empty = visibility.deriveAdminNavigationVisibility(admin(["admin_context.r
 check("P3-P3 route authorization remains the independent server boundary", factory.includes("resolveAdminRouteAuthorization") && factory.indexOf("const decision") < factory.indexOf("const visibility = deriveAdminNavigationVisibility") && factory.indexOf("permission_denied") < factory.indexOf("<AdminShell"));
 check("P3-P2 permission resolver remains exact through the bounded R1 classification repair",
   read("apps/admin-web/auth/admin-current-permission-context.ts").trimEnd() === git("show", `${P3_P3_HEAD}:apps/admin-web/auth/admin-current-permission-context.ts`).replace(/\r\n/g, "\n").trimEnd()
-    && (p3P5R1Phase
+    && (p2cPhase
+      ? read("apps/admin-web/auth/admin-context.ts").includes('import { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";')
+        && read("apps/admin-web/auth/admin-context.ts").includes("await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;")
+        && (read("apps/admin-web/auth/admin-context.ts").match(/auth\.getUser\(\)/g) ?? []).length === 1
+      : p3P5R1Phase
       ? git("hash-object", "apps/admin-web/auth/admin-context.ts") === P3_P5_R1_CONTEXT_BLOB
       : read("apps/admin-web/auth/admin-context.ts").trimEnd() === git("show", `${P3_P3_HEAD}:apps/admin-web/auth/admin-context.ts`).replace(/\r\n/g, "\n").trimEnd()));
 check("browser-provided permissions are never accepted", !/permissionContext|permissionKey|currentPermission|hasCurrentAdminPermission/.test(shell + sidebar + sidebarSection));
@@ -228,7 +249,8 @@ check("service_role is not used", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_r
 check("future staff roles and bundles are not implemented", !/roleBundle|permissionBundle|nutritionist_role|marketing_role/i.test(applicationChanges));
 check("predecessor guards contain exact P3-P4 successor awareness", ["admin-ia-p1", "admin-ia-p2", "admin-ia-p2-r1", "admin-ia-p2-r2", "admin-session-p3-p1", "admin-current-permissions-p3-p2", "admin-route-authorization-p3-p3"].every((name) => read(`scripts/${name}-guard.mjs`).includes(P3_P4_SUBJECT)));
 
-const allowed = (file) => file === "package.json"
+const allowed = (file) => (p2cPhase && P2C_PATHS.includes(file))
+  || file === "package.json"
   || file === "apps/admin-web/auth/admin-context.ts"
   || file === "apps/admin-web/auth/admin-navigation-visibility.ts"
   || file === "apps/admin-web/auth/admin-route-authorization.ts"
@@ -257,7 +279,7 @@ const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({
   suite: "admin-navigation-p3-p4-guard",
   phase: candidate ? "candidate" : frozen ? "frozen_local" : pushed ? "p3_p4_pushed" : p3P5Frozen ? "p3_p5_frozen_local"
-    : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
+    : p3P5R1Candidate ? "p3_p5_r1_candidate" : p3P5R1Frozen ? "p3_p5_r1_frozen_local" : p1aCandidate ? "p1a_candidate" : p1aFrozen ? "p1a_frozen_local" : p1bCandidate ? "p1b_candidate" : p1bFrozen ? "p1b_frozen_local" : p1cCandidate ? "p1c_candidate" : p1cFrozen ? "p1c_frozen_local" : p2aCandidate ? "p2a_candidate" : p2aFrozen ? "p2a_frozen_local" : p2bCandidate ? "p2b_candidate" : p2bFrozen ? "p2b_frozen_local" : p2cCandidate ? "p2c_candidate" : p2cFrozen ? "p2c_frozen_local" : p1cPushed ? "p1c_pushed" : "invalid",
   total: checks.length,
   passed: checks.length - failures.length,
   failed: failures.length,

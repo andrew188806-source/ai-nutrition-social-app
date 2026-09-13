@@ -20,6 +20,7 @@ import {
   type CurrentAdminPermissionContext,
   type CurrentAdminPermissionPredicateOutcome
 } from "./admin-current-permission-context";
+import { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";
 import { createAdminSupabaseServerClient } from "./supabase-server";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -116,11 +117,13 @@ async function resolvePermissionsForAuthority(
       });
     }
   }
-  return resolveCurrentAdminPermissionContext({
+  const authoritativeContext = resolveCurrentAdminPermissionContext({
     subject: authority.subject,
     membershipContext: authority.context,
     branchStatusPermission
   });
+  await resolveAdminStaffAuthorityShadow(client, authoritativeContext);
+  return authoritativeContext;
 }
 
 export async function resolveVerifiedAdminPermissionContext(
