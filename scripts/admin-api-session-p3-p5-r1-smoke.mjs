@@ -75,6 +75,8 @@ const auditRuntime = loadTypeScript("apps/admin-web/server/platformAdminAuditRun
       : { state: "ready", events: [], page: 1, pageSize: 20, hasNextPage: false, sourceWindow: 500 }
   };
   if (request === "../auth/admin-api-authorization") return apiHelper;
+  if (request === "../auth/admin-protected-read-authority") return { resolveAdminProtectedReadAuthority: () => ({ state: "ready", authority: "legacy" }) };
+  if (request === "./staffAdminAuditRead") return { readStaffAdminAudit: async () => { throw new Error("staff successor path not selected by this frozen smoke"); } };
   throw new Error(`Unexpected Audit runtime import: ${request}`);
 });
 
@@ -96,6 +98,8 @@ const branchRuntime = loadTypeScript("apps/admin-web/server/platformAdminBranchS
     createPlatformAdminBranchStatusTransport: () => { throw new Error("unexpected transport"); }
   };
   if (request === "../auth/admin-api-authorization") return apiHelper;
+  if (request === "../auth/admin-protected-read-authority") return { resolveAdminProtectedReadAuthority: () => ({ state: "ready", authority: "legacy" }) };
+  if (request === "./staffAdminBranchStatusRead") return { readStaffAdminBranchStatus: async () => { throw new Error("staff successor path not selected by this frozen smoke"); } };
   throw new Error(`Unexpected Branch runtime import: ${request}`);
 });
 

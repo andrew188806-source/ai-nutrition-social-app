@@ -9,6 +9,17 @@ const ROOT = process.cwd();
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
 const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
 const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
+const B0A_PREDECESSOR = "fd698dbdfedd131aac1779d2d07e8dbbe2d77267";
+const B0A_SUBJECT = "Add staff-native Admin read authority";
+const B0A_MIGRATION = "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql";
+const B0A_PATHS = [
+  "apps/admin-web/auth/admin-protected-read-authority.ts",
+  "apps/admin-web/server/platformAdminAuditRuntime.ts", "apps/admin-web/server/staffAdminAuditRead.ts", "apps/admin-web/server/staffAdminAuditTransport.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts", "apps/admin-web/server/staffAdminBranchStatusRead.ts", "apps/admin-web/server/staffAdminBranchStatusTransport.ts",
+  B0A_MIGRATION, "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs"
+];
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = [
@@ -83,8 +94,12 @@ const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD &&
 const p2cPushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
 const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
-const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen;
-const allowed = new Set([...OWN, ...SUCCESSOR_GUARDS, ...(p2cPhase ? P2C_PATHS : [])]);
+const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
+const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
+const b0aPhase = b0aCandidate || b0aFrozen;
+const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
+const allowed = new Set([...OWN, ...SUCCESSOR_GUARDS, ...(p2cPhase ? P2C_PATHS : []), ...(b0aPhase ? B0A_PATHS : [])]);
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1200)}`); }
 
@@ -92,10 +107,10 @@ check("exact P2A predecessor through bounded P2C lifecycle", candidate || frozen
 check("P2B diff contains only bounded paths", changed.every((f) => allowed.has(f)), changed.filter((f) => !allowed.has(f)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
-check("migration inventory advances exactly 113 to 114", migrations.length === 114, migrations.length);
-check("P2B is the exact latest migration", migrations.at(-1) === path.basename(MIGRATION), migrations.at(-1));
-check("exactly one migration is added after P2A", JSON.stringify(changed.filter((f) => f.startsWith("supabase/migrations/"))) === JSON.stringify([MIGRATION]));
-check("no frozen migration is modified", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((f) => f === MIGRATION));
+check("migration inventory is exact through bounded B0-A", migrations.length === (b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact through bounded B0-A", migrations.at(-1) === path.basename(b0aPhase ? B0A_MIGRATION : MIGRATION), migrations.at(-1));
+check("exact additive migrations follow P2A", JSON.stringify(changed.filter((f) => f.startsWith("supabase/migrations/"))) === JSON.stringify(b0aPhase ? [MIGRATION, B0A_MIGRATION] : [MIGRATION]));
+check("no frozen migration is modified", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((f) => f === MIGRATION || (b0aPhase && f === B0A_MIGRATION)));
 check("legacy grant and revoke definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+admin_internal\.(?:grant|revoke)_platform_admin/i.test(bare));
 check("legacy read resolver definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+public\.platform_admin_(?:current_context|has_permission)_v1/i.test(bare));
 check("P2A resolver definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+public\.staff_(?:current_context|has_permission)_v1/i.test(bare));
@@ -156,8 +171,8 @@ const currentKeys = [...p1a.matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'current'
 check("staff catalog remains exact current three", JSON.stringify(currentKeys) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"].sort()), currentKeys);
 check("P2B seeds no permission Bundle or staff identity", !/insert into admin_internal\.(?:staff_permission_catalog|staff_bundle_templates|staff_bundle_template_permissions|staff_bundle_assignments)\b/i.test(bare));
 check("P1C audit constraints are untouched", !/staff_authority_audit_log/.test(bare));
-check("application source changes only for bounded P2C shadow", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps", "packages", "functions")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item)));
-check("no route or Admin API promotion", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/auth", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item)));
+check("application source changes only for bounded successors", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps", "packages", "functions")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
+check("route and Admin API changes are bounded through B0-A", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/auth", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
 check("no migration-history repair or environment access", !/schema_migrations|supabase db push|migration sync|development|production/i.test(bare));
 const pkg = JSON.parse(read("package.json"));
 check("P2B package scripts are exact", pkg.scripts?.["test:staff-authority-p3-p6-p2b"] === "node scripts/staff-authority-p3-p6-p2b-guard.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2b-smoke"] === "node scripts/staff-authority-p3-p6-p2b-smoke.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2b-mutations"] === "node scripts/staff-authority-p3-p6-p2b-mutations.mjs");

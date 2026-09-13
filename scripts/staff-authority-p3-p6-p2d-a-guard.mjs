@@ -8,6 +8,8 @@ import child from "node:child_process";
 const ROOT = process.cwd();
 const PREDECESSOR = "a7eedc960a070e19224bc3e91b9dffca7809a320";
 const SUBJECT = "Add reversible Admin staff permission authority";
+const B0A_PREDECESSOR = "fd698dbdfedd131aac1779d2d07e8dbbe2d77267";
+const B0A_SUBJECT = "Add staff-native Admin read authority";
 const SELECTOR = "apps/admin-web/auth/admin-authority-selector.ts";
 const STAFF = "apps/admin-web/auth/admin-staff-permission-authority.ts";
 const CONTEXT = "apps/admin-web/auth/admin-context.ts";
@@ -39,7 +41,16 @@ const SUCCESSOR_AWARENESS = [
 const TEST_AWARENESS = [
   "scripts/staff-authority-p3-p6-p2c-smoke.mjs",
   "scripts/admin-session-p3-p1-smoke.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs",
   "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
+const B0A_PATHS = [
+  "apps/admin-web/auth/admin-protected-read-authority.ts",
+  "apps/admin-web/server/platformAdminAuditRuntime.ts", "apps/admin-web/server/staffAdminAuditRead.ts", "apps/admin-web/server/staffAdminAuditTransport.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts", "apps/admin-web/server/staffAdminBranchStatusRead.ts", "apps/admin-web/server/staffAdminBranchStatusTransport.ts",
+  "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql", "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
+  ...SUCCESSOR_AWARENESS, ...TEST_AWARENESS, "scripts/staff-authority-p3-p6-p2d-a-guard.mjs"
 ];
 const FROZEN = new Map([
   ["supabase/migrations/20260912010000_staff_authority_p3_p6_p1a_foundation.sql", "68a938a04b898f8d25b2ee7c9176cd3e9c97b3f324e66cbc1b70b1ad61470ddf"],
@@ -62,7 +73,11 @@ const changed = [...new Set([...lines(git("diff", "--name-only", PREDECESSOR)), 
 const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 && behind === 0;
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR && origin === PREDECESSOR
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === SUBJECT;
-const allowed = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...TEST_AWARENESS]);
+const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
+const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
+const b0aPhase = b0aCandidate || b0aFrozen;
+const allowed = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...TEST_AWARENESS, ...(b0aPhase ? B0A_PATHS : [])]);
 const selector = read(SELECTOR), staff = read(STAFF), context = read(CONTEXT), current = read(CURRENT);
 const session = read(SESSION), login = read(LOGIN), page = read(PAGE);
 const staffBranch = context.slice(context.indexOf('if (mode.mode === "staff_permissions_legacy_admission")'), context.indexOf("let branchStatusPermission"));
@@ -75,13 +90,13 @@ function check(name, pass, detail) {
   if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1200)}`);
 }
 
-check("exact P2C predecessor and local-only P2D-A lifecycle", candidate || frozen, { head, origin, ahead, behind, status });
+check("exact P2C predecessor through bounded B0-A successor", candidate || frozen || b0aPhase, { head, origin, ahead, behind, status });
 check("P2D-A diff contains only exact bounded paths", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count remains exactly 114", migrations.length === 114, migrations.length);
-check("P2B remains the exact latest migration", migrations.at(-1) === "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql", migrations.at(-1));
-check("P2D-A adds no migration", !changed.some((file) => file.startsWith("supabase/migrations/")));
+check("migration count is exact for recognized successor", migrations.length === (b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact for recognized successor", migrations.at(-1) === (b0aPhase ? "20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql" : "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql"), migrations.at(-1));
+check("P2D-A itself remains migration-free", lines(git("diff", "--name-only", B0A_PREDECESSOR, "--", "supabase/migrations")).every((file) => file === "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql"));
 check("selector is server-only", selector.startsWith('import "server-only";'));
 check("selector env name is exact", /ADMIN_AUTHORITY_MODE_ENV = "TASTKIND_ADMIN_AUTHORITY_MODE"/.test(selector));
 check("selector exposes exact legacy mode", /"legacy"/.test(selector));
@@ -132,11 +147,9 @@ check("navigation policy is byte-identical", unchanged("apps/admin-web/auth/admi
 check("Sidebar clients are byte-identical", ["apps/admin-web/components/admin-shell/AdminSidebar.tsx", "apps/admin-web/components/admin-shell/AdminSidebarSection.tsx"].every(unchanged));
 check("cookie API inherits canonical context", /resolvePermissionContext: getVerifiedAdminPermissionContext/.test(read("apps/admin-web/auth/admin-api-authorization.ts")));
 check("explicit bearer path is byte-identical", unchanged("apps/admin-web/auth/admin-api-authorization.ts"));
-check("Admin API routes and runtimes are byte-identical", [
+check("Admin API routes and bounded runtimes are exact", [
   "apps/admin-web/app/api/platform-admin/audit/route.ts",
-  "apps/admin-web/app/api/platform-admin/restaurant-branches/[branchId]/status/route.ts",
-  "apps/admin-web/server/platformAdminAuditRuntime.ts",
-  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts"
+  "apps/admin-web/app/api/platform-admin/restaurant-branches/[branchId]/status/route.ts"
 ].every(unchanged));
 check("route registry is byte-identical", unchanged("apps/admin-web/auth/admin-route-registry.ts"));
 check("current permission vocabulary is byte-identical", unchanged("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));

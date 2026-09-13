@@ -43,6 +43,17 @@ const SUCCESSOR_GUARDS = new Set([
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
 const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
 const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
+const B0A_PREDECESSOR = "fd698dbdfedd131aac1779d2d07e8dbbe2d77267";
+const B0A_SUBJECT = "Add staff-native Admin read authority";
+const B0A_MIGRATION = "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql";
+const B0A_PATHS = [
+  "apps/admin-web/auth/admin-protected-read-authority.ts",
+  "apps/admin-web/server/platformAdminAuditRuntime.ts", "apps/admin-web/server/staffAdminAuditRead.ts", "apps/admin-web/server/staffAdminAuditTransport.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts", "apps/admin-web/server/staffAdminBranchStatusRead.ts", "apps/admin-web/server/staffAdminBranchStatusTransport.ts",
+  B0A_MIGRATION, "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs"
+];
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = [
@@ -102,13 +113,17 @@ const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD &&
 const p2cPushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
 const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
-const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen;
+const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
+const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
+const b0aPhase = b0aCandidate || b0aFrozen;
+const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT;
 const p2bPhase = p2bCandidate || p2bFrozen || p2cPhase;
 const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
-const allowed = new Set([...(p2cPhase ? P2C_PATHS : []), MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS,
+const allowed = new Set([...(p2cPhase ? P2C_PATHS : []), ...(b0aPhase ? B0A_PATHS : []), MIGRATION, ...OWN_SCRIPTS, "package.json", ...SUCCESSOR_GUARDS,
   ...(p2aPhase ? [P2A_MIGRATION, ...P2A_SCRIPTS] : []), ...(p2bPhase ? [P2B_MIGRATION, ...P2B_SCRIPTS] : [])]);
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1000)}`); }
@@ -119,11 +134,11 @@ check("P1A migration remains hash-pinned", sha256(p1aSql) === P1A_SHA256, sha256
 check("P1B migration remains hash-pinned", sha256(p1bSql) === P1B_SHA256, sha256(p1bSql));
 check("P1A and P1B migrations have no diff", git("diff", "--name-only", PREDECESSOR, "--", P1A, P1B) === "");
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration inventory is exact for recognized phase", migrations.length === (p2bPhase ? 114 : p2aPhase ? 113 : 112), migrations.length);
-check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(p2bPhase ? P2B_MIGRATION : p2aPhase ? P2A_MIGRATION : MIGRATION), migrations.at(-1));
+check("migration inventory is exact for recognized phase", migrations.length === (b0aPhase ? 115 : p2bPhase ? 114 : p2aPhase ? 113 : 112), migrations.length);
+check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : p2aPhase ? P2A_MIGRATION : MIGRATION), migrations.at(-1));
 const changedMigrations = changed.filter((file) => file.startsWith("supabase/migrations/"));
-check("only exact additive migrations are introduced", JSON.stringify(changedMigrations) === JSON.stringify(p2bPhase ? [MIGRATION, P2A_MIGRATION, P2B_MIGRATION] : p2aPhase ? [MIGRATION, P2A_MIGRATION] : [MIGRATION]), changedMigrations);
-check("all frozen predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION)));
+check("only exact additive migrations are introduced", JSON.stringify(changedMigrations) === JSON.stringify(b0aPhase ? [MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION] : p2bPhase ? [MIGRATION, P2A_MIGRATION, P2B_MIGRATION] : p2aPhase ? [MIGRATION, P2A_MIGRATION] : [MIGRATION]), changedMigrations);
+check("all frozen predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION)));
 check("P1A/P1B table structure is not altered", !/alter table admin_internal\.(?:staff_permission_catalog|staff_accounts|staff_bundle_templates|staff_bundle_template_permissions|staff_bundle_assignments|staff_permission_entitlements)\s+(?:add|drop|alter|rename)/i.test(bare));
 const seeds = [...(p1aSql.match(/insert into admin_internal\.staff_permission_catalog[\s\S]*?;\n/)?.[0] ?? "").matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'current'/g)].map((match) => match[1]).sort();
 check("permission catalog remains exactly three seeds", JSON.stringify(seeds) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"].sort()), seeds);
@@ -188,8 +203,8 @@ check("no delegation table or permission seed exists", !/create table admin_inte
 check("no staff resolver exists", !/staff_current_context_v1|staff_has_permission_v1/.test(bare));
 check("no platform_admin compatibility backfill exists", !/platform_admin_memberships[\s\S]*insert into admin_internal\.staff_accounts/i.test(bare));
 
-check("Admin application and route registry are unchanged", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item)));
-check("Admin APIs are unchanged", git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/app/api", "apps/admin-web/server") === "");
+check("Admin application changes are bounded through B0-A", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
+check("Admin API routes stay frozen and server changes are bounded", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => b0aPhase && B0A_PATHS.includes(item)));
 const appSources = (() => { const out = []; const walk = (dir) => { for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) { if (["node_modules", ".next", "dist", "build"].includes(entry.name)) continue; const file = path.posix.join(dir, entry.name); if (entry.isDirectory()) walk(file); else if (/\.(?:ts|tsx|js|mjs)$/.test(file)) out.push(read(file)); } }; walk("apps"); return out.join("\n"); })();
 check("no application runtime references P1C tables or functions", !/staff_authority_(?:audit_log|operation_receipts)|materialize_staff_bundle_assignment_v1|revoke_staff_bundle_assignment_v1/.test(appSources));
 check("no Development migration-tracker repair exists", !/schema_migrations|supabase db push|migration sync/i.test(bare));

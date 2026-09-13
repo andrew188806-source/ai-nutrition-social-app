@@ -70,6 +70,20 @@ const P2B_PATHS = [
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
 const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
 const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
+const B0A_PREDECESSOR = "fd698dbdfedd131aac1779d2d07e8dbbe2d77267";
+const B0A_SUBJECT = "Add staff-native Admin read authority";
+const B0A_MIGRATION = "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql";
+const B0A_PATHS = [
+  "apps/admin-web/auth/admin-protected-read-authority.ts",
+  "apps/admin-web/server/platformAdminAuditRuntime.ts", "apps/admin-web/server/staffAdminAuditRead.ts", "apps/admin-web/server/staffAdminAuditTransport.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts", "apps/admin-web/server/staffAdminBranchStatusRead.ts", "apps/admin-web/server/staffAdminBranchStatusTransport.ts",
+  B0A_MIGRATION, "package.json",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
+  "scripts/staff-authority-p3-p6-p1a-guard.mjs", "scripts/staff-authority-p3-p6-p1b-guard.mjs", "scripts/staff-authority-p3-p6-p1c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p2a-guard.mjs", "scripts/staff-authority-p3-p6-p2b-guard.mjs", "scripts/staff-authority-p3-p6-p2c-guard.mjs", "scripts/staff-authority-p3-p6-p2d-a-guard.mjs",
+  "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
+  "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs", "scripts/admin-api-session-p3-p5-smoke.mjs", "scripts/admin-api-session-p3-p5-r1-smoke.mjs"
+];
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const P2C_APP_PATHS = ["apps/admin-web/auth/admin-context.ts", P2C_SHADOW];
@@ -138,8 +152,12 @@ const p2cFrozen = head !== P2C_HEAD && git("rev-parse", "HEAD^") === P2C_HEAD &&
 const p2cPushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
 const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
-const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts"));
-const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen;
+const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
+const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
+const b0aPhase = b0aCandidate || b0aFrozen;
+const p2dAPhase = p2dAFrozen || (p2cPushed && exists("apps/admin-web/auth/admin-authority-selector.ts")) || b0aPhase;
+const p2cPhase = p2cCandidate || p2cFrozen || p2cPushed || p2dAFrozen || b0aPhase;
 const p2bCandidate = head === P2A_HEAD && origin === P2A_HEAD && ahead === 0 && behind === 0;
 const p2bFrozen = head !== P2A_HEAD && git("rev-parse", "HEAD^") === P2A_HEAD && origin === P2A_HEAD
   && ahead === 1 && behind === 0 && git("log", "-1", "--format=%s") === P2B_SUBJECT && status === "";
@@ -205,13 +223,16 @@ const bearerFiles = [
   "apps/admin-web/server/platformAdminBranchStatusTransport.ts"
 ];
 check("bearer transport and authority files are byte-identical", bearerFiles.every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
-check("P3-P5 API runtimes are byte-identical", [auditRuntimePath, branchRuntimePath].every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
+check("P3-P5 API runtimes are byte-identical or use the bounded B0-A read split", b0aPhase
+  ? auditRuntime.includes("resolveAdminProtectedReadAuthority") && auditRuntime.includes("readStaffAdminAudit : readPlatformAdminAudit")
+    && branchRuntime.includes("resolveAdminProtectedReadAuthority") && branchRuntime.includes("readStaffAdminBranchStatus")
+  : [auditRuntimePath, branchRuntimePath].every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 check("cookie mutation CSRF and Origin policy are unchanged", branchRuntime.includes('authorization.mode === "browser_cookie_session" && !acceptsAdminApiCookieMutationOrigin(request)') && helper.includes('fetchSite === null || fetchSite === "same-origin"'));
 check("response cache security headers are unchanged", auditRuntime.includes('Vary: "Authorization, Cookie"') && branchRuntime.includes('Vary: "Authorization, Cookie"') && (auditRuntime + branchRuntime).includes('"Cache-Control": "private, no-store"') && (auditRuntime + branchRuntime).includes('"X-Content-Type-Options": "nosniff"'));
 
 const changedApplication = changed.filter((file) => file.startsWith("apps/")).filter(exists).map(read).join("\n");
 check("no service-role authority is introduced", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplication));
-check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION))), changed.filter((file) => file.startsWith("supabase/")));
+check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/")));
 check("current permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P5_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("Admin UI route and navigation remain unchanged; session gate is the exact P2D-A adapter", [
   "apps/admin-web/auth/admin-route-authorization.ts",
@@ -228,7 +249,7 @@ const p2dAApplicationPaths = [
   "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"
 ];
 check("P3-P5 API composition is otherwise byte-identical", changed.filter((file) => file.startsWith("apps/")).every((file) =>
-  file === contextPath || (p2cPhase && file === P2C_SHADOW) || (p2dAPhase && p2dAApplicationPaths.includes(file))), changed.filter((file) => file.startsWith("apps/")));
+  file === contextPath || (p2cPhase && file === P2C_SHADOW) || (p2dAPhase && p2dAApplicationPaths.includes(file)) || (b0aPhase && B0A_PATHS.includes(file))), changed.filter((file) => file.startsWith("apps/")));
 
 const predecessorGuards = [
   "admin-ia-p1", "admin-ia-p2", "admin-ia-p2-r1", "admin-ia-p2-r2", "admin-session-p3-p1",
@@ -236,7 +257,7 @@ const predecessorGuards = [
 ];
 check("P3-P1 through P3-P5 guards have exact R1 successor awareness", predecessorGuards.every((name) => read(`scripts/${name}-guard.mjs`).includes(R1_SUBJECT)));
 
-const allowed = [...new Set([...(p2cPhase ? P2C_PATHS : []),
+const allowed = [...new Set([...(p2cPhase ? P2C_PATHS : []), ...(b0aPhase ? B0A_PATHS : []),
   contextPath,
   "package.json",
   "scripts/admin-api-session-p3-p5-r1-guard.mjs",

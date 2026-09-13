@@ -24,6 +24,8 @@ import {
   resolveAdminApiAuthorization,
   type AdminApiAuthorization
 } from "../auth/admin-api-authorization";
+import { resolveAdminProtectedReadAuthority } from "../auth/admin-protected-read-authority";
+import { readStaffAdminBranchStatus } from "./staffAdminBranchStatusRead";
 
 type RuntimeFailure = Exclude<PlatformAdminBranchStatusPreview, { state: "ready" }>;
 const RESPONSE_HEADERS = {
@@ -142,7 +144,12 @@ export async function handlePlatformAdminBranchStatusPreviewRequest(
     PLATFORM_ADMIN_BRANCH_STATUS_PERMISSION
   );
   if (authorization.state !== "authorized") return json(authorizationFailure(authorization));
-  return json(await readPlatformAdminBranchStatus(
+  const readAuthority = resolveAdminProtectedReadAuthority(authorization.mode, env);
+  if (readAuthority.state === "unavailable") return json({ state: "dependency_unavailable" });
+  const read = readAuthority.authority === "staff"
+    ? readStaffAdminBranchStatus
+    : readPlatformAdminBranchStatus;
+  return json(await read(
     authorization.authorization, query.get("restaurantId"), branchId,
     getPlatformAdminBranchStatusConfig(env), fetchImpl
   ));

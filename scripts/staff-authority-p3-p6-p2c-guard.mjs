@@ -10,6 +10,9 @@ const PREDECESSOR = "8dbd14b65b8734842095ce809686ce5929cc5958";
 const SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_FROZEN_HEAD = "a7eedc960a070e19224bc3e91b9dffca7809a320";
 const P2D_A_SUBJECT = "Add reversible Admin staff permission authority";
+const B0A_PREDECESSOR = "fd698dbdfedd131aac1779d2d07e8dbbe2d77267";
+const B0A_SUBJECT = "Add staff-native Admin read authority";
+const B0A_MIGRATION = "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql";
 const SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
 const CONTEXT = "apps/admin-web/auth/admin-context.ts";
 const OWN = [
@@ -53,6 +56,15 @@ const P2D_A_PATHS = [
   ...SUCCESSOR_AWARENESS,
   ...TEST_AWARENESS
 ];
+const B0A_PATHS = [
+  ...P2D_A_PATHS,
+  "apps/admin-web/auth/admin-protected-read-authority.ts",
+  "apps/admin-web/server/platformAdminAuditRuntime.ts", "apps/admin-web/server/staffAdminAuditRead.ts", "apps/admin-web/server/staffAdminAuditTransport.ts",
+  "apps/admin-web/server/platformAdminBranchStatusRuntime.ts", "apps/admin-web/server/staffAdminBranchStatusRead.ts", "apps/admin-web/server/staffAdminBranchStatusTransport.ts",
+  B0A_MIGRATION, "scripts/staff-authority-p3-p6-p2d-b0-a-guard.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-b0-a-mutations.mjs", "scripts/staff-authority-p3-p6-p2d-b0-a-postgres.mjs",
+  "scripts/admin-api-session-p3-p5-smoke.mjs"
+];
 const FROZEN = new Map([
   ["supabase/migrations/20260912010000_staff_authority_p3_p6_p1a_foundation.sql", "68a938a04b898f8d25b2ee7c9176cd3e9c97b3f324e66cbc1b70b1ad61470ddf"],
   ["supabase/migrations/20260912020000_staff_authority_p3_p6_p1b_entitlement_foundation.sql", "c60becab5009051a01311e53dc7d8fa6c9072925aaa283cda3abff56b6e455c4"],
@@ -72,8 +84,11 @@ const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR && origin === PREDECESSOR && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === SUBJECT;
 const pushed = head === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 0 && behind === 0;
 const p2dAFrozen = head !== P2C_FROZEN_HEAD && git("rev-parse", "HEAD^") === P2C_FROZEN_HEAD && origin === P2C_FROZEN_HEAD && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P2D_A_SUBJECT;
-const p2dAPhase = pushed || p2dAFrozen;
-const allowed = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...TEST_AWARENESS, ...(p2dAPhase ? P2D_A_PATHS : [])]);
+const b0aCandidate = head === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 0 && behind === 0;
+const b0aFrozen = head !== B0A_PREDECESSOR && git("rev-parse", "HEAD^") === B0A_PREDECESSOR && origin === B0A_PREDECESSOR && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B0A_SUBJECT;
+const b0aPhase = b0aCandidate || b0aFrozen;
+const p2dAPhase = pushed || p2dAFrozen || b0aPhase;
+const allowed = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...TEST_AWARENESS, ...(p2dAPhase ? P2D_A_PATHS : []), ...(b0aPhase ? B0A_PATHS : [])]);
 const shadow = read(SHADOW), context = read(CONTEXT);
 const runtime = shadow.slice(shadow.indexOf("export async function resolveAdminStaffAuthorityShadow"));
 const comparator = shadow.slice(shadow.indexOf("export function compareAdminStaffAuthorityShadow"), shadow.indexOf("function emitAdminStaffAuthorityShadowDiagnostic"));
@@ -85,9 +100,9 @@ check("exact P2B predecessor through exact P2D-A successor lifecycle", candidate
 check("P2C diff contains only exact bounded paths", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count remains exactly 114", migrations.length === 114, migrations.length);
-check("P2B remains the exact latest migration", migrations.at(-1) === "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql", migrations.at(-1));
-check("P2C adds no migration", !changed.some((file) => file.startsWith("supabase/migrations/")));
+check("migration count is exact through bounded B0-A", migrations.length === (b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact through bounded B0-A", migrations.at(-1) === (b0aPhase ? path.basename(B0A_MIGRATION) : "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql"), migrations.at(-1));
+check("P2C migration boundary remains frozen", lines(git("diff", "--name-only", B0A_PREDECESSOR, "--", "supabase/migrations")).every((file) => file === B0A_MIGRATION));
 check("server-only shadow module exists", shadow.startsWith('import "server-only";'));
 check("shadow env name is exact", /ADMIN_STAFF_AUTHORITY_SHADOW_ENV = "TASTKIND_ADMIN_STAFF_AUTHORITY_SHADOW"/.test(shadow));
 check("shadow defaults disabled and enables only exact enabled", /return env\[ADMIN_STAFF_AUTHORITY_SHADOW_ENV\] === "enabled";/.test(shadow));

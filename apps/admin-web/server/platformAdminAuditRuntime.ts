@@ -7,6 +7,8 @@ import {
   resolveAdminApiAuthorization,
   type AdminApiAuthorization
 } from "../auth/admin-api-authorization";
+import { resolveAdminProtectedReadAuthority } from "../auth/admin-protected-read-authority";
+import { readStaffAdminAudit } from "./staffAdminAuditRead";
 
 export type AuditTrailComposition =
   | Readonly<{ mode: "mock" }>
@@ -34,12 +36,21 @@ export async function handlePlatformAdminAuditRequest(
     request.headers.get("authorization"),
     "admin_audit.read"
   );
-  const result: PlatformAdminAuditResult = authorization.state === "authorized"
-    ? await readPlatformAdminAudit(
+  let result: PlatformAdminAuditResult;
+  if (authorization.state !== "authorized") {
+    result = { state: authorization.state };
+  } else {
+    const readAuthority = resolveAdminProtectedReadAuthority(authorization.mode, env);
+    if (readAuthority.state === "unavailable") {
+      result = { state: "unavailable" };
+    } else {
+      const read = readAuthority.authority === "staff" ? readStaffAdminAudit : readPlatformAdminAudit;
+      result = await read(
         authorization.authorization, new URL(request.url).searchParams,
         getPlatformAdminAuditConfig(env), fetchImpl
-      )
-    : { state: authorization.state };
+      );
+    }
+  }
   const status = { ready: 200, unauthenticated: 401, forbidden: 403, unavailable: 503, invalid_request: 400 }[result.state];
   return Response.json(result, {
     status,
