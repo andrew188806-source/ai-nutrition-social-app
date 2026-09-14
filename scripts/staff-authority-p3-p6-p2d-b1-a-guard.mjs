@@ -53,7 +53,9 @@ const B1B_PATHS = [
   "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
   "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
-const ALLOWED = new Set([...CORE, ...FIXTURES, ...SUCCESSOR_GUARDS, ...B1B_PATHS]);
+const P3A_MIGRATION = "supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql";
+const P3A_PATHS = [P3A_MIGRATION, "package.json", "scripts/staff-authority-p3-p6-p3a-guard.mjs", "scripts/staff-authority-p3-p6-p3a-smoke.mjs", "scripts/staff-authority-p3-p6-p3a-mutations.mjs"];
+const ALLOWED = new Set([...CORE, ...FIXTURES, ...SUCCESSOR_GUARDS, ...B1B_PATHS, ...P3A_PATHS]);
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
 const git = (...args) => child.execFileSync("git", ["-c", "core.safecrlf=false", ...args], { cwd: ROOT, encoding: "utf8", maxBuffer: 64e6 }).trim();
 const lines = (value) => value ? value.split(/\r?\n/).filter(Boolean) : [];
@@ -68,7 +70,13 @@ const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR
 const B1A_FREEZE_HEAD = "8012fa1b11ec1824d512f8980276ef4114828a70";
 const b1aPushed = head === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD && ahead === 0 && behind === 0;
 const b1bFrozen = head !== B1A_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Enable staff-native Admin admission";
-const b1bPhase = b1aPushed || b1bFrozen;
+const B1B_FREEZE_HEAD = "922f1c6b89220723ac3cef118d8e172c67f64865";
+const P3A_SUBJECT = "Add staff management authority foundation";
+const b1bPushed = head === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD && ahead === 0 && behind === 0;
+const p3aFrozen = head !== B1B_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P3A_SUBJECT;
+const p3aPhase = b1bPushed || p3aFrozen;
+const b1bPhase = b1aPushed || b1bFrozen || p3aPhase;
 const current = read(CORE[0]), context = read(CORE[1]);
 const selector = read("apps/admin-web/auth/admin-authority-selector.ts");
 const legacy = read("apps/admin-web/server/platformAdminAuthority.ts");
@@ -80,9 +88,9 @@ check("exact predecessor and local lifecycle", candidate || frozen || b1bPhase, 
 check("changed paths are exactly bounded", changed.every((file) => ALLOWED.has(file)), changed.filter((file) => !ALLOWED.has(file)));
 check("all B1-A core files exist", CORE.every((file) => fs.existsSync(path.join(ROOT, file))));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count remains 116", migrations.length === 116, migrations.length);
-check("B0-B migration remains latest", migrations.at(-1) === "20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql", migrations.at(-1));
-check("B1-A changes no migration", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).length === 0);
+check("migration count remains 116", migrations.length === (p3aPhase ? 117 : 116), migrations.length);
+check("B0-B migration remains latest", migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : "20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql"), migrations.at(-1));
+check("B1-A changes no migration", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => p3aPhase && file === P3A_MIGRATION));
 check("canonical context removes roleKey", !/\broleKey\b/.test(current));
 check("canonical context contains admissionAuthority", /admissionAuthority: "legacy" \| "staff";/.test(current));
 check("canonical admission values are exact", (current.match(/admissionAuthority: "legacy" \| "staff";/g) ?? []).length === 1);

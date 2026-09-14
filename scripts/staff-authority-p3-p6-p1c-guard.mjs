@@ -97,7 +97,9 @@ const B1B_PATHS = [
   "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
   "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
-B0A_PATHS.push(...B1B_PATHS);
+const P3A_MIGRATION = "supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql";
+const P3A_PATHS = [P3A_MIGRATION, "package.json", "scripts/staff-authority-p3-p6-p3a-guard.mjs", "scripts/staff-authority-p3-p6-p3a-smoke.mjs", "scripts/staff-authority-p3-p6-p3a-mutations.mjs"];
+B0A_PATHS.push(...B1B_PATHS, ...P3A_PATHS);
 
 
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
@@ -171,7 +173,13 @@ const b1aFrozen = head !== B1A_HEAD && git("rev-parse", "HEAD^") === B1A_HEAD &&
 const b1aPushed = head === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD && ahead === 0 && behind === 0;
 const b1bFrozen = head !== B1A_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1B_SUBJECT;
-const b1bPhase = b1aPushed || b1bFrozen;
+const B1B_FREEZE_HEAD = "922f1c6b89220723ac3cef118d8e172c67f64865";
+const P3A_SUBJECT = "Add staff management authority foundation";
+const b1bPushed = head === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD && ahead === 0 && behind === 0;
+const p3aFrozen = head !== B1B_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P3A_SUBJECT;
+const p3aPhase = b1bPushed || p3aFrozen;
+const b1bPhase = b1aPushed || b1bFrozen || p3aPhase;
 const b1aPhase = b0bPushed || b1aFrozen || b1bPhase;
 const b0bPhase = b0aPushed || b0bFrozen || b1aPhase;
 const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
@@ -192,11 +200,11 @@ check("P1A migration remains hash-pinned", sha256(p1aSql) === P1A_SHA256, sha256
 check("P1B migration remains hash-pinned", sha256(p1bSql) === P1B_SHA256, sha256(p1bSql));
 check("P1A and P1B migrations have no diff", git("diff", "--name-only", PREDECESSOR, "--", P1A, P1B) === "");
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration inventory is exact for recognized phase", migrations.length === (b0bPhase ? 116 : b0aPhase ? 115 : p2bPhase ? 114 : p2aPhase ? 113 : 112), migrations.length);
-check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : p2aPhase ? P2A_MIGRATION : MIGRATION), migrations.at(-1));
-const changedMigrations = changed.filter((file) => file.startsWith("supabase/migrations/"));
+check("migration inventory is exact for recognized phase", migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : p2bPhase ? 114 : p2aPhase ? 113 : 112), migrations.length);
+check("latest migration is exact for recognized phase", migrations.at(-1) === path.basename(p3aPhase ? P3A_MIGRATION : b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : p2aPhase ? P2A_MIGRATION : MIGRATION), migrations.at(-1));
+const changedMigrations = changed.filter((file) => file.startsWith("supabase/migrations/")).filter((file) => !(p3aPhase && file === P3A_MIGRATION));
 check("only exact additive migrations are introduced", JSON.stringify(changedMigrations) === JSON.stringify(b0bPhase ? [MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION] : p2bPhase ? [MIGRATION, P2A_MIGRATION, P2B_MIGRATION] : p2aPhase ? [MIGRATION, P2A_MIGRATION] : [MIGRATION]), changedMigrations);
-check("all frozen predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION)));
+check("all frozen predecessor migrations remain byte-identical", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => file === MIGRATION || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
 check("P1A/P1B table structure is not altered", !/alter table admin_internal\.(?:staff_permission_catalog|staff_accounts|staff_bundle_templates|staff_bundle_template_permissions|staff_bundle_assignments|staff_permission_entitlements)\s+(?:add|drop|alter|rename)/i.test(bare));
 const seeds = [...(p1aSql.match(/insert into admin_internal\.staff_permission_catalog[\s\S]*?;\n/)?.[0] ?? "").matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'current'/g)].map((match) => match[1]).sort();
 check("permission catalog remains exactly three seeds", JSON.stringify(seeds) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"].sort()), seeds);

@@ -29,7 +29,9 @@ const SUCCESSOR_AWARENESS = [
   "scripts/admin-route-authorization-p3-p3-guard.mjs", "scripts/admin-navigation-p3-p4-guard.mjs",
   "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
-const ALLOWED = new Set([...CORE, ...SUCCESSOR_AWARENESS]);
+const P3A_MIGRATION = "supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql";
+const P3A_PATHS = ["supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql","package.json","scripts/staff-authority-p3-p6-p3a-guard.mjs","scripts/staff-authority-p3-p6-p3a-smoke.mjs","scripts/staff-authority-p3-p6-p3a-mutations.mjs"];
+const ALLOWED = new Set([...CORE, ...SUCCESSOR_AWARENESS, ...P3A_PATHS]);
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
 const git = (...args) => child.execFileSync("git", ["-c", "core.safecrlf=false", ...args], { cwd: ROOT, encoding: "utf8", maxBuffer: 64e6 }).trim();
 const lines = (value) => value ? value.split(/\r?\n/).filter(Boolean) : [];
@@ -40,19 +42,23 @@ const [ahead, behind] = git("rev-list", "--left-right", "--count", "HEAD...origi
 const status = lines(git("status", "--porcelain=v1", "--untracked-files=all"));
 const changed = [...new Set([...lines(git("diff", "--name-only", PREDECESSOR)), ...lines(git("ls-files", "--others", "--exclude-standard"))])].sort();
 const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 && behind === 0;
+const B1B_FREEZE_HEAD = "922f1c6b89220723ac3cef118d8e172c67f64865";
+const p3aCandidate = head === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD && ahead === 0 && behind === 0;
+const p3aFrozen = head !== B1B_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === "Add staff management authority foundation";
+const p3aPhase = p3aCandidate || p3aFrozen;
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR && origin === PREDECESSOR && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === SUBJECT;
 const selector = read(CORE[0]), context = read(CORE[1]), readAuthority = read(CORE[2]), mutationAuthority = read(CORE[3]);
 const current = read("apps/admin-web/auth/admin-current-permission-context.ts");
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(!pass && detail !== undefined ? { detail } : {}) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     ${JSON.stringify(detail).slice(0, 900)}`); }
 
-check("exact predecessor and local lifecycle", candidate || frozen, { head, origin, ahead, behind, status });
+check("exact predecessor and local lifecycle", candidate || frozen || p3aPhase, { head, origin, ahead, behind, status });
 check("changed paths are exactly bounded", changed.every((file) => ALLOWED.has(file)), changed.filter((file) => !ALLOWED.has(file)));
 check("all B1-B core paths exist", CORE.every((file) => fs.existsSync(path.join(ROOT, file))));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count remains 116", migrations.length === 116, migrations.length);
-check("B0-B migration remains latest", migrations.at(-1) === "20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql", migrations.at(-1));
-check("B1-B creates no migration", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).length === 0);
+check("migration count remains 116", migrations.length === (p3aPhase ? 117 : 116), migrations.length);
+check("B0-B migration remains latest", migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : "20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql"), migrations.at(-1));
+check("B1-B creates no migration", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => p3aPhase && file === P3A_MIGRATION));
 check("selector contains exact three modes", /\| "legacy"[\s\S]*\| "staff_permissions_legacy_admission"[\s\S]*\| "staff";/.test(selector));
 check("selector accepts exact staff", /value === "staff"/.test(selector) && /mode: "staff" as const/.test(selector));
 check("selector preserves legacy and hybrid", /value === undefined \|\| value === "legacy"/.test(selector) && /value === "staff_permissions_legacy_admission"/.test(selector));

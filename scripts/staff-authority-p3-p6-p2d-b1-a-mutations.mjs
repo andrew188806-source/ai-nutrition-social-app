@@ -18,16 +18,16 @@ const files = {
 };
 
 function audit(state) {
-  const hybrid = state.context.slice(state.context.indexOf('if (mode.mode === "staff_permissions_legacy_admission")'), state.context.indexOf("let branchStatusPermission"));
+  const hybrid = state.context.slice(state.context.indexOf("async function resolvePermissionsForAuthority"), state.context.indexOf("let branchStatusPermission"));
   return /admissionAuthority: "legacy" \| "staff";/.test(state.current)
     && !/\broleKey\b/.test(state.current)
     && /admissionAuthority: "legacy" as const/.test(state.current)
-    && /admissionAuthority: "legacy" as const/.test(hybrid)
-    && !/admissionAuthority: "staff" as const/.test(state.context)
+    && /resolveStaffAdminPermissionContext\(client, authority\.subject, "legacy"\)/.test(hybrid)
+    && /mode\.mode === "staff"[\s\S]*resolveStaffAdminPermissionContext\(client, identity\.subject, "staff"\)/.test(state.context)
     && /roleKey: PlatformAdminRoleKey/.test(state.legacy)
     && /PLATFORM_ADMIN_ROLE_KEYS = Object\.freeze\(\["platform_admin"\]/.test(state.legacy)
-    && /\| "legacy"\s*\n\s*\| "staff_permissions_legacy_admission";/.test(state.selector)
-    && !/\| "staff";|value === "staff"/.test(state.selector)
+    && /\| "legacy"[\s\S]*\| "staff_permissions_legacy_admission"[\s\S]*\| "staff";/.test(state.selector)
+    && /value === "staff"/.test(state.selector)
     && /authority\.context\.state !== "admin"/.test(state.context)
     && state.context.indexOf('authority.context.state !== "admin"') < state.context.indexOf('mode.mode === "staff_permissions_legacy_admission"')
     && /!authority\.context\.permissions\.includes\("admin_context\.read"\)/.test(state.context)
@@ -51,9 +51,9 @@ function mutate(name, key, anchor, replacement) {
 }
 mutate("keep canonical roleKey", "current", 'admissionAuthority: "legacy" | "staff";', 'roleKey: "platform_admin";');
 mutate("remove admissionAuthority", "current", 'admissionAuthority: "legacy" | "staff";', 'permissionsSource: "current";');
-mutate("emit staff admission in hybrid", "context", 'admissionAuthority: "legacy" as const', 'admissionAuthority: "staff" as const');
-mutate("allow staff-only admission", "context", 'authority.context.state !== "admin"', 'authority.context.state === "unauthenticated"');
-mutate("add staff selector value", "selector", '| "staff_permissions_legacy_admission";', '| "staff_permissions_legacy_admission"\n  | "staff";');
+mutate("emit staff admission in hybrid", "context", 'resolveStaffAdminPermissionContext(client, authority.subject, "legacy")', 'resolveStaffAdminPermissionContext(client, authority.subject, "staff")');
+mutate("allow staff-only admission", "context", 'if (mode.mode === "staff")', 'if (mode.mode !== "legacy")');
+mutate("remove staff selector value", "selector", '  | "staff";', '  | "removed_staff";');
 mutate("fallback staff failure to legacy", "context", 'if (staffPermissions.state !== "ready") return staffPermissions;', 'if (staffPermissions.state !== "ready") return MUTANT_FALLBACK_LEGACY;');
 mutate("union permissions", "context", 'permissions: staffPermissions.permissions', 'permissions: UNION_LEGACY(authority.context.permissions, staffPermissions.permissions)');
 mutate("skip admin_context admission", "context", '!authority.context.permissions.includes("admin_context.read")', 'false && !authority.context.permissions.includes("admin_context.read")');

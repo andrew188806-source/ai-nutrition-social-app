@@ -130,7 +130,9 @@ const B1B_PATHS = [
   "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-route-authorization-p3-p3-guard.mjs",
   "scripts/admin-navigation-p3-p4-guard.mjs", "scripts/admin-api-session-p3-p5-guard.mjs", "scripts/admin-api-session-p3-p5-r1-guard.mjs"
 ];
-B0A_PATHS.push(...B1B_PATHS);
+const P3A_MIGRATION = "supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql";
+const P3A_PATHS = [P3A_MIGRATION, "package.json", "scripts/staff-authority-p3-p6-p3a-guard.mjs", "scripts/staff-authority-p3-p6-p3a-smoke.mjs", "scripts/staff-authority-p3-p6-p3a-mutations.mjs"];
+B0A_PATHS.push(...B1B_PATHS, ...P3A_PATHS);
 
 const P2C_SUBJECT = "Add Admin staff authority shadow comparison";
 const P2C_SHADOW = "apps/admin-web/auth/admin-staff-authority-shadow.ts";
@@ -236,7 +238,13 @@ const b1aFrozen = head !== B1A_HEAD && git("rev-parse", "HEAD^") === B1A_HEAD &&
 const b1aPushed = head === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD && ahead === 0 && behind === 0;
 const b1bFrozen = head !== B1A_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1A_FREEZE_HEAD && origin === B1A_FREEZE_HEAD
   && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === B1B_SUBJECT;
-const b1bPhase = b1aPushed || b1bFrozen;
+const B1B_FREEZE_HEAD = "922f1c6b89220723ac3cef118d8e172c67f64865";
+const P3A_SUBJECT = "Add staff management authority foundation";
+const b1bPushed = head === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD && ahead === 0 && behind === 0;
+const p3aFrozen = head !== B1B_FREEZE_HEAD && git("rev-parse", "HEAD^") === B1B_FREEZE_HEAD && origin === B1B_FREEZE_HEAD
+  && ahead === 1 && behind === 0 && status.length === 0 && git("log", "-1", "--format=%s") === P3A_SUBJECT;
+const p3aPhase = b1bPushed || p3aFrozen;
+const b1bPhase = b1aPushed || b1bFrozen || p3aPhase;
 const b1aPhase = b0bPushed || b1aFrozen || b1bPhase;
 const b0bPhase = b0aPushed || b0bFrozen || b1aPhase;
 const b0aPhase = b0aCandidate || b0aFrozen || b0bPhase;
@@ -292,7 +300,7 @@ check("email is not accepted as authority", !/\.email\b|\bemail\s*[:=]/.test(per
 check("browser role or permission input is not accepted", !/searchParams|FormData|cookies\(\).*role|cookies\(\).*permission/i.test(permissionContext + serverContext));
 check("no service_role authority is used", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplicationSources));
 check("no direct admin_internal table access exists", !/\.from\(\s*["']admin_internal|admin_internal\./i.test(permissionContext + serverContext));
-check("no database migration changed except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
+check("no database migration changed except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
 check("membership RPC failures remain unavailable", serverContext.includes('reason: "authority_unreachable"') && serverContext.includes('reason: "authority_rejected"'));
 check("predicate transport failure is unavailable", serverContext.includes('reason: "permission_authority_unreachable"'));
 check("predicate malformed/error response is unavailable", serverContext.includes('reason: "permission_authority_rejected"') && serverContext.includes('typeof result.data !== "boolean"'));
