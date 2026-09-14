@@ -38,7 +38,7 @@ class Model {
 }
 
 test("A account.write is promoted CURRENT", () => assert.match(sql, /set readiness_status = 'current'/));
-test("B only bounded P3C delegation.write may follow account.write", () => assert.ok(otherManagement.every((x) => x === "admin.management.staff.delegation.write" || !vocabularySource.includes(`\"${x}\"`))));
+test("B only bounded P3C/P3E writer keys may follow account.write", () => assert.ok(otherManagement.every((x) => ["admin.management.staff.delegation.write", "admin.management.staff.console_admission.write"].includes(x) || !vocabularySource.includes(`\"${x}\"`))));
 test("C application vocabulary retains exact P3B four", () => assert.ok(current.every((x) => vocabularySource.includes(`\"${x}\"`))));
 test("D no management route is promoted", () => assert.doesNotMatch(sql, /admin-route-registry|Sidebar/));
 

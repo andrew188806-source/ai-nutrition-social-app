@@ -22,7 +22,7 @@ function revoke({actor,id,version,request}){if(!authorized(actor.keys))return{er
 const manager={id:"m",auth:"ma",keys:new Set(["admin_context.read","admin.management.staff.delegation.write"])};
 const target={id:"t",status:"active",from:10,until:100};
 test("A delegation.write is CURRENT",()=>assert.match(sql,/delegation\.write'[\s\S]*readiness_status = 'planned'/));
-test("B exact five-key app vocabulary",()=>assert.equal((vocabulary.match(/^  "/gm)||[]).length,5));
+test("B exact six-key P3E app vocabulary",()=>assert.equal((vocabulary.match(/^  "/gm)||[]).length,6));
 test("C manager with both keys authorized",()=>assert.ok(authorized(manager.keys)));
 test("D missing context denied",()=>assert.ok(!authorized(new Set(["admin.management.staff.delegation.write"]))));
 test("E missing delegation.write denied",()=>assert.ok(!authorized(new Set(["admin_context.read"]))));
@@ -61,5 +61,6 @@ test("AJ receipt exactly once on replay",()=>assert.equal([...receipts.keys()].f
 test("AK audit exactly once on replay",()=>assert.equal(audits.filter(x=>x.rk==="ma:ab").length,1));
 test("AL no entitlement Bundle or legacy writes",()=>assert.ok(!/(?:insert into|update|delete from) admin_internal\.(?:staff_permission_entitlements|staff_bundle_|platform_admins)/i.test(sql)));
 test("AM app accepts fifth key",()=>assert.ok(vocabulary.includes('"admin.management.staff.delegation.write"')));
+test("AO P3E app accepts console admission writer",()=>assert.ok(vocabulary.includes('"admin.management.staff.console_admission.write"')));
 test("AN no route or nav promotion",()=>assert.ok(!/admin-route-registry|Sidebar/.test(sql)));
 console.log("\n"+JSON.stringify({suite:"staff-authority-p3-p6-p3c-smoke",total:tests.length,passed:tests.length-failures.length,failed:failures.length,failures,databaseUsed:false,networkUsed:false,developmentAccessed:false,productionAccessed:false},null,2));process.exitCode=failures.length?1:0;

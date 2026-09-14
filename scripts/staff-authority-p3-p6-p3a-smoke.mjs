@@ -28,7 +28,7 @@ check("A migration transaction is complete", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;
 check("B eight management keys are exact", management.every((key) => sql.includes(`'${key}'`)));
 check("C every management key is PLANNED", (sql.match(/'active', 'planned', 'SECURITY_AUTH'/g) ?? []).length === 8 && !/admin\.management[^\n]*'current'/.test(sql));
 check("D existing three current keys remain application vocabulary", current.every((key) => fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8").includes(`\"${key}\"`)));
-check("E only bounded P3B/P3C writer keys may enter current application vocabulary", management.every((key) => ["admin.management.staff.account.write", "admin.management.staff.delegation.write"].includes(key) || !fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8").includes(`\"${key}\"`)));
+check("E only bounded P3B/P3C/P3E writer keys may enter current application vocabulary", management.every((key) => ["admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write"].includes(key) || !fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8").includes(`\"${key}\"`)));
 check("F exact permission key is accepted", validPermission("admin_restaurant_branch.status.write"));
 check("G wildcard is rejected", !validPermission("admin_restaurant_branch.*"));
 check("H unknown permission is FK-governed", /staff_permission_delegations_permission_fkey[\s\S]*staff_permission_catalog/.test(sql));
@@ -47,7 +47,7 @@ check("T audit insert is restricted to sealed writers", /staff_management_audit_
 check("U authenticated and service_role direct table paths are revoked", (sql.match(/from public, anon, authenticated, authenticator, service_role;/g) ?? []).length >= 3);
 check("V granular roles are sealed", (sql.match(/create role staff_[a-z_]+ nologin noinherit nobypassrls;/g) ?? []).length === 6);
 check("W no delegation, receipt, or audit rows are seeded", !/insert into admin_internal\.staff_(?:permission_delegations|management_operation_receipts|management_audit_log)/.test(sql));
-check("X application vocabulary is exact through bounded P3C", ["196b6ad67dd9398b81d1e5ae9dc2a1951e5477db4aa664a9fad79eb0e308513d", "a19c9415b127792dfe394a9563ad8a0dc8ed0b65923327496540d095eab20b3c", "657b13cdd67ad0b0b72b202a16fef4a34d1da695962e33e706815037282c0df6"].includes(sha("apps/admin-web/auth/admin-current-permission-vocabulary.ts")));
+check("X application vocabulary is exact through bounded P3E", ["196b6ad67dd9398b81d1e5ae9dc2a1951e5477db4aa664a9fad79eb0e308513d", "a19c9415b127792dfe394a9563ad8a0dc8ed0b65923327496540d095eab20b3c", "657b13cdd67ad0b0b72b202a16fef4a34d1da695962e33e706815037282c0df6", "337068a7c2284944589c5d885618afdc52e2f464785e0d81cda28bb4af7217b3"].includes(sha("apps/admin-web/auth/admin-current-permission-vocabulary.ts")));
 check("Y P2A resolver remains frozen", sha("supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql") === "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
 
 console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p3a-smoke", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures: failures.map((x) => x.name), databaseUsed: false, networkUsed: false, developmentAccessed: false, productionAccessed: false }, null, 2));

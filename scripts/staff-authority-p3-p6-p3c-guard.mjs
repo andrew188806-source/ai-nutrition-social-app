@@ -9,6 +9,7 @@ const ROOT = process.cwd();
 const PREDECESSOR = "55b5c2caadb0fb050b4450f69d2358266876d4ca";
 const MIGRATION = "supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql";
 const P3D = "supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql";
+const P3E = "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql";
 const P3B = "supabase/migrations/20260914020000_staff_management_p3_p6_p3b_account_operator.sql";
 const P2A = "supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql";
 const VOCABULARY = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
@@ -21,6 +22,7 @@ const actorDefinition = sql.slice(sql.indexOf("create or replace function admin_
 const vocabulary = await import(pathToFileURL(path.join(ROOT, VOCABULARY)).href + `?v=${Date.now()}`);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((x) => x.endsWith(".sql")).sort();
 const p3dPhase = migrations.length === 120 && migrations.at(-1) === path.basename(P3D);
+const p3ePhase = migrations.length === 121 && migrations.at(-1) === path.basename(P3E);
 const changed = [...new Set([...git("diff", "--name-only", PREDECESSOR).split(/\r?\n/), ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/)].filter(Boolean))].sort();
 const checks = [], failures = [];
 function check(name, pass, detail) { const x={name,pass:Boolean(pass),...(!pass&&detail!==undefined?{detail}:{})}; checks.push(x); if(!x.pass) failures.push(x); console.log(`${x.pass?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`); }
@@ -30,8 +32,8 @@ const rpc=["staff_management_grant_permission_delegation_v1","staff_management_r
 
 check("migration is one transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;\s*$/.test(sql));
 check("exact predecessor is present", git("merge-base", "HEAD", PREDECESSOR) === PREDECESSOR);
-check("migration count is exact through bounded P3D", migrations.length===(p3dPhase?120:119), migrations.length);
-check("P3C migration has only exact P3D successor", migrations.at(-1)===path.basename(p3dPhase?P3D:MIGRATION) && migrations.filter(x=>x.includes("p3c_delegation_operator")).length===1, migrations.at(-1));
+check("migration count is exact through bounded P3E", migrations.length===(p3ePhase?121:p3dPhase?120:119), migrations.length);
+check("P3C migration has only exact P3D/P3E successors", migrations.at(-1)===path.basename(p3ePhase?P3E:p3dPhase?P3D:MIGRATION) && migrations.filter(x=>x.includes("p3c_delegation_operator")).length===1, migrations.at(-1));
 check("P3B hash is frozen", sha(P3B)==="a58bee65c8a0f14289fff0f3354b81ddc1d8223536b7b750698e324fdf48ec91");
 check("P2A resolver hash is frozen", sha(P2A)==="140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
 check("delegation.write alone is promoted", /permission_key = 'admin\.management\.staff\.delegation\.write'[\s\S]*readiness_status = 'planned'/.test(sql));
@@ -40,8 +42,9 @@ check("promotion pins exact P3A metadata", /sensitivity_class = 'SECURITY_AUTH'[
 check("promotion requires one row", /v_updated <> 1[\s\S]*staff_delegation_write_promotion_mismatch/.test(sql));
 check("account.write remains P3B CURRENT", /set readiness_status = 'current'[\s\S]*permission_key = 'admin\.management\.staff\.account\.write'/.test(p3b));
 check("other six management keys remain P3A PLANNED", planned.every(k=>read("supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql").includes(`'${k}', 'active', 'planned'`)));
-check("application vocabulary is exact five", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS)===JSON.stringify(exactCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
-check("no sixth application key", vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.length===5);
+const successorCurrent = p3ePhase ? [...exactCurrent.slice(0,4), "admin.management.staff.console_admission.write", exactCurrent[4]] : exactCurrent;
+check("application vocabulary is exact through bounded P3E", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS)===JSON.stringify(successorCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
+check("no unexpected application key", vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.length===(p3ePhase?6:5));
 check("no entitlement bootstrap", !/insert into admin_internal\.staff_permission_entitlements/i.test(sql));
 check("no legacy auto grant", !/insert into admin_internal\.(?:platform_admins|staff_platform_admin_compatibility_links)/i.test(sql));
 check("P3A delegation table is reused", /insert into admin_internal\.staff_permission_delegations/.test(sql));

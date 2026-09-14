@@ -9,6 +9,7 @@ const ROOT = process.cwd();
 const PREDECESSOR = "1a17400e1ebbc219cb4968f275cfabeef7030c21";
 const MIGRATION = "supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql";
 const P3C = "supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql";
+const P3E = "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql";
 const P2A = "supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql";
 const VOCABULARY = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
@@ -19,6 +20,7 @@ const p3c = read(P3C);
 const p2a = read(P2A);
 const vocabulary = await import(pathToFileURL(path.join(ROOT, VOCABULARY)).href + `?v=${Date.now()}`);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((x) => x.endsWith(".sql")).sort();
+const p3ePhase = migrations.length === 121 && migrations.at(-1) === path.basename(P3E);
 const changed = [...new Set([
   ...git("diff", "--name-only", PREDECESSOR).split(/\r?\n/),
   ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/)
@@ -29,9 +31,18 @@ const allowed = new Set([
   "scripts/staff-authority-p3-p6-p3d-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3d-mutations.mjs",
   "scripts/staff-authority-p3-p6-p3a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3a-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p2d-a-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3c-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3b-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3b-successor-awareness.mjs"
+  ,P3E
+  ,"apps/admin-web/auth/admin-current-permission-vocabulary.ts"
+  ,"scripts/staff-authority-p3-p6-p3e-guard.mjs"
+  ,"scripts/staff-authority-p3-p6-p3e-smoke.mjs"
+  ,"scripts/staff-authority-p3-p6-p3e-mutations.mjs"
 ]);
 const checks = [], failures = [];
 function check(name, pass, detail) {
@@ -43,18 +54,19 @@ const current = [
   "admin_audit.read", "admin_context.read", "admin.management.staff.account.write",
   "admin.management.staff.delegation.write", "admin_restaurant_branch.status.write"
 ];
+const successorCurrent = p3ePhase ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", current[4]] : current;
 const rpcs = ["staff_delegated_grant_permission_v1", "staff_delegated_revoke_permission_v1"];
 const allChangedText = changed.filter((file) => fs.existsSync(path.join(ROOT, file))).map(read).join("\n");
 
 check("migration is one complete transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;\s*$/.test(sql));
 check("exact P3C predecessor is present", git("merge-base", "HEAD", PREDECESSOR) === PREDECESSOR);
-check("migration count is 120", migrations.length === 120, migrations.length);
-check("P3D migration is the unique latest", migrations.at(-1) === path.basename(MIGRATION) && migrations.filter((x) => x.includes("p3d_delegated_permission_operator")).length === 1, migrations.at(-1));
+check("migration count is exact through bounded P3E", migrations.length === (p3ePhase ? 121 : 120), migrations.length);
+check("P3D migration has only exact P3E successor", migrations.at(-1) === path.basename(p3ePhase ? P3E : MIGRATION) && migrations.filter((x) => x.includes("p3d_delegated_permission_operator")).length === 1, migrations.at(-1));
 check("changed paths are bounded", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 check("P3C migration hash is frozen", sha(P3C) === "9140a6bac29b56c00bccdc3eee40f9023ef19fb474dfff46a6a8c0e90ff9d5f4");
 check("P2A resolver hash is frozen", sha(P2A) === "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
 check("permission.write is not promoted", !/update admin_internal\.staff_permission_catalog[\s\S]*admin\.management\.staff\.permission\.write/.test(sql));
-check("application vocabulary remains exact five", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(current), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
+check("application vocabulary is exact through bounded P3E", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(successorCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
 check("P3C remains sole delegation.write promotion", /admin\.management\.staff\.delegation\.write/.test(p3c) && !/set readiness_status = 'current'/.test(sql));
 check("provenance table exists", /create table admin_internal\.staff_delegated_permission_grants/.test(sql));
 check("entitlement foreign key is restrictive", /staff_delegated_permission_grants_entitlement_fkey[\s\S]*staff_permission_entitlements \(entitlement_id\)[\s\S]*on update restrict on delete restrict/.test(sql));
@@ -116,7 +128,7 @@ check("exact replay returns stored result", /return v_prior\.result_payload/.tes
 check("changed request payload conflicts", /request_payload is distinct from v_request_payload[\s\S]*request_conflict/.test(sql));
 check("delegation does not enter runtime resolver", !/staff_permission_delegations/.test(p2a));
 check("delegation loss does not revoke issued entitlements", !/(?:update|delete from) admin_internal\.staff_permission_entitlements[\s\S]{0,300}staff_permission_delegations/i.test(p3c));
-check("no route navigation or application change", !changed.some((file) => /^(?:apps|packages|supabase\/functions)\//.test(file)));
+check("no route navigation or application change beyond exact P3E vocabulary", !changed.some((file) => /^(?:apps|packages|supabase\/functions)\//.test(file) && file !== VOCABULARY));
 check("no service credential or Auth Admin runtime", !/SUPABASE_SERVICE_ROLE_KEY|auth\.admin|inviteUserByEmail/.test(sql));
 check("secret scan is clean", ![/github_pat_[A-Za-z0-9_]{20,}/, /gh[pousr]_[A-Za-z0-9]{20,}/, /sb_secret_[A-Za-z0-9_-]{20,}/, /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/].some((pattern) => pattern.test(allChangedText)));
 
