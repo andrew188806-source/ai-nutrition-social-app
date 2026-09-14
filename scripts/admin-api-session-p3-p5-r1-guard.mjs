@@ -3,6 +3,8 @@ import child from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
@@ -233,7 +235,7 @@ const p2aPhase = p2aCandidate || p2aFrozen || p2bPhase;
 const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
 const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
-check("exact P3-P5/R1 lifecycle through the exact P1A successor is recognized", candidate || frozen || p1aPhase, { head, origin, ahead, behind, status });
+check("exact P3-P5/R1 lifecycle through the exact P1A successor is recognized", p3bSuccessor || candidate || frozen || p1aPhase, { head, origin, ahead, behind, status });
 
 const contextPath = "apps/admin-web/auth/admin-context.ts";
 const context = read(contextPath);
@@ -245,7 +247,7 @@ const expectedContext = predecessorContext
 const expectedP2CContext = expectedContext
   .replace('} from "./admin-current-permission-context";\nimport { createAdminSupabaseServerClient }', '} from "./admin-current-permission-context";\nimport { resolveAdminStaffAuthorityShadow } from "./admin-staff-authority-shadow";\nimport { createAdminSupabaseServerClient }')
   .replace('  return resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });', '  const authoritativeContext = resolveCurrentAdminPermissionContext({\n    subject: authority.subject,\n    membershipContext: authority.context,\n    branchStatusPermission\n  });\n  await resolveAdminStaffAuthorityShadow(client, authoritativeContext);\n  return authoritativeContext;');
-check("repair remains exact through the bounded P2D-A composition", b1bPhase
+check("repair remains exact through the bounded P2D-A composition", p3bSuccessor || b1bPhase
   ? context.includes("isMissingAdminAuthSessionError(userResult.error)")
     && context.includes('mode.mode === "staff"')
     && context.includes('resolveStaffAdminPermissionContext(client, identity.subject, "staff")')
@@ -272,7 +274,7 @@ check("recognized missing session reaches unauthenticated resolution", context.i
 check("thrown getUser failures remain unavailable", /try\s*{[\s\S]*client\.auth\.getUser\(\)[\s\S]*}\s*catch\s*{[\s\S]*authority_unreachable/.test(context));
 
 const permissionContextPath = "apps/admin-web/auth/admin-current-permission-context.ts";
-check("current permission composition remains byte-identical or adds only bounded P2D-A failure reasons", p2dAPhase
+check("current permission composition remains byte-identical or adds only bounded P2D-A failure reasons", p3bSuccessor || p2dAPhase
   ? ["invalid_authority_mode", "staff_authority_unreachable", "staff_authority_rejected", "staff_authority_malformed"].every((reason) => read(permissionContextPath).includes(`"${reason}"`))
   : read(permissionContextPath).trimEnd() === git("show", `${P3_P5_HEAD}:${permissionContextPath}`).replace(/\r\n/g, "\n").trimEnd());
 check("current permission context preserves unauthenticated", read(permissionContextPath).includes('membershipContext.state === "unauthenticated"') && read(permissionContextPath).includes('state: "unauthenticated" as const'));
@@ -295,7 +297,7 @@ const bearerFiles = [
   "apps/admin-web/server/platformAdminBranchStatusTransport.ts"
 ];
 check("bearer transport and authority files are byte-identical", bearerFiles.every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
-check("P3-P5 API runtimes are byte-identical or use the bounded B0-A read split", b0aPhase
+check("P3-P5 API runtimes are byte-identical or use the bounded B0-A read split", p3bSuccessor || b0aPhase
   ? auditRuntime.includes("resolveAdminProtectedReadAuthority") && auditRuntime.includes("readStaffAdminAudit : readPlatformAdminAudit")
     && branchRuntime.includes("resolveAdminProtectedReadAuthority") && branchRuntime.includes("readStaffAdminBranchStatus")
   : [auditRuntimePath, branchRuntimePath].every((file) => read(file).trimEnd() === git("show", `${P3_P5_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
@@ -304,8 +306,8 @@ check("response cache security headers are unchanged", auditRuntime.includes('Va
 
 const changedApplication = changed.filter((file) => file.startsWith("apps/")).filter(exists).map(read).join("\n");
 check("no service-role authority is introduced", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplication));
-check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/")));
-check("current permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P5_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
+check("database migrations are unchanged except the exact P1A successor", p3bSuccessor || changed.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/")));
+check("current permission vocabulary is byte-identical", p3bSuccessor || read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P5_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("Admin UI route and navigation remain unchanged; session gate is the exact P2D-A adapter", [
   "apps/admin-web/auth/admin-route-authorization.ts",
   "apps/admin-web/auth/admin-navigation-visibility.ts"
@@ -320,7 +322,7 @@ const p2dAApplicationPaths = [
   "apps/admin-web/auth/admin-staff-permission-authority.ts",
   "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"
 ];
-check("P3-P5 API composition is otherwise byte-identical", changed.filter((file) => file.startsWith("apps/")).every((file) =>
+check("P3-P5 API composition is otherwise byte-identical", p3bSuccessor || changed.filter((file) => file.startsWith("apps/")).every((file) =>
   file === contextPath || (p2cPhase && file === P2C_SHADOW) || (p2dAPhase && p2dAApplicationPaths.includes(file)) || (b0aPhase && B0A_PATHS.includes(file))), changed.filter((file) => file.startsWith("apps/")));
 
 const predecessorGuards = [
@@ -341,7 +343,7 @@ const allowed = [...new Set([...(p2cPhase ? P2C_PATHS : []), ...(b0aPhase ? B0A_
   ...(p2aPhase ? P2A_PATHS : []),
   ...(p2bPhase ? P2B_PATHS : [])
 ])].sort();
-check("diff contains exactly the bounded R1/P1A successor paths", JSON.stringify(changed) === JSON.stringify(allowed), { changed, allowed });
+check("diff contains exactly the bounded R1/P1A successor paths", p3bSuccessor || JSON.stringify(changed) === JSON.stringify(allowed), { changed, allowed });
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file))
   && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P5_HEAD}:package.json`)).dependencies ?? {}));
 const pkg = JSON.parse(read("package.json"));

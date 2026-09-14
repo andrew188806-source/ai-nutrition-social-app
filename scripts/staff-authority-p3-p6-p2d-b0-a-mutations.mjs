@@ -4,7 +4,7 @@ import fs from "node:fs";
 import child from "node:child_process";
 const read=(p)=>fs.readFileSync(p,"utf8").replace(/\r\n/g,"\n");
 const b0bPresent=fs.existsSync("supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql");
-const frozenB0A=(p)=>child.execFileSync("git",["show",`79b4f92e568ea37becbbe0b502c07ef857108813:${p}`],{encoding:"utf8"}).replace(/\r\n/g,"\n");
+const frozenB0A=(p)=>child.execFileSync("git",["show",`79b4f92e568ea37becbbe0b502c07ef857108813:${p}`],{encoding:"utf8",stdio:["ignore","pipe","ignore"]}).replace(/\r\n/g,"\n");
 const original={
   sql:read("supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql"),
   selector:read("apps/admin-web/auth/admin-protected-read-authority.ts"),

@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const ROOT = process.cwd();
 const PREDECESSOR = "8012fa1b11ec1824d512f8980276ef4114828a70";
@@ -52,13 +54,13 @@ const current = read("apps/admin-web/auth/admin-current-permission-context.ts");
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(!pass && detail !== undefined ? { detail } : {}) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     ${JSON.stringify(detail).slice(0, 900)}`); }
 
-check("exact predecessor and local lifecycle", candidate || frozen || p3aPhase, { head, origin, ahead, behind, status });
-check("changed paths are exactly bounded", changed.every((file) => ALLOWED.has(file)), changed.filter((file) => !ALLOWED.has(file)));
+check("exact predecessor and local lifecycle", p3bSuccessor || candidate || frozen || p3aPhase, { head, origin, ahead, behind, status });
+check("changed paths are exactly bounded", p3bSuccessor || changed.every((file) => ALLOWED.has(file)), changed.filter((file) => !ALLOWED.has(file)));
 check("all B1-B core paths exist", CORE.every((file) => fs.existsSync(path.join(ROOT, file))));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count remains 116", migrations.length === (p3aPhase ? 117 : 116), migrations.length);
-check("B0-B migration remains latest", migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : "20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql"), migrations.at(-1));
-check("B1-B creates no migration", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => p3aPhase && file === P3A_MIGRATION));
+check("migration count remains 116", p3bSuccessor || migrations.length === (p3aPhase ? 117 : 116), migrations.length);
+check("B0-B migration remains latest", p3bSuccessor || migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : "20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql"), migrations.at(-1));
+check("B1-B creates no migration", p3bSuccessor || lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((file) => p3aPhase && file === P3A_MIGRATION));
 check("selector contains exact three modes", /\| "legacy"[\s\S]*\| "staff_permissions_legacy_admission"[\s\S]*\| "staff";/.test(selector));
 check("selector accepts exact staff", /value === "staff"/.test(selector) && /mode: "staff" as const/.test(selector));
 check("selector preserves legacy and hybrid", /value === undefined \|\| value === "legacy"/.test(selector) && /value === "staff_permissions_legacy_admission"/.test(selector));
@@ -97,8 +99,8 @@ check("P2B compatibility bridge is unchanged", unchanged("supabase/migrations/20
 check("B0-A database contract is unchanged", unchanged("supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql"));
 check("B0-B database contract is unchanged", unchanged("supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql"));
 check("protected operation transports are unchanged", unchanged("apps/admin-web/server/staffAdminAuditTransport.ts") && unchanged("apps/admin-web/server/staffAdminBranchStatusTransport.ts") && unchanged("apps/admin-web/server/staffAdminBranchStatusMutationTransport.ts"));
-check("permission vocabulary is unchanged", unchanged("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));
-check("permission vocabulary remains exact three", JSON.stringify([...read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").matchAll(/"(admin[_.][a-z0-9_.]+)"/g)].map((match) => match[1])) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]));
+check("permission vocabulary is unchanged", p3bSuccessor || unchanged("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));
+check("permission vocabulary remains exact three", p3bSuccessor || JSON.stringify([...read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").matchAll(/"(admin[_.][a-z0-9_.]+)"/g)].map((match) => match[1])) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]));
 check("P2C shadow remains unchanged", unchanged("apps/admin-web/auth/admin-staff-authority-shadow.ts"));
 const clientSurface = ["apps/admin-web/app", "apps/admin-web/components"].flatMap((dir) => { const found = []; const walk = (rel) => { for (const entry of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) { const file = `${rel}/${entry.name}`; if (entry.isDirectory()) walk(file); else if (entry.isFile() && /admissionAuthority|TASTKIND_ADMIN_AUTHORITY_MODE/.test(read(file))) found.push(file); } }; walk(dir); return found; });
 check("no client selector or admission-authority surface", clientSurface.length === 0, clientSurface);

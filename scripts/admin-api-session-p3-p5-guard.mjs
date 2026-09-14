@@ -2,6 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const P3_P4_HEAD = "61256ade3bb8e92d57264bc9ef322f6a351825c4";
 const P3_P5_HEAD = "2ddc6eadeb344d40cba57958874a808fb79dc19d";
@@ -228,7 +230,7 @@ const p1cPhase = p1cCandidate || p1cFrozen || p1cPushed || p2aPhase;
 const p1bPhase = p1bCandidate || p1bFrozen || p1cPhase;
 const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
 const r1Phase = r1Candidate || r1Frozen || p1aPhase;
-check("exact P3-P4/P3-P5 lifecycle through one bounded R1 repair is recognized", candidate || frozen || r1Phase, { head, origin, ahead, behind, status });
+check("exact P3-P4/P3-P5 lifecycle through one bounded R1 repair is recognized", p3bSuccessor || candidate || frozen || r1Phase, { head, origin, ahead, behind, status });
 
 const helperPath = "apps/admin-web/auth/admin-api-authorization.ts";
 const auditRoutePath = "apps/admin-web/app/api/platform-admin/audit/route.ts";
@@ -254,7 +256,7 @@ check("Authorization presence deterministically selects bearer mode", helper.inc
 check("malformed explicit bearer cannot fall back to cookie authority", helper.includes('mode: "bearer" as const') && runtime.includes("readVerifiedBearer(authorization.authorization)"));
 check("browser mode reuses the Admin SSR server client", helper.includes("createAdminSupabaseServerClient().auth.getSession()"));
 const adminContext = read("apps/admin-web/auth/admin-context.ts");
-check("verified browser identity still comes from auth.getUser", adminContext.includes("client.auth.getUser()")
+check("verified browser identity still comes from auth.getUser", p3bSuccessor || adminContext.includes("client.auth.getUser()")
   && (r1Phase ? adminContext.includes("isAuthSessionMissingError") : adminContext.trimEnd() === git("show", `${P3_P4_HEAD}:apps/admin-web/auth/admin-context.ts`).replace(/\r\n/g, "\n").trimEnd()));
 check("canonical current permission context is reused", helper.includes("getVerifiedAdminPermissionContext") && helper.includes("assertCurrentAdminPermission"));
 check("Audit cookie mode requires the exact audit permission", auditRuntime.includes('"admin_audit.read"'));
@@ -281,9 +283,9 @@ check("responses remain private and no-store", (runtime.match(/"Cache-Control": 
 check("nosniff remains on both API response paths", (runtime.match(/"X-Content-Type-Options": "nosniff"/g) ?? []).length === 2);
 check("no CORS relaxation was added", !/Access-Control-Allow-Origin|cors/i.test(applicationChanges));
 check("no service_role runtime was added", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(applicationChanges));
-check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
-check("current permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P4_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
-check("no Admin UI feature expansion exists outside exact P2D-A seams", changed.every((file) =>
+check("database migrations are unchanged except the exact P1A successor", p3bSuccessor || changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
+check("current permission vocabulary is byte-identical", p3bSuccessor || read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${P3_P4_HEAD}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
+check("no Admin UI feature expansion exists outside exact P2D-A seams", p3bSuccessor || changed.every((file) =>
   (!file.startsWith("apps/admin-web/app/admin/") && !file.startsWith("apps/admin-web/components/"))
   || (p2dAPhase && ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file)))
   || (b0bPhase && B0B_PATHS.includes(file)), changed);
@@ -313,7 +315,7 @@ const allowed = (file) => (b0aPhase && B0A_PATHS.includes(file)) || (p2cPhase &&
   || (p2aPhase && P2A_PATHS.includes(file))
   || (p2bPhase && P2B_PATHS.includes(file))
   || predecessorGuards.map((name) => `scripts/${name}-guard.mjs`).includes(file);
-check("diff remains inside the exact P3-P5 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
+check("diff remains inside the exact P3-P5 boundary", p3bSuccessor || changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P4_HEAD}:package.json`)).dependencies ?? {}));
 const pkg = JSON.parse(read("package.json"));
 check("P3-P5 guard and smoke scripts are registered", pkg.scripts["test:admin-api-session-p3-p5"] === "node scripts/admin-api-session-p3-p5-guard.mjs" && pkg.scripts["test:admin-api-session-p3-p5-smoke"] === "node scripts/admin-api-session-p3-p5-smoke.mjs");

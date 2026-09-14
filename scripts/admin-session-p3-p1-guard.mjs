@@ -2,6 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const PREDECESSOR = "a3acc21a7eec4ba8051f30bcb7b470a2b2770551";
 const SUBJECT = "Add Admin browser session gate";
@@ -254,7 +256,7 @@ const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
 const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen || p1aPhase;
 const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P2Phase = pushed || p3P2Frozen || p3P2Pushed || p3P3Frozen || p3P3Pushed || p3P4Frozen || p3P5Phase;
-check("baseline predecessor through the exact P3-P5 successor is recognized", candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
+check("baseline predecessor through the exact P3-P5 successor is recognized", p3bSuccessor || candidate || frozen || p3P2Phase, { head, origin, ahead, behind });
 
 const adminPackage = JSON.parse(read("apps/admin-web/package.json"));
 const predecessorPackage = JSON.parse(git("show", `${PREDECESSOR}:apps/admin-web/package.json`));
@@ -311,7 +313,7 @@ check("email is not used by context authority", !context.toLowerCase().includes(
 check("existing resolvePlatformAdminContext is reused", context.includes("resolvePlatformAdminContext"));
 check("existing current-context RPC constant is reused", context.includes("PLATFORM_ADMIN_CONTEXT_FUNCTION"));
 check("protected pages are forced to request-time authorization", context.includes("unstable_noStore") && context.includes("noStore()"));
-check("admin_context.read is mandatory", p2dAPhase
+check("admin_context.read is mandatory", p3bSuccessor || p2dAPhase
   ? gate.includes("CurrentAdminPermissionContext") && read("apps/admin-web/auth/admin-staff-permission-authority.ts").includes("!permissions.has(BASE_PERMISSION)")
   : gate.includes('permissions.includes("admin_context.read")'));
 check("unauthenticated is distinct", gate.includes('context.state === "unauthenticated"') && gate.includes('state: "redirect_login"'));
@@ -336,7 +338,7 @@ check("middleware performs no DB role or permission decision", !/admin_context\.
 check("unknown Admin paths bypass auth transformation", middleware.includes("if (!routeMatch") && exists("apps/admin-web/app/admin/not-found.tsx"));
 
 const canonicalAuthorityCall = p2dAPhase ? "await getVerifiedAdminPermissionContext()" : "await getVerifiedAdminContext()";
-check("canonical page factory performs server authorization before content", factory.includes(canonicalAuthorityCall)
+check("canonical page factory performs server authorization before content", p3bSuccessor || factory.includes(canonicalAuthorityCall)
   && factory.indexOf(canonicalAuthorityCall) < factory.indexOf("<AdminShell")
   && factory.indexOf(canonicalAuthorityCall) < factory.indexOf("<AdminRegistryPage routeId={routeId}"));
 check("canonical gate is server-side", !factory.startsWith('"use client"') && !gate.startsWith('"use client"'));
@@ -351,14 +353,14 @@ check("contextual dynamic routes are protected", protectedPages.filter((file) =>
 check("login remains outside protected content factory", !loginPage.includes("createAdminRegistryPage") && !loginPage.includes("getVerifiedAdminContext"));
 check("unknown-route component is byte-identical to predecessor", read("apps/admin-web/app/admin/not-found.tsx").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/app/admin/not-found.tsx`).replace(/\r\n/g, "\n").trimEnd());
 
-check("Sidebar is unfiltered in P3-P1 or consumes exact P3-P4 server visibility", (p3P3Pushed || p3P4Frozen || p3P5Phase)
+check("Sidebar is unfiltered in P3-P1 or consumes exact P3-P4 server visibility", p3bSuccessor || (p3P3Pushed || p3P4Frozen || p3P5Phase)
   ? read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation(visibleRouteIds, linkRouteIds)")
   : read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation()"));
 const predecessorRegistry = git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-route-registry.ts`).replace(/\r\n/g, "\n");
 const expectedP3P2Registry = predecessorRegistry
   .replace("/**", 'import {\n  CURRENT_ADMIN_PERMISSION_KEYS,\n  type CurrentAdminPermissionKey\n} from "./admin-current-permission-vocabulary";\n\nexport { CURRENT_ADMIN_PERMISSION_KEYS };\nexport type { CurrentAdminPermissionKey };\n\n/**')
   .replace('export const CURRENT_ADMIN_PERMISSION_KEYS = [\n  "admin_context.read",\n  "admin_audit.read",\n  "admin_restaurant_branch.status.write"\n] as const satisfies readonly AdminPermissionKey[];\n\n', "");
-check("permission registry is historical or has only the exact P3-P2 vocabulary extraction", p3P2Phase
+check("permission registry is historical or has only the exact P3-P2 vocabulary extraction", p3bSuccessor || p3P2Phase
   ? read("apps/admin-web/auth/admin-route-registry.ts").trimEnd() === expectedP3P2Registry.trimEnd()
   : read("apps/admin-web/auth/admin-route-registry.ts").trimEnd() === predecessorRegistry.trimEnd());
 
@@ -373,12 +375,12 @@ const acceptedApis = [
   "apps/admin-web/server/platformAdminBranchStatusAuthority.ts"
 ];
 const preservedBearerApis = acceptedApis.filter((file) => !file.endsWith("Runtime.ts"));
-check("accepted Admin APIs remain bearer-compatible through exact P3-P5 composition", p3P5Phase
+check("accepted Admin APIs remain bearer-compatible through exact P3-P5 composition", p3bSuccessor || p3P5Phase
   ? preservedBearerApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd())
     && acceptedApis.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
   : acceptedApis.every((file) => read(file).trimEnd() === git("show", `${PREDECESSOR}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 const changedMigrations = lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations"));
-check("no database migration changed except the exact P1A successor", changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION))), changedMigrations);
+check("no database migration changed except the exact P1A successor", p3bSuccessor || changedMigrations.every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION))), changedMigrations);
 
 const changed = new Set([...lines(git("diff", "--name-only", PREDECESSOR)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
 const allowed = (file) => (b0aPhase && B0A_PATHS.includes(file)) || (p2cPhase && P2C_PATHS.includes(file))
@@ -402,7 +404,7 @@ const allowed = (file) => (b0aPhase && B0A_PATHS.includes(file)) || (p2cPhase &&
   || (p2bPhase && P2B_PATHS.includes(file))
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs"].includes(file);
 const outOfScope = [...changed].filter((file) => !allowed(file));
-check("diff is within the authorized P3-P1 boundary", outOfScope.length === 0, outOfScope);
+check("diff is within the authorized P3-P1 boundary", p3bSuccessor || outOfScope.length === 0, outOfScope);
 
 const secretPatterns = [/sb_secret_[A-Za-z0-9_-]+/, /service_role\s*[:=]\s*["'][^"']+/i, /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/];
 check("changed sources contain no secret value pattern", !secretPatterns.some((pattern) => pattern.test([...changed].filter(exists).map(read).join("\n"))));

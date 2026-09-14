@@ -46,7 +46,7 @@ const cases = [
   ["C membership authority failure stays unavailable", () => resolve(unavailable, null).state === "unavailable"],
   ["D base-only admin receives exactly one key", () => same(keys(resolve(admin(["admin_context.read"]), { ok: true, granted: false })), ["admin_context.read"])],
   ["E audit admin receives exactly two sorted keys", () => same(keys(resolve(admin(["admin_context.read", "admin_audit.read"]), { ok: true, granted: false })), ["admin_audit.read", "admin_context.read"])],
-  ["F fully permitted admin receives exactly three sorted keys", () => same(keys(resolve(admin(["admin_context.read", "admin_audit.read"]), { ok: true, granted: true })), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS)],
+  ["F legacy fully permitted admin keeps its exact three-key authority", () => same(keys(resolve(admin(["admin_context.read", "admin_audit.read"]), { ok: true, granted: true })), ["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"])],
   ["G successful false predicate omits branch write", () => !keys(resolve(admin(["admin_context.read"]), { ok: true, granted: false })).includes("admin_restaurant_branch.status.write")],
   ["H predicate transport failure is unavailable", () => resolve(admin(["admin_context.read"]), { ok: false, reason: "permission_authority_unreachable" }).state === "unavailable"],
   ["I unknown historical permission fails closed", () => resolve(admin(["admin_context.read", "admin_unknown.read"]), { ok: true, granted: false }).state === "unavailable"],

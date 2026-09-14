@@ -63,7 +63,11 @@ const adminContext = loadTypeScript("apps/admin-web/auth/admin-context.ts", (req
 });
 
 const subject = "11111111-1111-4111-8111-111111111111";
-const threeKeys = [...vocabulary.CURRENT_ADMIN_PERMISSION_KEYS];
+// P3B adds an operational management permission that legacy Platform Admin does not
+// inherently hold. Keep this predecessor shadow fixture on the original three-key user.
+const threeKeys = vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.filter(
+  (key) => key !== "admin.management.staff.account.write"
+);
 const authoritative = Object.freeze({
   state: "admin",
   subject,

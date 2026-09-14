@@ -5,6 +5,7 @@
 export const CURRENT_ADMIN_PERMISSION_KEYS = Object.freeze([
   "admin_audit.read",
   "admin_context.read",
+  "admin.management.staff.account.write",
   "admin_restaurant_branch.status.write"
 ] as const);
 

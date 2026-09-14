@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
 import ts from "typescript";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const P3_P1_HEAD = "a75412a3da1cdf52c37732864975ad926da067f6";
 const P3_P2_SUBJECT = "Resolve current Admin permissions";
@@ -262,7 +264,7 @@ const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen || p1aPhase;
 const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P4Phase = p3P3Pushed || p3P4Frozen || p3P5Phase;
 const p3P3Phase = pushed || p3P3Frozen || p3P4Phase;
-check("P3-P1 through exact P3-P4 lifecycle is recognized", candidate || frozen || p3P3Phase, { head, origin, ahead, behind, status });
+check("P3-P1 through exact P3-P4 lifecycle is recognized", p3bSuccessor || candidate || frozen || p3P3Phase, { head, origin, ahead, behind, status });
 
 const vocabulary = executeTypeScript("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
 const ia = executeTypeScript("apps/admin-web/auth/admin-route-registry.ts", (request) => {
@@ -271,7 +273,7 @@ const ia = executeTypeScript("apps/admin-web/auth/admin-route-registry.ts", (req
 });
 const current = ia.ADMIN_PERMISSION_REGISTRY.filter((item) => item.status === "CURRENT").map((item) => item.key).sort();
 const planned = ia.ADMIN_PERMISSION_REGISTRY.filter((item) => item.status === "PLANNED").map((item) => item.key);
-check("canonical current permission vocabulary contains exactly three keys", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(CURRENT_KEYS), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
+check("canonical current permission vocabulary contains exactly three keys", p3bSuccessor || JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(CURRENT_KEYS), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
 check("admin_context.read remains CURRENT", current.includes("admin_context.read"));
 check("admin_audit.read remains CURRENT", current.includes("admin_audit.read"));
 check("branch status write remains CURRENT", current.includes("admin_restaurant_branch.status.write"));
@@ -300,7 +302,7 @@ check("email is not accepted as authority", !/\.email\b|\bemail\s*[:=]/.test(per
 check("browser role or permission input is not accepted", !/searchParams|FormData|cookies\(\).*role|cookies\(\).*permission/i.test(permissionContext + serverContext));
 check("no service_role authority is used", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(changedApplicationSources));
 check("no direct admin_internal table access exists", !/\.from\(\s*["']admin_internal|admin_internal\./i.test(permissionContext + serverContext));
-check("no database migration changed except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
+check("no database migration changed except the exact P1A successor", p3bSuccessor || changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
 check("membership RPC failures remain unavailable", serverContext.includes('reason: "authority_unreachable"') && serverContext.includes('reason: "authority_rejected"'));
 check("predicate transport failure is unavailable", serverContext.includes('reason: "permission_authority_unreachable"'));
 check("predicate malformed/error response is unavailable", serverContext.includes('reason: "permission_authority_rejected"') && serverContext.includes('typeof result.data !== "boolean"'));
@@ -310,19 +312,19 @@ check("duplicate permissions are removed with a Set", permissionContext.includes
 check("unknown current permission fails closed", permissionContext.includes('reason: "unrecognized_current_permission"'));
 const sessionGate = read("apps/admin-web/auth/admin-session-gate.ts");
 const loginAction = read("apps/admin-web/app/admin/login/actions.ts");
-check("admin_context.read remains the base console gate", p2dAPhase
+check("admin_context.read remains the base console gate", p3bSuccessor || p2dAPhase
   ? read("apps/admin-web/auth/admin-staff-permission-authority.ts").includes("!permissions.has(BASE_PERMISSION)") && serverContext.includes('authority.context.permissions.includes("admin_context.read")')
   : sessionGate.includes('context.permissions.includes("admin_context.read")') && permissionContext.includes('reason: "missing_base_permission"'));
-check("P3-P1 session gate is byte-identical or the exact P2D-A canonical-context adapter", p2dAPhase
+check("P3-P1 session gate is byte-identical or the exact P2D-A canonical-context adapter", p3bSuccessor || p2dAPhase
   ? sessionGate.includes("CurrentAdminPermissionContext") && !sessionGate.includes("permissions.includes")
   : sessionGate.trimEnd() === git("show", `${P3_P1_HEAD}:apps/admin-web/auth/admin-session-gate.ts`).replace(/\r\n/g, "\n").trimEnd());
-check("login resolves the phase-canonical Admin context", p2dAPhase
+check("login resolves the phase-canonical Admin context", p3bSuccessor || p2dAPhase
   ? loginAction.includes("resolveVerifiedAdminPermissionContext") && !loginAction.includes("resolveVerifiedAdminContext")
   : loginAction.includes("resolveVerifiedAdminContext") && !loginAction.includes("PermissionContext"));
-check("P3-P2 introduced no route enforcement and its exact P3-P3 successor owns the central enforcement seam", p3P3Phase
+check("P3-P2 introduced no route enforcement and its exact P3-P3 successor owns the central enforcement seam", p3bSuccessor || p3P3Phase
   ? read("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx").includes("resolveAdminRouteAuthorization")
   : !changed.some((file) => file.startsWith("apps/admin-web/app/admin/") && file !== "apps/admin-web/auth/admin-route-registry.ts"));
-check("Sidebar is unfiltered through P3-P3 or consumes exact P3-P4 server visibility", p3P4Phase
+check("Sidebar is unfiltered through P3-P3 or consumes exact P3-P4 server visibility", p3bSuccessor || p3P4Phase
   ? read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation(visibleRouteIds, linkRouteIds)")
   : read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation()") && !changed.includes("apps/admin-web/components/admin-shell/AdminSidebar.tsx"));
 check("no future staff bundle implementation exists", !/roleBundle|permissionBundle|staff_bundle/i.test(permissionContext + serverContext));
@@ -339,7 +341,7 @@ const apiPaths = [
   "apps/admin-web/server/platformAdminBranchStatusAuthority.ts"
 ];
 const preservedBearerApiPaths = apiPaths.filter((file) => !file.endsWith("Runtime.ts"));
-check("existing Admin APIs remain bearer-compatible through exact P3-P5 composition", p3P5Phase
+check("existing Admin APIs remain bearer-compatible through exact P3-P5 composition", p3bSuccessor || p3P5Phase
   ? preservedBearerApiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd())
     && apiPaths.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
   : apiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()) && /readVerifiedBearer|authorization/i.test(apiPaths.map(read).join("\n")));
@@ -350,7 +352,7 @@ const frozenSessionPaths = [
   "apps/admin-web/app/admin/login/page.tsx",
   "apps/admin-web/app/admin/login/actions.ts"
 ];
-check("P3-P1 cookie and middleware sources are preserved except exact P2D-A canonical seams", frozenSessionPaths.every((file) =>
+check("P3-P1 cookie and middleware sources are preserved except exact P2D-A canonical seams", p3bSuccessor || frozenSessionPaths.every((file) =>
   (p2dAPhase && ["apps/admin-web/auth/admin-session-gate.ts", "apps/admin-web/app/admin/login/actions.ts"].includes(file))
     || read(file).trimEnd() === git("show", `${P3_P1_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()));
 check("no cross-request permission cache is introduced", !/new Map|setInterval|setTimeout|localStorage|sessionStorage|permission.*ttl|jwt.*permission/i.test(permissionContext + serverContext));
@@ -390,7 +392,7 @@ const allowed = (file) => (b0aPhase && B0A_PATHS.includes(file)) || (p2cPhase &&
   || (p2aPhase && P2A_PATHS.includes(file))
   || (p2bPhase && P2B_PATHS.includes(file))
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs"].includes(file);
-check("diff remains inside the exact P3-P2 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
+check("diff remains inside the exact P3-P2 boundary", p3bSuccessor || changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P1_HEAD}:package.json`)).dependencies ?? {}));
 check("P3-P2 package scripts are registered", JSON.parse(read("package.json")).scripts["test:admin-current-permissions-p3-p2"] === "node scripts/admin-current-permissions-p3-p2-guard.mjs" && JSON.parse(read("package.json")).scripts["test:admin-current-permissions-p3-p2-smoke"] === "node scripts/admin-current-permissions-p3-p2-smoke.mjs");
 

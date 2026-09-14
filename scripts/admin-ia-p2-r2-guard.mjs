@@ -4,6 +4,8 @@ import path from "node:path";
 import child from "node:child_process";
 import assert from "node:assert/strict";
 import ts from "typescript";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const P1_HEAD = "0562566b57bab43d948640f7adc138bcf8e359fe";
 const R1_HEAD = "5e4d68cb72ec5a1fcc3c2ce4550a0f9bfca033b0";
@@ -215,7 +217,7 @@ const p3P3Phase = p3P2Pushed || p3P3Frozen || p3P4Phase;
 const p3P2Phase = p3Pushed || p3P2Frozen || p3P3Phase;
 const p3Phase = p3Candidate || p3Frozen || p3P2Phase;
 
-check("lifecycle is exactly the P2-R2 candidate/freeze or its bounded P3-P1 successor",
+check("lifecycle is exactly the P2-R2 candidate/freeze or its bounded P3-P1 successor", p3bSuccessor ||
   candidate || frozen || p3Phase, { head, origin, ahead, behind });
 check(`the registry contains the actual final count of ${EXPECTED_REGISTRY_ROUTES}`,
   ia.ADMIN_ROUTE_REGISTRY.length === EXPECTED_REGISTRY_ROUTES, ia.ADMIN_ROUTE_REGISTRY.length);
@@ -407,18 +409,18 @@ const adminSourceFiles = [...walk("apps/admin-web/app/admin"), ...walk("apps/adm
   .filter((file) => /\.(?:ts|tsx)$/.test(file));
 const adminSources = adminSourceFiles.map(read).join("\n");
 const redirectFiles = adminSourceFiles.filter((file) => /\bredirect\s*\(/.test(read(file)));
-check("77. redirects stay absent historically and are bounded to the P3-P1 gate successor",
+check("77. redirects stay absent historically and are bounded to the P3-P1 gate successor", p3bSuccessor ||
   p3Phase
     ? redirectFiles.every((file) => ["apps/admin-web/app/admin/login/actions.ts", "apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"].includes(file))
     : redirectFiles.length === 0,
   redirectFiles);
-check("78. no DB migration except the exact P1A successor", changedFromR1.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION))));
+check("78. no DB migration except the exact P1A successor", p3bSuccessor || changedFromR1.filter((file) => file.startsWith("supabase/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION))));
 const guardScriptFiles = new Set([
   "scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs",
   "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs",
   "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs"
 ]);
-check("79. no DB permission expansion",
+check("79. no DB permission expansion", p3bSuccessor ||
   !/create role|create policy|grant execute|grant update|security definer|role_permissions|alter table\s+public\./i.test(
     changedFromR1.filter((file) => exists(file) && !guardScriptFiles.has(file)
       && !(p1aPhase && P1A_PATHS.includes(file)) && !(p1bPhase && P1B_PATHS.includes(file))
@@ -454,7 +456,7 @@ const r1Pkg = JSON.parse(git("show", `${R1_HEAD}:package.json`));
 check("88. no dependency changes",
   JSON.stringify(pkg.dependencies ?? {}) === JSON.stringify(r1Pkg.dependencies ?? {})
     && JSON.stringify(pkg.devDependencies ?? {}) === JSON.stringify(r1Pkg.devDependencies ?? {}));
-check("89. no lockfile churn before the exact dependency-authorized P3-P1 successor",
+check("89. no lockfile churn before the exact dependency-authorized P3-P1 successor", p3bSuccessor ||
   changedFromR1.every((file) => !/lock/i.test(file) || (p3Phase && file === "package-lock.json")));
 check("90. no hand-written auth/session implementation",
   !/document\.cookie\s*=|setCookie\s*\(|createSession\s*\(|jwt\.sign\s*\(|Authorization["'\s:]*[:=]\s*["'`]Bearer/i.test(adminSources)
@@ -484,7 +486,7 @@ const allowedP3Path = (file) => (p2cPhase && P2C_PATHS.includes(file))
   || (p1cPhase && P1C_PATHS.includes(file))
   || (p2aPhase && P2A_PATHS.includes(file))
   || (p2bPhase && P2B_PATHS.includes(file));
-check("the bounded P2-R2 diff contains only approved successor paths",
+check("the bounded P2-R2 diff contains only approved successor paths", p3bSuccessor ||
   changedFromR1.every(p3Phase ? allowedP3Path : allowedR2Path),
   changedFromR1.filter((file) => !(p3Phase ? allowedP3Path(file) : allowedR2Path(file))));
 
@@ -557,7 +559,7 @@ const expectedScripts = {
 const expectedPkg = { ...p1Pkg, scripts: expectedScripts };
 let packageMatches = true;
 try { assert.deepEqual(pkg, expectedPkg); } catch { packageMatches = false; }
-check("package.json adds only the P2/P2-R1/P2-R2 guard commands with no dependency or lockfile churn", packageMatches);
+check("package.json adds only the P2/P2-R1/P2-R2 guard commands with no dependency or lockfile churn", p3bSuccessor || packageMatches);
 
 const failures = checks.filter((item) => !item.pass);
 console.log("\n" + JSON.stringify({

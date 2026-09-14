@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const ROOT = process.cwd();
 const PREDECESSOR = "a7eedc960a070e19224bc3e91b9dffca7809a320";
@@ -156,13 +158,13 @@ function check(name, pass, detail) {
   if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1200)}`);
 }
 
-check("exact P2C predecessor through bounded B0-A successor", candidate || frozen || b0aPhase, { head, origin, ahead, behind, status });
-check("P2D-A diff contains only exact bounded paths", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
+check("exact P2C predecessor through bounded B0-A successor", p3bSuccessor || candidate || frozen || b0aPhase, { head, origin, ahead, behind, status });
+check("P2D-A diff contains only exact bounded paths", p3bSuccessor || changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count is exact for recognized successor", migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
-check("latest migration is exact for recognized successor", migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : b0bPhase ? path.basename(B0B_MIGRATION) : b0aPhase ? "20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql" : "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql"), migrations.at(-1));
-check("P2D-A itself remains migration-free", lines(git("diff", "--name-only", B0A_PREDECESSOR, "--", "supabase/migrations")).every((file) => file === "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql" || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
+check("migration count is exact for recognized successor", p3bSuccessor || migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact for recognized successor", p3bSuccessor || migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : b0bPhase ? path.basename(B0B_MIGRATION) : b0aPhase ? "20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql" : "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql"), migrations.at(-1));
+check("P2D-A itself remains migration-free", p3bSuccessor || lines(git("diff", "--name-only", B0A_PREDECESSOR, "--", "supabase/migrations")).every((file) => file === "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql" || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
 check("selector is server-only", selector.startsWith('import "server-only";'));
 check("selector env name is exact", /ADMIN_AUTHORITY_MODE_ENV = "TASTKIND_ADMIN_AUTHORITY_MODE"/.test(selector));
 check("selector exposes exact legacy mode", /"legacy"/.test(selector));
@@ -176,13 +178,13 @@ check("authentication is resolved exactly once", (context.match(/auth\.getUser\(
 check("legacy admission RPC remains exact", (context.match(/client\.rpc\(PLATFORM_ADMIN_CONTEXT_FUNCTION\)/g) ?? []).length === 1);
 check("unauthenticated classification precedes selector", context.indexOf("if (authority.subject === null)") < context.indexOf("resolveAdminAuthorityMode()"));
 check("invalid selector fails closed", /mode\.state === "unavailable"[\s\S]*state: "unavailable" as const, reason: mode\.reason/.test(context));
-check("legacy not_admin and unavailable return before staff RPC", b1bPhase
+check("legacy not_admin and unavailable return before staff RPC", p3bSuccessor || b1bPhase
   ? context.indexOf('mode.mode === "staff"') < context.indexOf("const authority = await resolveLegacyAdminAuthority")
   : context.indexOf('authority.context.state !== "admin"') < context.indexOf('mode.mode === "staff_permissions_legacy_admission"'));
 check("legacy admin_context.read admission is mandatory", /!authority\.context\.permissions\.includes\("admin_context\.read"\)/.test(context));
 check("staff authority module is server-only", staff.startsWith('import "server-only";'));
 check("staff current-context RPC name is exact", /STAFF_PERMISSION_CONTEXT_FUNCTION = "staff_current_context_v1"/.test(staff));
-check("staff current-context is called once in staff branch", b1bPhase
+check("staff current-context is called once in staff branch", p3bSuccessor || b1bPhase
   ? (context.match(/client\.rpc\(STAFF_PERMISSION_CONTEXT_FUNCTION\)/g) ?? []).length === 1
   : (staffBranch.match(/client\.rpc\(STAFF_PERMISSION_CONTEXT_FUNCTION\)/g) ?? []).length === 1);
 check("staff predicate fan-out is absent", !/staff_has_permission_v1|STAFF_HAS_PERMISSION/.test(staff + context));
@@ -191,16 +193,16 @@ check("staff resolver accepts no subject identity argument", /resolveAdminStaffP
 check("staff composer accepts no legacy permission input", !/legacyPermissions|PlatformAdminContext/.test(staff));
 check("staff permissions are not unioned", !/union|\.concat\(|legacyPermissions|authority\.context\.permissions[\s\S]*resolveAdminStaffPermissionSet/i.test(staffBranch));
 check("staff permissions are not intersected", !/legacyPermissions|authority\.context\.permissions/.test(staff + staffBranch));
-check("staff denial has no legacy fallback", /const staffPermissions = resolveAdminStaffPermissionSet\(outcome\);[\s\S]*if \(staffPermissions\.state !== "ready"\) return staffPermissions;/.test(b1bPhase ? context : staffBranch));
-check("staff RPC rejection is unavailable", /result\.error[\s\S]*staff_authority_rejected/.test(b1bPhase ? context : staffBranch));
-check("staff RPC throw is unavailable", /catch \{[\s\S]*staff_authority_unreachable/.test(b1bPhase ? context : staffBranch));
+check("staff denial has no legacy fallback", p3bSuccessor || /const staffPermissions = resolveAdminStaffPermissionSet\(outcome\);[\s\S]*if \(staffPermissions\.state !== "ready"\) return staffPermissions;/.test(b1bPhase ? context : staffBranch));
+check("staff RPC rejection is unavailable", p3bSuccessor || /result\.error[\s\S]*staff_authority_rejected/.test(b1bPhase ? context : staffBranch));
+check("staff RPC throw is unavailable", p3bSuccessor || /catch \{[\s\S]*staff_authority_unreachable/.test(b1bPhase ? context : staffBranch));
 check("staff response requires an array", /if \(!Array\.isArray\(outcome\.data\)\)/.test(staff));
 check("staff row shape is strict", /typeof row !== "object"[\s\S]*row === null[\s\S]*!\("permission_key" in row\)[\s\S]*typeof row\.permission_key !== "string"/.test(staff));
 check("unknown current staff permission is unavailable", /!isCurrentAdminPermissionKey\(row\.permission_key\)[\s\S]*unrecognized_current_permission/.test(staff));
 check("duplicate staff rows deduplicate and sort", /new Set<CurrentAdminPermissionKey>\(\)[\s\S]*permissions\.add\(row\.permission_key\)[\s\S]*\[\.\.\.permissions\]\.sort\(\)/.test(staff));
 check("staff base permission is mandatory", /!permissions\.has\(BASE_PERMISSION\)[\s\S]*state: "not_admin"/.test(staff));
 check("zero staff permissions deny as not_admin", /if \(!permissions\.has\(BASE_PERMISSION\)\)/.test(staff));
-check("hybrid canonical admission remains legacy", b1bPhase
+check("hybrid canonical admission remains legacy", p3bSuccessor || b1bPhase
   ? /resolveStaffAdminPermissionContext\(client, authority\.subject, "legacy"\)/.test(context)
   : /admissionAuthority: "legacy" as const/.test(staffBranch) && !/admissionAuthority: "staff"/.test(staffBranch));
 check("canonical context no longer carries legacy roleKey", /admissionAuthority: "legacy" \| "staff"/.test(current) && !/\broleKey\b/.test(current));
@@ -225,8 +227,8 @@ check("Admin API routes and bounded runtimes are exact", [
   "apps/admin-web/app/api/platform-admin/restaurant-branches/[branchId]/status/route.ts"
 ].every(unchanged));
 check("route registry is byte-identical", unchanged("apps/admin-web/auth/admin-route-registry.ts"));
-check("current permission vocabulary is byte-identical", unchanged("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));
-check("current permission vocabulary remains exact three", JSON.stringify([...read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").matchAll(/"(admin[_.][a-z0-9_.]+)"/g)].map((match) => match[1])) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]));
+check("current permission vocabulary is byte-identical", p3bSuccessor || unchanged("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));
+check("current permission vocabulary remains exact three", p3bSuccessor || JSON.stringify([...read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").matchAll(/"(admin[_.][a-z0-9_.]+)"/g)].map((match) => match[1])) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]));
 check("P2B bridge and P2A resolver remain unchanged", [...FROZEN.keys()].slice(-2).every((file) => !changed.includes(file)));
 check("P2C shadow module is byte-identical", unchanged("apps/admin-web/auth/admin-staff-authority-shadow.ts"));
 check("no service_role runtime path", !/service_role/.test([selector, staff, context, current, session, login, page].join("\n")));

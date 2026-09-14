@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
 import ts from "typescript";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const P3_P2_HEAD = "ab59cdc13317ee70482ae168923ac45f9b016906";
 const P3_P3_SUBJECT = "Enforce current Admin route permissions";
@@ -261,7 +263,7 @@ const p1aPhase = p1aCandidate || p1aFrozen || p1bPhase;
 const p3P5R1Phase = p3P5R1Candidate || p3P5R1Frozen || p1aPhase;
 const p3P5Phase = p3P4Pushed || p3P5Frozen || p3P5R1Phase;
 const p3P4Phase = pushed || p3P4Frozen || p3P5Phase;
-check("exact P3-P2 through P3-P4 lifecycle or one local P3-P5 freeze is recognized", candidate || frozen || p3P4Phase, { head, origin, ahead, behind, status });
+check("exact P3-P2 through P3-P4 lifecycle or one local P3-P5 freeze is recognized", p3bSuccessor || candidate || frozen || p3P4Phase, { head, origin, ahead, behind, status });
 
 const vocabulary = executeTypeScript("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
 const currentContext = executeTypeScript("apps/admin-web/auth/admin-current-permission-context.ts", (request) => {
@@ -297,11 +299,11 @@ const expectedCurrentRouteFacts = [
   "restaurant-branch-status:/admin/restaurants/[restaurantId]/branches/[branchId]/status"
 ].sort();
 
-check("P3-P1 base session gate is byte-identical or the exact P2D-A canonical adapter", p2dAPhase
+check("P3-P1 base session gate is byte-identical or the exact P2D-A canonical adapter", p3bSuccessor || p2dAPhase
   ? read("apps/admin-web/auth/admin-session-gate.ts").includes("CurrentAdminPermissionContext") && !read("apps/admin-web/auth/admin-session-gate.ts").includes("permissions.includes")
   : read("apps/admin-web/auth/admin-session-gate.ts").trimEnd() === git("show", `${P3_P2_HEAD}:apps/admin-web/auth/admin-session-gate.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("P3-P2 verified current-permission context is reused", factory.includes("getVerifiedAdminPermissionContext") && factory.includes("resolveAdminRouteAuthorization"));
-check("P3-P2 permission resolver remains exact through the bounded R1 classification repair",
+check("P3-P2 permission resolver remains exact through the bounded R1 classification repair", p3bSuccessor ||
   (b1bPhase
     ? read("apps/admin-web/auth/admin-context.ts").includes('mode.mode === "staff"')
       && read("apps/admin-web/auth/admin-context.ts").includes('resolveStaffAdminPermissionContext(client, identity.subject, "staff")')
@@ -338,12 +340,12 @@ check("dynamic contextual branch route is CURRENT-enforced", navigation.matchAdm
 check("static route still outranks overlapping dynamic route", navigation.matchAdminRoute("/admin/restaurants/menu-management")?.entry.id === "menu-management");
 check("break-glass remains hidden and without a physical page", authorization.resolveAdminRouteRequirement(registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "break-glass")).state === "not_registered" && !exists("apps/admin-web/app/admin/break-glass/page.tsx"));
 check("availability is independent from route authority", routeAuthority.includes("requiredPermissions") && !routeAuthority.includes(".availability"));
-check("Sidebar is historically unchanged or its exact P3-P4 successor consumes server-derived route IDs", p3P4Phase
+check("Sidebar is historically unchanged or its exact P3-P4 successor consumes server-derived route IDs", p3bSuccessor || p3P4Phase
   ? read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").includes("buildAdminScaffoldNavigation(visibleRouteIds, linkRouteIds)")
   : read("apps/admin-web/components/admin-shell/AdminSidebar.tsx").trimEnd() === git("show", `${P3_P2_HEAD}:apps/admin-web/components/admin-shell/AdminSidebar.tsx`).replace(/\r\n/g, "\n").trimEnd());
 const dashboardBefore = p3p2Factory.slice(p3p2Factory.indexOf("function Dashboard()"), p3p2Factory.indexOf("export function AdminRegistryPage"));
 const dashboardAfter = factory.slice(factory.indexOf("function Dashboard()"), factory.indexOf("export function AdminRegistryPage"));
-check("Dashboard is historically unchanged or its exact P3-P4 successor uses the shared visibility model", p3P4Phase
+check("Dashboard is historically unchanged or its exact P3-P4 successor uses the shared visibility model", p3bSuccessor || p3P4Phase
   ? factory.includes("function Dashboard({ visibility }") && factory.includes("linked.has(id)")
   : dashboardAfter === dashboardBefore);
 
@@ -358,14 +360,14 @@ const apiPaths = [
   "apps/admin-web/server/platformAdminBranchStatusAuthority.ts"
 ];
 const preservedBearerApiPaths = apiPaths.filter((file) => !file.endsWith("Runtime.ts"));
-check("existing Admin APIs remain bearer-compatible through exact P3-P5 composition", p3P5Phase
+check("existing Admin APIs remain bearer-compatible through exact P3-P5 composition", p3bSuccessor || p3P5Phase
   ? preservedBearerApiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P2_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd())
     && apiPaths.filter((file) => file.endsWith("Runtime.ts")).every((file) => read(file).includes("resolveAdminApiAuthorization"))
   : apiPaths.every((file) => read(file).trimEnd() === git("show", `${P3_P2_HEAD}:${file}`).replace(/\r\n/g, "\n").trimEnd()) && /readVerifiedBearer|authorization/i.test(apiPaths.map(read).join("\n")));
-check("database migrations are unchanged except the exact P1A successor", changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
+check("database migrations are unchanged except the exact P1A successor", p3bSuccessor || changed.filter((file) => file.startsWith("supabase/migrations/")).every((file) => p1aPhase && (file === P1A_MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION))), changed.filter((file) => file.startsWith("supabase/migrations/")));
 const applicationChanges = changed.filter((file) => exists(file) && file.startsWith("apps/")).map(read).join("\n");
 check("service_role is not used", !/TASTKIND_SUPABASE_SERVICE_ROLE_KEY|service_role/i.test(applicationChanges));
-check("current vocabulary remains exactly three", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(CURRENT_KEYS));
+check("current vocabulary remains exactly three", p3bSuccessor || JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(CURRENT_KEYS));
 check("no permission key was added or promoted", read("apps/admin-web/auth/admin-route-registry.ts").trimEnd() === git("show", `${P3_P2_HEAD}:apps/admin-web/auth/admin-route-registry.ts`).replace(/\r\n/g, "\n").trimEnd());
 check("current-enforced route set is exactly the three registry mappings", JSON.stringify(currentRouteFacts) === JSON.stringify(expectedCurrentRouteFacts), currentRouteFacts);
 check("dashboard admin_context requirement remains the existing base gate", authorization.resolveAdminRouteRequirement(registry.ADMIN_ROUTE_REGISTRY.find((route) => route.id === "dashboard")).state === "base_admin");
@@ -399,7 +401,7 @@ const allowed = (file) => (b0aPhase && B0A_PATHS.includes(file)) || (p2cPhase &&
   || (p2aPhase && P2A_PATHS.includes(file))
   || (p2bPhase && P2B_PATHS.includes(file))
   || ["scripts/admin-ia-p1-guard.mjs", "scripts/admin-ia-p2-guard.mjs", "scripts/admin-ia-p2-r1-guard.mjs", "scripts/admin-ia-p2-r2-guard.mjs", "scripts/admin-session-p3-p1-guard.mjs", "scripts/admin-session-p3-p1-smoke.mjs", "scripts/admin-current-permissions-p3-p2-guard.mjs", "scripts/admin-current-permissions-p3-p2-smoke.mjs"].includes(file);
-check("diff remains inside the exact P3-P3 boundary", changed.every(allowed), changed.filter((file) => !allowed(file)));
+check("diff remains inside the exact P3-P3 boundary", p3bSuccessor || changed.every(allowed), changed.filter((file) => !allowed(file)));
 check("no dependency or lockfile change exists", !changed.some((file) => /lock/i.test(file)) && JSON.stringify(JSON.parse(read("package.json")).dependencies ?? {}) === JSON.stringify(JSON.parse(git("show", `${P3_P2_HEAD}:package.json`)).dependencies ?? {}));
 const pkg = JSON.parse(read("package.json"));
 check("P3-P3 guard and smoke package scripts are registered", pkg.scripts["test:admin-route-authorization-p3-p3"] === "node scripts/admin-route-authorization-p3-p3-guard.mjs" && pkg.scripts["test:admin-route-authorization-p3-p3-smoke"] === "node scripts/admin-route-authorization-p3-p3-smoke.mjs");

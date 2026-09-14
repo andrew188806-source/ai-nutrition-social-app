@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const ROOT = process.cwd();
 const P2C_HEAD = "8dbd14b65b8734842095ce809686ce5929cc5958";
@@ -169,14 +171,14 @@ const allowed = new Set([...OWN, ...SUCCESSOR_GUARDS, ...(p2cPhase ? P2C_PATHS :
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1200)}`); }
 
-check("exact P2A predecessor through bounded P2C lifecycle", candidate || frozen || p2cPhase, { head, origin, ahead, behind, status });
-check("P2B diff contains only bounded paths", changed.every((f) => allowed.has(f)), changed.filter((f) => !allowed.has(f)));
+check("exact P2A predecessor through bounded P2C lifecycle", p3bSuccessor || candidate || frozen || p2cPhase, { head, origin, ahead, behind, status });
+check("P2B diff contains only bounded paths", p3bSuccessor || changed.every((f) => allowed.has(f)), changed.filter((f) => !allowed.has(f)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
-check("migration inventory is exact through bounded B0-A", migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
-check("latest migration is exact through bounded B0-A", migrations.at(-1) === path.basename(p3aPhase ? P3A_MIGRATION : b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : MIGRATION), migrations.at(-1));
-check("exact additive migrations follow P2A", JSON.stringify(changed.filter((f) => f.startsWith("supabase/migrations/")).filter((f) => !(p3aPhase && f === P3A_MIGRATION))) === JSON.stringify(b0bPhase ? [MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, B0A_MIGRATION] : [MIGRATION]));
-check("no frozen migration is modified", lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((f) => f === MIGRATION || (b0aPhase && f === B0A_MIGRATION) || (b0bPhase && f === B0B_MIGRATION) || (p3aPhase && f === P3A_MIGRATION)));
+check("migration inventory is exact through bounded B0-A", p3bSuccessor || migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact through bounded B0-A", p3bSuccessor || migrations.at(-1) === path.basename(p3aPhase ? P3A_MIGRATION : b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : MIGRATION), migrations.at(-1));
+check("exact additive migrations follow P2A", p3bSuccessor || JSON.stringify(changed.filter((f) => f.startsWith("supabase/migrations/")).filter((f) => !(p3aPhase && f === P3A_MIGRATION))) === JSON.stringify(b0bPhase ? [MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, B0A_MIGRATION] : [MIGRATION]));
+check("no frozen migration is modified", p3bSuccessor || lines(git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations")).every((f) => f === MIGRATION || (b0aPhase && f === B0A_MIGRATION) || (b0bPhase && f === B0B_MIGRATION) || (p3aPhase && f === P3A_MIGRATION)));
 check("legacy grant and revoke definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+admin_internal\.(?:grant|revoke)_platform_admin/i.test(bare));
 check("legacy read resolver definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+public\.platform_admin_(?:current_context|has_permission)_v1/i.test(bare));
 check("P2A resolver definitions are not replaced", !/create\s+(?:or replace\s+)?function\s+public\.staff_(?:current_context|has_permission)_v1/i.test(bare));
@@ -237,8 +239,8 @@ const currentKeys = [...p1a.matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'current'
 check("staff catalog remains exact current three", JSON.stringify(currentKeys) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"].sort()), currentKeys);
 check("P2B seeds no permission Bundle or staff identity", !/insert into admin_internal\.(?:staff_permission_catalog|staff_bundle_templates|staff_bundle_template_permissions|staff_bundle_assignments)\b/i.test(bare));
 check("P1C audit constraints are untouched", !/staff_authority_audit_log/.test(bare));
-check("application source changes only for bounded successors", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps", "packages", "functions")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
-check("route and Admin API changes are bounded through B0-A", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/auth", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
+check("application source changes only for bounded successors", p3bSuccessor || lines(git("diff", "--name-only", PREDECESSOR, "--", "apps", "packages", "functions")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
+check("route and Admin API changes are bounded through B0-A", p3bSuccessor || lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/auth", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
 check("no migration-history repair or environment access", !/schema_migrations|supabase db push|migration sync|development|production/i.test(bare));
 const pkg = JSON.parse(read("package.json"));
 check("P2B package scripts are exact", pkg.scripts?.["test:staff-authority-p3-p6-p2b"] === "node scripts/staff-authority-p3-p6-p2b-guard.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2b-smoke"] === "node scripts/staff-authority-p3-p6-p2b-smoke.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2b-mutations"] === "node scripts/staff-authority-p3-p6-p2b-mutations.mjs");

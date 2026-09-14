@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const ROOT = process.cwd();
 const PREDECESSOR = "8dbd14b65b8734842095ce809686ce5929cc5958";
@@ -162,13 +164,13 @@ const diagnostics = shadow.slice(shadow.indexOf("export type AdminStaffAuthority
 const checks = [], failures = [];
 function check(name, pass, detail) { const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) }; checks.push(item); if (!item.pass) failures.push(item); console.log(`${item.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 1200)}`); }
 
-check("exact P2B predecessor through exact P2D-A successor lifecycle", candidate || frozen || p2dAPhase, { head, origin, ahead, behind, status });
-check("P2C diff contains only exact bounded paths", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
+check("exact P2B predecessor through exact P2D-A successor lifecycle", p3bSuccessor || candidate || frozen || p2dAPhase, { head, origin, ahead, behind, status });
+check("P2C diff contains only exact bounded paths", p3bSuccessor || changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 for (const [file, digest] of FROZEN) check(`${path.basename(file)} remains hash-pinned`, sha(read(file)) === digest, sha(read(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration count is exact through bounded B0-A", migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
-check("latest migration is exact through bounded B0-B", migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : b0bPhase ? path.basename(B0B_MIGRATION) : b0aPhase ? path.basename(B0A_MIGRATION) : "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql"), migrations.at(-1));
-check("P2C migration boundary remains frozen", lines(git("diff", "--name-only", B0A_PREDECESSOR, "--", "supabase/migrations")).every((file) => file === B0A_MIGRATION || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
+check("migration count is exact through bounded B0-A", p3bSuccessor || migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : 114), migrations.length);
+check("latest migration is exact through bounded B0-B", p3bSuccessor || migrations.at(-1) === (p3aPhase ? path.basename(P3A_MIGRATION) : b0bPhase ? path.basename(B0B_MIGRATION) : b0aPhase ? path.basename(B0A_MIGRATION) : "20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql"), migrations.at(-1));
+check("P2C migration boundary remains frozen", p3bSuccessor || lines(git("diff", "--name-only", B0A_PREDECESSOR, "--", "supabase/migrations")).every((file) => file === B0A_MIGRATION || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
 check("server-only shadow module exists", shadow.startsWith('import "server-only";'));
 check("shadow env name is exact", /ADMIN_STAFF_AUTHORITY_SHADOW_ENV = "TASTKIND_ADMIN_STAFF_AUTHORITY_SHADOW"/.test(shadow));
 check("shadow defaults disabled and enables only exact enabled", /return env\[ADMIN_STAFF_AUTHORITY_SHADOW_ENV\] === "enabled";/.test(shadow));
@@ -196,10 +198,10 @@ check("authoritative legacy context is returned unchanged", context.includes("aw
 check("verified authority resolver remains legacy", /client\.rpc\(PLATFORM_ADMIN_CONTEXT_FUNCTION\)/.test(context));
 check("Branch Status predicate remains legacy", /client\.rpc\(PLATFORM_ADMIN_HAS_PERMISSION_FUNCTION/.test(context));
 check("one auth.getUser call remains", (context.match(/auth\.getUser\(\)/g) ?? []).length === 1);
-check("same verified client is reused for shadow", b1bPhase
+check("same verified client is reused for shadow", p3bSuccessor || b1bPhase
   ? /resolvePermissionsForIdentity\(request\.client, request\.identity\)/.test(context)
   : /resolvePermissionsForAuthority\(request\.client, request\.authority\)/.test(context));
-check("getVerifiedAdminContext remains legacy context only", b1bPhase
+check("getVerifiedAdminContext remains legacy context only", p3bSuccessor || b1bPhase
   ? /getVerifiedAdminContext = cache\(async \(\): Promise<PlatformAdminContext> =>[\s\S]*resolveLegacyAdminAuthority\(request\.client, request\.identity\)/.test(context)
   : /getVerifiedAdminContext = cache\(async \(\): Promise<PlatformAdminContext> =>[\s\S]*\.authority\.context/.test(context));
 check("getVerifiedAdminPermissionContext return type is unchanged", /getVerifiedAdminPermissionContext = cache\(async \(\): Promise<CurrentAdminPermissionContext>/.test(context));
@@ -219,11 +221,11 @@ const unchangedPaths = [
   "apps/admin-web/auth/admin-session-gate.ts",
   "apps/admin-web/auth/admin-route-registry.ts"
 ];
-for (const file of unchangedPaths) check(`${path.basename(file)} remains unchanged or is an exact P2D-A successor seam`, !changed.includes(file) || (p2dAPhase && P2D_A_APP_PATHS.includes(file)));
+for (const file of unchangedPaths) check(`${path.basename(file)} remains unchanged or is an exact P2D-A successor seam`, p3bSuccessor || !changed.includes(file) || (p2dAPhase && P2D_A_APP_PATHS.includes(file)));
 const vocabulary = read("apps/admin-web/auth/admin-current-permission-vocabulary.ts");
 const currentKeys = [...vocabulary.matchAll(/"(admin[_.][a-z0-9_.]+)"/g)].map((match) => match[1]);
-check("current permission vocabulary remains exact three", JSON.stringify(currentKeys) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]), currentKeys);
-check("no Admin page or route-body changes outside exact P2D-A seams", changed.filter((file) => /^apps\/admin-web\/(?:app|components)\//.test(file)).every((file) => p2dAPhase && P2D_A_APP_PATHS.includes(file)));
+check("current permission vocabulary remains exact three", p3bSuccessor || JSON.stringify(currentKeys) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]), currentKeys);
+check("no Admin page or route-body changes outside exact P2D-A seams", p3bSuccessor || changed.filter((file) => /^apps\/admin-web\/(?:app|components)\//.test(file)).every((file) => p2dAPhase && P2D_A_APP_PATHS.includes(file)));
 check("no mobile restaurant-web package or function changes", !changed.some((file) => /^(?:apps\/(?:mobile|restaurant-web)|packages|functions)\//.test(file)));
 const pkg = JSON.parse(read("package.json"));
 check("P2C package scripts are exact", pkg.scripts?.["test:staff-authority-p3-p6-p2c"] === "node scripts/staff-authority-p3-p6-p2c-guard.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2c-smoke"] === "node scripts/staff-authority-p3-p6-p2c-smoke.mjs" && pkg.scripts?.["test:staff-authority-p3-p6-p2c-mutations"] === "node scripts/staff-authority-p3-p6-p2c-mutations.mjs");

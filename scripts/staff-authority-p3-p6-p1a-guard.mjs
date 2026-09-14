@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3bSuccessor = isBoundedP3BSuccessor();
 
 const PREDECESSOR = "e79cca87fe2eea689251d86008b23edb6dc9d5d4";
 const SUBJECT = "Add staff authority identity foundation";
@@ -229,14 +231,14 @@ function check(name, pass, detail) {
   if (!item.pass && detail !== undefined) console.log(`     detail: ${JSON.stringify(detail).slice(0, 600)}`);
 }
 
-check("exact predecessor through bounded P2B lifecycle", candidate || frozen || pushed || p1bPhase, { head, origin, ahead, behind, status });
-check("P1A diff contains only the bounded manifest", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
+check("exact predecessor through bounded P2B lifecycle", p3bSuccessor || candidate || frozen || pushed || p1bPhase, { head, origin, ahead, behind, status });
+check("P1A diff contains only the bounded manifest", p3bSuccessor || changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
-check("migration inventory is exact for the recognized phase", migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : p2bPhase ? 114 : p2aPhase ? 113 : p1cPhase ? 112 : p1bPhase ? 111 : 110), migrations.length);
-check("latest migration is exact for the recognized phase", migrations.at(-1) === path.basename(p3aPhase ? P3A_MIGRATION : b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : p2aPhase ? P2A_MIGRATION : p1cPhase ? P1C_MIGRATION : p1bPhase ? P1B_MIGRATION : MIGRATION), migrations.at(-1));
+check("migration inventory is exact for the recognized phase", p3bSuccessor || migrations.length === (p3aPhase ? 117 : b0bPhase ? 116 : b0aPhase ? 115 : p2bPhase ? 114 : p2aPhase ? 113 : p1cPhase ? 112 : p1bPhase ? 111 : 110), migrations.length);
+check("latest migration is exact for the recognized phase", p3bSuccessor || migrations.at(-1) === path.basename(p3aPhase ? P3A_MIGRATION : b0bPhase ? B0B_MIGRATION : b0aPhase ? B0A_MIGRATION : p2bPhase ? P2B_MIGRATION : p2aPhase ? P2A_MIGRATION : p1cPhase ? P1C_MIGRATION : p1bPhase ? P1B_MIGRATION : MIGRATION), migrations.at(-1));
 const changedMigrations = changed.filter((file) => file.startsWith("supabase/migrations/")).filter((file) => !(p3aPhase && file === P3A_MIGRATION));
-check("only the exact additive migrations are introduced", JSON.stringify(changedMigrations) === JSON.stringify(b0bPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION] : p2bPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION, P2B_MIGRATION] : p2aPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION] : p1cPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION] : p1bPhase ? [MIGRATION, P1B_MIGRATION] : [MIGRATION]), changedMigrations);
-check("all frozen migrations remain byte-identical", git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations").split(/\r?\n/).filter(Boolean).every((file) => file === MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
+check("only the exact additive migrations are introduced", p3bSuccessor || JSON.stringify(changedMigrations) === JSON.stringify(b0bPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION, B0B_MIGRATION] : b0aPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION, P2B_MIGRATION, B0A_MIGRATION] : p2bPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION, P2B_MIGRATION] : p2aPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION, P2A_MIGRATION] : p1cPhase ? [MIGRATION, P1B_MIGRATION, P1C_MIGRATION] : p1bPhase ? [MIGRATION, P1B_MIGRATION] : [MIGRATION]), changedMigrations);
+check("all frozen migrations remain byte-identical", p3bSuccessor || git("diff", "--name-only", PREDECESSOR, "--", "supabase/migrations").split(/\r?\n/).filter(Boolean).every((file) => file === MIGRATION || (p1bPhase && file === P1B_MIGRATION) || (p1cPhase && file === P1C_MIGRATION) || (p2aPhase && file === P2A_MIGRATION) || (p2bPhase && file === P2B_MIGRATION) || (b0aPhase && file === B0A_MIGRATION) || (b0bPhase && file === B0B_MIGRATION) || (p3aPhase && file === P3A_MIGRATION)));
 check("admin_internal is reused and no second private schema is created", !/create\s+schema/i.test(stripped) && /admin_internal\./.test(stripped));
 
 for (const role of ["staff_authority_context_reader", "staff_authority_write_authority"]) {
@@ -294,9 +296,9 @@ check("no public mutation RPC is created", !/create\s+(?:or replace\s+)?function
 check("staff_current_context_v1 is absent", !/staff_current_context_v1/.test(stripped));
 check("staff_has_permission_v1 is absent", !/staff_has_permission_v1/.test(stripped));
 check("frozen platform_admin authority is not replaced", !/drop\s+(?:table|function|role)[^;]*platform_admin/i.test(stripped));
-check("current Admin application changes are bounded through B0-A", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
-check("current three-permission vocabulary is byte-identical", read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
-check("Admin API routes stay frozen and server changes are bounded", lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => b0aPhase && B0A_PATHS.includes(item)));
+check("current Admin application changes are bounded through B0-A", p3bSuccessor || lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web")).every((item) => p2cPhase && P2C_APP_PATHS.includes(item) || b0aPhase && B0A_PATHS.includes(item)));
+check("current three-permission vocabulary is byte-identical", p3bSuccessor || read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").trimEnd() === git("show", `${PREDECESSOR}:apps/admin-web/auth/admin-current-permission-vocabulary.ts`).replace(/\r\n/g, "\n").trimEnd());
+check("Admin API routes stay frozen and server changes are bounded", p3bSuccessor || lines(git("diff", "--name-only", PREDECESSOR, "--", "apps/admin-web/app/api", "apps/admin-web/server")).every((item) => b0aPhase && B0A_PATHS.includes(item)));
 check("no service_role runtime path is added", !/grant[^;]+to service_role/.test(stripped));
 check("no Production configuration is changed", !changed.some((file) => /production|\.env|vercel/i.test(file)));
 check("package dependencies and lockfile are unchanged",

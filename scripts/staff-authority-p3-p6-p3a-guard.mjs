@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { P3B_SUCCESSOR_PATHS } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
 const ROOT = process.cwd();
 const PREDECESSOR = "922f1c6b89220723ac3cef118d8e172c67f64865";
@@ -14,6 +15,15 @@ const OWN = new Set([
   "scripts/staff-authority-p3-p6-p3a-guard.mjs",
   "scripts/staff-authority-p3-p6-p3a-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3a-mutations.mjs"
+]);
+const P3B_HEAD = "5590b3dd287247ea3b26983cb393339b0affa63c";
+const P3B_SUBJECT = "Add staff account management operators";
+const P3B_MIGRATION = "supabase/migrations/20260914020000_staff_management_p3_p6_p3b_account_operator.sql";
+const P3B_PATHS = new Set([
+  P3B_MIGRATION, "package.json", "apps/admin-web/auth/admin-current-permission-vocabulary.ts",
+  "scripts/staff-authority-p3-p6-p3b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3b-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p3b-mutations.mjs"
 ]);
 const SUCCESSOR_AWARENESS = new Set([
   "scripts/staff-authority-p3-p6-p1a-guard.mjs",
@@ -27,7 +37,6 @@ const SUCCESSOR_AWARENESS = new Set([
   "scripts/staff-authority-p3-p6-p2d-b0-b-guard.mjs",
   "scripts/staff-authority-p3-p6-p2d-b1-a-guard.mjs",
   "scripts/staff-authority-p3-p6-p2d-b1-b-guard.mjs",
-  "scripts/admin-ia-p2-r2-guard.mjs",
   "scripts/admin-session-p3-p1-guard.mjs",
   "scripts/admin-current-permissions-p3-p2-guard.mjs",
   "scripts/admin-route-authorization-p3-p3-guard.mjs",
@@ -38,7 +47,7 @@ const SUCCESSOR_AWARENESS = new Set([
 const REGRESSION_FIXTURES = new Set([
   "scripts/staff-authority-p3-p6-p2d-b1-a-mutations.mjs"
 ]);
-const ALLOWED = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...REGRESSION_FIXTURES]);
+const ALLOWED = new Set([...OWN, ...SUCCESSOR_AWARENESS, ...REGRESSION_FIXTURES, ...P3B_PATHS, ...P3B_SUCCESSOR_PATHS]);
 const MANAGEMENT_KEYS = [
   "admin.management.read",
   "admin.management.permissions.read",
@@ -70,7 +79,7 @@ const FROZEN = new Map([
 ]);
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
 const sha = (file) => crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, file))).digest("hex");
-const git = (...args) => child.execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+const git = (...args) => child.execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 const lines = (value) => value.split(/\r?\n/).filter(Boolean);
 const sql = read(MIGRATION);
 const head = git("rev-parse", "HEAD"), origin = git("rev-parse", "origin/main");
@@ -81,10 +90,15 @@ const candidate = head === PREDECESSOR && origin === PREDECESSOR && ahead === 0 
 const frozen = head !== PREDECESSOR && git("rev-parse", "HEAD^") === PREDECESSOR
   && origin === PREDECESSOR && ahead === 1 && behind === 0 && status.length === 0
   && git("log", "-1", "--format=%s") === SUBJECT;
+const p3bCandidate = head === P3B_HEAD && origin === P3B_HEAD && ahead === 0 && behind === 0;
+const p3bFrozen = head !== P3B_HEAD && git("rev-parse", "HEAD^") === P3B_HEAD
+  && origin === P3B_HEAD && ahead === 1 && behind === 0 && status.length === 0
+  && git("log", "-1", "--format=%s") === P3B_SUBJECT;
+const p3bPhase = p3bCandidate || p3bFrozen;
 const checks = [], failures = [];
 function check(name, pass, detail) { const x = { name, pass: Boolean(pass), ...(!pass && detail !== undefined ? { detail } : {}) }; checks.push(x); if (!x.pass) failures.push(x); console.log(`${x.pass ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); }
 
-check("repository is exact P3A candidate or local freeze", candidate || frozen, { head, origin, ahead, behind, status });
+check("repository is exact P3A or bounded P3B lifecycle", candidate || frozen || p3bPhase, { head, origin, ahead, behind, status });
 check("changed paths are bounded", changed.every((file) => ALLOWED.has(file)), changed.filter((file) => !ALLOWED.has(file)));
 check("changed predecessor guards carry exact P3A successor awareness", changed.filter((file) => SUCCESSOR_AWARENESS.has(file)).every((file) => {
   const source = read(file);
@@ -92,9 +106,9 @@ check("changed predecessor guards carry exact P3A successor awareness", changed.
 }));
 check("all five P3A core paths exist", [...OWN].every((file) => fs.existsSync(path.join(ROOT, file))));
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
-check("migration count is 117", migrations.length === 117, migrations.length);
-check("P3A migration is unique and latest", migrations.at(-1) === path.basename(MIGRATION) && migrations.filter((f) => f.includes("p3a")).length === 1, migrations.at(-1));
-check("frozen predecessors and runtime hashes are unchanged", [...FROZEN].every(([f, h]) => sha(f) === h));
+check("migration count is exact through P3B", migrations.length === (p3bPhase ? 118 : 117), migrations.length);
+check("P3A is unique and exact P3B may follow", migrations.at(-1) === path.basename(p3bPhase ? P3B_MIGRATION : MIGRATION) && migrations.filter((f) => f.includes("p3a")).length === 1, migrations.at(-1));
+check("frozen predecessors and runtime hashes are unchanged", [...FROZEN].every(([f, h]) => f === "apps/admin-web/auth/admin-current-permission-vocabulary.ts" && p3bPhase ? sha(f) === "a19c9415b127792dfe394a9563ad8a0dc8ed0b65923327496540d095eab20b3c" : sha(f) === h));
 const seed = sql.match(/insert into admin_internal\.staff_permission_catalog[\s\S]*?;\n/)?.[0] ?? "";
 const seeded = [...seed.matchAll(/\('([a-z0-9_.]+)',\s*'active',\s*'planned'/g)].map((m) => m[1]).sort();
 check("eight management permission keys are exact", JSON.stringify(seeded) === JSON.stringify(MANAGEMENT_KEYS), seeded);
@@ -140,14 +154,14 @@ check("no staff account DML is seeded", !/(?:insert into|update|delete from) adm
 check("no entitlement DML is seeded", !/(?:insert into|update|delete from) admin_internal\.staff_permission_entitlements/i.test(sql));
 check("no Bundle DML is seeded", !/(?:insert into|update|delete from) admin_internal\.staff_bundle_(?:templates|template_permissions|assignments)/i.test(sql));
 check("no compatibility DML is seeded", !/(?:insert into|update|delete from) admin_internal\.staff_platform_admin_compatibility_links/i.test(sql));
-check("P2A resolver and three-key application vocabulary are unchanged", sha("supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql") === FROZEN.get("supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql") && sha("apps/admin-web/auth/admin-current-permission-vocabulary.ts") === FROZEN.get("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));
+check("P2A resolver is frozen and P3B vocabulary delta is exact", sha("supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql") === FROZEN.get("supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql") && sha("apps/admin-web/auth/admin-current-permission-vocabulary.ts") === (p3bPhase ? "a19c9415b127792dfe394a9563ad8a0dc8ed0b65923327496540d095eab20b3c" : FROZEN.get("apps/admin-web/auth/admin-current-permission-vocabulary.ts")));
 check("B1 admission and B0 operation runtime are unchanged", ["apps/admin-web/auth/admin-context.ts", "apps/admin-web/auth/admin-authority-selector.ts", "apps/admin-web/auth/admin-protected-read-authority.ts", "apps/admin-web/auth/admin-protected-mutation-authority.ts"].every((f) => sha(f) === FROZEN.get(f)));
 check("P3A creates no public RPC", !/create (?:or replace )?function public\./.test(sql));
-check("P3A changes no application, package, or function source", !changed.some((f) => /^(?:apps|packages|supabase\/functions)\//.test(f)));
+check("P3A itself changes no application source; P3B changes only vocabulary", !changed.some((f) => /^(?:apps|packages|supabase\/functions)\//.test(f) && !(p3bPhase && f === "apps/admin-web/auth/admin-current-permission-vocabulary.ts")));
 check("Admin registry promotes no route", !changed.includes("apps/admin-web/auth/admin-route-registry.ts"));
 check("no Auth invite or service-role runtime is added", !/inviteUserByEmail|auth\.admin|SUPABASE_SERVICE_ROLE_KEY/.test(sql));
 check("package registers exact three P3A commands", ["test:staff-authority-p3-p6-p3a", "test:staff-authority-p3-p6-p3a-smoke", "test:staff-authority-p3-p6-p3a-mutations"].every((x) => read("package.json").includes(`\"${x}\"`)));
 check("secret scan is clean", ![/github_pat_[A-Za-z0-9_]{20,}/, /gh[pousr]_[A-Za-z0-9]{20,}/, /sb_secret_[A-Za-z0-9_-]{20,}/, /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/].some((pattern) => pattern.test(changed.filter((f) => fs.existsSync(path.join(ROOT, f))).map(read).join("\n"))));
 
-console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p3a-guard", phase: candidate ? "candidate" : frozen ? "frozen_local" : "invalid", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures: failures.map((x) => x.name), changedPaths: changed, migrationCount: migrations.length, developmentAccessed: false, productionAccessed: false, pushed: false }, null, 2));
+console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p3a-guard", phase: candidate ? "candidate" : frozen ? "frozen_local" : p3bCandidate ? "p3b_candidate" : p3bFrozen ? "p3b_frozen_local" : "invalid", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures: failures.map((x) => x.name), changedPaths: changed, migrationCount: migrations.length, developmentAccessed: false, productionAccessed: false, pushed: false }, null, 2));
 process.exitCode = failures.length ? 1 : 0;
