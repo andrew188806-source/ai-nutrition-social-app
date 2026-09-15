@@ -13,9 +13,11 @@ const frozen = { p3a: digest(p3a), route: digest(route) };
 
 function audit(state) {
   const s = state.sql;
+  const actor = s.slice(s.indexOf("create function admin_internal.lock_current_staff_management_actor_v1"), s.indexOf("comment on function admin_internal.lock_current_staff_management_actor_v1"));
   const publicFunctions = ["link", "suspend", "reactivate", "revoke"];
   return /permission_key = 'admin\.management\.staff\.account\.write'[\s\S]*readiness_status = 'planned'/.test(s)
     && /set readiness_status = 'current'/.test(s)
+    && (s.match(/set readiness_status\s*=\s*'current'/g) ?? []).length === 1
     && !/permission_key = 'admin\.management\.(?:read|permissions\.read|staff\.read|staff\.(?:bundle|permission|delegation|console_admission)\.write)'[\s\S]{0,300}set readiness_status = 'current'/.test(s)
     && ["admin_audit.read", "admin_context.read", "admin.management.staff.account.write", "admin_restaurant_branch.status.write"].every((x) => state.app.includes(`\"${x}\"`))
     && (state.app.match(/\"admin\.[^\"]+\"/g) ?? []).length === 4
@@ -24,8 +26,10 @@ function audit(state) {
     && (s.match(/create function public\.staff_management_[a-z_]+_v1\(/g) ?? []).length === 4
     && !/p_actor/i.test(s)
     && /staff_request_subject_v1\(\)/.test(s)
-    && /'admin_context\.read', 'admin\.management\.staff\.account\.write'/.test(s)
-    && /v_effective_count <> 2 or v_locked_effective_count <> 2/.test(s)
+    && /'admin_context\.read', 'admin\.management\.staff\.account\.write'/.test(actor)
+    && (actor.match(/'admin_context\.read', 'admin\.management\.staff\.account\.write'/g) ?? []).length === 4
+    && /v_effective_count <> 2 or v_locked_effective_count <> 2/.test(actor)
+    && !/if exists \(select 1 from admin_internal\.platform_admins\)/.test(s)
     && /source_type in \('direct_grant', 'migration_backfill'\)/.test(s)
     && /source_type = 'bundle_assignment'/.test(s)
     && /p_target_auth_user_id = v_actor_auth_user_id/.test(s)
@@ -44,11 +48,13 @@ function audit(state) {
     && !/(?:insert into|update|delete from) admin_internal\.staff_permission_entitlements/i.test(s)
     && !/(?:insert into|update|delete from) admin_internal\.staff_bundle_/i.test(s)
     && !/(?:insert into|update|delete from) admin_internal\.(?:platform_admins|staff_platform_admin_compatibility_links)/i.test(s)
-    && !/grant execute[\s\S]{0,500}to (?:service_role|anon)/i.test(s)
+    && !/\) to authenticated, (?:service_role|anon);/i.test(s)
     && !/grant[^;]*on (?:table )?admin_internal\.staff_accounts to (?:authenticated|service_role|anon)/i.test(s)
     && /grant update \(status, status_version, updated_at\)/.test(s)
     && !/grant update \([^)]*(?:auth_user_id|effective_from|effective_until)/.test(s)
-    && !/grant[^;]*(?:delete|truncate)[^;]*staff_accounts/i.test(s);
+    && !/grant[^;]*(?:delete|truncate)[^;]*staff_accounts/i.test(s)
+    && !/set effective_until=v_database_now/.test(s)
+    && !/grant delete on admin_internal\.staff_management_audit_log/.test(s);
 }
 
 const mutants = [];

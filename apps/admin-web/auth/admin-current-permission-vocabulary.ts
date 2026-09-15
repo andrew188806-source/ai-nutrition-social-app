@@ -8,6 +8,7 @@ export const CURRENT_ADMIN_PERMISSION_KEYS = Object.freeze([
   "admin.management.staff.account.write",
   "admin.management.staff.delegation.write",
   "admin.management.staff.console_admission.write",
+  "admin.management.staff.permission.write",
   "admin_restaurant_branch.status.write"
 ] as const);
 

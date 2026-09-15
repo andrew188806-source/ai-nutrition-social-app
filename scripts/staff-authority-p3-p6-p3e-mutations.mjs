@@ -9,7 +9,7 @@ const p1c = fs.readFileSync("supabase/migrations/20260912030000_staff_authority_
 const mutants = [
   ["console writer stays PLANNED", () => !/console_admission\.write'[\s\S]*set readiness_status = 'current'|set readiness_status = 'current'[\s\S]*console_admission\.write'/.test(sql)],
   ["permission writer accidentally promoted", () => /permission\.write'[\s\S]{0,400}set readiness_status = 'current'/.test(sql)],
-  ["application vocabulary remains five", () => (vocabulary.match(/^\s+"/gm) ?? []).length !== 6],
+  ["application vocabulary is not exact through P3F", () => (vocabulary.match(/^\s+"/gm) ?? []).length !== 7],
   ["console manager is auto-granted", () => /insert into admin_internal\.staff_permission_entitlements[\s\S]{0,300}console_admission\.write/.test(sql)],
   ["legacy Platform Admin gains console writer", () => /platform_admin_role_permissions|platform_admin_memberships/.test(sql)],
   ["actor only requires admin_context", () => !/admin\.management\.staff\.console_admission\.write/.test(sql)],

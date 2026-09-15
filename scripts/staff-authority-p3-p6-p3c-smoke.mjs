@@ -22,7 +22,7 @@ function revoke({actor,id,version,request}){if(!authorized(actor.keys))return{er
 const manager={id:"m",auth:"ma",keys:new Set(["admin_context.read","admin.management.staff.delegation.write"])};
 const target={id:"t",status:"active",from:10,until:100};
 test("A delegation.write is CURRENT",()=>assert.match(sql,/delegation\.write'[\s\S]*readiness_status = 'planned'/));
-test("B exact six-key P3E app vocabulary",()=>assert.equal((vocabulary.match(/^  "/gm)||[]).length,6));
+test("B exact seven-key P3F app vocabulary",()=>assert.equal((vocabulary.match(/^  "/gm)||[]).length,7));
 test("C manager with both keys authorized",()=>assert.ok(authorized(manager.keys)));
 test("D missing context denied",()=>assert.ok(!authorized(new Set(["admin.management.staff.delegation.write"]))));
 test("E missing delegation.write denied",()=>assert.ok(!authorized(new Set(["admin_context.read"]))));

@@ -13,6 +13,7 @@ const VOCABULARY = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
 const P3C = "supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql";
 const P3D = "supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql";
 const P3E = "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql";
+const P3F = "supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql";
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
 const sha = (file) => crypto.createHash("sha256").update(fs.readFileSync(path.join(ROOT, file))).digest("hex");
 const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -23,6 +24,7 @@ const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter
 const p3cPhase = migrations.length === 119 && migrations.at(-1) === path.basename(P3C);
 const p3dPhase = migrations.length === 120 && migrations.at(-1) === path.basename(P3D);
 const p3ePhase = migrations.length === 121 && migrations.at(-1) === path.basename(P3E);
+const p3fPhase = migrations.length === 122 && migrations.at(-1) === path.basename(P3F);
 const changed = [...new Set([
   ...git("diff", "--name-only", PREDECESSOR).split("\n"),
   ...git("ls-files", "--others", "--exclude-standard").split("\n")
@@ -59,8 +61,8 @@ const functions = [
 ];
 
 check("migration is one complete transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;\s*$/.test(sql));
-check("migration count is exact through bounded P3E", migrations.length === (p3ePhase ? 121 : p3dPhase ? 120 : p3cPhase ? 119 : 118), migrations.length);
-check("P3B migration is followed only by exact P3C/P3D/P3E", migrations.at(-1) === path.basename(p3ePhase ? P3E : p3dPhase ? P3D : p3cPhase ? P3C : MIGRATION), migrations.at(-1));
+check("migration count is exact through bounded P3F", migrations.length === (p3fPhase ? 122 : p3ePhase ? 121 : p3dPhase ? 120 : p3cPhase ? 119 : 118), migrations.length);
+check("P3B migration has only exact P3C-P3F successors", migrations.at(-1) === path.basename(p3fPhase ? P3F : p3ePhase ? P3E : p3dPhase ? P3D : p3cPhase ? P3C : MIGRATION), migrations.at(-1));
 check("all frozen predecessor hashes match", [...frozen].every(([f, digest]) => sha(f) === digest));
 check("P3A hash matches exact baseline", sha(P3A) === frozen.get(P3A));
 check("account writer role is reused", !/create role staff_account_write_authority/i.test(sql));
@@ -71,11 +73,13 @@ check("promotion preserves SECURITY_AUTH", /sensitivity_class = 'SECURITY_AUTH'/
 check("promotion preserves six security booleans", /individually_provisionable = false[\s\S]*temporary_grantable = false[\s\S]*ordinary_supervisor_delegable = false[\s\S]*privileged_only = true[\s\S]*deferred = false[\s\S]*console_admission_required = false/.test(sql));
 check("promotion requires exactly one row", /v_updated <> 1[\s\S]*staff_account_write_promotion_mismatch/.test(sql));
 check("other seven management permissions remain P3A planned", otherManagement.every((key) => new RegExp(`'${key.replaceAll(".", "\\.")}', 'active', 'planned', 'SECURITY_AUTH'`).test(p3a)));
-const expectedCurrent = p3ePhase
+const expectedCurrent = p3fPhase
+  ? [...exactCurrent.slice(0, 3), "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", exactCurrent[3]]
+  : p3ePhase
   ? [...exactCurrent.slice(0, 3), "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", exactCurrent[3]]
   : (p3cPhase || p3dPhase) ? [...exactCurrent.slice(0, 3), "admin.management.staff.delegation.write", exactCurrent[3]] : exactCurrent;
-check("application current vocabulary is exact through bounded P3E", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(expectedCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
-check("only bounded operational management keys are current", otherManagement.every((key) => ((p3cPhase || p3dPhase || p3ePhase) && key === "admin.management.staff.delegation.write") || (p3ePhase && key === "admin.management.staff.console_admission.write") || !vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.includes(key)));
+check("application current vocabulary is exact through bounded P3F", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS) === JSON.stringify(expectedCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
+check("only bounded management keys are current", otherManagement.every((key) => ((p3cPhase || p3dPhase || p3ePhase || p3fPhase) && key === "admin.management.staff.delegation.write") || ((p3ePhase || p3fPhase) && key === "admin.management.staff.console_admission.write") || (p3fPhase && key === "admin.management.staff.permission.write") || !vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.includes(key)));
 check("Admin route registry is frozen", sha("apps/admin-web/auth/admin-route-registry.ts") === frozen.get("apps/admin-web/auth/admin-route-registry.ts"));
 check("no route or navigation source changed", !changed.some((f) => !f.startsWith("scripts/") && /admin-route-registry|Sidebar|navigation|\/app\/admin\/management/.test(f)));
 check("four exact public RPC definitions exist", functions.every((fn) => new RegExp(`create function public\\.${fn}\\(`).test(sql)));

@@ -1,0 +1,100 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import { execFileSync } from "node:child_process";
+
+const migration = "supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql";
+const p3ePath = "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql";
+const p3dPath = "supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql";
+const p3cPath = "supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql";
+const p2aPath = "supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql";
+const p1cPath = "supabase/migrations/20260912030000_staff_authority_p3_p6_p1c_materializer_audit.sql";
+const vocabularyPath = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
+const sql = fs.readFileSync(migration, "utf8");
+const p3e = fs.readFileSync(p3ePath, "utf8");
+const p3d = fs.readFileSync(p3dPath, "utf8");
+const p3c = fs.readFileSync(p3cPath, "utf8");
+const p1c = fs.readFileSync(p1cPath, "utf8");
+const vocabulary = fs.readFileSync(vocabularyPath, "utf8");
+const sha = (path) => crypto.createHash("sha256").update(fs.readFileSync(path)).digest("hex");
+const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+const tests = [];
+const failures = [];
+function check(name, condition) {
+  tests.push(name);
+  try { assert.ok(condition); console.log(`PASS ${String(tests.length).padStart(2, "0")} ${name}`); }
+  catch (error) { failures.push(name); console.log(`FAIL ${String(tests.length).padStart(2, "0")} ${name}: ${error.message}`); }
+}
+
+const baseline = "7139b2b14b19cb7033301c19a8f6700f3e1b6d34";
+const head = git("rev-parse", "HEAD");
+check("exact P3E predecessor is current or direct parent", head === baseline || git("rev-parse", "HEAD^") === baseline);
+check("migration inventory is 122", fs.readdirSync("supabase/migrations").filter((x) => x.endsWith(".sql")).length === 122);
+check("exactly one P3F migration exists", fs.readdirSync("supabase/migrations").filter((x) => /p3f_privileged_permission_operator\.sql$/.test(x)).length === 1);
+check("P3E hash is pinned", sha(p3ePath) === "f83dc938ead180f0264a051035609a09351256b89317c6e99ddd787b01af2196");
+check("P3D hash is pinned", sha(p3dPath) === "350db01448691a93bdf215032d3cd325ea87d124742afcbecc0f7d61016d1c90");
+check("P3C hash is pinned", sha(p3cPath) === "9140a6bac29b56c00bccdc3eee40f9023ef19fb474dfff46a6a8c0e90ff9d5f4");
+check("P2A hash is pinned", sha(p2aPath) === "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
+check("permission writer is promoted CURRENT", /set readiness_status = 'current'[\s\S]*permission_key = 'admin\.management\.staff\.permission\.write'/.test(sql));
+check("permission writer frozen metadata is pinned", /sensitivity_class = 'SECURITY_AUTH'[\s\S]*individually_provisionable = false[\s\S]*temporary_grantable = false[\s\S]*ordinary_supervisor_delegable = false[\s\S]*privileged_only = true[\s\S]*deferred = false[\s\S]*console_admission_required = false/.test(sql));
+check("only one permission is promoted", (sql.match(/set readiness_status = 'current'/g) ?? []).length === 1);
+check("other CURRENT management writers remain accepted", /account\.write'[\s\S]*delegation\.write'[\s\S]*console_admission\.write'[\s\S]*permission\.write'/.test(sql));
+check("remaining management keys are not promoted", !/permission_key = 'admin\.management\.(?:read|permissions\.read|staff\.read|staff\.bundle\.write)'[\s\S]{0,300}set readiness_status = 'current'/.test(sql));
+
+const keys = [...vocabulary.matchAll(/^\s+"([a-z0-9_.]+)"/gm)].map((m) => m[1]);
+const expected = ["admin_audit.read", "admin_context.read", "admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", "admin_restaurant_branch.status.write"];
+check("application vocabulary is exact seven", keys.length === 7 && expected.every((key) => keys.includes(key)));
+check("application vocabulary has no eighth key", keys.length === 7);
+check("dedicated provenance table exists", /create table admin_internal\.staff_privileged_permission_grants/.test(sql));
+check("provenance binds entitlement target permission and actors", /entitlement_id uuid not null[\s\S]*target_staff_account_id uuid not null[\s\S]*permission_key text not null[\s\S]*granted_by_auth_user_id uuid not null[\s\S]*granted_by_staff_account_id uuid not null/.test(sql));
+check("history foreign keys are restrictive", (sql.match(/on update restrict on delete restrict/g) ?? []).length >= 7 && !/on delete cascade/i.test(sql));
+check("one active source per target and permission", /unique index staff_privileged_permission_grants_active_target_permission_key[\s\S]*\(target_staff_account_id, permission_key\)[\s\S]*where status = 'active'/.test(sql));
+check("provenance FORCEs RLS", /alter table admin_internal\.staff_privileged_permission_grants force row level security/.test(sql));
+check("clients and service role are denied provenance", /revoke all on table admin_internal\.staff_privileged_permission_grants[\s\S]*public, anon, authenticated, authenticator, service_role/.test(sql));
+check("sealed direct role owns bounded provenance ACL", /grant select, insert on table admin_internal\.staff_privileged_permission_grants[\s\S]*staff_direct_grant_authority/.test(sql));
+check("provenance and entitlement have no DELETE path", !/delete from admin_internal\.(?:staff_permission_entitlements|staff_privileged_permission_grants)/i.test(sql) && !/grant delete[^;]*staff_privileged_permission_grants/i.test(sql));
+check("direct entitlement update is P3F provenance scoped", /staff_permission_entitlements_privileged_writer_update[\s\S]*staff_privileged_permission_grants[\s\S]*privileged\.entitlement_id = staff_permission_entitlements\.entitlement_id/.test(sql));
+check("actor helper accepts permission writer", /lock_current_staff_management_actor_v1[\s\S]*'admin\.management\.staff\.permission\.write'/.test(sql));
+check("actor requires admin_context plus requested writer", /effective\.permission_key in \('admin_context\.read', p_required_management_permission_key\)/.test(sql));
+check("actor derives from verified request subject", /v_actor := admin_internal\.staff_request_subject_v1\(\)/.test(sql));
+check("public RPCs expose no actor", !/create function public\.staff_management_(?:grant|revoke)_privileged_permission_v1\([\s\S]{0,320}p_actor/i.test(sql));
+check("no legacy fallback", !/platform_admin|legacy.*(?:fallback|bypass)/i.test(sql));
+check("actor authority sources are locked", /staff_bundle_assignments[\s\S]*for update[\s\S]*staff_permission_entitlements[\s\S]*for update/.test(sql));
+check("target then catalogue lock is exact", /lock_staff_privileged_permission_target_policy_v1[\s\S]*staff_accounts[\s\S]*for update[\s\S]*staff_permission_catalog[\s\S]*p_permission_key[\s\S]*for update/.test(sql));
+check("self grant and revoke are denied", (sql.match(/self_target_denied/g) ?? []).length >= 2);
+check("target must be active and effective now", /target_status <> 'active'[\s\S]*target_effective_from > v_database_now[\s\S]*v_database_now >= v_target\.target_effective_until/.test(sql));
+check("permission key is exact and wildcard free", /p_permission_key <> pg_catalog\.btrim[\s\S]*strpos\(p_permission_key, '\*'\)[\s\S]*strpos\(p_permission_key, '%'\)/.test(sql));
+check("catalogue must be active CURRENT privileged", /permission_lifecycle_status <> 'active'[\s\S]*permission_readiness_status <> 'current'[\s\S]*not v_target\.permission_privileged_only/.test(sql));
+check("admin_context is hard denied", (sql.match(/p_permission_key = 'admin_context\.read'|v_pre_grant\.permission_key = 'admin_context\.read'/g) ?? []).length >= 2);
+check("console and ordinary lanes are denied", /permission_console_admission_required[\s\S]*permission_ordinary_supervisor_delegable/.test(sql));
+check("individually_provisionable is not an eligibility gate", !/not v_target\.permission_individually_provisionable/.test(sql));
+check("standard window inherits target envelope", /v_actual_effective_from := v_database_now[\s\S]*v_actual_effective_until := v_target\.target_effective_until/.test(sql));
+check("custom window requires temporary grantability", /v_custom_window and not v_target\.permission_temporary_grantable/.test(sql));
+check("custom window is contained", /v_actual_effective_until <= v_actual_effective_from[\s\S]*v_actual_effective_from < v_database_now[\s\S]*v_actual_effective_until > v_target\.target_effective_until/.test(sql));
+check("exactly two public P3F RPCs exist", (sql.match(/create function public\.staff_management_(?:grant|revoke)_privileged_permission_v1/g) ?? []).length === 2);
+check("grant RPC has exact input surface", /staff_management_grant_privileged_permission_v1\(\s*p_target_staff_account_id uuid,\s*p_permission_key text,\s*p_effective_from timestamptz,\s*p_effective_until timestamptz,\s*p_reason_code text,\s*p_request_id uuid\s*\)/m.test(sql));
+check("revoke RPC has exact source CAS surface", /staff_management_revoke_privileged_permission_v1\(\s*p_privileged_permission_grant_id uuid,\s*p_expected_status_version bigint,\s*p_reason_code text,\s*p_request_id uuid\s*\)/m.test(sql));
+check("grant creates direct entitlement and provenance", /insert into admin_internal\.staff_permission_entitlements[\s\S]*p_permission_key, 'direct_grant', null[\s\S]*insert into admin_internal\.staff_privileged_permission_grants/.test(sql));
+check("duplicate active source is bounded", /unique_violation[\s\S]*privileged_permission_exists/.test(sql));
+check("revoke targets exact provenance with CAS", /privileged_permission_grant_id = p_privileged_permission_grant_id[\s\S]*for update[\s\S]*status_version <> p_expected_status_version/.test(sql));
+check("revoke binds exact entitlement", /entitlement_id = v_grant\.entitlement_id[\s\S]*for update/.test(sql));
+check("revoked provenance is terminal", /old\.status = 'revoked' and new is distinct from old/.test(sql));
+check("restoration cannot reactivate", !/set status = 'active'/.test(sql));
+check("shared receipts and audit are reused", /insert into admin_internal\.staff_management_operation_receipts/.test(sql) && /insert into admin_internal\.staff_management_audit_log/.test(sql) && !/create table .*receipt|create table .*audit/i.test(sql));
+check("replay and request conflict are bounded", /return v_prior\.result_payload/.test(sql) && /request_conflict/.test(sql));
+check("request advisory lock is present", /pg_advisory_xact_lock/.test(sql));
+check("P3E remains sole console path", /'admin_context\.read'/.test(p3e) && !/staff_console_admission_grants[\s\S]{0,200}(?:insert|update|delete)/i.test(sql));
+check("P3D remains ordinary lane", /not v_target\.permission_individually_provisionable[\s\S]*not v_target\.permission_ordinary_supervisor_delegable[\s\S]*v_target\.permission_privileged_only/.test(p3d));
+check("P3C delegation model is untouched", /staff_permission_delegations/.test(p3c) && !/insert into admin_internal\.staff_permission_delegations/.test(sql));
+check("Bundle model is untouched", /bundle_console_admission_forbidden/.test(p1c) && !/staff_bundle_assignments[\s\S]{0,200}(?:insert|update|delete)/i.test(sql));
+check("P2A resolver remains frozen", sha(p2aPath) === "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
+check("no legacy Platform Admin mutation", !/platform_admin_role_permissions|platform_admin_memberships/.test(sql));
+check("no initial authority is seeded", (sql.match(/insert into admin_internal\.staff_permission_entitlements/g) ?? []).length === 1 && (sql.match(/insert into admin_internal\.staff_privileged_permission_grants/g) ?? []).length === 1 && !/insert into admin_internal\.staff_accounts/i.test(sql));
+check("authenticated alone receives public execute", (sql.match(/\) to authenticated;/g) ?? []).length === 2 && !/grant execute[^;]*to (?:anon|service_role|authenticator)/i.test(sql));
+check("public RPC security is sealed", (sql.match(/language sql\s+volatile\s+security definer\s+set search_path = ''\s+set row_security = 'on'/g) ?? []).length === 2);
+check("no route nav page HTTP or Auth Admin promotion", !/route registry|Sidebar|createUser|inviteUser|auth\.admin/i.test(sql));
+check("migration contains no credential-shaped value", !/(?:service_role_key|access_token|refresh_token|password\s*=|postgres(?:ql)?:\/\/[^\s]+:[^\s]+@)/i.test(sql));
+
+console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p3f-guard", total: tests.length, passed: tests.length - failures.length, failed: failures.length, failures, developmentAccessed: false, productionAccessed: false }, null, 2));
+process.exitCode = failures.length ? 1 : 0;

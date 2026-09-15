@@ -121,7 +121,7 @@ test("AM temporal permission present inside window", () => assert.ok(hasPermissi
 test("AN temporal permission absent at exclusive end", () => assert.ok(!hasPermission("temporal", full.key, 40)));
 test("AO receipt exactly once on replay", () => assert.equal([...receipts.keys()].filter((key) => key === `${supervisor.auth}:first`).length, 1));
 test("AP audit exactly once on replay", () => assert.equal(audits.filter((event) => event.key === `${supervisor.auth}:first`).length, 1));
-test("AQ P3E adds only the sixth vocabulary key without route/nav", () => { assert.equal((vocabulary.match(/^  "/gm) ?? []).length, 6); assert.ok(vocabulary.includes('"admin.management.staff.console_admission.write"')); assert.ok(!/admin-route-registry|Sidebar/.test(sql)); });
+test("AQ P3F adds only the seventh vocabulary key without route/nav", () => { assert.equal((vocabulary.match(/^  "/gm) ?? []).length, 7); assert.ok(vocabulary.includes('"admin.management.staff.console_admission.write"')); assert.ok(vocabulary.includes('"admin.management.staff.permission.write"')); assert.ok(!/admin-route-registry|Sidebar/.test(sql)); });
 
 console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p3d-smoke", total: tests.length, passed: tests.length - failures.length, failed: failures.length, failures, databaseUsed: false, networkUsed: false, developmentAccessed: false, productionAccessed: false }, null, 2));
 process.exitCode = failures.length ? 1 : 0;

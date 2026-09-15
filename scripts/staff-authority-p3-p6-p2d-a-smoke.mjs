@@ -236,7 +236,7 @@ test("AI cookie Audit filtering", async () => assert.equal((await apiAuthorizati
 test("AJ cookie Branch filtering", async () => assert.equal((await apiAuthorization.resolveAdminApiAuthorization(null, branch, { resolvePermissionContext: async () => staffSubset, resolveSessionSnapshot: async () => ({ subject, accessToken: "token" }) })).state, "forbidden"));
 test("AK explicit bearer path untouched", async () => assert.deepEqual(await apiAuthorization.resolveAdminApiAuthorization("Bearer frozen.token", audit, { resolvePermissionContext: async () => { throw new Error("must not call"); }, resolveSessionSnapshot: async () => { throw new Error("must not call"); } }), { state: "authorized", mode: "bearer", authorization: "Bearer frozen.token" }));
 test("AL malformed explicit bearer cannot fall back", async () => assert.equal((await apiAuthorization.resolveAdminApiAuthorization("malformed", audit, { resolvePermissionContext: async () => staffSubset, resolveSessionSnapshot: async () => ({ subject, accessToken: "token" }) })).mode, "bearer"));
-test("AM current vocabulary includes bounded P3B/P3C/P3E successors", () => assert.deepEqual([...vocabulary.CURRENT_ADMIN_PERMISSION_KEYS], [audit, base, "admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", branch]));
+test("AM current vocabulary includes bounded P3B-P3F successors", () => assert.deepEqual([...vocabulary.CURRENT_ADMIN_PERMISSION_KEYS], [audit, base, "admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", branch]));
 
 let passed = 0;
 const failures = [];

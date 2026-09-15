@@ -19,6 +19,9 @@ const P3D_MIGRATION = "supabase/migrations/20260914040000_staff_management_p3_p6
 const P3E_SUBJECT = "Add dedicated staff console admission authority";
 const P3E_MIGRATION = "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql";
 const P3E_VOCABULARY_SHA = "337068a7c2284944589c5d885618afdc52e2f464785e0d81cda28bb4af7217b3";
+const P3F_SUBJECT = "Add privileged staff permission operators";
+const P3F_MIGRATION = "supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql";
+const P3F_VOCABULARY_SHA = "3f6d4407f867ddce09fc327dfdd3932739a490d147ba8d4d49a33ea2188d8b52";
 
 export const P3B_SUCCESSOR_PATHS = Object.freeze([
   P3B_MIGRATION,
@@ -64,6 +67,10 @@ export const P3B_SUCCESSOR_PATHS = Object.freeze([
   ,"scripts/staff-authority-p3-p6-p3e-guard.mjs"
   ,"scripts/staff-authority-p3-p6-p3e-smoke.mjs"
   ,"scripts/staff-authority-p3-p6-p3e-mutations.mjs"
+  ,P3F_MIGRATION
+  ,"scripts/staff-authority-p3-p6-p3f-guard.mjs"
+  ,"scripts/staff-authority-p3-p6-p3f-smoke.mjs"
+  ,"scripts/staff-authority-p3-p6-p3f-mutations.mjs"
 ]);
 
 export function isBoundedP3BSuccessor(root = process.cwd()) {
@@ -105,7 +112,14 @@ export function isBoundedP3BSuccessor(root = process.cwd()) {
       && origin === "a384e9769556873105f06c15f88560ba4ab361d1"
       && ahead === 1 && behind === 0 && status.length === 0
       && git("log", "-1", "--format=%s") === P3E_SUBJECT;
-    if (!candidate && !frozen && !p3cCandidate && !p3cFrozen && !p3dCandidate && !p3dFrozen && !p3eCandidate && !p3eFrozen) return false;
+    const p3fCandidate = head === "7139b2b14b19cb7033301c19a8f6700f3e1b6d34"
+      && origin === head && ahead === 0 && behind === 0;
+    const p3fFrozen = head !== "7139b2b14b19cb7033301c19a8f6700f3e1b6d34"
+      && git("rev-parse", "HEAD^") === "7139b2b14b19cb7033301c19a8f6700f3e1b6d34"
+      && origin === "7139b2b14b19cb7033301c19a8f6700f3e1b6d34"
+      && ahead === 1 && behind === 0 && status.length === 0
+      && git("log", "-1", "--format=%s") === P3F_SUBJECT;
+    if (!candidate && !frozen && !p3cCandidate && !p3cFrozen && !p3dCandidate && !p3dFrozen && !p3eCandidate && !p3eFrozen && !p3fCandidate && !p3fFrozen) return false;
     const changed = [...new Set([
       ...lines(git("diff", "--name-only", P3B_PREDECESSOR)),
       ...lines(git("ls-files", "--others", "--exclude-standard"))
@@ -125,9 +139,12 @@ export function isBoundedP3BSuccessor(root = process.cwd()) {
     const p3eState = migrations.length === 121
       && migrations.at(-1) === path.basename(P3E_MIGRATION)
       && sha(VOCABULARY) === P3E_VOCABULARY_SHA;
+    const p3fState = migrations.length === 122
+      && migrations.at(-1) === path.basename(P3F_MIGRATION)
+      && sha(VOCABULARY) === P3F_VOCABULARY_SHA;
     return changed.every((file) => allowed.has(file))
       && sha(P3A_MIGRATION) === P3A_SHA
-      && (p3bState || p3cState || p3dState || p3eState);
+      && (p3bState || p3cState || p3dState || p3eState || p3fState);
   } catch {
     return false;
   }

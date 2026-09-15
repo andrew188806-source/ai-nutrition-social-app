@@ -63,7 +63,7 @@ function revoke({ actor = manager, grantId, version = 0, reason = "withdrawn", r
 
 test("A console_admission.write is CURRENT", () => assert.equal(catalog.get("admin.management.staff.console_admission.write").current, true));
 test("B permission.write remains PLANNED", () => assert.equal(catalog.get("admin.management.staff.permission.write").current, false));
-test("C application vocabulary is exact six", () => assert.equal((vocabulary.match(/^\s+"/gm) ?? []).length, 6));
+test("C application vocabulary is exact through P3F", () => assert.equal((vocabulary.match(/^\s+"/gm) ?? []).length, 7));
 test("D actor with context and console writer is authorized", () => assert.ok(authorized(manager)));
 test("E context-only actor is denied", () => assert.ok(!authorized(account("context-only", "active", 0, null, ["admin_context.read"]))));
 test("F console-writer-only actor is denied", () => assert.ok(!authorized(account("write-only", "active", 0, null, ["admin.management.staff.console_admission.write"]))));

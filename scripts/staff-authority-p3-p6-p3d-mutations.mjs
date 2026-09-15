@@ -37,7 +37,7 @@ const mutants = [
   ["anon execute", () => /grant execute[^;]*to anon/i.test(sql)],
   ["client entitlement mutation", () => /grant[^;]*(?:insert|update|delete)[^;]*staff_permission_entitlements[^;]*to (?:anon|authenticated|authenticator|service_role)/i.test(sql)],
   ["client provenance mutation", () => /grant[^;]*(?:insert|update|delete)[^;]*staff_delegated_permission_grants[^;]*to (?:anon|authenticated|authenticator|service_role)/i.test(sql)],
-  ["P3E application vocabulary is not exact six", () => (vocabulary.match(/^  "/gm) ?? []).length !== 6 || !vocabulary.includes('"admin.management.staff.console_admission.write"')]
+  ["P3F application vocabulary is not exact seven", () => (vocabulary.match(/^  "/gm) ?? []).length !== 7 || !vocabulary.includes('"admin.management.staff.console_admission.write"') || !vocabulary.includes('"admin.management.staff.permission.write"')]
 ];
 const survivors = [];
 for (const [name, survives] of mutants) {
