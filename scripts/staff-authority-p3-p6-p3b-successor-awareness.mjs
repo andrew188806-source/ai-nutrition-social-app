@@ -41,6 +41,14 @@ const P3G_PATHS = [
   "scripts/staff-authority-p3-p6-p3e-guard.mjs",
   "scripts/staff-authority-p3-p6-p3f-guard.mjs",
 ];
+const P3G_R1_BASELINE = "79cccc2a3bb2584401757d4620d0135e5e754675";
+const P3G_R1_SUBJECT = "Make break-glass extension collation-independent";
+const P3G_R1_MIGRATION = "supabase/migrations/20260916010000_staff_management_p3_p6_p3g_r1_extend_collation_repair.sql";
+const P3G_R1_PATHS = [
+  P3G_R1_MIGRATION,
+  "scripts/staff-authority-p3-p6-p3g-r1-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3g-r1-mutations.mjs",
+];
 
 export const P3B_SUCCESSOR_PATHS = Object.freeze([
   P3B_MIGRATION,
@@ -91,6 +99,7 @@ export const P3B_SUCCESSOR_PATHS = Object.freeze([
   ,"scripts/staff-authority-p3-p6-p3f-smoke.mjs"
   ,"scripts/staff-authority-p3-p6-p3f-mutations.mjs"
   ,...P3G_PATHS
+  ,...P3G_R1_PATHS
 ]);
 
 export function isBoundedP3BSuccessor(root = process.cwd()) {
@@ -145,7 +154,13 @@ export function isBoundedP3BSuccessor(root = process.cwd()) {
       && git("rev-parse", "HEAD^") === P3G_BASELINE
       && origin === P3G_BASELINE && ahead === 1 && behind === 0
       && status.length === 0 && git("log", "-1", "--format=%s") === P3G_SUBJECT;
-    if (!candidate && !frozen && !p3cCandidate && !p3cFrozen && !p3dCandidate && !p3dFrozen && !p3eCandidate && !p3eFrozen && !p3fCandidate && !p3fFrozen && !p3gCandidate && !p3gFrozen) return false;
+    const p3gR1Candidate = head === P3G_R1_BASELINE && origin === P3G_BASELINE
+      && ahead === 1 && behind === 0;
+    const p3gR1Frozen = head !== P3G_R1_BASELINE
+      && git("rev-parse", "HEAD^") === P3G_R1_BASELINE
+      && origin === P3G_BASELINE && ahead === 2 && behind === 0
+      && status.length === 0 && git("log", "-1", "--format=%s") === P3G_R1_SUBJECT;
+    if (!candidate && !frozen && !p3cCandidate && !p3cFrozen && !p3dCandidate && !p3dFrozen && !p3eCandidate && !p3eFrozen && !p3fCandidate && !p3fFrozen && !p3gCandidate && !p3gFrozen && !p3gR1Candidate && !p3gR1Frozen) return false;
     const changed = [...new Set([
       ...lines(git("diff", "--name-only", P3B_PREDECESSOR)),
       ...lines(git("ls-files", "--others", "--exclude-standard"))
@@ -171,9 +186,12 @@ export function isBoundedP3BSuccessor(root = process.cwd()) {
     const p3gState = migrations.length === 123
       && migrations.at(-1) === path.basename(P3G_MIGRATION)
       && sha(VOCABULARY) === P3F_VOCABULARY_SHA;
+    const p3gR1State = migrations.length === 124
+      && migrations.at(-1) === path.basename(P3G_R1_MIGRATION)
+      && sha(VOCABULARY) === P3F_VOCABULARY_SHA;
     return changed.every((file) => allowed.has(file))
       && sha(P3A_MIGRATION) === P3A_SHA
-      && (p3bState || p3cState || p3dState || p3eState || p3fState || p3gState);
+      && (p3bState || p3cState || p3dState || p3eState || p3fState || p3gState || p3gR1State);
   } catch {
     return false;
   }

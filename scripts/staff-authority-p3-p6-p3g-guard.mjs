@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 
 const BASELINE = "13d89a50bc05c3992332b245d6c47e05f2fe392f";
 const MIGRATION = "supabase/migrations/20260915030000_staff_management_p3_p6_p3g_break_glass_control_plane.sql";
+const R1 = "supabase/migrations/20260916010000_staff_management_p3_p6_p3g_r1_extend_collation_repair.sql";
 const P3F = "supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql";
 const VOCABULARY = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
 const CLI = "scripts/break-glass-control.mjs";
@@ -20,6 +21,7 @@ const cli = read(CLI);
 const pkg = JSON.parse(read("package.json"));
 const vocabulary = read(VOCABULARY);
 const migrations = fs.readdirSync("supabase/migrations").filter((file) => file.endsWith(".sql")).sort();
+const r1Phase = migrations.length === 124 && migrations.at(-1) === R1.split("/").at(-1);
 const changed = [...new Set([
   ...git("diff", "--name-only", BASELINE).split(/\r?\n/),
   ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/),
@@ -39,6 +41,9 @@ const allowed = new Set([
   "scripts/staff-authority-p3-p6-p3d-guard.mjs",
   "scripts/staff-authority-p3-p6-p3e-guard.mjs",
   "scripts/staff-authority-p3-p6-p3f-guard.mjs",
+  R1,
+  "scripts/staff-authority-p3-p6-p3g-r1-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3g-r1-mutations.mjs",
 ]);
 const root = [
   "admin_context.read",
@@ -74,9 +79,11 @@ function check(name, condition, detail) {
 }
 
 check("exact P3F-R1 predecessor is an ancestor", git("merge-base", "HEAD", BASELINE) === BASELINE);
-check("migration inventory advances 122 to 123", migrations.length === 123, migrations.length);
-check("P3G migration is latest and unique", migrations.at(-1) === MIGRATION.split("/").at(-1)
-  && migrations.filter((file) => file.includes("p3g_break_glass_control_plane")).length === 1);
+check("migration inventory advances 122 to 123 or exact bounded R1", migrations.length === (r1Phase ? 124 : 123), migrations.length);
+check("P3G migration is present exactly once and latest, or has only its exact R1 successor",
+  migrations.filter((file) => file.includes("p3g_break_glass_control_plane")).length === 1
+  && migrations.filter((file) => file.includes("p3g_r1_extend_collation_repair")).length === (r1Phase ? 1 : 0)
+  && (r1Phase ? migrations.at(-1) === R1.split("/").at(-1) : migrations.at(-1) === MIGRATION.split("/").at(-1)));
 check("P3F migration SHA is pinned", sha(P3F) === "fcfb4b50f9cc2d97efb136dbdbc6c41ef069261f17312e43c5d1ffa3bb3468b3");
 check("changed paths are bounded", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 check("no application runtime path changed", !changed.some((file) => /^(apps|packages|supabase\/functions)\//.test(file)));
