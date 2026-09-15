@@ -38,6 +38,7 @@ const allowed = new Set([
   "scripts/staff-authority-p3-p6-p3c-guard.mjs",
   "scripts/staff-authority-p3-p6-p3c-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3b-mutations.mjs",
   "scripts/staff-authority-p3-p6-p3b-smoke.mjs",
   "scripts/staff-authority-p3-p6-p3b-successor-awareness.mjs"
   ,P3E
