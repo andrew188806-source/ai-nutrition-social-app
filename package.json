@@ -436,6 +436,11 @@
     "test:staff-authority-p3-p6-p3f": "node scripts/staff-authority-p3-p6-p3f-guard.mjs",
     "test:staff-authority-p3-p6-p3f-smoke": "node scripts/staff-authority-p3-p6-p3f-smoke.mjs",
     "test:staff-authority-p3-p6-p3f-mutations": "node scripts/staff-authority-p3-p6-p3f-mutations.mjs",
+    "test:staff-authority-p3-p6-p3g": "node scripts/staff-authority-p3-p6-p3g-guard.mjs",
+    "test:staff-authority-p3-p6-p3g-smoke": "node scripts/staff-authority-p3-p6-p3g-smoke.mjs",
+    "test:staff-authority-p3-p6-p3g-mutations": "node scripts/staff-authority-p3-p6-p3g-mutations.mjs",
+    "test:staff-authority-p3-p6-p3g-postgres": "node scripts/staff-authority-p3-p6-p3g-postgres.mjs",
+    "break-glass": "node scripts/break-glass-control.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1": "node scripts/restaurant-owner-sold-out-ra-2a-p1-guard.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-smoke": "node scripts/restaurant-owner-sold-out-ra-2a-p1-smoke.mjs",
     "test:restaurant-owner-sold-out-ra-2a-p1-mutations": "node scripts/restaurant-owner-sold-out-ra-2a-p1-mutations.mjs",
@@ -478,59 +483,60 @@
     "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-guard.mjs",
     "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-smoke": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-smoke.mjs",
     "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-mutations": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-mutations.mjs",
-    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-postgres": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-postgres-apply.mjs"
-    ,"test:restaurant-owner-branch-display-name-ra-2e-p2-smoke": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-smoke.mjs"
-    ,"test:restaurant-owner-branch-display-name-ra-2e-p2-mutations": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-mutations.mjs"
-    ,"test:restaurant-owner-branch-display-name-ra-2e-p2-development": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-development-acceptance.mjs"
-    ,"test:restaurant-owner-visibility-ra-2d-p2": "node scripts/restaurant-owner-visibility-ra-2d-p2-guard.mjs"
-    ,"test:restaurant-owner-visibility-ra-2d-p2-smoke": "node scripts/restaurant-owner-visibility-ra-2d-p2-smoke.mjs"
-    ,"test:restaurant-owner-visibility-ra-2d-p2-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p2-mutations.mjs"
-    ,"test:restaurant-owner-visibility-ra-2d-p2-development": "node scripts/restaurant-owner-visibility-ra-2d-p2-development-acceptance.mjs"
-    ,"test:restaurant-owner-visibility-ra-2d-p2-r1": "node scripts/restaurant-owner-visibility-ra-2d-p2-r1-regression.mjs"
-    ,"test:restaurant-owner-visibility-ra-2d-p2-r1-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p2-r1-mutations.mjs"
-    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-guard.mjs"
-    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-smoke": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-smoke.mjs"
-    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-mutations": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-mutations.mjs"
-    ,"test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-development": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-development-acceptance.mjs"
-    ,"test:restaurant-owner-temporal-ra-2h-p0": "node scripts/restaurant-owner-temporal-ra-2h-p0-guard.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p1": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-guard.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p1-smoke": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-smoke.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p1-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-mutations.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p1-postgres": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-postgres-apply.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p2": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-guard.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p2-smoke": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-smoke.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p2-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-mutations.mjs"
-    ,"test:restaurant-owner-branch-temporal-ra-2h-p2-development": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-development-acceptance.mjs"
-    ,"test:auth-scoped-client-state-isolation": "node scripts/auth-scoped-client-state-isolation-smoke.mjs"
-    ,"test:meal-buddy-late-response-actor-boundary": "node scripts/meal-buddy-late-response-actor-boundary-smoke.mjs"
-    ,"test:meal-buddy-auth-fix-live-development-validation": "node scripts/meal-buddy-auth-fix-live-development-validation.mjs"
-    ,"test:consumer-temporal-activation-ra-2h-p3": "node scripts/consumer-temporal-activation-ra-2h-p3-guard.mjs"
-    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-guard.mjs"
-    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-smoke": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-smoke.mjs"
-    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-mutations": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-mutations.mjs"
-    ,"test:restaurant-owner-branch-public-phone-ra-2i-p1a-postgres": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-postgres-apply.mjs"
-    ,"test:restaurant-owner-public-website-ra-2i-p1b": "node scripts/restaurant-owner-public-website-ra-2i-p1b-guard.mjs"
-    ,"test:restaurant-owner-public-website-ra-2i-p1b-smoke": "node scripts/restaurant-owner-public-website-ra-2i-p1b-smoke.mjs"
-    ,"test:restaurant-owner-public-website-ra-2i-p1b-mutations": "node scripts/restaurant-owner-public-website-ra-2i-p1b-mutations.mjs"
-    ,"test:restaurant-owner-public-website-ra-2i-p1b-postgres": "node scripts/restaurant-owner-public-website-ra-2i-p1b-postgres-apply.mjs"
-    ,"test:restaurant-owner-public-social-links-ra-2i-p2": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-guard.mjs"
-    ,"test:restaurant-owner-public-social-links-ra-2i-p2-smoke": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-smoke.mjs"
-    ,"test:restaurant-owner-public-social-links-ra-2i-p2-mutations": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-mutations.mjs"
-    ,"test:restaurant-owner-public-social-links-ra-2i-p2-postgres": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-postgres-apply.mjs"
-    ,"test:restaurant-url-mutation-authority-ra-2i-r2": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-guard.mjs"
-    ,"test:restaurant-url-mutation-authority-ra-2i-r2-smoke": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-smoke.mjs"
-    ,"test:restaurant-url-mutation-authority-ra-2i-r2-mutations": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-mutations.mjs"
-    ,"test:restaurant-url-mutation-authority-ra-2i-r2-postgres": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-postgres-apply.mjs"
-    ,"test:restaurant-owner-about-ra-2g-p1": "node scripts/restaurant-owner-about-ra-2g-p1-guard.mjs"
-    ,"test:restaurant-owner-about-ra-2g-p1-smoke": "node scripts/restaurant-owner-about-ra-2g-p1-smoke.mjs"
-    ,"test:restaurant-owner-about-ra-2g-p1-mutations": "node scripts/restaurant-owner-about-ra-2g-p1-mutations.mjs"
-    ,"test:restaurant-owner-about-ra-2g-p1-postgres": "node scripts/restaurant-owner-about-ra-2g-p1-postgres-apply.mjs"
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p1-postgres": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-postgres-apply.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p2-smoke": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-smoke.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p2-mutations": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-mutations.mjs",
+    "test:restaurant-owner-branch-display-name-ra-2e-p2-development": "node scripts/restaurant-owner-branch-display-name-ra-2e-p2-development-acceptance.mjs",
+    "test:restaurant-owner-visibility-ra-2d-p2": "node scripts/restaurant-owner-visibility-ra-2d-p2-guard.mjs",
+    "test:restaurant-owner-visibility-ra-2d-p2-smoke": "node scripts/restaurant-owner-visibility-ra-2d-p2-smoke.mjs",
+    "test:restaurant-owner-visibility-ra-2d-p2-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p2-mutations.mjs",
+    "test:restaurant-owner-visibility-ra-2d-p2-development": "node scripts/restaurant-owner-visibility-ra-2d-p2-development-acceptance.mjs",
+    "test:restaurant-owner-visibility-ra-2d-p2-r1": "node scripts/restaurant-owner-visibility-ra-2d-p2-r1-regression.mjs",
+    "test:restaurant-owner-visibility-ra-2d-p2-r1-mutations": "node scripts/restaurant-owner-visibility-ra-2d-p2-r1-mutations.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-guard.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-smoke": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-smoke.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-mutations": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-mutations.mjs",
+    "test:restaurant-owner-branch-menu-item-display-name-ra-2f-p2-development": "node scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p2-development-acceptance.mjs",
+    "test:restaurant-owner-temporal-ra-2h-p0": "node scripts/restaurant-owner-temporal-ra-2h-p0-guard.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p1": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-guard.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p1-smoke": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-smoke.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p1-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-mutations.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p1-postgres": "node scripts/restaurant-owner-branch-temporal-ra-2h-p1-postgres-apply.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p2": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-guard.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p2-smoke": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-smoke.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p2-mutations": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-mutations.mjs",
+    "test:restaurant-owner-branch-temporal-ra-2h-p2-development": "node scripts/restaurant-owner-branch-temporal-ra-2h-p2-development-acceptance.mjs",
+    "test:auth-scoped-client-state-isolation": "node scripts/auth-scoped-client-state-isolation-smoke.mjs",
+    "test:meal-buddy-late-response-actor-boundary": "node scripts/meal-buddy-late-response-actor-boundary-smoke.mjs",
+    "test:meal-buddy-auth-fix-live-development-validation": "node scripts/meal-buddy-auth-fix-live-development-validation.mjs",
+    "test:consumer-temporal-activation-ra-2h-p3": "node scripts/consumer-temporal-activation-ra-2h-p3-guard.mjs",
+    "test:restaurant-owner-branch-public-phone-ra-2i-p1a": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-guard.mjs",
+    "test:restaurant-owner-branch-public-phone-ra-2i-p1a-smoke": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-smoke.mjs",
+    "test:restaurant-owner-branch-public-phone-ra-2i-p1a-mutations": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-mutations.mjs",
+    "test:restaurant-owner-branch-public-phone-ra-2i-p1a-postgres": "node scripts/restaurant-owner-branch-public-phone-ra-2i-p1a-postgres-apply.mjs",
+    "test:restaurant-owner-public-website-ra-2i-p1b": "node scripts/restaurant-owner-public-website-ra-2i-p1b-guard.mjs",
+    "test:restaurant-owner-public-website-ra-2i-p1b-smoke": "node scripts/restaurant-owner-public-website-ra-2i-p1b-smoke.mjs",
+    "test:restaurant-owner-public-website-ra-2i-p1b-mutations": "node scripts/restaurant-owner-public-website-ra-2i-p1b-mutations.mjs",
+    "test:restaurant-owner-public-website-ra-2i-p1b-postgres": "node scripts/restaurant-owner-public-website-ra-2i-p1b-postgres-apply.mjs",
+    "test:restaurant-owner-public-social-links-ra-2i-p2": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-guard.mjs",
+    "test:restaurant-owner-public-social-links-ra-2i-p2-smoke": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-smoke.mjs",
+    "test:restaurant-owner-public-social-links-ra-2i-p2-mutations": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-mutations.mjs",
+    "test:restaurant-owner-public-social-links-ra-2i-p2-postgres": "node scripts/restaurant-owner-public-social-links-ra-2i-p2-postgres-apply.mjs",
+    "test:restaurant-url-mutation-authority-ra-2i-r2": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-guard.mjs",
+    "test:restaurant-url-mutation-authority-ra-2i-r2-smoke": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-smoke.mjs",
+    "test:restaurant-url-mutation-authority-ra-2i-r2-mutations": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-mutations.mjs",
+    "test:restaurant-url-mutation-authority-ra-2i-r2-postgres": "node scripts/restaurant-url-mutation-authority-ra-2i-r2-postgres-apply.mjs",
+    "test:restaurant-owner-about-ra-2g-p1": "node scripts/restaurant-owner-about-ra-2g-p1-guard.mjs",
+    "test:restaurant-owner-about-ra-2g-p1-smoke": "node scripts/restaurant-owner-about-ra-2g-p1-smoke.mjs",
+    "test:restaurant-owner-about-ra-2g-p1-mutations": "node scripts/restaurant-owner-about-ra-2g-p1-mutations.mjs",
+    "test:restaurant-owner-about-ra-2g-p1-postgres": "node scripts/restaurant-owner-about-ra-2g-p1-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "devDependencies": {
+    "pg": "^8.23.0",
     "typescript": "^5.4.5"
   }
 }

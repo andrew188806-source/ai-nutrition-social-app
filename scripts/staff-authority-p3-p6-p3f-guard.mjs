@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
 const migration = "supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql";
 const p3ePath = "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql";
@@ -29,8 +30,9 @@ function check(name, condition) {
 
 const baseline = "7139b2b14b19cb7033301c19a8f6700f3e1b6d34";
 const head = git("rev-parse", "HEAD");
-check("exact P3E predecessor is current or direct parent", head === baseline || git("rev-parse", "HEAD^") === baseline);
-check("migration inventory is 122", fs.readdirSync("supabase/migrations").filter((x) => x.endsWith(".sql")).length === 122);
+const p3gPhase = isBoundedP3BSuccessor(process.cwd());
+check("exact P3E predecessor is current or bounded successor", p3gPhase || head === baseline || git("rev-parse", "HEAD^") === baseline);
+check("migration inventory is exact through P3G", fs.readdirSync("supabase/migrations").filter((x) => x.endsWith(".sql")).length === (p3gPhase ? 123 : 122));
 check("exactly one P3F migration exists", fs.readdirSync("supabase/migrations").filter((x) => /p3f_privileged_permission_operator\.sql$/.test(x)).length === 1);
 check("P3E hash is pinned", sha(p3ePath) === "f83dc938ead180f0264a051035609a09351256b89317c6e99ddd787b01af2196");
 check("P3D hash is pinned", sha(p3dPath) === "350db01448691a93bdf215032d3cd325ea87d124742afcbecc0f7d61016d1c90");

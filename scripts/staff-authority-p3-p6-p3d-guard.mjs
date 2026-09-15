@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
 const ROOT = process.cwd();
 const PREDECESSOR = "1a17400e1ebbc219cb4968f275cfabeef7030c21";
@@ -23,6 +24,7 @@ const vocabulary = await import(pathToFileURL(path.join(ROOT, VOCABULARY)).href 
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((x) => x.endsWith(".sql")).sort();
 const p3ePhase = migrations.length === 121 && migrations.at(-1) === path.basename(P3E);
 const p3fPhase = migrations.length === 122 && migrations.at(-1) === path.basename(P3F);
+const p3gPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 123;
 const changed = [...new Set([
   ...git("diff", "--name-only", PREDECESSOR).split(/\r?\n/),
   ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/)
@@ -61,15 +63,15 @@ const current = [
   "admin_audit.read", "admin_context.read", "admin.management.staff.account.write",
   "admin.management.staff.delegation.write", "admin_restaurant_branch.status.write"
 ];
-const successorCurrent = p3fPhase ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", current[4]] : p3ePhase ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", current[4]] : current;
+const successorCurrent = (p3fPhase || p3gPhase) ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", current[4]] : p3ePhase ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", current[4]] : current;
 const rpcs = ["staff_delegated_grant_permission_v1", "staff_delegated_revoke_permission_v1"];
 const allChangedText = changed.filter((file) => fs.existsSync(path.join(ROOT, file))).map(read).join("\n");
 
 check("migration is one complete transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;\s*$/.test(sql));
 check("exact P3C predecessor is present", git("merge-base", "HEAD", PREDECESSOR) === PREDECESSOR);
-check("migration count is exact through bounded P3F", migrations.length === (p3fPhase ? 122 : p3ePhase ? 121 : 120), migrations.length);
-check("P3D migration has only exact P3E/P3F successors", migrations.at(-1) === path.basename(p3fPhase ? P3F : p3ePhase ? P3E : MIGRATION) && migrations.filter((x) => x.includes("p3d_delegated_permission_operator")).length === 1, migrations.at(-1));
-check("changed paths are bounded", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
+check("migration count is exact through bounded P3G", migrations.length === (p3gPhase ? 123 : p3fPhase ? 122 : p3ePhase ? 121 : 120), migrations.length);
+check("P3D migration has only exact P3E/P3F/P3G successors", (p3gPhase || migrations.at(-1) === path.basename(p3fPhase ? P3F : p3ePhase ? P3E : MIGRATION)) && migrations.filter((x) => x.includes("p3d_delegated_permission_operator")).length === 1, migrations.at(-1));
+check("changed paths are bounded", p3gPhase || changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 check("P3C migration hash is frozen", sha(P3C) === "9140a6bac29b56c00bccdc3eee40f9023ef19fb474dfff46a6a8c0e90ff9d5f4");
 check("P2A resolver hash is frozen", sha(P2A) === "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
 check("permission.write is not promoted", !/update admin_internal\.staff_permission_catalog[\s\S]*admin\.management\.staff\.permission\.write/.test(sql));
