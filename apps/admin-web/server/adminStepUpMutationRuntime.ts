@@ -98,7 +98,7 @@ function operationArguments(operation: Operation, args: Record<string, unknown>)
   }
   if (operation === "grant_privileged_permission") {
     return uuid(args.targetStaffAccountId) && permission(args.permissionKey)
-      && instant(args.effectiveFrom) && instant(args.effectiveUntil, true)
+      && instant(args.effectiveFrom, true) && instant(args.effectiveUntil, true)
       ? { ...common, p_target_staff_account_id: args.targetStaffAccountId,
         p_permission_key: args.permissionKey, p_effective_from: args.effectiveFrom,
         p_effective_until: args.effectiveUntil } : null;
