@@ -292,15 +292,17 @@ Step-Up 一經完成，15 分鐘內可在**任一位人員的詳情頁**執行�
 
 ## 18. 查看最高權限 Audit
 
-1. 點左側選單「稽核與資安」→ 進入 `/admin/audit/platform-memberships`（此頁沿用既有 Platform Admin 稽核資料）。
-2. 目前版本尚未提供 P3B–P3H 高權限操作（人員生命週期、委派、主控台授權、高權限授予）的**專屬**網頁式稽核瀏覽介面；這些操作的完整證據已記錄在資料庫 `admin_internal.staff_step_up_receipt_uses`（每筆操作的行動者、目標、原因、時間）與 `admin_internal.staff_security_notification_outbox`（安全通知事件），可由具資料庫存取權限的工程人員查詢。此為已知待補項目，見文件末「技術待辦」。
+1. 點左側選單「平台管理」→「安全稽核」，或前往 `/admin/management/security-log`。
+2. 頁面下半部「Step-Up 憑證使用紀錄（Receipt Use Log）」表格，依時間新到舊列出每一筆 P3B–P3H 高權限操作（人員生命週期、委派、主控台授權、高權限授予／撤銷）：操作類型、行動者人員帳號、目標、權限鍵值、驗證方式、原因代碼。此頁為唯讀，沒有任何操作按鈕。
+3. 一般的 Platform Admin 會員稽核（既有、非 P3B–P3H）仍在「稽核與資安」→ `/admin/audit/platform-memberships`。
 
 ---
 
 ## 19. 查看 Security notification／outbox
 
-1. 同上，目前無專屬網頁介面。
-2. 每次「授予高權限」成功後，系統會自動在 `staff_security_notification_outbox` 產生一筆事件；若授予的是 `admin.management.staff.permission.write`（等同建立新的 Permission Manager），事件優先等級會標記為 `critical`，其餘為 `high`。撤銷則對應標記為 revoke 事件。
+1. 同第 18 節路徑 `/admin/management/security-log`，頁面上半部「安全通知事件（Security Outbox）」表格。
+2. 每次「授予高權限」成功後，系統會自動產生一筆事件，列出：時間、事件類型、優先等級、行動者 Auth UUID、目標、權限鍵值、原因代碼。若授予的是 `admin.management.staff.permission.write`（等同建立新的 Permission Manager），事件類型為 `new_permission_manager`、優先等級顯示紅色「CRITICAL」徽章；其餘事件為黃色「HIGH」徽章。撤銷則對應標記為 `permission_manager_revoke` 等 revoke 事件。
+3. 此頁需要 `admin_context.read` 與 `admin_audit.read` 兩項權限才看得到資料；沒有這兩項權限的帳號會看到「目前帳號沒有 admin_audit.read 權限，或目前沒有任何紀錄。」
 
 ---
 
@@ -335,10 +337,9 @@ Step-Up 一經完成，15 分鐘內可在**任一位人員的詳情頁**執行�
 ## 技術待辦（已知限制，非本次範圍缺陷）
 
 - 人員詳情頁尚未提供「新增人員」的獨立按鈕（見第 6 節備註）與「代為刪除他人 Authenticator」按鈕（見第 15 節）。
-- 尚未提供 P3B–P3H 高權限操作的專屬網頁稽核／Security notification 瀏覽介面（見第 18、19 節）；資料已完整落地於資料庫，只是還沒有對應網頁。
 - 角色（Bundle）管理（`/admin/management/roles`）與平台層級設定仍為規劃中，尚無資料庫權限對應，維持「尚未啟用」。
 - Passkey／WebAuthn 尚未啟用，MVP 僅支援 TOTP Authenticator。
 
 ---
 
-*本文件根據 2026-09-16 於 Development 環境（`tastkind-development`）實際登入、實際點擊操作、實際資料庫核對後撰寫並完成一次完整彩排。*
+*本文件根據 2026-09-16 於 Development 環境（`tastkind-development`）實際登入、實際點擊操作、實際資料庫核對後撰寫並完成第一次完整彩排；2026-09-16 稍後新增「安全稽核」頁面上線後，第 18、19 節同樣於同一 Development 環境重新核對過畫面文字與路徑。*
