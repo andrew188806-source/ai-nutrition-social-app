@@ -219,4 +219,30 @@ Community Profile
 5. Invitations/Matches/Chats: realtime social tables.
 6. Group Dining: group tables, members, group messages.
 7. Calorie/Guilt Sharing: sharing sessions and participants.
+
+## Admin Authority (Platform Management, `apps/admin-web`)
+
+Staff/permission authority is a separate `admin_internal` schema authority stack (RA-3-IA-P3-P6, migrations `20260912010000`...`20260916040000`), independent of the consumer/mobile tables above. Operator-facing procedure lives in [docs/admin-authority-sop-zh-tw.md](admin-authority-sop-zh-tw.md) (《最高權限開啟 SOP》) — read that first for anything hands-on. This section is the engineering summary.
+
+**Architecture, bottom to top:**
+- **P1A-P1C / P2A-P2D**: foundation tables (`staff_accounts`, `staff_permission_entitlements`, `staff_permission_catalog`, `staff_permission_delegations`) and the effective-permission resolver (`staff_current_context_v1`, `staff_has_permission_v1`).
+- **P3A-P3F**: staff lifecycle (P3B), ordinary delegated grants (P3C/P3D), console admission (P3E), privileged direct grants (P3F) — each a pair of a protected `_v1` function (owned by `staff_step_up_gate_authority`, EXECUTE granted only to that role) and, after P3H, a `_v2` wrapper that gates the `_v1` call behind a live Step-Up receipt.
+- **P3G**: Break-glass — a separate, postgres-owner-only emergency control plane (`scripts/break-glass-control.mjs`, `npm run break-glass`). Completely independent of everything below; a compromised admin-web session cannot reach it.
+- **P3H**: the Step-Up authority itself — TOTP + AAL2, a 15-minute non-sliding database receipt issued only through a narrowly-scoped Postgres broker LOGIN (`TASTKIND_P3H_BROKER_DATABASE_URL`, env name only, never the value), an HttpOnly cookie (`apps/admin-web/auth/admin-step-up-cookie.ts`), and the ten protected `_v1` functions closed to everyone except that gate role. `apps/admin-web/server/adminStepUpMutationRuntime.ts` is the only caller of any `_v2` wrapper; nothing in `admin-web` calls a protected `_v1` function directly (re-verified by grep this round — zero matches outside the broker's own receipt issue/revoke calls).
+- **P3I**: promotes `admin.management.read` / `.permissions.read` / `.staff.read` from PLANNED to CURRENT and adds a sealed read-only role (`staff_management_read_authority`) with four permission-gated RPCs for the roster/detail/authority-aggregate/catalog reads the UI needs. `admin.management.staff.bundle.write` stays PLANNED — role (Bundle) management is still out of scope.
+- **P3J**: extends the same read role to the P3H evidence tables (`staff_step_up_receipt_uses`, `staff_security_notification_outbox`), gated by the pre-existing `admin_context.read` + `admin_audit.read` (not a new key), powering `/admin/management/security-log`.
+
+**Primary Permission Manager** is not a database role. It is a *display-only* derivation (`PRIMARY_READY_KEYS` in `apps/admin-web/app/admin/management/staff/[staffAccountId]/page.tsx`) over whether a staff account holds all eight `admin_context.read`/`admin.management.*` keys as active entitlements. There is no `primary_admin` superuser anywhere in the schema; authority is exactly the sum of a staff account's entitlement rows, always.
+
+**Live routes** (all under `/admin/management`, gated by the registry in `apps/admin-web/auth/admin-route-registry.ts`): `/` (hub), `/staff` (roster), `/staff/[staffAccountId]` (detail + the one unified action form covering all ten P3B/C/E/F operations), `/permissions` (catalog), `/settings` (TOTP + Step-Up + recovery-order note), `/security-log` (P3H evidence, read-only). `/roles` stays `NOT_ENABLED` (`admin.management.roles.read` has no database counterpart yet — Bundle/role management is a future round, not this one).
+
+**MFA recovery rule**: no password-only path ever recovers Step-Up capability — this is intentional, not a gap. Recovery order is: another device holding the same TOTP secret → another Primary → Break-glass. Deleting *someone else's* TOTP factor and self-service new-staff linking both still require direct API/database access; see the SOP's "技術待辦" section.
+
+**Secrets**: two connection strings gate this whole system and neither is ever committed or logged — only their env var *names* appear anywhere in the repo or docs: `TASTKIND_P3H_BROKER_DATABASE_URL` (a narrowly-scoped Postgres LOGIN, member only of `staff_step_up_receipt_issuer_authority`, created fresh per acceptance round and dropped after) and `TASTKIND_BREAK_GLASS_DEVELOPMENT_DATABASE_URL` / `TASTKIND_BREAK_GLASS_PRODUCTION_DATABASE_URL` (DB-owner-only; `service_role` credentials are rejected by the CLI itself).
+
+**Known deferred items**: `admin.management.roles.read` / Bundle-role management; Passkey/WebAuthn (TOTP is the MVP authenticator by design, see P3H markers `TOTP_AAL2_MVP_AUTHENTICATOR_SELECTED` / `PASSKEY_NATIVE_AVAILABLE_BUT_DEFERRED`); destructive MFA-factor recovery (`MFA_FACTOR_DESTRUCTIVE_RECOVERY_DEFERRED`); a dedicated "add new staff" button and a "delete another operator's TOTP factor" button in the UI (both currently require direct API/database access, documented as such in the SOP rather than left silent).
+
+**Development migration history**: `tastkind-development` (`msbgnnoorsoefuiwluye`) is on direct-apply migration history — every migration in this stack was applied via the Management API SQL channel, not `supabase db push`. `DEVELOPMENT_MIGRATION_HISTORY_DRIFT_OPEN` is expected and should not be "fixed" by force-pushing the whole migration tree or hand-editing `schema_migrations`.
+
+**Production**: none of this has ever been applied to Production. Before it can be, Production needs its own `TASTKIND_P3H_BROKER_DATABASE_URL` and `TASTKIND_BREAK_GLASS_PRODUCTION_DATABASE_URL` provisioned (values only, by whoever owns Production credentials — never committed), and the admin-web deployment needs `TASTKIND_ADMIN_AUTHORITY_MODE=staff` set (it defaults to a legacy Platform-Admin-table mode otherwise, which predates and is unrelated to this whole stack).
 8. Remove legacy i18n social candidate copy and compatibility mirror fields after all screens use backend records.
