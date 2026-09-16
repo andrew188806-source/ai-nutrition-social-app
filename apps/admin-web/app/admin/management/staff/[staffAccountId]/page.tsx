@@ -7,6 +7,20 @@ import { StaffAuthorityPanel, type StaffAuthority } from "../../../../../compone
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// The exact management keys a daily Primary Permission Manager needs to operate the
+// workspace end to end. This is a display-only derivation, not a database role: Primary
+// stays defined purely by holding these exact permissions, nothing more.
+const PRIMARY_READY_KEYS = [
+  "admin_context.read",
+  "admin.management.read",
+  "admin.management.staff.read",
+  "admin.management.permissions.read",
+  "admin.management.staff.account.write",
+  "admin.management.staff.delegation.write",
+  "admin.management.staff.console_admission.write",
+  "admin.management.staff.permission.write"
+] as const;
+
 type DetailRow = Readonly<{
   staff_account_id: string;
   auth_user_id: string;
@@ -53,6 +67,27 @@ async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
         <div><p className="text-xs font-bold text-slate-500">生效期間</p><p className="mt-1 text-sm text-slate-800">{new Date(detail.effective_from).toLocaleString("zh-TW")}{detail.effective_until ? ` – ${new Date(detail.effective_until).toLocaleString("zh-TW")}` : "（無期限）"}</p></div>
         <div><p className="text-xs font-bold text-slate-500">主控台存取</p><p className="mt-1 text-sm text-slate-800">{detail.console_admission_active ? "已授予" : "未授予"}</p></div>
       </section>
+
+      {authority ? (() => {
+        const active = new Set(authority.entitlements.filter((item) => item.status === "active").map((item) => item.permissionKey));
+        const missing = PRIMARY_READY_KEYS.filter((key) => !active.has(key));
+        const ready = missing.length === 0;
+        return (
+          <section className={`rounded-xl border px-5 py-4 ${ready ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
+            <p className={`text-sm font-bold ${ready ? "text-emerald-900" : "text-slate-800"}`}>
+              {ready ? "PRIMARY READY — 已具備每日最高權限管理所需的完整權限組合" : `尚未 PRIMARY READY，缺少 ${missing.length} 項：`}
+            </p>
+            {!ready ? (
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {missing.map((key) => (
+                  <li className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-mono text-[10px] text-amber-800" key={key}>{key}</li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="mt-2 text-[11px] text-slate-500">此標示僅為畫面顯示的衍生狀態，非資料庫角色；實際權限一律以逐項 admin.management.* 授權為準。</p>
+          </section>
+        );
+      })() : null}
 
       {authority ? (
         <section className="grid gap-4 sm:grid-cols-2">
