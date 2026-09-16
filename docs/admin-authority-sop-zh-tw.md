@@ -76,18 +76,16 @@ Step-Up 一經完成，15 分鐘內可在**任一位人員的詳情頁**執行�
 
 ## 6. 正常新增一位管理人員
 
-新增人員分兩步：**先建立人員帳號連結**，**再個別授予需要的權限**。
-
-1. 取得目標人員的 **Auth UUID**（見第 4.4 節／本文件附註「如何取得 Auth UUID」）。
-2. 進入任一位「PRIMARY READY」人員（通常是你自己）的詳情頁，完成 Step-Up（第 3 節）。
-3. 在「執行高權限操作」區塊：
-   - 「操作類型」下拉選單選「授予高權限」清單中沒有「新增人員」這個選項——新增人員的操作類型是特殊的 `link_staff_account`，目前的統一操作表單以人員清單頁的「操作類型」呈現；若下拉選單中沒有直接列出，代表新增人員必須改由具備 `admin.management.staff.account.write` 的工作人員透過同一表單的「link_staff_account」等效流程處理（見下方備註）。
-   - 「原因代碼」填入小寫英文＋數底線格式，例如 `new_hire_onboarding`。
-   - 點擊「送出操作」。
-4. 成功後畫面會顯示「成功：applied。頁面將重新整理。」，約 1.2 秒後自動整理，人員清單會出現一筆新紀錄。
-5. 記下新人員帳號 ID，接續第 7–9 節逐項授權。
-
-> **備註（目前版本限制）**：「新增人員」（`link_staff_account`）尚未在人員詳情頁的操作類型下拉選單中提供獨立入口；若你的畫面沒有看到「新增人員」選項，請洽工程團隊確認是否已上線此選項，或改由具備資料庫存取權限的工程人員透過 `/api/admin/management/staff/mutations`（`operation: "link_staff_account"`）代為執行，並在事後於稽核紀錄核對。
+1. 取得目標人員的 **Auth UUID**（見本文件附註「如何取得 Auth UUID」）。
+2. 點左側選單「平台管理」→「人員」，或前往 `/admin/management/staff`。
+3. 頁面上方有「新增管理人員（連結既有帳號）」按鈕，點擊展開表單。
+4. 若尚未完成 Step-Up，表單內建的「Step-Up 狀態」卡片會先要求驗證（同第 3 節）。
+5. 在「目標 Auth UUID」欄位輸入目標人員的 Auth UUID。
+6. 畫面會出現黃底確認區塊，完整顯示你剛輸入的 UUID：「我確認要連結的目標 Auth UUID 就是：`<UUID>`」，勾選該確認框——**送出前務必再核對一次畫面上顯示的 UUID 與你原本要輸入的是否完全一致**。
+7. 在「原因代碼」填入小寫英文＋數字＋底線格式，例如 `new_hire_onboarding`。
+8. 點擊「送出：建立人員帳號連結」。
+9. 成功後畫面顯示「已建立人員帳號：`<新的人員帳號 ID>`」，並附上前往該人員詳情頁的連結。
+10. 記下新人員帳號 ID，接續第 7–9 節逐項授權，或直接使用第 11 節的精靈一次完成。
 
 ---
 
@@ -119,23 +117,23 @@ Step-Up 一經完成，15 分鐘內可在**任一位人員的詳情頁**執行�
 
 ## 11. 建立另一位 Primary Permission Manager
 
-依序執行（每步都需要有效 Step-Up）：
+**建議做法：使用內建精靈。** 依第 6 節建立人員帳號連結後，進入該人員的詳情頁，會看到「精靈：建立 Primary Permission Manager」區塊：
 
-1. 第 6 節：建立目標人員帳號連結（取得其人員帳號 ID）。
-2. 第 9 節：授予「主控台存取」（`admin_context.read`）。
-3. 第 7 節：授予 `admin.management.staff.account.write`。
-4. 第 8 節：授予 `admin.management.staff.delegation.write`。
-5. 第 9 節：授予 `admin.management.staff.console_admission.write`。
-6. 額外授予 `admin.management.read`、`admin.management.staff.read`、`admin.management.permissions.read`（步驟同第 7 節，僅換「權限鍵值」）。
-7. 授予 `admin.management.staff.permission.write`（第 10 節）：
-   - 「操作類型」選「授予高權限」，「權限鍵值」填 `admin.management.staff.permission.write`。
-   - 畫面會多出一個紅字欄位「強制確認片語（需完全一致）」，下方會顯示完整片語，格式固定為：
-     ```
-     GRANT admin.management.staff.permission.write TO <目標人員帳號 ID>
-     ```
-   - 把畫面顯示的那一行**完整複製貼上**到輸入框（大小寫、空格都要完全一致，目標 UUID 錯誤或用通用「yes」都會被拒絕）。
-   - 送出。
-8. 全部完成後，重新整理該人員的詳情頁，確認上方出現綠色「PRIMARY READY — 已具備每日最高權限管理所需的完整權限組合」。
+1. 完成 Step-Up（精靈區塊內建自己的 Step-Up 卡片）。
+2. 在「高權限確認片語」欄位，**完整複製貼上**畫面上方顯示的那一行（格式固定為 `GRANT admin.management.staff.permission.write TO <目標人員帳號 ID>`，大小寫、空格需完全一致）。
+3. 點擊「繼續精靈」。精靈會依序自動執行下列 8 個步驟，每完成一步畫面會即時標示「已完成」：
+   1. 授予 `admin.management.read`
+   2. 授予 `admin.management.staff.read`
+   3. 授予 `admin.management.permissions.read`
+   4. 授予 `admin.management.staff.account.write`
+   5. 授予 `admin.management.staff.delegation.write`
+   6. 授予 `admin.management.staff.console_admission.write`
+   7. 授予 `admin.management.staff.permission.write`（用你在步驟 2 填入的確認片語）
+   8. 透過主控台授權（P3E）授予 `admin_context.read`
+4. **若中途 Step-Up 逾期**：畫面會停在該步驟並顯示「已停在『...』：Step-Up 已逾期，請於上方重新驗證後再次點擊『繼續精靈』」。重新完成 Step-Up 後再點一次「繼續精靈」即可——精靈會先重新讀取目前實際生效的權限，跳過已完成的步驟，只從中斷處繼續，不會重複授予。
+5. 全部完成後，精靈上方徽章會顯示「PRIMARY READY」，頁面最上方也會出現綠色「PRIMARY READY — 已具備每日最高權限管理所需的完整權限組合」。
+
+**逐項手動做法（精靈無法使用時的備援）**：依序執行第 9 節（主控台存取）、第 7／8／9／10 節（四項高權限），與額外的 `admin.management.read`／`staff.read`／`permissions.read`（步驟同第 7 節，僅換「權限鍵值」），每步都需要有效 Step-Up，最後一項（`permission.write`）需要第 10 節說明的強制確認片語。
 
 ---
 
@@ -288,6 +286,21 @@ Step-Up 一經完成，15 分鐘內可在**任一位人員的詳情頁**執行�
 2. 確認能看到「平台管理」工作區、能進入「人員」清單。
 3. 依第 3 節完成一次 Step-Up，確認仍可正常完成（Break-glass 的開關**完全不影響**一般 Primary 的登入與 Step-Up 能力，兩者是互相獨立的路徑）。
 
+### 17.12 用 Break-glass 實際復原出第一位 Primary（完整流程）
+
+Break-glass 啟用後，該帳號**必須自行完成一次一般的 TOTP 設定**才能通過 Step-Up——啟用本身不會、也不應該繞過 Step-Up。完整流程：
+
+1. 依第 17.3、17.5 節完成登記與啟用。
+2. 用該帳號的電子郵件與密碼，依第 1 節正常登入管理後台——啟用後立即可以登入並看到「平台管理」工作區。
+3. 依第 2 節，在「設定」頁面完成該帳號**自己的** TOTP 設定（Break-glass 不提供、也不需要任何特殊的「預先設定」步驟；這與任何一般人員第一次設定 TOTP 完全相同）。
+4. 依第 3 節完成 Step-Up。
+5. 依第 6 節「新增管理人員」連結一個新的人員帳號（即第一位正常 Primary 人選）。
+6. 進入該新人員的詳情頁，依第 11 節使用精靈，授予完整八項權限，達成 PRIMARY READY。
+7. 新 Primary 依第 1 節獨立登入，確認可正常使用。
+8. 依第 17.7 節關閉 Break-glass 啟用，並視需要依第 17.8 節撤銷該 Break-glass 人選資格。
+
+**重要**：人員詳情頁與精靈在設計上刻意不依賴「唯讀」權限才能運作——Break-glass 的四項緊急權限雖然不含 `admin.management.staff.read` 等唯讀權限，仍可完整執行以上第 5–6 步（會看到部分頁面顯示「無法查看...」的唯讀資料提示，但操作表單仍正常可用）。
+
 ---
 
 ## 18. 查看最高權限 Audit
@@ -336,10 +349,11 @@ Step-Up 一經完成，15 分鐘內可在**任一位人員的詳情頁**執行�
 
 ## 技術待辦（已知限制，非本次範圍缺陷）
 
-- 人員詳情頁尚未提供「新增人員」的獨立按鈕（見第 6 節備註）與「代為刪除他人 Authenticator」按鈕（見第 15 節）。
+- 人員詳情頁尚未提供「代為刪除他人 Authenticator」按鈕（見第 15 節）；「新增人員」按鈕已於本輪上線（見第 6 節）。
 - 角色（Bundle）管理（`/admin/management/roles`）與平台層級設定仍為規劃中，尚無資料庫權限對應，維持「尚未啟用」。
 - Passkey／WebAuthn 尚未啟用，MVP 僅支援 TOTP Authenticator。
+- Break-glass 啟用後取得的四項緊急權限（`admin_context.read`、`staff.account.write`、`staff.console_admission.write`、`staff.permission.write`）**不包含**三項唯讀權限（`admin.management.read`／`staff.read`／`permissions.read`）。人員詳情頁與精靈本身刻意設計為即使沒有這三項唯讀權限也能使用（會看到「無法查看...」的提示文字，但操作表單仍可送出），但人員清單、權限目錄、安全稽核等**唯讀**頁面在 Break-glass 期間會顯示空白或無資料——這是設計上的正確行為，不是故障：緊急權限的目的是「寫入以完成復原」，不是「瀏覽」。
 
 ---
 
-*本文件根據 2026-09-16 於 Development 環境（`tastkind-development`）實際登入、實際點擊操作、實際資料庫核對後撰寫並完成第一次完整彩排；2026-09-16 稍後新增「安全稽核」頁面上線後，第 18、19 節同樣於同一 Development 環境重新核對過畫面文字與路徑。*
+*本文件根據 2026-09-16 於 Development 環境（`tastkind-development`）實際登入、實際點擊操作、實際資料庫核對後撰寫並完成第一次完整彩排；同日稍後新增「安全稽核」頁面、「新增管理人員」按鈕與「建立 Primary Permission Manager」精靈上線後，相關章節（第 6、11、18、19 節）同樣於同一 Development 環境重新實際核對過畫面文字、路徑與點擊流程，並完成一次涵蓋 Break-glass 啟用、自助 TOTP 設定、精靈復原到第二位 Primary 獨立登入、Break-glass 關閉後緊急權限即時消失的完整端到端彩排。*
