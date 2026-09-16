@@ -49,6 +49,42 @@ const P3G_R1_PATHS = [
   "scripts/staff-authority-p3-p6-p3g-r1-guard.mjs",
   "scripts/staff-authority-p3-p6-p3g-r1-mutations.mjs",
 ];
+const P3H_BASELINE = "042209feb9c0fac9992f6fcc09c1348ef8a6251d";
+const P3H_SUBJECT = "Add high-privilege step-up authority";
+const P3H_MIGRATION = "supabase/migrations/20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql";
+const P3H_PATHS = [
+  P3H_MIGRATION,
+  "apps/admin-web/app/admin/login/actions.ts",
+  "apps/admin-web/app/api/admin/management/staff/mutations/route.ts",
+  "apps/admin-web/app/api/admin/step-up/clear/route.ts",
+  "apps/admin-web/app/api/admin/step-up/enroll/route.ts",
+  "apps/admin-web/app/api/admin/step-up/enroll/verify/route.ts",
+  "apps/admin-web/app/api/admin/step-up/factors/route.ts",
+  "apps/admin-web/app/api/admin/step-up/status/route.ts",
+  "apps/admin-web/app/api/admin/step-up/verify/route.ts",
+  "apps/admin-web/auth/admin-step-up-authorization.ts",
+  "apps/admin-web/auth/admin-step-up-cookie.ts",
+  "apps/admin-web/package.json",
+  "apps/admin-web/server/adminStepUpBroker.ts",
+  "apps/admin-web/server/adminStepUpMutationRuntime.ts",
+  "apps/admin-web/server/adminStepUpRuntime.ts",
+  "package-lock.json",
+  "package.json",
+  "scripts/staff-authority-p3-p6-p3h-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3h-smoke.mjs",
+  "scripts/staff-authority-p3-p6-p3h-mutations.mjs",
+  "scripts/staff-authority-p3-p6-p3h-postgres.mjs",
+  "scripts/staff-authority-p3-p6-p3h-server.mjs",
+  "scripts/staff-authority-p3-p6-p3a-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3b-successor-awareness.mjs",
+  "scripts/staff-authority-p3-p6-p3b-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3c-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3d-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3e-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3f-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3g-guard.mjs",
+  "scripts/staff-authority-p3-p6-p3g-r1-guard.mjs",
+];
 
 export const P3B_SUCCESSOR_PATHS = Object.freeze([
   P3B_MIGRATION,
@@ -100,6 +136,7 @@ export const P3B_SUCCESSOR_PATHS = Object.freeze([
   ,"scripts/staff-authority-p3-p6-p3f-mutations.mjs"
   ,...P3G_PATHS
   ,...P3G_R1_PATHS
+  ,...P3H_PATHS
 ]);
 
 export function isBoundedP3BSuccessor(root = process.cwd()) {
@@ -160,7 +197,13 @@ export function isBoundedP3BSuccessor(root = process.cwd()) {
       && git("rev-parse", "HEAD^") === P3G_R1_BASELINE
       && origin === P3G_BASELINE && ahead === 2 && behind === 0
       && status.length === 0 && git("log", "-1", "--format=%s") === P3G_R1_SUBJECT;
-    if (!candidate && !frozen && !p3cCandidate && !p3cFrozen && !p3dCandidate && !p3dFrozen && !p3eCandidate && !p3eFrozen && !p3fCandidate && !p3fFrozen && !p3gCandidate && !p3gFrozen && !p3gR1Candidate && !p3gR1Frozen) return false;
+    const p3hCandidate = head === P3H_BASELINE && origin === P3H_BASELINE
+      && ahead === 0 && behind === 0;
+    const p3hFrozen = head !== P3H_BASELINE
+      && git("rev-parse", "HEAD^") === P3H_BASELINE
+      && origin === P3H_BASELINE && ahead === 1 && behind === 0
+      && status.length === 0 && git("log", "-1", "--format=%s") === P3H_SUBJECT;
+    if (!candidate && !frozen && !p3cCandidate && !p3cFrozen && !p3dCandidate && !p3dFrozen && !p3eCandidate && !p3eFrozen && !p3fCandidate && !p3fFrozen && !p3gCandidate && !p3gFrozen && !p3gR1Candidate && !p3gR1Frozen && !p3hCandidate && !p3hFrozen) return false;
     const changed = [...new Set([
       ...lines(git("diff", "--name-only", P3B_PREDECESSOR)),
       ...lines(git("ls-files", "--others", "--exclude-standard"))
@@ -189,9 +232,12 @@ export function isBoundedP3BSuccessor(root = process.cwd()) {
     const p3gR1State = migrations.length === 124
       && migrations.at(-1) === path.basename(P3G_R1_MIGRATION)
       && sha(VOCABULARY) === P3F_VOCABULARY_SHA;
+    const p3hState = migrations.length === 125
+      && migrations.at(-1) === path.basename(P3H_MIGRATION)
+      && sha(VOCABULARY) === P3F_VOCABULARY_SHA;
     return changed.every((file) => allowed.has(file))
       && sha(P3A_MIGRATION) === P3A_SHA
-      && (p3bState || p3cState || p3dState || p3eState || p3fState || p3gState || p3gR1State);
+      && (p3bState || p3cState || p3dState || p3eState || p3fState || p3gState || p3gR1State || p3hState);
   } catch {
     return false;
   }

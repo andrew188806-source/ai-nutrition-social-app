@@ -33,7 +33,7 @@ const head = git("rev-parse", "HEAD");
 const p3gPhase = isBoundedP3BSuccessor(process.cwd());
 const migrationCount = fs.readdirSync("supabase/migrations").filter((x) => x.endsWith(".sql")).length;
 check("exact P3E predecessor is current or bounded successor", p3gPhase || head === baseline || git("rev-parse", "HEAD^") === baseline);
-check("migration inventory is exact through P3G-R1", p3gPhase ? (migrationCount === 123 || migrationCount === 124) : migrationCount === 122);
+check("migration inventory is exact through P3H", p3gPhase ? [123, 124, 125].includes(migrationCount) : migrationCount === 122);
 check("exactly one P3F migration exists", fs.readdirSync("supabase/migrations").filter((x) => /p3f_privileged_permission_operator\.sql$/.test(x)).length === 1);
 check("P3E hash is pinned", sha(p3ePath) === "f83dc938ead180f0264a051035609a09351256b89317c6e99ddd787b01af2196");
 check("P3D hash is pinned", sha(p3dPath) === "350db01448691a93bdf215032d3cd325ea87d124742afcbecc0f7d61016d1c90");

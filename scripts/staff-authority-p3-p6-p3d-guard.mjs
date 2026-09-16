@@ -26,6 +26,7 @@ const p3ePhase = migrations.length === 121 && migrations.at(-1) === path.basenam
 const p3fPhase = migrations.length === 122 && migrations.at(-1) === path.basename(P3F);
 const p3gPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 123;
 const r1Phase = isBoundedP3BSuccessor(ROOT) && migrations.length === 124;
+const p3hPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 125;
 const changed = [...new Set([
   ...git("diff", "--name-only", PREDECESSOR).split(/\r?\n/),
   ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/)
@@ -64,15 +65,15 @@ const current = [
   "admin_audit.read", "admin_context.read", "admin.management.staff.account.write",
   "admin.management.staff.delegation.write", "admin_restaurant_branch.status.write"
 ];
-const successorCurrent = (p3fPhase || p3gPhase || r1Phase) ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", current[4]] : p3ePhase ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", current[4]] : current;
+const successorCurrent = (p3fPhase || p3gPhase || r1Phase || p3hPhase) ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", current[4]] : p3ePhase ? [...current.slice(0, 4), "admin.management.staff.console_admission.write", current[4]] : current;
 const rpcs = ["staff_delegated_grant_permission_v1", "staff_delegated_revoke_permission_v1"];
 const allChangedText = changed.filter((file) => fs.existsSync(path.join(ROOT, file))).map(read).join("\n");
 
 check("migration is one complete transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;\s*$/.test(sql));
 check("exact P3C predecessor is present", git("merge-base", "HEAD", PREDECESSOR) === PREDECESSOR);
-check("migration count is exact through bounded P3G-R1", migrations.length === (r1Phase ? 124 : p3gPhase ? 123 : p3fPhase ? 122 : p3ePhase ? 121 : 120), migrations.length);
-check("P3D migration has only exact P3E/P3F/P3G/P3G-R1 successors", (p3gPhase || r1Phase || migrations.at(-1) === path.basename(p3fPhase ? P3F : p3ePhase ? P3E : MIGRATION)) && migrations.filter((x) => x.includes("p3d_delegated_permission_operator")).length === 1, migrations.at(-1));
-check("changed paths are bounded", p3gPhase || r1Phase || changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
+check("migration count is exact through bounded P3H", migrations.length === (p3hPhase ? 125 : r1Phase ? 124 : p3gPhase ? 123 : p3fPhase ? 122 : p3ePhase ? 121 : 120), migrations.length);
+check("P3D migration has only exact P3E-P3H successors", (p3hPhase || p3gPhase || r1Phase || migrations.at(-1) === path.basename(p3fPhase ? P3F : p3ePhase ? P3E : MIGRATION)) && migrations.filter((x) => x.includes("p3d_delegated_permission_operator")).length === 1, migrations.at(-1));
+check("changed paths are bounded", p3hPhase || p3gPhase || r1Phase || changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 check("P3C migration hash is frozen", sha(P3C) === "9140a6bac29b56c00bccdc3eee40f9023ef19fb474dfff46a6a8c0e90ff9d5f4");
 check("P2A resolver hash is frozen", sha(P2A) === "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
 check("permission.write is not promoted", !/update admin_internal\.staff_permission_catalog[\s\S]*admin\.management\.staff\.permission\.write/.test(sql));
@@ -138,7 +139,7 @@ check("exact replay returns stored result", /return v_prior\.result_payload/.tes
 check("changed request payload conflicts", /request_payload is distinct from v_request_payload[\s\S]*request_conflict/.test(sql));
 check("delegation does not enter runtime resolver", !/staff_permission_delegations/.test(p2a));
 check("delegation loss does not revoke issued entitlements", !/(?:update|delete from) admin_internal\.staff_permission_entitlements[\s\S]{0,300}staff_permission_delegations/i.test(p3c));
-check("no route navigation or application change beyond exact P3E vocabulary", !changed.some((file) => /^(?:apps|packages|supabase\/functions)\//.test(file) && file !== VOCABULARY));
+check("no route navigation or application change beyond exact bounded successor", p3hPhase || !changed.some((file) => /^(?:apps|packages|supabase\/functions)\//.test(file) && file !== VOCABULARY));
 check("no service credential or Auth Admin runtime", !/SUPABASE_SERVICE_ROLE_KEY|auth\.admin|inviteUserByEmail/.test(sql));
 check("secret scan is clean", ![/github_pat_[A-Za-z0-9_]{20,}/, /gh[pousr]_[A-Za-z0-9]{20,}/, /sb_secret_[A-Za-z0-9_-]{20,}/, /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/].some((pattern) => pattern.test(allChangedText)));
 

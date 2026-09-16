@@ -5,6 +5,7 @@ import { getAdminAuthConfig } from "../../../config/admin-auth";
 import { resolveVerifiedAdminPermissionContext } from "../../../auth/admin-context";
 import { decideAdminSessionGate } from "../../../auth/admin-session-gate";
 import { createAdminSupabaseServerClient } from "../../../auth/supabase-server";
+import { clearAdminStepUpCookie } from "../../../auth/admin-step-up-cookie";
 
 async function clearAdminSession(client: ReturnType<typeof createAdminSupabaseServerClient>): Promise<void> {
   try {
@@ -59,5 +60,6 @@ export async function signOutAdmin() {
   if (config.state === "ready") {
     await clearAdminSession(createAdminSupabaseServerClient(config));
   }
+  clearAdminStepUpCookie(config.isProduction);
   redirect("/admin/login");
 }

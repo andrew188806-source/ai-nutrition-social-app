@@ -34,8 +34,9 @@ const migrationCount = fs.readdirSync("supabase/migrations").filter((x) => x.end
 const p3fPhase = migrationCount === 122;
 const p3gPhase = isBoundedP3BSuccessor(process.cwd()) && migrationCount === 123;
 const r1Phase = isBoundedP3BSuccessor(process.cwd()) && migrationCount === 124;
-check("exact P3D predecessor is current or bounded successor", frozen || p3gPhase || r1Phase);
-check("migration inventory is exact through P3G-R1", migrationCount === (r1Phase ? 124 : p3gPhase ? 123 : p3fPhase ? 122 : 121));
+const p3hPhase = isBoundedP3BSuccessor(process.cwd()) && migrationCount === 125;
+check("exact P3D predecessor is current or bounded successor", frozen || p3gPhase || r1Phase || p3hPhase);
+check("migration inventory is exact through P3H", migrationCount === (p3hPhase ? 125 : r1Phase ? 124 : p3gPhase ? 123 : p3fPhase ? 122 : 121));
 check("exactly one P3E migration exists", fs.readdirSync("supabase/migrations").filter((x) => /p3e_console_admission_operator\.sql$/.test(x)).length === 1);
 check("P3D hash is pinned", sha(p3dPath) === "350db01448691a93bdf215032d3cd325ea87d124742afcbecc0f7d61016d1c90");
 check("P3C hash is pinned", sha(p3cPath) === "9140a6bac29b56c00bccdc3eee40f9023ef19fb474dfff46a6a8c0e90ff9d5f4");
@@ -46,10 +47,10 @@ check("generic permission writer is not promoted", !/permission_key = 'admin\.ma
 check("no other management permission is promoted", (sql.match(/set readiness_status = 'current'/g) ?? []).length === 1);
 
 const currentKeys = [...vocabulary.matchAll(/^\s+"([a-z0-9_.]+)"/gm)].map((m) => m[1]);
-const expectedKeys = ["admin_audit.read", "admin_context.read", "admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", ...((p3fPhase || p3gPhase || r1Phase) ? ["admin.management.staff.permission.write"] : []), "admin_restaurant_branch.status.write"];
+const expectedKeys = ["admin_audit.read", "admin_context.read", "admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", ...((p3fPhase || p3gPhase || r1Phase || p3hPhase) ? ["admin.management.staff.permission.write"] : []), "admin_restaurant_branch.status.write"];
 check("application vocabulary is exact through P3F", currentKeys.length === expectedKeys.length && expectedKeys.every((key) => currentKeys.includes(key)));
-check("application vocabulary has no unexpected key", currentKeys.length === ((p3fPhase || p3gPhase || r1Phase) ? 7 : 6));
-check("permission.write follows bounded P3F/P3G/P3G-R1 state", currentKeys.includes("admin.management.staff.permission.write") === (p3fPhase || p3gPhase || r1Phase));
+check("application vocabulary has no unexpected key", currentKeys.length === ((p3fPhase || p3gPhase || r1Phase || p3hPhase) ? 7 : 6));
+check("permission.write follows bounded P3F-P3H state", currentKeys.includes("admin.management.staff.permission.write") === (p3fPhase || p3gPhase || r1Phase || p3hPhase));
 check("admin_context metadata receives zero update", !/update admin_internal\.staff_permission_catalog[\s\S]{0,300}permission_key = 'admin_context\.read'/.test(sql));
 check("dedicated provenance table exists", /create table admin_internal\.staff_console_admission_grants/.test(sql));
 check("provenance has exact entitlement uniqueness", /entitlement_id uuid not null[\s\S]*unique \(entitlement_id\)/.test(sql));
