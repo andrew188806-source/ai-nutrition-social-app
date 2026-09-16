@@ -245,10 +245,12 @@ export function StaffAuthorityPanel({
     }
     const response = await postJson("/api/admin/management/staff/mutations", payload);
     setBusy(false);
-    if (response.status === 200 && response.body.ok) {
-      const inner = response.body.result as Record<string, unknown> | undefined;
-      setResult(`成功：${String(inner?.outcome ?? "applied")}。頁面將重新整理。`);
+    const inner = response.body.result as Record<string, unknown> | undefined;
+    if (response.status === 200 && response.body.ok && inner?.outcome === "applied") {
+      setResult("成功：操作已套用。頁面將重新整理。");
       window.setTimeout(() => window.location.reload(), 1200);
+    } else if (response.status === 200 && response.body.ok) {
+      setResult(`遭拒絕：${String(inner?.errorCode ?? "rejected")}`);
     } else {
       setResult(`失敗：${String(response.body.error ?? "unknown_error")}`);
     }
