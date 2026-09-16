@@ -9,7 +9,10 @@ export const CURRENT_ADMIN_PERMISSION_KEYS = Object.freeze([
   "admin.management.staff.delegation.write",
   "admin.management.staff.console_admission.write",
   "admin.management.staff.permission.write",
-  "admin_restaurant_branch.status.write"
+  "admin_restaurant_branch.status.write",
+  "admin.management.read",
+  "admin.management.permissions.read",
+  "admin.management.staff.read"
 ] as const);
 
 export type CurrentAdminPermissionKey = (typeof CURRENT_ADMIN_PERMISSION_KEYS)[number];
