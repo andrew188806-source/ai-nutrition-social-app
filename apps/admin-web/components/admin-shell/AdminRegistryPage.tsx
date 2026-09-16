@@ -51,7 +51,7 @@ const descriptions: Readonly<Record<string, string>> = {
   "nutrition-certification": "餐廳菜點的專業營養認證與遠端 Restaurant／Nutritionist 審核工作區。",
   "nutrition-assignments": "區域預設、餐廳／分店指定與單一案件 override 的分派管理；一般 Nutritionist 通常僅檢視「我的工作」，管理權限保留給經授權的 Nutrition Operations Lead。",
   audit: "例行稽核與未來資安管理的分層入口。",
-  management: "角色、權限與平台設定的預定位置；目前尚無 UI 管理權限。",
+  management: "人員帳號、權限與最高權限 Step-Up 設定的管理工作區；角色（Bundle）管理仍為預定位置，尚無 UI 管理權限。",
   engineering: "系統健康、版本、工作佇列與安全化診斷的獨立工程工作區。"
 };
 
@@ -73,7 +73,7 @@ const boundaryCopy: Readonly<Record<string, string>> = {
   members: "未來僅提供案件所需的最小資訊，不提供任意瀏覽會員或健康資料。",
   social: "未來僅提供檢舉／案件所需的範圍資料，不提供任意瀏覽聊天、精確位置或推播 token。",
   engineering: `工程診斷不代表可存取使用者私密內容。初始範圍僅限：${ENGINEERING_WORKSPACE_BOUNDARY.safeInitialAreas.join("、")}。`,
-  management: "現有 trusted-operator grant/revoke functions 並未透過管理後台開放。"
+  management: "人員帳號生命週期與各項高權限授予／撤銷，一律經過 15 分鐘 TOTP Step-Up 驗證後才能執行；角色（Bundle）管理仍為預定位置。"
 };
 
 const restaurantItemContextBoundary =
