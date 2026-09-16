@@ -3,6 +3,7 @@ import { createAdminManagementPage } from "../../../../components/admin-shell/Ad
 import { AdminWorkspaceHeader } from "../../../../components/admin-shell/AdminWorkspaceHeader";
 import { getAdminRoute } from "../../../../components/admin-shell/admin-ia-navigation";
 import { createAdminSupabaseServerClient } from "../../../../auth/supabase-server";
+import { LinkStaffAccountPanel } from "../../../../components/admin-shell/LinkStaffAccountPanel";
 
 type StaffRow = Readonly<{
   staff_account_id: string;
@@ -39,6 +40,7 @@ async function StaffListView() {
         description="所有已建立的人員帳號與其生命週期狀態；權限授予／撤銷請進入個別人員詳情頁。"
         entry={getAdminRoute("management-staff")}
       />
+      <LinkStaffAccountPanel />
       {error ? (
         <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900" role="alert">
           目前無法讀取人員清單，請稍後重試。

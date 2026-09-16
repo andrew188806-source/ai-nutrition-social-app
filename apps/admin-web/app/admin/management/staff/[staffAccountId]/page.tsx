@@ -4,6 +4,7 @@ import { AdminWorkspaceHeader } from "../../../../../components/admin-shell/Admi
 import { getAdminRoute } from "../../../../../components/admin-shell/admin-ia-navigation";
 import { createAdminSupabaseServerClient } from "../../../../../auth/supabase-server";
 import { StaffAuthorityPanel, type StaffAuthority } from "../../../../../components/admin-shell/StaffAuthorityPanel";
+import { PrimaryWizard } from "../../../../../components/admin-shell/PrimaryWizard";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -44,29 +45,33 @@ async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
   const detail = rows[0];
   const authority = (authorityResult.error ? null : (authorityResult.data as StaffAuthority)) ?? null;
 
-  if (!detail) {
-    return (
-      <article className="space-y-5">
-        <AdminWorkspaceHeader
-          description="此人員帳號不存在，或目前帳號沒有讀取權限。"
-          entry={getAdminRoute("management-staff-detail")}
-        />
-      </article>
-    );
-  }
+  // detail is null either because the account does not exist, or because the caller lacks
+  // admin.management.staff.read. The two are indistinguishable from here by design (the read
+  // RPC returns zero rows either way) -- but the action forms below do not depend on this read
+  // succeeding: they only need the staffAccountId from the URL, and each mutation is
+  // independently authorized (Step-Up + the target permission's own check) regardless of
+  // whether the caller can also read the account's lifecycle detail. This matters for a
+  // Break-glass-recovered actor, whose four emergency permissions do not include
+  // admin.management.staff.read.
 
   return (
     <article className="space-y-5">
       <AdminWorkspaceHeader
-        description={`人員帳號 ${detail.staff_account_id} 的生命週期與高權限管理。`}
+        description={detail ? `人員帳號 ${detail.staff_account_id} 的生命週期與高權限管理。` : "此人員帳號不存在，或目前帳號沒有讀取權限；下方操作仍可執行，結果以實際回應為準。"}
         entry={getAdminRoute("management-staff-detail")}
       />
-      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
-        <div><p className="text-xs font-bold text-slate-500">Auth UUID</p><p className="mt-1 font-mono text-sm text-slate-800">{detail.auth_user_id}</p></div>
-        <div><p className="text-xs font-bold text-slate-500">狀態</p><p className="mt-1 text-sm text-slate-800">{detail.status}（status_version {detail.status_version}）</p></div>
-        <div><p className="text-xs font-bold text-slate-500">生效期間</p><p className="mt-1 text-sm text-slate-800">{new Date(detail.effective_from).toLocaleString("zh-TW")}{detail.effective_until ? ` – ${new Date(detail.effective_until).toLocaleString("zh-TW")}` : "（無期限）"}</p></div>
-        <div><p className="text-xs font-bold text-slate-500">主控台存取</p><p className="mt-1 text-sm text-slate-800">{detail.console_admission_active ? "已授予" : "未授予"}</p></div>
-      </section>
+      {detail ? (
+        <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
+          <div><p className="text-xs font-bold text-slate-500">Auth UUID</p><p className="mt-1 font-mono text-sm text-slate-800">{detail.auth_user_id}</p></div>
+          <div><p className="text-xs font-bold text-slate-500">狀態</p><p className="mt-1 text-sm text-slate-800">{detail.status}（status_version {detail.status_version}）</p></div>
+          <div><p className="text-xs font-bold text-slate-500">生效期間</p><p className="mt-1 text-sm text-slate-800">{new Date(detail.effective_from).toLocaleString("zh-TW")}{detail.effective_until ? ` – ${new Date(detail.effective_until).toLocaleString("zh-TW")}` : "（無期限）"}</p></div>
+          <div><p className="text-xs font-bold text-slate-500">主控台存取</p><p className="mt-1 text-sm text-slate-800">{detail.console_admission_active ? "已授予" : "未授予"}</p></div>
+        </section>
+      ) : (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          目前帳號沒有 admin.management.staff.read 權限，無法查看此人員的生命週期資料。下方的精靈與操作表單仍可使用——例如 Break-glass 復原情境下，行動者通常只持有寫入權限，沒有讀取權限。
+        </p>
+      )}
 
       {authority ? (() => {
         const active = new Set(authority.entitlements.filter((item) => item.status === "active").map((item) => item.permissionKey));
@@ -88,6 +93,8 @@ async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
           </section>
         );
       })() : null}
+
+      <PrimaryWizard staffAccountId={staffAccountId} />
 
       {authority ? (
         <section className="grid gap-4 sm:grid-cols-2">
@@ -140,10 +147,16 @@ async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
 
       <StaffAuthorityPanel
         authority={authority}
-        initialStatus={detail.status}
-        initialStatusVersion={detail.status_version}
-        staffAccountId={detail.staff_account_id}
+        initialStatus={detail?.status ?? "active"}
+        initialStatusVersion={detail?.status_version ?? 0}
+        staffAccountId={staffAccountId}
       />
+      {!detail ? (
+        <p className="text-xs text-slate-500">
+          注意：由於無法讀取此帳號目前的 status_version，「停用／恢復／撤銷此人員帳號」三項操作可能因版本不符而遭拒絕；
+          授予主控台存取、授予高權限等不依賴 status_version 的操作不受影響。
+        </p>
+      ) : null}
     </article>
   );
 }

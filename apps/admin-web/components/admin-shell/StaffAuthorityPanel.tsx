@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { StepUpCard } from "./StepUpCard";
+import { isReasonValid, submitMutation } from "./adminMutationClient";
 
 type Entitlement = Readonly<{
   entitlementId: string;
@@ -41,10 +43,6 @@ export type StaffAuthority = Readonly<{
   consoleAdmissions: readonly ConsoleAdmission[];
 }> | null;
 
-type StepUpStatus =
-  | Readonly<{ checked: false }>
-  | Readonly<{ checked: true; active: boolean; remainingSeconds?: number }>;
-
 const OPERATIONS = [
   { value: "suspend_staff_account", label: "停用此人員帳號" },
   { value: "reactivate_staff_account", label: "恢復此人員帳號" },
@@ -59,117 +57,6 @@ const OPERATIONS = [
 type OperationValue = (typeof OPERATIONS)[number]["value"];
 
 const REASON_HINT = "只能用小寫英文字母、數字與底線，例如 quarterly_access_review";
-
-function isReasonValid(value: string): boolean {
-  return /^[a-z][a-z0-9_]{0,79}$/.test(value);
-}
-
-async function postJson(url: string, body: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {})
-  });
-  let parsed: Record<string, unknown> = {};
-  try { parsed = await response.json(); } catch { /* non-JSON error body */ }
-  return { status: response.status, body: parsed };
-}
-
-function StepUpCard() {
-  const [status, setStatus] = useState<StepUpStatus>({ checked: false });
-  const [factorId, setFactorId] = useState("");
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    const result = await postJson("/api/admin/step-up/status", {});
-    if (result.status === 200 && result.body.ok) {
-      setStatus({ checked: true, active: Boolean(result.body.active), remainingSeconds: typeof result.body.remainingSeconds === "number" ? result.body.remainingSeconds : undefined });
-    } else {
-      setStatus({ checked: true, active: false });
-    }
-  }, []);
-
-  useEffect(() => { void refresh(); }, [refresh]);
-
-  const verify = useCallback(async () => {
-    setBusy(true);
-    setMessage(null);
-    const result = await postJson("/api/admin/step-up/verify", { factorId, code });
-    setBusy(false);
-    if (result.status === 200 && result.body.ok) {
-      setMessage("Step-Up 驗證成功，15 分鐘內可執行高權限操作。");
-      setCode("");
-      await refresh();
-    } else {
-      setMessage(`驗證失敗：${String(result.body.error ?? "unknown_error")}`);
-    }
-  }, [factorId, code, refresh]);
-
-  const clear = useCallback(async () => {
-    setBusy(true);
-    await postJson("/api/admin/step-up/clear", {});
-    setBusy(false);
-    await refresh();
-  }, [refresh]);
-
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-bold text-slate-950">Step-Up 狀態</h2>
-      <p className="mt-1 text-xs text-slate-500">高權限操作（停用／撤銷／授予）皆需要 15 分鐘內有效的 TOTP Step-Up 驗證。</p>
-      {status.checked ? (
-        <p className={`mt-3 rounded-lg border px-3 py-2 text-sm ${status.active ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-          {status.active
-            ? `目前已完成 Step-Up，約剩餘 ${Math.ceil((status.remainingSeconds ?? 0) / 60)} 分鐘。`
-            : "目前尚未完成 Step-Up，需要先驗證才能執行高權限操作。"}
-        </p>
-      ) : null}
-      {status.checked && status.active ? (
-        <button
-          className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-          disabled={busy}
-          onClick={() => void clear()}
-          type="button"
-        >
-          結束 Step-Up
-        </button>
-      ) : (
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <label className="text-xs font-bold text-slate-700">
-            Authenticator Factor ID
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              onChange={(event) => setFactorId(event.target.value)}
-              placeholder="於「設定」頁面查看"
-              value={factorId}
-            />
-          </label>
-          <label className="text-xs font-bold text-slate-700">
-            6 位數驗證碼
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              inputMode="numeric"
-              onChange={(event) => setCode(event.target.value)}
-              value={code}
-            />
-          </label>
-          <div className="flex items-end">
-            <button
-              className="w-full rounded-lg bg-sky-700 px-4 py-2 text-sm font-bold text-white hover:bg-sky-800 disabled:opacity-50"
-              disabled={busy || !factorId || !/^[0-9]{6,8}$/.test(code)}
-              onClick={() => void verify()}
-              type="button"
-            >
-              進行 Step-Up 驗證
-            </button>
-          </div>
-        </div>
-      )}
-      {message ? <p className="mt-3 text-sm text-slate-700">{message}</p> : null}
-    </section>
-  );
-}
 
 export function StaffAuthorityPanel({
   staffAccountId,
@@ -239,20 +126,20 @@ export function StaffAuthorityPanel({
         args = { ...base, privilegedPermissionGrantId: targetId, expectedStatusVersion: active?.statusVersion ?? 0 };
       }
     }
-    const payload: Record<string, unknown> = { operation, arguments: args };
-    if (needsConfirmation) {
-      payload.confirmation = { targetStaffAccountId: staffAccountId, permissionKey, phrase: confirmPhrase };
-    }
-    const response = await postJson("/api/admin/management/staff/mutations", payload);
+    const confirmation = needsConfirmation
+      ? { targetStaffAccountId: staffAccountId, permissionKey, phrase: confirmPhrase }
+      : undefined;
+    const outcome = await submitMutation(operation, args, confirmation);
     setBusy(false);
-    const inner = response.body.result as Record<string, unknown> | undefined;
-    if (response.status === 200 && response.body.ok && inner?.outcome === "applied") {
+    if (outcome.kind === "applied") {
       setResult("成功：操作已套用。頁面將重新整理。");
       window.setTimeout(() => window.location.reload(), 1200);
-    } else if (response.status === 200 && response.body.ok) {
-      setResult(`遭拒絕：${String(inner?.errorCode ?? "rejected")}`);
+    } else if (outcome.kind === "rejected") {
+      setResult(`遭拒絕：${outcome.errorCode}`);
+    } else if (outcome.kind === "step_up_required") {
+      setResult("Step-Up 已逾期或尚未完成，請重新驗證後再試一次。");
     } else {
-      setResult(`失敗：${String(response.body.error ?? "unknown_error")}`);
+      setResult(`失敗：${outcome.error}`);
     }
   }, [operation, reasonCode, permissionKey, targetId, canGrant, canRevoke, canSetTemporary, confirmPhrase, needsConfirmation, staffAccountId, initialStatusVersion, authority]);
 
