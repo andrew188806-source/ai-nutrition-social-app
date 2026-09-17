@@ -53,6 +53,9 @@ export default function RootLayout() {
           <Stack.Screen name="meal-buddies" options={{ title: zhTW.mobile.mealBuddies.title }} />
           <Stack.Screen name="meal-buddy-candidate-profile/[candidateRef]" options={{ title: "飯友公開檔案" }} />
           <Stack.Screen name="meal-buddy-chat/[relationshipRef]" options={{ title: zhTW.mobile.mealBuddyChat.screenTitle }} />
+          <Stack.Screen name="codex/index" options={{ title: zhTW.mobile.ipCodex.galleryTitle }} />
+          <Stack.Screen name="codex/[seriesId]/index" options={{ title: zhTW.mobile.ipCodex.galleryTitle }} />
+          <Stack.Screen name="codex/[seriesId]/[entryId]" options={{ title: zhTW.mobile.ipCodex.galleryTitle }} />
           </Stack>
         </ConsumerRuntimeNavigationGate>
       </ConsumerLocationProvider>

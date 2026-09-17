@@ -155,6 +155,19 @@ export default function MeScreen() {
           />
         </View>
 
+        {/* 4b. IP 圖鑑 entry point — demo data only, see docs/ip-codex-scale-system.md */}
+        <View style={styles.section}>
+          <SectionHeader title={zhTW.mobile.ipCodex.codexEntryPoint} subtitle={zhTW.mobile.ipCodex.codexEntryPointSubtitle} />
+          <CompactRow
+            icon="star"
+            iconTone="primary"
+            title={zhTW.mobile.ipCodex.codexEntryPoint}
+            subtitle={zhTW.mobile.ipCodex.codexEntryPointSubtitle}
+            value={zhTW.mobile.ipCodex.demoBadge}
+            onPress={() => router.push("/codex")}
+          />
+        </View>
+
         {/* 5. Settings/privacy entries */}
         <View style={styles.section}>
           <SectionHeader title={profile.accountSettingsTitle} />

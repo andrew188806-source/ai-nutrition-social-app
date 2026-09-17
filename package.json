@@ -17,6 +17,7 @@
     "admin": "npm --workspace @haocu/admin-web run dev",
     "demo": "node scripts/start-demo.mjs",
     "typecheck": "tsc --noEmit",
+    "test:ip-codex-catalog": "node scripts/ip-codex-catalog-validate.mjs",
     "test:taste-similarity-ts1": "node scripts/taste-similarity-ts1-guard.mjs",
     "test:taste-similarity-ts1-smoke": "node scripts/taste-similarity-ts1-smoke.mjs",
     "test:taste-similarity-ts1-mutations": "node scripts/taste-similarity-ts1-mutations.mjs",

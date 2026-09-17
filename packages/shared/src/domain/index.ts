@@ -11,3 +11,4 @@ export * as CandidateTasteAuthority from "./candidate-taste";
 export * as UserTasteNormalizationAuthority from "./user-taste-normalization";
 export * as CandidateAllergenAuthority from "./candidate-allergen";
 export * as CandidateIngredientAvoidanceAuthority from "./candidate-ingredient-avoidance";
+export * as IpCodexDomain from "./ip-codex";
