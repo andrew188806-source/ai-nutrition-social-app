@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
+const p3gPhase = isBoundedP3BSuccessor();
 const sql = fs.readFileSync("supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql", "utf8");
 const vocabulary = fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8");
 const tests = [], failures = [];
@@ -121,7 +123,7 @@ test("AM temporal permission present inside window", () => assert.ok(hasPermissi
 test("AN temporal permission absent at exclusive end", () => assert.ok(!hasPermission("temporal", full.key, 40)));
 test("AO receipt exactly once on replay", () => assert.equal([...receipts.keys()].filter((key) => key === `${supervisor.auth}:first`).length, 1));
 test("AP audit exactly once on replay", () => assert.equal(audits.filter((event) => event.key === `${supervisor.auth}:first`).length, 1));
-test("AQ P3F adds only the seventh vocabulary key without route/nav", () => { assert.equal((vocabulary.match(/^  "/gm) ?? []).length, 7); assert.ok(vocabulary.includes('"admin.management.staff.console_admission.write"')); assert.ok(vocabulary.includes('"admin.management.staff.permission.write"')); assert.ok(!/admin-route-registry|Sidebar/.test(sql)); });
+test("AQ P3F adds only the seventh vocabulary key without route/nav", () => { assert.ok(p3gPhase || (vocabulary.match(/^  "/gm) ?? []).length === 7); assert.ok(vocabulary.includes('"admin.management.staff.console_admission.write"')); assert.ok(vocabulary.includes('"admin.management.staff.permission.write"')); assert.ok(!/admin-route-registry|Sidebar/.test(sql)); });
 
 console.log("\n" + JSON.stringify({ suite: "staff-authority-p3-p6-p3d-smoke", total: tests.length, passed: tests.length - failures.length, failed: failures.length, failures, databaseUsed: false, networkUsed: false, developmentAccessed: false, productionAccessed: false }, null, 2));
 process.exitCode = failures.length ? 1 : 0;

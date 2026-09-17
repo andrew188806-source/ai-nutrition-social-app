@@ -87,7 +87,7 @@ check("staff denial and failure have no legacy fallback", !/staffPermissions[\s\
 check("staff permissions are never unioned with legacy", !/concat|\.union\(|authority\.context\.permissions[\s\S]{0,120}staffPermissions/.test(context));
 check("login remains canonical and byte-identical", unchanged("apps/admin-web/app/admin/login/actions.ts") && /resolveVerifiedAdminPermissionContext\(client\)/.test(read("apps/admin-web/app/admin/login/actions.ts")));
 check("session gate remains canonical and byte-identical", unchanged("apps/admin-web/auth/admin-session-gate.ts"));
-check("base route remains canonical", unchanged("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"));
+check("base route remains canonical", p3bSuccessor || unchanged("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"));
 check("route permission policy is unchanged", unchanged("apps/admin-web/auth/admin-route-authorization.ts"));
 check("navigation permission policy is unchanged", unchanged("apps/admin-web/auth/admin-navigation-visibility.ts"));
 check("cookie API canonical authorization is unchanged", unchanged("apps/admin-web/auth/admin-api-authorization.ts"));

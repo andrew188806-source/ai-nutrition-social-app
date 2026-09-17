@@ -2,6 +2,8 @@
 // Pure P3B contract smoke. PostgreSQL execution and races are separate required gates.
 import fs from "node:fs";
 import assert from "node:assert/strict";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3iPhase = isBoundedP3BSuccessor();
 
 const sql = fs.readFileSync("supabase/migrations/20260914020000_staff_management_p3_p6_p3b_account_operator.sql", "utf8");
 const vocabularySource = fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8");
@@ -38,7 +40,7 @@ class Model {
 }
 
 test("A account.write is promoted CURRENT", () => assert.match(sql, /set readiness_status = 'current'/));
-test("B only bounded P3C-P3F writer keys may follow account.write", () => assert.ok(otherManagement.every((x) => ["admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", "admin.management.staff.permission.write"].includes(x) || !vocabularySource.includes(`\"${x}\"`))));
+test("B only bounded P3C-P3F writer keys may follow account.write", () => assert.ok(otherManagement.every((x) => ["admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", "admin.management.staff.permission.write"].includes(x) || (p3iPhase && ["admin.management.read", "admin.management.permissions.read", "admin.management.staff.read"].includes(x)) || !vocabularySource.includes(`\"${x}\"`))));
 test("C application vocabulary retains exact P3B four", () => assert.ok(current.every((x) => vocabularySource.includes(`\"${x}\"`))));
 test("D no management route is promoted", () => assert.doesNotMatch(sql, /admin-route-registry|Sidebar/));
 

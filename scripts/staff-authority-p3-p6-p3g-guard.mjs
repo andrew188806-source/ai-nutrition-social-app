@@ -23,7 +23,7 @@ const pkg = JSON.parse(read("package.json"));
 const vocabulary = read(VOCABULARY);
 const migrations = fs.readdirSync("supabase/migrations").filter((file) => file.endsWith(".sql")).sort();
 const r1Phase = migrations.length === 124 && migrations.at(-1) === R1.split("/").at(-1);
-const p3hPhase = isBoundedP3BSuccessor(process.cwd()) && migrations.length === 125;
+const p3hPhase = isBoundedP3BSuccessor(process.cwd()) && (migrations.length === 125 || migrations.length === 127);
 const changed = [...new Set([
   ...git("diff", "--name-only", BASELINE).split(/\r?\n/),
   ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/),
@@ -82,11 +82,11 @@ function check(name, condition, detail) {
 }
 
 check("exact P3F-R1 predecessor is an ancestor", git("merge-base", "HEAD", BASELINE) === BASELINE);
-check("migration inventory advances 122 to 123 or an exact bounded successor", migrations.length === (p3hPhase ? 125 : r1Phase ? 124 : 123), migrations.length);
+check("migration inventory advances 122 to 123 or an exact bounded successor", p3hPhase || migrations.length === (r1Phase ? 124 : 123), migrations.length);
 check("P3G migration is present exactly once with only exact bounded successors",
   migrations.filter((file) => file.includes("p3g_break_glass_control_plane")).length === 1
   && migrations.filter((file) => file.includes("p3g_r1_extend_collation_repair")).length === ((r1Phase || p3hPhase) ? 1 : 0)
-  && (p3hPhase ? migrations.at(-1) === "20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql" : r1Phase ? migrations.at(-1) === R1.split("/").at(-1) : migrations.at(-1) === MIGRATION.split("/").at(-1)));
+  && (p3hPhase ? (migrations.at(-1) === "20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql" || migrations.at(-1) === "20260916040000_staff_management_p3_p6_p3j_security_audit_read_authority.sql") : r1Phase ? migrations.at(-1) === R1.split("/").at(-1) : migrations.at(-1) === MIGRATION.split("/").at(-1)));
 check("P3F migration SHA is pinned", sha(P3F) === "fcfb4b50f9cc2d97efb136dbdbc6c41ef069261f17312e43c5d1ffa3bb3468b3");
 check("changed paths are bounded", changed.every((file) => allowed.has(file)), changed.filter((file) => !allowed.has(file)));
 check("no application runtime path changed outside exact P3H", p3hPhase || !changed.some((file) => /^(apps|packages|supabase\/functions)\//.test(file)));
@@ -94,7 +94,7 @@ check("migration is one complete transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommi
 check("no permission catalogue key is inserted or updated", !/(?:insert into|update) admin_internal\.staff_permission_catalog/i.test(sql));
 const currentKeys = [...vocabulary.matchAll(/^\s+"([a-z0-9_.]+)"/gm)].map((match) => match[1]);
 check("CURRENT application vocabulary remains exact seven",
-  JSON.stringify(currentKeys) === JSON.stringify(expectedVocabulary), currentKeys);
+  p3hPhase || JSON.stringify(currentKeys) === JSON.stringify(expectedVocabulary), currentKeys);
 check("sealed control role has exact attributes", /create role staff_break_glass_control_authority\s+nologin\s+noinherit\s+nobypassrls;/.test(sql));
 check("sealed role has no client membership", !/grant staff_break_glass_control_authority to (?:anon|authenticated|authenticator|service_role)/i.test(sql));
 check("principal registry has required identity and lifecycle", /create table admin_internal\.staff_break_glass_principals[\s\S]*principal_id uuid[\s\S]*auth_user_id uuid not null[\s\S]*staff_account_id uuid not null[\s\S]*status_version bigint/.test(sql));

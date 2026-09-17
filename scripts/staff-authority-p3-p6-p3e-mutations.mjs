@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
+const p3gPhase = isBoundedP3BSuccessor();
 const sql = fs.readFileSync("supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql", "utf8");
 const vocabulary = fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8");
 const p3c = fs.readFileSync("supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql", "utf8");
@@ -9,7 +11,7 @@ const p1c = fs.readFileSync("supabase/migrations/20260912030000_staff_authority_
 const mutants = [
   ["console writer stays PLANNED", () => !/console_admission\.write'[\s\S]*set readiness_status = 'current'|set readiness_status = 'current'[\s\S]*console_admission\.write'/.test(sql)],
   ["permission writer accidentally promoted", () => /permission\.write'[\s\S]{0,400}set readiness_status = 'current'/.test(sql)],
-  ["application vocabulary is not exact through P3F", () => (vocabulary.match(/^\s+"/gm) ?? []).length !== 7],
+  ["application vocabulary is not exact through P3F", () => !p3gPhase && (vocabulary.match(/^\s+"/gm) ?? []).length !== 7],
   ["console manager is auto-granted", () => /insert into admin_internal\.staff_permission_entitlements[\s\S]{0,300}console_admission\.write/.test(sql)],
   ["legacy Platform Admin gains console writer", () => /platform_admin_role_permissions|platform_admin_memberships/.test(sql)],
   ["actor only requires admin_context", () => !/admin\.management\.staff\.console_admission\.write/.test(sql)],

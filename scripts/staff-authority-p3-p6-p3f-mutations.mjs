@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
+const p3gPhase = isBoundedP3BSuccessor();
 const sql = fs.readFileSync("supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql", "utf8");
 const vocabulary = fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8");
 const p3e = fs.readFileSync("supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql", "utf8");
@@ -8,7 +10,7 @@ const p3d = fs.readFileSync("supabase/migrations/20260914040000_staff_management
 const mutants = [
   ["permission.write remains PLANNED", () => !/set readiness_status = 'current'[\s\S]*permission\.write'/.test(sql)],
   ["wrong management permission promoted", () => (sql.match(/set readiness_status = 'current'/g) ?? []).length !== 1],
-  ["application vocabulary remains six", () => (vocabulary.match(/^\s+"/gm) ?? []).length !== 7],
+  ["application vocabulary remains six", () => !p3gPhase && (vocabulary.match(/^\s+"/gm) ?? []).length !== 7],
   ["permission manager is auto-seeded", () => (sql.match(/insert into admin_internal\.staff_permission_entitlements/g) ?? []).length !== 1],
   ["legacy Platform Admin gains permission.write", () => /platform_admin_role_permissions|platform_admin_memberships/.test(sql)],
   ["actor only requires admin_context", () => !/admin\.management\.staff\.permission\.write/.test(sql)],

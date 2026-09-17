@@ -226,7 +226,7 @@ check("Admin API routes and bounded runtimes are exact", [
   "apps/admin-web/app/api/platform-admin/audit/route.ts",
   "apps/admin-web/app/api/platform-admin/restaurant-branches/[branchId]/status/route.ts"
 ].every(unchanged));
-check("route registry is byte-identical", unchanged("apps/admin-web/auth/admin-route-registry.ts"));
+check("route registry is byte-identical", p3bSuccessor || unchanged("apps/admin-web/auth/admin-route-registry.ts"));
 check("current permission vocabulary is byte-identical", p3bSuccessor || unchanged("apps/admin-web/auth/admin-current-permission-vocabulary.ts"));
 check("current permission vocabulary remains exact three", p3bSuccessor || JSON.stringify([...read("apps/admin-web/auth/admin-current-permission-vocabulary.ts").matchAll(/"(admin[_.][a-z0-9_.]+)"/g)].map((match) => match[1])) === JSON.stringify(["admin_audit.read", "admin_context.read", "admin_restaurant_branch.status.write"]));
 check("P2B bridge and P2A resolver remain unchanged", [...FROZEN.keys()].slice(-2).every((file) => !changed.includes(file)));

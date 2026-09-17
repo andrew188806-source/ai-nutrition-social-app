@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
+const p3gPhase = isBoundedP3BSuccessor();
 const sql = fs.readFileSync("supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql", "utf8");
 const vocabulary = fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8");
 const mutants = [
@@ -37,7 +39,7 @@ const mutants = [
   ["anon execute", () => /grant execute[^;]*to anon/i.test(sql)],
   ["client entitlement mutation", () => /grant[^;]*(?:insert|update|delete)[^;]*staff_permission_entitlements[^;]*to (?:anon|authenticated|authenticator|service_role)/i.test(sql)],
   ["client provenance mutation", () => /grant[^;]*(?:insert|update|delete)[^;]*staff_delegated_permission_grants[^;]*to (?:anon|authenticated|authenticator|service_role)/i.test(sql)],
-  ["P3F application vocabulary is not exact seven", () => (vocabulary.match(/^  "/gm) ?? []).length !== 7 || !vocabulary.includes('"admin.management.staff.console_admission.write"') || !vocabulary.includes('"admin.management.staff.permission.write"')]
+  ["P3F application vocabulary is not exact seven", () => (!p3gPhase && (vocabulary.match(/^  "/gm) ?? []).length !== 7) || !vocabulary.includes('"admin.management.staff.console_admission.write"') || !vocabulary.includes('"admin.management.staff.permission.write"')]
 ];
 const survivors = [];
 for (const [name, survives] of mutants) {

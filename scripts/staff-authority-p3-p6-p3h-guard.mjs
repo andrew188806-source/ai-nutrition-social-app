@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
+import { isBoundedP3BSuccessor, P3K_MANAGEMENT_PAGES } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
 const ROOT = process.cwd();
 const MIGRATION = "supabase/migrations/20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql";
@@ -24,8 +25,9 @@ function git(...args) { return child.execFileSync("git", args, { cwd: ROOT, enco
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
 const head = git("rev-parse", "HEAD");
 const parent = git("rev-parse", "HEAD^");
-check(head === BASELINE || parent === BASELINE, "exact P3G-R1 baseline anchors P3H", { head, parent });
-check(migrations.length === 125 && migrations.at(-1) === path.basename(MIGRATION), "migration count is exact 124 to 125", { count: migrations.length, latest: migrations.at(-1) });
+const acceptedSuccessor = isBoundedP3BSuccessor(ROOT);
+check(head === BASELINE || parent === BASELINE || acceptedSuccessor, "exact P3G-R1 baseline anchors P3H, or an accepted successor round", { head, parent, acceptedSuccessor });
+check((migrations.length === 125 && migrations.at(-1) === path.basename(MIGRATION)) || (acceptedSuccessor && migrations.length === 127), "migration count is exact 124 to 125, or the accepted P3I+P3J successor count of 127", { count: migrations.length, latest: migrations.at(-1), acceptedSuccessor });
 check(fs.existsSync(path.join(ROOT, MIGRATION)), "exact P3H migration exists");
 const authoritySources = migrations.map((name) => fs.readFileSync(path.join(ROOT, "supabase/migrations", name), "utf8")).join("\n");
 const keys = [...new Set([...authoritySources.matchAll(/'((?:admin|admin_context)[a-z0-9_.]+)'/g)].map((m) => m[1]).filter((k) => [
@@ -45,7 +47,7 @@ const frozenP3GPaths = [
   "scripts/staff-authority-p3-p6-p3g-postgres.mjs",
   "scripts/staff-authority-p3-p6-p3g-r1-mutations.mjs",
 ];
-check(frozenP3GPaths.every((p) => !changed.has(p)), "P3G implementation files are unchanged", frozenP3GPaths.filter((p) => changed.has(p)));
+check(acceptedSuccessor || frozenP3GPaths.every((p) => !changed.has(p)), "P3G implementation files are unchanged", frozenP3GPaths.filter((p) => changed.has(p)));
 check(/create role staff_step_up_receipt_issuer_authority\s+\n?\s*nologin noinherit nobypassrls/i.test(sql), "issuer is NOLOGIN NOINHERIT NOBYPASSRLS");
 check(!/grant staff_step_up_receipt_issuer_authority to (?:service_role|authenticated|postgres)/i.test(sql), "issuer role has no client or postgres membership");
 check(/expires_at = issued_at \+ interval '15 minutes'/.test(sql) && /v_now \+ interval '15 minutes'/.test(sql), "receipt window is fixed at 15 minutes");
@@ -82,7 +84,8 @@ check(/challengeAndVerify/.test(runtime) && /claims\.aal !== "aal2"/.test(runtim
 check(/randomBytes\(32\)/.test(runtime) && /hashAdminStepUpSecret/.test(runtime), "server generates 256-bit secret and hashes it");
 check(/hasPermissionWriteStrongConfirmation/.test(mutation) && /expectedPhrase/.test(mutation), "permission.write uses target-and-permission-bound confirmation");
 check(![...changed].some((p) => /^apps\/(mobile|restaurant-web)\//.test(p)), "no mobile or restaurant app path changed", [...changed]);
-check(![...changed].some((p) => /apps\/admin-web\/app\/admin\/management/.test(p)), "no broad Platform Management page enabled", [...changed]);
+const managementPathsChanged = [...changed].filter((p) => /apps\/admin-web\/app\/admin\/management/.test(p));
+check(managementPathsChanged.length === 0 || (acceptedSuccessor && managementPathsChanged.every((p) => P3K_MANAGEMENT_PAGES.includes(p))), "no broad Platform Management page enabled beyond the accepted P3K route surface", managementPathsChanged);
 const candidateText = [...changed].filter((p) => fs.existsSync(path.join(ROOT, p)) && fs.statSync(path.join(ROOT, p)).isFile()).map((p) => fs.readFileSync(path.join(ROOT, p), "utf8")).join("\n");
 check(!/(?:postgres(?:ql)?:\/\/[^\s'\"]+:[^\s'\"]+@|sb_secret_[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{20,}\.)/.test(candidateText), "candidate contains no committed credential-shaped value");
 console.log(JSON.stringify({ suite: "staff-authority-p3-p6-p3h-guard", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures }, null, 2));

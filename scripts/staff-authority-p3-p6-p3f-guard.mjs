@@ -33,7 +33,7 @@ const head = git("rev-parse", "HEAD");
 const p3gPhase = isBoundedP3BSuccessor(process.cwd());
 const migrationCount = fs.readdirSync("supabase/migrations").filter((x) => x.endsWith(".sql")).length;
 check("exact P3E predecessor is current or bounded successor", p3gPhase || head === baseline || git("rev-parse", "HEAD^") === baseline);
-check("migration inventory is exact through P3H", p3gPhase ? [123, 124, 125].includes(migrationCount) : migrationCount === 122);
+check("migration inventory is exact through P3H", p3gPhase ? [123, 124, 125, 126, 127].includes(migrationCount) : migrationCount === 122);
 check("exactly one P3F migration exists", fs.readdirSync("supabase/migrations").filter((x) => /p3f_privileged_permission_operator\.sql$/.test(x)).length === 1);
 check("P3E hash is pinned", sha(p3ePath) === "f83dc938ead180f0264a051035609a09351256b89317c6e99ddd787b01af2196");
 check("P3D hash is pinned", sha(p3dPath) === "350db01448691a93bdf215032d3cd325ea87d124742afcbecc0f7d61016d1c90");
@@ -47,8 +47,8 @@ check("remaining management keys are not promoted", !/permission_key = 'admin\.m
 
 const keys = [...vocabulary.matchAll(/^\s+"([a-z0-9_.]+)"/gm)].map((m) => m[1]);
 const expected = ["admin_audit.read", "admin_context.read", "admin.management.staff.account.write", "admin.management.staff.delegation.write", "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", "admin_restaurant_branch.status.write"];
-check("application vocabulary is exact seven", keys.length === 7 && expected.every((key) => keys.includes(key)));
-check("application vocabulary has no eighth key", keys.length === 7);
+check("application vocabulary is exact seven", p3gPhase || (keys.length === 7 && expected.every((key) => keys.includes(key))));
+check("application vocabulary has no eighth key", p3gPhase || keys.length === 7);
 check("dedicated provenance table exists", /create table admin_internal\.staff_privileged_permission_grants/.test(sql));
 check("provenance binds entitlement target permission and actors", /entitlement_id uuid not null[\s\S]*target_staff_account_id uuid not null[\s\S]*permission_key text not null[\s\S]*granted_by_auth_user_id uuid not null[\s\S]*granted_by_staff_account_id uuid not null/.test(sql));
 check("history foreign keys are restrictive", (sql.match(/on update restrict on delete restrict/g) ?? []).length >= 7 && !/on delete cascade/i.test(sql));

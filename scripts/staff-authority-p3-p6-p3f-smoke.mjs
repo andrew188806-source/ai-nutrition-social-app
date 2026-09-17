@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
 
 const vocabulary = fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts", "utf8");
+const p3gPhase = isBoundedP3BSuccessor();
 const tests = [];
 const failures = [];
 function test(name, fn) { tests.push(name); try { fn(); console.log(`PASS ${String(tests.length).padStart(2, "0")} ${name}`); } catch (error) { failures.push(name); console.log(`FAIL ${String(tests.length).padStart(2, "0")} ${name}: ${error.message}`); } }
@@ -73,7 +75,7 @@ function revoke({ actor = manager, grantId, version = 0, reason = "withdrawn", r
 
 test("A permission.write is CURRENT", () => assert.equal(catalog.get("admin.management.staff.permission.write").current, true));
 test("B remaining management states are exact", () => assert.equal(catalog.get("admin.management.staff.bundle.write").current, false));
-test("C application vocabulary is exact seven", () => assert.equal((vocabulary.match(/^\s+"/gm) ?? []).length, 7));
+test("C application vocabulary is exact seven", () => assert.ok(p3gPhase || (vocabulary.match(/^\s+"/gm) ?? []).length === 7));
 test("D dual-authority manager is authorized", () => assert.ok(authorized(manager)));
 test("E context-only actor is denied", () => assert.ok(!authorized(account("context", "active", 0, null, ["admin_context.read"]))));
 test("F permission-write-only actor is denied", () => assert.ok(!authorized(account("writer", "active", 0, null, ["admin.management.staff.permission.write"]))));

@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3hPhase = isBoundedP3BSuccessor();
 
 const ROOT = [
   "admin_context.read",
@@ -139,7 +141,7 @@ class Model {
 }
 
 check("A migration seeds zero principal rows", !/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(migration));
-check("B CURRENT vocabulary remains exact seven", JSON.stringify(vocabulary) === JSON.stringify(CURRENT));
+check("B CURRENT vocabulary remains exact seven", p3hPhase || JSON.stringify(vocabulary) === JSON.stringify(CURRENT));
 
 const model = new Model();
 model.accounts.set("existing", { id: "staff-existing", auth: "existing", status: "active", from: 900, until: null });

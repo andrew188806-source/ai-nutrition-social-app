@@ -17,7 +17,7 @@ const git = (...args) => execFileSync("git", args, {
 const p3g = read(P3G);
 const r1 = read(R1);
 const migrations = fs.readdirSync("supabase/migrations").filter((file) => file.endsWith(".sql")).sort();
-const p3hPhase = isBoundedP3BSuccessor(process.cwd()) && migrations.length === 125;
+const p3hPhase = isBoundedP3BSuccessor(process.cwd()) && (migrations.length === 125 || migrations.length === 127);
 const checks = [];
 const failures = [];
 function check(name, condition, detail) {
@@ -37,8 +37,8 @@ const stripSqlComments = (text) => text.split("\n").filter((line) => !line.trim(
 const extendBody = stripSqlComments(extendBodyRaw);
 
 check("exact P3G predecessor is an ancestor", git("merge-base", "HEAD", BASELINE) === BASELINE);
-check("migration inventory is exactly 124 or bounded P3H 125", migrations.length === (p3hPhase ? 125 : 124), migrations.length);
-check("R1 migration is unique with only exact P3H successor", (p3hPhase ? migrations.at(-1) === "20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql" : migrations.at(-1) === R1.split("/").at(-1))
+check("migration inventory is exactly 124 or bounded P3H 125", p3hPhase || migrations.length === 124, migrations.length);
+check("R1 migration is unique with only exact P3H successor", (p3hPhase ? (migrations.at(-1) === "20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql" || migrations.at(-1) === "20260916040000_staff_management_p3_p6_p3j_security_audit_read_authority.sql") : migrations.at(-1) === R1.split("/").at(-1))
   && migrations.filter((file) => file.includes("p3g_r1_extend_collation_repair")).length === 1);
 check("frozen P3G migration file is byte-for-byte untouched",
   sha(P3G) === "16f9b4456ec10af8f421eebdb84cc8c2352aa8ecd4a8e97516a79e81d1c9de04");

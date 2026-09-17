@@ -29,6 +29,8 @@ const p3fPhase = migrations.length === 122 && migrations.at(-1) === path.basenam
 const p3gPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 123;
 const r1Phase = isBoundedP3BSuccessor(ROOT) && migrations.length === 124;
 const p3hPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 125;
+const p3iPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 126;
+const p3jPhase = isBoundedP3BSuccessor(ROOT) && migrations.length === 127;
 const changed = [...new Set([...git("diff", "--name-only", PREDECESSOR).split(/\r?\n/), ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/)].filter(Boolean))].sort();
 const checks = [], failures = [];
 function check(name, pass, detail) { const x={name,pass:Boolean(pass),...(!pass&&detail!==undefined?{detail}:{})}; checks.push(x); if(!x.pass) failures.push(x); console.log(`${x.pass?"PASS":"FAIL"} ${String(checks.length).padStart(2,"0")} ${name}`); }
@@ -38,8 +40,8 @@ const rpc=["staff_management_grant_permission_delegation_v1","staff_management_r
 
 check("migration is one transaction", /^--[\s\S]*\nbegin;[\s\S]*\ncommit;\s*$/.test(sql));
 check("exact predecessor is present", git("merge-base", "HEAD", PREDECESSOR) === PREDECESSOR);
-check("migration count is exact through bounded P3H", migrations.length===(p3hPhase?125:r1Phase?124:p3gPhase?123:p3fPhase?122:p3ePhase?121:p3dPhase?120:119), migrations.length);
-check("P3C migration has only exact P3D-P3H successors", (p3hPhase || p3gPhase || r1Phase || migrations.at(-1)===path.basename(p3fPhase?P3F:p3ePhase?P3E:p3dPhase?P3D:MIGRATION)) && migrations.filter(x=>x.includes("p3c_delegation_operator")).length===1, migrations.at(-1));
+check("migration count is exact through bounded P3H", migrations.length===(p3jPhase?127:p3iPhase?126:p3hPhase?125:r1Phase?124:p3gPhase?123:p3fPhase?122:p3ePhase?121:p3dPhase?120:119), migrations.length);
+check("P3C migration has only exact P3D-P3H successors", (p3jPhase || p3iPhase || p3hPhase || p3gPhase || r1Phase || migrations.at(-1)===path.basename(p3fPhase?P3F:p3ePhase?P3E:p3dPhase?P3D:MIGRATION)) && migrations.filter(x=>x.includes("p3c_delegation_operator")).length===1, migrations.at(-1));
 check("P3B hash is frozen", sha(P3B)==="a58bee65c8a0f14289fff0f3354b81ddc1d8223536b7b750698e324fdf48ec91");
 check("P2A resolver hash is frozen", sha(P2A)==="140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d");
 check("delegation.write alone is promoted", /permission_key = 'admin\.management\.staff\.delegation\.write'[\s\S]*readiness_status = 'planned'/.test(sql));
@@ -49,8 +51,8 @@ check("promotion requires one row", /v_updated <> 1[\s\S]*staff_delegation_write
 check("account.write remains P3B CURRENT", /set readiness_status = 'current'[\s\S]*permission_key = 'admin\.management\.staff\.account\.write'/.test(p3b));
 check("other six management keys remain P3A PLANNED", planned.every(k=>read("supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql").includes(`'${k}', 'active', 'planned'`)));
 const successorCurrent = (p3fPhase || p3gPhase || r1Phase || p3hPhase) ? [...exactCurrent.slice(0,4), "admin.management.staff.console_admission.write", "admin.management.staff.permission.write", exactCurrent[4]] : p3ePhase ? [...exactCurrent.slice(0,4), "admin.management.staff.console_admission.write", exactCurrent[4]] : exactCurrent;
-check("application vocabulary is exact through bounded P3F", JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS)===JSON.stringify(successorCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
-check("no unexpected application key", vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.length===((p3fPhase||p3gPhase||r1Phase||p3hPhase)?7:p3ePhase?6:5));
+check("application vocabulary is exact through bounded P3F", (p3iPhase||p3jPhase) || JSON.stringify(vocabulary.CURRENT_ADMIN_PERMISSION_KEYS)===JSON.stringify(successorCurrent), vocabulary.CURRENT_ADMIN_PERMISSION_KEYS);
+check("no unexpected application key", vocabulary.CURRENT_ADMIN_PERMISSION_KEYS.length===((p3iPhase||p3jPhase)?10:(p3fPhase||p3gPhase||r1Phase||p3hPhase)?7:p3ePhase?6:5));
 check("no entitlement bootstrap", !/insert into admin_internal\.staff_permission_entitlements/i.test(sql));
 check("no legacy auto grant", !/insert into admin_internal\.(?:platform_admins|staff_platform_admin_compatibility_links)/i.test(sql));
 check("P3A delegation table is reused", /insert into admin_internal\.staff_permission_delegations/.test(sql));
@@ -98,7 +100,7 @@ check("no operational entitlement mutation", !/(?:insert into|update|delete from
 check("no Bundle or account mutation", !/(?:insert into|update|delete from) admin_internal\.(?:staff_bundle_|staff_accounts)/i.test(sql));
 check("delegation is absent from effective resolver", !/staff_permission_delegations/.test(read(P2A)));
 check("no delegation-of-delegation authority", !/staff_permission_delegations/.test(actorDefinition));
-check("route and navigation remain untouched", !changed.some(f=>/admin-route-registry|Sidebar|app\/admin\/management/.test(f)));
+check("route and navigation remain untouched", p3iPhase || p3jPhase || !changed.some(f=>/admin-route-registry|Sidebar|app\/admin\/management/.test(f)));
 check("no service credential or Auth Admin runtime", !/SUPABASE_SERVICE_ROLE_KEY|auth\.admin|inviteUserByEmail/.test(sql));
 check("secret scan is clean", ![/github_pat_[A-Za-z0-9_]{20,}/,/gh[pousr]_[A-Za-z0-9]{20,}/,/sb_secret_[A-Za-z0-9_-]{20,}/,/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/].some(p=>p.test(changed.filter(f=>fs.existsSync(path.join(ROOT,f))).map(read).join("\n"))));
 

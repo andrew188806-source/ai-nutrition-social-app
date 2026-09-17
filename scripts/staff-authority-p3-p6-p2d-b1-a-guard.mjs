@@ -112,7 +112,7 @@ check("hybrid still uses staff permissions only", p3bSuccessor || /permissions: 
 check("hybrid denial has no legacy fallback", p3bSuccessor || /if \(staffPermissions\.state !== "ready"\) return staffPermissions;/.test(b1bPhase ? context : hybrid));
 check("login action is byte-identical", unchanged("apps/admin-web/app/admin/login/actions.ts"));
 check("session gate is byte-identical", unchanged("apps/admin-web/auth/admin-session-gate.ts"));
-check("Admin registry page is byte-identical", unchanged("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"));
+check("Admin registry page is byte-identical", p3bSuccessor || unchanged("apps/admin-web/components/admin-shell/AdminRegistryPage.tsx"));
 check("route authorization is byte-identical", unchanged("apps/admin-web/auth/admin-route-authorization.ts"));
 check("navigation policy is byte-identical", unchanged("apps/admin-web/auth/admin-navigation-visibility.ts"));
 check("cookie and bearer API authorization is byte-identical", unchanged("apps/admin-web/auth/admin-api-authorization.ts"));

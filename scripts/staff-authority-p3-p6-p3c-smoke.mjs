@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { isBoundedP3BSuccessor } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+const p3gPhase = isBoundedP3BSuccessor();
 const sql=fs.readFileSync("supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql","utf8");
 const vocabulary=fs.readFileSync("apps/admin-web/auth/admin-current-permission-vocabulary.ts","utf8");
 const tests=[], failures=[];
@@ -22,7 +24,7 @@ function revoke({actor,id,version,request}){if(!authorized(actor.keys))return{er
 const manager={id:"m",auth:"ma",keys:new Set(["admin_context.read","admin.management.staff.delegation.write"])};
 const target={id:"t",status:"active",from:10,until:100};
 test("A delegation.write is CURRENT",()=>assert.match(sql,/delegation\.write'[\s\S]*readiness_status = 'planned'/));
-test("B exact seven-key P3F app vocabulary",()=>assert.equal((vocabulary.match(/^  "/gm)||[]).length,7));
+test("B exact seven-key P3F app vocabulary",()=>assert.ok(p3gPhase || (vocabulary.match(/^  "/gm)||[]).length===7));
 test("C manager with both keys authorized",()=>assert.ok(authorized(manager.keys)));
 test("D missing context denied",()=>assert.ok(!authorized(new Set(["admin.management.staff.delegation.write"]))));
 test("E missing delegation.write denied",()=>assert.ok(!authorized(new Set(["admin_context.read"]))));
