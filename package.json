@@ -13,6 +13,7 @@
     "test:platform-admin-ra-1a-development-acceptance": "node scripts/platform-admin-ra-1a-development-acceptance.mjs",
     "test:platform-admin-ra-1a-development-reset": "node scripts/platform-admin-ra-1a-development-reset.mjs",
     "mobile": "node scripts/start-mobile.mjs",
+    "mobile:demo-preview": "node scripts/start-mobile-demo-preview.mjs",
     "restaurant": "npm --workspace @haocu/restaurant-web run dev",
     "admin": "npm --workspace @haocu/admin-web run dev",
     "demo": "node scripts/start-demo.mjs",

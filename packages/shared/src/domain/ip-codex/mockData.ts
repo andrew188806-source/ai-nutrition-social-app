@@ -55,7 +55,7 @@ export const CODEX_MOCK_CHARACTERS: readonly CodexCharacter[] = CHARACTER_SEED.m
   displayName: seed.name,
   status: "active",
   description: seed.description,
-  canonicalAsset: demoAsset(`${seed.id}-canonical`, seed.asset, seed.name)
+  canonicalAsset: demoAsset(`${seed.id}-canonical`, seed.asset, seed.name.replace("〔DEMO〕", ""))
 }));
 
 function character(id: string) {
@@ -110,7 +110,7 @@ function entry(params: {
     displayName: seed.name,
     description: seed.description,
     status: "active",
-    primaryAsset: demoAsset(`${params.id}-primary`, seed.asset, seed.name),
+    primaryAsset: demoAsset(`${params.id}-primary`, seed.asset, seed.name.replace("〔DEMO〕", "")),
     relativeScale: params.relativeScale,
     physicalDimensions: params.dimensions,
     sortOrder: params.sortOrder
