@@ -14,7 +14,7 @@ function isActive(pathname: string, href: string) {
 export function DashboardShell({ title, subtitle, children }: { title: string; subtitle: string; children?: ReactNode }) {
   const pathname = usePathname();
   const regularItems = consoleNavItems.filter((item) => !item.phaseTwo);
-  const phaseTwoItem = consoleNavItems.find((item) => item.phaseTwo);
+  const phaseTwoItems = consoleNavItems.filter((item) => item.phaseTwo);
 
   return (
     <div className="min-h-screen bg-[#f8f5ee] text-stone-900">
@@ -41,7 +41,7 @@ export function DashboardShell({ title, subtitle, children }: { title: string; s
                   </Link>
                   {item.children && active ? (
                     <div className="mt-1 hidden pl-3 lg:grid lg:gap-1">
-                      {item.children.map((child) => {
+                      {item.children.filter((child) => !child.phaseTwo).map((child) => {
                         const childActive = pathname === child.href;
                         return (
                           <Link
@@ -62,16 +62,21 @@ export function DashboardShell({ title, subtitle, children }: { title: string; s
             })}
           </nav>
 
-          {phaseTwoItem ? (
-            <Link
-              className={`mt-3 hidden rounded-md border border-dashed border-stone-300 px-3 py-3 text-sm font-bold lg:block ${
-                isActive(pathname, phaseTwoItem.href) ? "bg-stone-100 text-stone-600" : "text-stone-400 hover:bg-stone-50"
-              }`}
-              href={phaseTwoItem.href}
-            >
-              <span className="block">{phaseTwoItem.label}</span>
-              <span className="mt-1 inline-flex rounded-full bg-stone-200 px-2 py-0.5 text-xs text-stone-600">第二階段</span>
-            </Link>
+          {phaseTwoItems.length ? (
+            <div className="mt-3 hidden lg:grid lg:gap-1.5">
+              {phaseTwoItems.map((item) => (
+                <Link
+                  className={`rounded-md border border-dashed border-stone-300 px-3 py-3 text-sm font-bold ${
+                    isActive(pathname, item.href) ? "bg-stone-100 text-stone-600" : "text-stone-400 hover:bg-stone-50"
+                  }`}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <span className="block">{item.label}</span>
+                  <span className="mt-1 inline-flex rounded-full bg-stone-200 px-2 py-0.5 text-xs text-stone-600">尚未開放</span>
+                </Link>
+              ))}
+            </div>
           ) : null}
         </aside>
 
@@ -84,9 +89,6 @@ export function DashboardShell({ title, subtitle, children }: { title: string; s
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">{subtitle}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link className="rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-700 hover:bg-stone-50" href="/restaurant/assistant">
-                  店務助手
-                </Link>
                 <form action={signOutRestaurant}>
                   <button className="rounded-md bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800" type="submit">登出</button>
                 </form>

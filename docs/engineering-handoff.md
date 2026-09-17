@@ -262,3 +262,31 @@ Screens: `apps/mobile/app/codex/index.tsx` (Series Gallery), `codex/[seriesId]/i
 Validation: `npm run test:ip-codex-catalog` (`scripts/ip-codex-catalog-validate.mjs`) runs the real domain validator against the real DEMO dataset plus an asset-path-resolvability check — not a static regex probe. Root `npm run typecheck` does **not** cover `apps/mobile`; use `npm --workspace @haocu/mobile run typecheck` (or `cd apps/mobile && npm run typecheck`) for the mobile-specific surface, which is where this feature's own type errors are caught.
 
 No database change. Per the governing brief, this phase intentionally stays a local/static typed catalog registry (no new table, no migration) since no formal product exists to persist yet.
+
+## Restaurant Owner Console (`apps/restaurant-web`)
+
+Separate from the "Restaurant/Menu" section above, which describes the **Consumer mobile app's** read-only restaurant-browsing mock (`apps/mobile/features/restaurants/restaurantBackendMock.ts`). This section is the **Restaurant Owner-facing web console**, a distinct Next.js 14 App Router app (`apps/restaurant-web`, `TASTKIND_RESTAURANT_DATA_SOURCE=mock|supabase|disabled`). The two apps share the same underlying `restaurants`/`branch_menu_items` schema but are otherwise independent.
+
+**LIVE OPERATIONAL today** (real Supabase Auth, real SECURITY DEFINER RPCs, owner-only RLS, version-concurrency on every write — the "RA-2" round family, `supabase/migrations/2026090[4-9]*` and `202609100*`):
+- Auth/session (`/login`), restaurant access context + restaurant selection (persisted via an httpOnly cookie), branch list read.
+- Branch profile writes: display name, public phone, weekly hours, special-date hours, operational closures (`/restaurant/locations`).
+- Per-branch menu item writes: sold-out, availability, price (whole TWD, 1–999,999), visibility (available/hidden), and the **branch-specific display-name override** — `branch_menu_items.branch_specific_name`: NULL falls back to canonical `menu_items.name`; SET requires 1–80 Unicode code points after outer-trim only (interior whitespace preserved), rejects whitespace-only/control characters; `set`/`clear` are explicit, never inferred (`/restaurant/menu`, same component as `/restaurant/menu/items`).
+- Restaurant "about" text, public website URL, public social links (`/restaurant/settings`) — website/social links route through a `service_role`-only `v2` RPC via a Next.js API route (`app/api/restaurant/settings/*`), by design, not a gap.
+- Nutrition summary — read-only.
+
+**NOT operational** (no DB-layer capability exists at all, not a UI gap):
+- Creating a menu item, menu, or category — every write RPC in this stack is `UPDATE`-only against pre-seeded `branch_menu_items`/`menu_items` rows; there is no `INSERT` capability anywhere. Whether this is meant to be Owner-side (would need new privileged migrations) or platform/Admin-side is an **open product question**, not yet decided.
+- Creating a branch, or provisioning a new `restaurant_users`/`restaurant_memberships` row (no self-serve owner onboarding exists at the DB layer).
+- **Restaurant name edit** — `RESTAURANT_NAME_WRITE_AUTHORITY_ABSENT`: no RPC, RLS policy, or migration anywhere writes `restaurants.name` (confirmed by exhaustive grep of every `update public.restaurants` in the migration set — only `public_website_url`, `restaurant_about`/`restaurant_about_source`, and social-link columns are ever written). Only the free-text "about" description is editable.
+- Menu/restaurant-item **image upload** — no Storage bucket, no upload/delete RPC, no UI form anywhere. `menu_items.image_url` is a plain, unmanaged, display-only `text` column.
+- Nutrition writes, staff/team write authority (roles `manager`/`staff` exist and are read-scoped by branch, but hold zero granted write permission in the entire migration history — this is deliberate, not partial).
+
+**MOCK / DEMO MODE** (`TASTKIND_RESTAURANT_DATA_SOURCE=mock`, dev-only, forced off in production): a parallel read-mostly mock stack (`adapters/mock/`, `services/restaurantConsoleService.ts`) — note the mock-mode Menu screen is read-only cards with no edit controls at all, a real capability difference from live mode, not just a different data source.
+
+**DEFERRED** (route/component intentionally preserved, hidden from primary navigation as of R1 — see `apps/restaurant-web/data/navigation.ts`'s `phaseTwo` flag): analytics (exposure/nutrition-badge/menu-performance), staff/team management (UI components exist in `components/staff/StaffPanels.tsx` but are unreachable and even their buttons have no handlers), the store assistant, media/image manager, pending-menu-items, and orders/table system (`orders-preview`, already self-flagged in-app).
+
+**Branch context**: the selected branch persists across page navigation as a UX preference cookie (`tastkind_restaurant_selected_branch`, R1) — it is never an authorization token; every read/write path independently re-validates the branch against the caller's real access context on every request. A stale or cross-restaurant value is silently ignored (branch ids are globally unique, so a leftover preference from a previously-selected restaurant simply won't be found in the new restaurant's branch list).
+
+**Test coverage**: ~150 Restaurant-scoped `scripts/*.mjs` files. The RA-2A–RA-2I family (~55 scripts: contract/guard/mutations/smoke/postgres-apply/development-acceptance per feature) is npm-registered at root; the `phase-2v` (tenant isolation/internal-read/performance) and `mi-e-c5-r7` (meal-identification restaurant-context) tracks are not registered anywhere and are runnable only via direct `node scripts/<file>.mjs`. No CI workflow exists in this repo. Each RA-2x round's `*-guard.mjs` is a **frozen single-round** check (pins an exact baseline commit and "exactly one migration ahead" at authoring time) — it will correctly report FAIL today purely because later rounds landed afterward; that is expected frozen-round behavior, not a regression, and these guards must never be loosened to force green.
+
+**Documentation note**: root `ENGINEER_HANDOFF.md`/`README.md` predate this entire RA-2 build-out (frozen at a 92-migration baseline) and understate what's live — treat their Restaurant paragraphs as HISTORICAL, not current.

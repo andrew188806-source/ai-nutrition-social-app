@@ -546,7 +546,8 @@
     "test:restaurant-owner-about-ra-2g-p1": "node scripts/restaurant-owner-about-ra-2g-p1-guard.mjs",
     "test:restaurant-owner-about-ra-2g-p1-smoke": "node scripts/restaurant-owner-about-ra-2g-p1-smoke.mjs",
     "test:restaurant-owner-about-ra-2g-p1-mutations": "node scripts/restaurant-owner-about-ra-2g-p1-mutations.mjs",
-    "test:restaurant-owner-about-ra-2g-p1-postgres": "node scripts/restaurant-owner-about-ra-2g-p1-postgres-apply.mjs"
+    "test:restaurant-owner-about-ra-2g-p1-postgres": "node scripts/restaurant-owner-about-ra-2g-p1-postgres-apply.mjs",
+    "test:restaurant-owner-branch-context-r1": "node scripts/restaurant-owner-branch-context-r1-guard.mjs"
   },
   "workspaces": [
     "apps/*",

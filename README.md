@@ -74,7 +74,7 @@ Development is the accepted live backend for these demo/runtime rounds. Producti
 ## Partial, scaffold, and post-MVP scope
 
 - Group tables/gatherings and general/manual Meal Buddy completion still have demo/local paths; they are not the recommendation-backed live creation authority.
-- Restaurant Web is partially MVP-active, with owner-scoped live reads; remaining write/media/settings and other deferred console surfaces are incomplete but non-blocking.
+- Restaurant Web is MVP-active for owner-scoped live reads **and** writes — branch profile (name/phone/hours/closures) and per-branch menu item fields (price/availability/sold-out/visibility/branch-specific display-name), plus restaurant about/website/social links, are all live today. Not yet implemented: creating a menu item/menu/category/branch, owner/member self-service provisioning, and media upload — none of these have any backend capability yet, not just a UI gap. See `docs/engineering-handoff.md`'s "Restaurant Owner Console" section for the current, authoritative breakdown (this README predates the RA-2 build-out that closed most of the earlier gap).
 - Admin Web is a scaffold/future backend surface.
 - Future 飲食方式 authority is not implemented by Allergy, Ingredient Avoidance, or Taste.
 

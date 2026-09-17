@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card, MetricCard, Section, StatusPill } from "../RestaurantCards";
 import { getConsoleOverview } from "../../services/restaurantConsoleService";
 
@@ -9,21 +8,18 @@ export function DashboardHome() {
     <>
       <div className="grid gap-4 xl:grid-cols-4">
         <MetricCard
-          href="/restaurant/analytics/exposure"
           label={overview.cards.cityExposure.title}
-          note={`${overview.cards.cityExposure.growth} 較上月 · ${overview.cards.cityExposure.people}`}
+          note={`${overview.cards.cityExposure.growth} 較上月 · ${overview.cards.cityExposure.people}（成效分析尚未開放）`}
           value={overview.cards.cityExposure.value}
         />
         <MetricCard
-          href="/restaurant/analytics/nutrition-badge"
           label={overview.cards.nutritionBadge.title}
-          note={`平均瀏覽 ${overview.cards.nutritionBadge.viewGrowth} · 加入訂單 ${overview.cards.nutritionBadge.addToCartGrowth}`}
+          note={`平均瀏覽 ${overview.cards.nutritionBadge.viewGrowth} · 加入訂單 ${overview.cards.nutritionBadge.addToCartGrowth}（成效分析尚未開放）`}
           value={`${overview.cards.nutritionBadge.enabledCount} 道`}
         />
         <MetricCard
-          href="/restaurant/menu/pending-items"
           label={overview.cards.pendingMenuItems.title}
-          note={`本週新增 ${overview.cards.pendingMenuItems.weeklyNew} 筆 · 常見：${overview.cards.pendingMenuItems.topName}`}
+          note={`本週新增 ${overview.cards.pendingMenuItems.weeklyNew} 筆 · 常見：${overview.cards.pendingMenuItems.topName}（尚未開放）`}
           value={overview.cards.pendingMenuItems.count}
         />
         <MetricCard
@@ -35,14 +31,9 @@ export function DashboardHome() {
       </div>
 
       <Card className="border-teal-100 bg-teal-50/70">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-bold text-teal-900">{overview.cards.cityExposure.body}</p>
-            <p className="mt-1 text-sm leading-6 text-teal-800">加入訂單目前只呈現分析事件，不包含完整訂單流程。</p>
-          </div>
-          <Link className="rounded-md bg-teal-700 px-4 py-2 text-sm font-bold text-white hover:bg-teal-800" href="/restaurant/analytics/exposure">
-            查看詳細成效
-          </Link>
+        <div>
+          <p className="text-sm font-bold text-teal-900">{overview.cards.cityExposure.body}</p>
+          <p className="mt-1 text-sm leading-6 text-teal-800">成效分析頁面尚未開放，此區塊僅供預覽。</p>
         </div>
       </Card>
 
@@ -95,13 +86,13 @@ export function DashboardHome() {
           </Card>
         </Section>
 
-        <Section title="店務助手入口">
+        <Section title="店務助手入口（尚未開放）">
           <Card>
             <div className="grid gap-2">
               {overview.assistantSuggestions.map((suggestion) => (
-                <Link className="rounded-md border border-stone-200 px-3 py-2 text-sm font-bold text-stone-700 hover:bg-stone-50" href="/restaurant/assistant" key={suggestion.id}>
+                <div className="rounded-md border border-dashed border-stone-200 px-3 py-2 text-sm font-bold text-stone-400" key={suggestion.id}>
                   {suggestion.prompt}
-                </Link>
+                </div>
               ))}
             </div>
           </Card>

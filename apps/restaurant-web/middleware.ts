@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getRestaurantDataSourceConfig } from "./config/restaurant-data-source";
+import { SELECTED_BRANCH_COOKIE, selectedBranchCookieOptions } from "./auth/selection-cookie";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -30,6 +31,17 @@ export async function middleware(request: NextRequest) {
     login.searchParams.set("reason", "session");
     return NextResponse.redirect(login);
   }
+
+  // R1 branch-context persistence: remember the last explicitly-selected branch as a UX
+  // default only. This is a blind write of the raw query value — it carries no authority.
+  // Every actual read/write path re-validates the branch against the caller's real access
+  // context on every request (see runtime/restaurant-access-context.ts); an owner who has
+  // since lost access, or a stale/cross-restaurant id, is never trusted from this cookie.
+  if (hasIdentity && request.nextUrl.pathname.startsWith("/restaurant")) {
+    const branch = request.nextUrl.searchParams.get("branch");
+    if (branch) response.cookies.set(SELECTED_BRANCH_COOKIE, branch, selectedBranchCookieOptions(config.isProduction));
+  }
+
   return response;
 }
 

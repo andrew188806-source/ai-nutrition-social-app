@@ -17,6 +17,8 @@ The declared MVP mainline is complete. Recorded closure dispositions are `GEO_FI
 
 This document states current takeover status; source and frozen phase contracts supply detailed authority. Historical roadmap/phase documents are useful evidence, not instructions to restart completed phases. Completion is bounded to the declared MVP and Development acceptance, not Production certification, security certification, or physical-device acceptance.
 
+> **HISTORICAL NOTICE (added post-`27272e2d…`, Restaurant Phase R1):** this document is frozen at the `9d68eab2…` baseline (91 migrations). The repository has since grown to 127+ migrations, and the entire "RA-2" Restaurant Owner authority round (branch profile, hours/closures, per-branch price/availability/sold-out/visibility/branch-specific display-name, restaurant about/website/social links — all live, owner-only, SECURITY DEFINER, tested) landed after this baseline. Every "Restaurant… incomplete" statement below describes the state **at that frozen commit**, not today. For current Restaurant Owner Console status, see `docs/engineering-handoff.md`'s "Restaurant Owner Console" section — that is the living, current-status document; this one is a preserved historical audit snapshot.
+
 ## 2. Repository surfaces and entry points
 
 | Surface | Current responsibility / source entry |
@@ -25,7 +27,7 @@ This document states current takeover status; source and frozen phase contracts 
 | Shared authority | `packages/shared/src/domain` contains domain contracts/engines; `packages/services` contains service boundaries and remaining placeholders, not a blanket live implementation. |
 | Supabase database | `supabase/migrations`: 91 migrations at the audited runtime baseline, unchanged by the Recommendation repair. Private authority, RLS, role-limited operations, and approved projections/RPCs are separate from public DTOs. Preserve frozen migration bytes. |
 | Edge Functions | `supabase/functions`: analysis, Social candidates/profile/Taste, Meal Buddy cards/discovery/relationships/chat/push, and GEO. `_shared` carries server-side contracts, opaque references, composition, and executor transport. |
-| Restaurant Web | `apps/restaurant-web`: partially MVP-active, incomplete but non-blocking. [Runtime service factory](apps/restaurant-web/services/restaurant-runtime-service-factory.ts) selects mock/disabled or owner-RPC live reads and explicitly marks unsupported console surfaces. |
+| Restaurant Web | `apps/restaurant-web`: **HISTORICAL as of this baseline — see the notice in §1.** At this frozen commit, partially MVP-active, incomplete but non-blocking. [Runtime service factory](apps/restaurant-web/services/restaurant-runtime-service-factory.ts) selects mock/disabled or owner-RPC live reads. The full RA-2 Restaurant Owner write authority (branch profile, hours, per-branch item price/availability/sold-out/visibility/display-name, restaurant about/website/social) landed after this baseline and is live today — see `docs/engineering-handoff.md`. |
 | Admin Web | `apps/admin-web`: scaffold/future backend; rendered screens are not evidence of live admin authority. |
 | Public Vercel demo | [haocu-demo.vercel.app](https://haocu-demo.vercel.app/), Expo Web, Root Directory `apps/mobile`; [SPA config](apps/mobile/vercel.json). |
 | Validation / frozen design | `scripts`, `docs`, and the named commits above. Check each harness's scope and side effects before use. |
@@ -277,7 +279,7 @@ These are explicit handoff items, not hidden mandatory MVP phases:
 | Device / environment | Physical Push handset delivery/tap; physical GEO GPS and OS permission/settings validation; Development migration ledger drift. Backend/provider and simulated/local acceptance do not certify handset behavior. |
 | Tooling / historical | Stale predecessor guards; stale/dead guard references; Codex Windows checkpoint filename-too-long noise; phase-2p guard artifact emission; tracked tsbuildinfo and old caches where applicable. Preserve baseline evidence rather than silently suppressing old failures. |
 | Data / curation | Real Taste curation coverage, Meal Context mappings, operational geocoding/provider curation. Contract correctness is not universal data completeness. |
-| Post-MVP | Group tables/gatherings; general/manual Meal Buddy live completion; Admin backend; remaining Restaurant write/media/settings surfaces; future 飲食方式 authority. Restaurant remains partially MVP-active and non-blocking, Admin scaffold/future. |
+| Post-MVP | Group tables/gatherings; general/manual Meal Buddy live completion; Admin backend; future 飲食方式 authority. **(HISTORICAL: this row's "remaining Restaurant write/media/settings" claim predates the RA-2 build-out — branch profile, hours, and per-branch item writes are live today; only catalog-item/menu/category/branch creation, owner/member provisioning, and media upload remain genuinely absent — see `docs/engineering-handoff.md`.)** |
 | Non-blocking Web picker rough edge | A third-party unsupported/non-image override can leave the picker request visually stuck, while failing closed with no upload/analysis egress. Investigate as UX/device follow-up without weakening validation. |
 
 ### 10.1 Non-blocking review items from the independent Recommendation review

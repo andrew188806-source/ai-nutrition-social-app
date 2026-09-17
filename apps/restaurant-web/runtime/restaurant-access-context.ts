@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { getVerifiedRestaurantClaims } from "../auth/supabase-server";
-import { SELECTED_RESTAURANT_COOKIE } from "../auth/selection-cookie";
+import { SELECTED_BRANCH_COOKIE, SELECTED_RESTAURANT_COOKIE } from "../auth/selection-cookie";
 import { createRestaurantOwnerRpcRepository } from "../repositories/supabase/restaurant-owner-rpc-repository";
 import type { OwnerBranch, OwnerRestaurant } from "./restaurant-rpc-contracts";
 
@@ -36,7 +36,15 @@ export async function loadValidatedBranch(branchId?: string | null): Promise<{ b
   const context = await loadRestaurantAccessContext();
   if (context.state !== "selected") return { branches: [], selected: null, invalid: Boolean(branchId) };
   const branches = await createRestaurantOwnerRpcRepository().listBranches(context.restaurant.id);
-  if (!branchId) return { branches, selected: null, invalid: false };
-  const selected = branches.find((branch) => branch.id === branchId) ?? null;
-  return { branches, selected, invalid: !selected };
+  if (branchId) {
+    const selected = branches.find((branch) => branch.id === branchId) ?? null;
+    return { branches, selected, invalid: !selected };
+  }
+  // No explicit URL branch: fall back to the last-selected-branch UX preference (§8/§10 of
+  // R1), but only ever as a default within the CURRENTLY authorized branch list — a stale
+  // or cross-restaurant cookie value that isn't in `branches` is silently ignored, exactly
+  // like today's existing "no selection" state, never surfaced as an error.
+  const preferredId = cookies().get(SELECTED_BRANCH_COOKIE)?.value;
+  const preferred = preferredId ? branches.find((branch) => branch.id === preferredId) ?? null : null;
+  return { branches, selected: preferred, invalid: false };
 }
