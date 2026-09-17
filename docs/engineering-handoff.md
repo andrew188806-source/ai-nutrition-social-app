@@ -274,9 +274,15 @@ Separate from the "Restaurant/Menu" section above, which describes the **Consume
 - Restaurant "about" text, public website URL, public social links (`/restaurant/settings`) — website/social links route through a `service_role`-only `v2` RPC via a Next.js API route (`app/api/restaurant/settings/*`), by design, not a gap.
 - Nutrition summary — read-only.
 
+**BACKEND AUTHORITY EXISTS, NO UI YET** — R2B (`supabase/migrations/2026091801*`–`2026091805*`) added privileged Restaurant Owner **creation** authority for the catalog itself, closing the "UPDATE-only" gap the paragraph below used to describe. This is backend/RPC/RLS only — R2C (not yet built) owns wiring it into `apps/restaurant-web`. See `docs/restaurant-owner-catalog-authoring-r2b.md` for the full contract (permission keys, RPC shapes, lifecycle, tenant-consistency triggers, audit tables):
+- Menu create (`menu.write`) — name + draft/published/archived lifecycle.
+- Menu Category create (`menu_category.write`) — name + sort_order; delete is `CATEGORY_DELETE_DEFERRED` (not implemented this round).
+- Menu Item create (`menu_item.write`) — restaurant-tenant-local name, optional description/advisory allergens, draft/active/archived lifecycle; `nutrition_badge_status`/`badge_enabled`/`nutrition_id`/`tag_ids`/`image_url` remain structurally unwritable by this authority (no RPC parameter, no GRANT).
+- Branch Menu Item **linkage creation** (`branch_menu_item.create`) — links an existing item to an existing branch (price + availability at creation); a *new*, sixth sealed role, deliberately separate from the five existing field-write roles above (sold-out/availability/price/visibility/display-name), which remain untouched and still own every post-creation field edit.
+- A DB-level trigger now enforces that `menu_items.restaurant_id`/`branch_menu_items.restaurant_id` agree with their transitive menu/branch/item chain (previously unenforced redundant columns).
+
 **NOT operational** (no DB-layer capability exists at all, not a UI gap):
-- Creating a menu item, menu, or category — every write RPC in this stack is `UPDATE`-only against pre-seeded `branch_menu_items`/`menu_items` rows; there is no `INSERT` capability anywhere. Whether this is meant to be Owner-side (would need new privileged migrations) or platform/Admin-side is an **open product question**, not yet decided.
-- Creating a branch, or provisioning a new `restaurant_users`/`restaurant_memberships` row (no self-serve owner onboarding exists at the DB layer).
+- Creating a branch, or provisioning a new `restaurant_users`/`restaurant_memberships` row (no self-serve owner onboarding exists at the DB layer) — explicitly out of R2B's scope by design, a separate future concern.
 - **Restaurant name edit** — `RESTAURANT_NAME_WRITE_AUTHORITY_ABSENT`: no RPC, RLS policy, or migration anywhere writes `restaurants.name` (confirmed by exhaustive grep of every `update public.restaurants` in the migration set — only `public_website_url`, `restaurant_about`/`restaurant_about_source`, and social-link columns are ever written). Only the free-text "about" description is editable.
 - Menu/restaurant-item **image upload** — no Storage bucket, no upload/delete RPC, no UI form anywhere. `menu_items.image_url` is a plain, unmanaged, display-only `text` column.
 - Nutrition writes, staff/team write authority (roles `manager`/`staff` exist and are read-scoped by branch, but hold zero granted write permission in the entire migration history — this is deliberate, not partial).
