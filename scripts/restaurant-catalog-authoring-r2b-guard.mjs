@@ -29,10 +29,16 @@ function check(pass, name, detail) {
 // --- Files exist, in the expected R2B-1..R2B-5 order ------------------------------------------
 for (const [key, path] of Object.entries(FILES)) check(source[key] !== null, `migration file exists: ${path}`);
 const migrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
+// Exact successor awareness: the final six migrations are exactly R2B-1..R2B-5 followed by the one
+// authorized R2E successor. Any other migration inserted inside the R2B chain, after R2E, or in
+// place of an R2B file fails. A future round must deliberately update this authorized list.
+const R2E_SUCCESSOR = "20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql";
+const r2bNames = Object.values(FILES).map((path) => path.split("/").pop());
+const expectedTail = [...r2bNames, R2E_SUCCESSOR];
 check(
-  Object.values(FILES).every((path, i) => migrationFiles.at(-5 + i) === path.split("/").pop()),
-  "the 5 R2B migrations are the final 5 successors, in R2B-1..R2B-5 order",
-  migrationFiles.slice(-5)
+  expectedTail.every((name, i) => migrationFiles.at(-expectedTail.length + i) === name),
+  "the final 6 migrations are exactly R2B-1..R2B-5 followed by the authorized R2E successor",
+  migrationFiles.slice(-expectedTail.length)
 );
 
 // --- R2B-1: tenant consistency ------------------------------------------------------------------

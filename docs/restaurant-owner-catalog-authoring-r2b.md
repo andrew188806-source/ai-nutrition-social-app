@@ -250,3 +250,55 @@ a local visual pass (with a throwaway, uncommitted preview route feeding static 
 Supabase session was available) are the only verification performed. No real Owner has exercised
 these RPCs, and no cross-tenant/Consumer-visibility runtime proof has been done against Development.
 That is R2D's job.
+
+## R2D — Development live acceptance (closed) and the multi-restaurant cookie fix
+
+R2D applied the five R2B migrations to `tastkind-development` (Management API raw-SQL path, the
+established convention for this project's known `schema_migrations` drift — history was never
+touched) and proved the full self-service flow, cross-tenant denial, tenant-consistency triggers,
+stale-state, duplicate-linkage handling, and Consumer visibility gating against real data with a
+real authenticated Owner. It also found and fixed one genuine pre-existing R1 defect, unrelated to
+R2B/R2C's own code: `SELECTED_RESTAURANT_COOKIE`/`SELECTED_BRANCH_COOKIE` were scoped
+`Path=/restaurant`, so the browser never sent them on `/api/restaurant/**` requests. Single-restaurant
+owners never noticed (an auto-select fallback masked it); the first genuine multi-restaurant owner
+fixture this project has ever had exposed it. Fixed to `Path=/` in `apps/restaurant-web/auth/selection-cookie.ts`
+plus its two other exact-path-match cookie-clear call sites.
+
+R2D also surfaced a second, narrower defect and correctly did **not** fix it inline — see R2E below.
+
+## R2E — RA-2F draft-item display-name visibility successor repair (closed)
+
+**The defect R2D found.** RA-2F's sealed role (`restaurant_owner_branch_menu_item_display_name_write_authority`)
+already held column-scoped `SELECT` on `menu_items(id, name)` — needed by its preview RPC's
+canonical-name-fallback join — but had no RLS policy of its own on `menu_items`. Its only row
+visibility fell through to the baseline's permissive `items_public_read_dev` policy, which requires
+`status = 'active'`. Before R2B this was unreachable: every `branch_menu_items` row's underlying item
+was always active, since only admin-seeded data ever existed. **R2B made this reachable**: R2B-5
+legitimately allows linking a still-`draft` item to a branch, so a real, product-valid state now
+exists where RA-2F's own join silently finds nothing for a tenant-owned row and returns
+`target_not_found`.
+
+**The fix.** One additive migration
+(`supabase/migrations/20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql`):
+a single new PERMISSIVE, tenant-scoped `SELECT` policy (`menu_items_display_name_context_select`) on
+`menu_items` for exactly the RA-2F sealed role, with **no `status` predicate at all** — reusing the
+exact permissive-context-read pattern R2B-4 already established for
+`restaurant_owner_menu_item_write_authority`'s own reads of `menus`/`menu_categories`. One companion
+column grant, `SELECT (restaurant_id)`, was added because the new policy's own tenant predicate needs
+to read that column to evaluate at all — nothing broader. No RA-2F RPC body was touched. No historical
+migration was edited. No other role (client or sealed) gained anything.
+
+- SET/CLEAR/whitespace-rejection/interior-whitespace-preservation semantics: **unchanged**.
+- Canonical-name fallback (`COALESCE(branch_specific_name, menu_items.name)`): **unchanged**.
+- Visibility now follows tenant authority, not the item's Consumer-facing lifecycle state — proven
+  against `draft`, `active`, and `archived` items alike.
+- Browser roles (`anon`/`authenticated`): still zero direct table access to `menu_items`, unchanged.
+
+Verified locally (fresh PostgreSQL 17, 133/133 migrations, 25/25 mutation/negative checks) and live
+against Development with a dedicated synthetic draft-item fixture, then cleaned up.
+
+```
+RA2F_DRAFT_ITEM_VISIBILITY_SUCCESSOR_ESTABLISHED
+R2B_SUCCESSOR_REPAIR_CLOSED
+RESTAURANT_CATALOG_AUTHORITY_FINALIZED
+```

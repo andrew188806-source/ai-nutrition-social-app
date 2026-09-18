@@ -550,7 +550,10 @@
     "test:restaurant-owner-branch-context-r1": "node scripts/restaurant-owner-branch-context-r1-guard.mjs",
     "test:restaurant-catalog-authoring-r2b-guard": "node scripts/restaurant-catalog-authoring-r2b-guard.mjs",
     "test:restaurant-catalog-authoring-r2b-smoke": "node scripts/restaurant-catalog-authoring-r2b-smoke.mjs",
-    "test:restaurant-catalog-authoring-r2b-postgres": "node scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs"
+    "test:restaurant-catalog-authoring-r2b-postgres": "node scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs",
+    "test:restaurant-owner-display-name-draft-visibility-r2e-guard": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs",
+    "test:restaurant-owner-display-name-draft-visibility-r2e-smoke": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-smoke.mjs",
+    "test:restaurant-owner-display-name-draft-visibility-r2e-postgres": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",
