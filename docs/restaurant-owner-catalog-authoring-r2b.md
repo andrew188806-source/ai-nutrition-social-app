@@ -199,19 +199,54 @@ authoring time. The `-guard` script is a **frozen single-round** check (pins the
 RPC/role/permission-key shapes as of R2B) — it is expected to FAIL once a later round lands on top of
 it; that is normal frozen-round behavior, and the guard must never be loosened to force it green.
 
-## R2C — what the UI layer still owns
+## R2C — UI wiring (implemented)
 
-No React component, route, or API handler exists yet. R2C should follow the exact file-quadruple
-convention every existing RA-2 control already uses (no shared hook exists in this codebase — the
-"reuse" is a copy-pattern, not an abstraction): a `runtime/restaurant-owner-<authority>.ts` validator
-file, a `-client.ts` fetch wrapper, a `RestaurantOwner<Authority>Control.tsx`/form component, and a
-server route + repository. Concretely:
+R2C wired all four authorities into `apps/restaurant-web`. It deviated from the strict per-authority
+six-file convention in one respect: rather than one `runtime/restaurant-owner-<x>.ts` +
+`-client.ts` pair per authority, it consolidated validators/types/parsers for the whole R2B family
+into two shared files (`runtime/restaurant-catalog-authoring.ts`,
+`runtime/restaurant-catalog-authoring-client.ts`) plus one shared server-handler file
+(`server/restaurant-catalog-authoring-runtime.ts`) and one shared repository
+(`repositories/supabase/restaurant-catalog-authoring-repository.ts`) — this document's own text
+above explicitly invited that consolidation for the error-mapping layer, and R2C extended the same
+reasoning to the rest of the family since these four authorities are one cohesive round, not four
+independently-grantable RA-2-style capabilities. The React components remain one-per-authority,
+matching the established `RestaurantOwner<X>Control.tsx` naming:
 
-- Replace the `/restaurant/menu/items/new` `DeferredPage` stub with a real create-item form. It can
-  reuse the already-loaded, already-tenant-scoped `data.categories`/`data.menus` from
-  `loadLiveMenu()` for its dropdowns — no new read RPC is needed for that.
-- Branch-linkage creation slots into the existing per-item/per-branch grid in
-  `components/runtime/LiveRestaurantViews.tsx`'s `LiveMenu`, alongside the five existing per-offer
-  controls (sold-out/availability/price/visibility/display-name).
-- Menu/category creation needs new, currently-nonexistent management screens under
-  `/restaurant/menu` — exact route naming is a UI detail for R2C, not a product decision made here.
+- `components/menu/RestaurantOwnerMenuManagementPanel.tsx` — Menu create/rename/lifecycle, rendered
+  in a new panel on `/restaurant/menu`, above the existing per-item/per-branch grid.
+- `components/menu/RestaurantOwnerCategoryManagementPanel.tsx` — Category create/rename/reorder,
+  same page, scoped by a Menu selector.
+- `components/menu/RestaurantOwnerMenuItemCreateForm.tsx` — the real `/restaurant/menu/items/new`
+  page (the `DeferredPage` stub is gone), reusing the already-loaded, already-tenant-scoped
+  `data.categories`/`data.menus` from `loadLiveMenu()` for its dropdowns — no new read RPC was
+  needed. Handles the empty-catalog dead-end explicitly (no Menu → link back; Menu but no Category →
+  link back) rather than duplicating Menu/Category creation inline.
+- `components/menu/RestaurantOwnerItemCatalogControls.tsx` — content edit + lifecycle for an
+  *existing* item, inserted into `LiveMenu`'s item Card (lazy: previews only when the Owner opens
+  it, not on every page load, since a restaurant can have many items).
+- `components/menu/RestaurantOwnerBranchLinkageStep.tsx` — shared by both the create-item flow and
+  the per-item "link to another branch" affordance in `LiveMenu`. Multi-branch selection submits the
+  R2B-5 RPC sequentially (never a new bulk RPC) with per-branch result reporting; a failed linkage
+  never undoes the item creation, since the item is already a valid draft row either way.
+
+Every new mutation follows R2B's own concurrency contract directly: each row component fetches its
+authoritative current state (name/status/content and their version tokens) via the entity's preview
+RPC on demand — list-read RPCs (`restaurant_internal_menus_v1` etc.) don't carry the new version
+columns, so this mirrors exactly how every existing RA-2 control already works (e.g.
+`RestaurantOwnerPriceControl` previews before allowing an edit), not a new pattern.
+
+Refresh strategy: `router.refresh()` (Next.js App Router's own primitive) after any mutation that
+changes list membership or a value shown elsewhere on the page — no parallel client cache. No prior
+control in this codebase needed this (UPDATE-only fields never change list membership), so this is
+the first use of it here, not a deviation from an existing convention.
+
+Mock mode: intentionally untouched. All new write UI renders only in `runtime.mode === "supabase"`;
+`/restaurant/menu/items/new` shows a plain unavailable-in-demo message in mock mode instead of a
+form. `components/menu/MenuListPanel.tsx` (mock mode's read view) was not modified.
+
+**`RESTAURANT_CATALOG_DEVELOPMENT_LIVE_ACCEPTANCE_PENDING`**: local build/typecheck/guard/smoke and
+a local visual pass (with a throwaway, uncommitted preview route feeding static fake props — no real
+Supabase session was available) are the only verification performed. No real Owner has exercised
+these RPCs, and no cross-tenant/Consumer-visibility runtime proof has been done against Development.
+That is R2D's job.

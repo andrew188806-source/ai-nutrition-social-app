@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { DashboardShell } from "../../../components/DashboardShell";
 import { MenuListPanel } from "../../../components/menu/MenuListPanel";
+import { RestaurantOwnerCategoryManagementPanel } from "../../../components/menu/RestaurantOwnerCategoryManagementPanel";
+import { RestaurantOwnerMenuManagementPanel } from "../../../components/menu/RestaurantOwnerMenuManagementPanel";
 import { LiveMenu } from "../../../components/runtime/LiveRestaurantViews";
 import { RpcUnavailable } from "../../../components/runtime/RuntimeStates";
 import { loadLiveMenu } from "../../../runtime/live-restaurant-reads";
@@ -16,7 +18,15 @@ export default async function MenuPage({ searchParams }: { searchParams: { branc
     if (branch.invalid) redirect("/restaurant/menu");
     try {
       const data = await loadLiveMenu();
-      return <DashboardShell title="菜單管理" subtitle="Tenant-safe 核心唯讀欄位。"><LiveMenu data={data} branches={branch.branches} selectedBranchId={branch.selected?.id ?? null}/></DashboardShell>;
+      return (
+        <DashboardShell title="菜單管理" subtitle="Tenant-safe 核心唯讀欄位；菜單／分類／餐點之建立與維護為本店餐廳自有資料。">
+          <div className="flex flex-col gap-8">
+            <RestaurantOwnerMenuManagementPanel menus={data.menus} />
+            <RestaurantOwnerCategoryManagementPanel menus={data.menus} categories={data.categories} />
+            <LiveMenu data={data} branches={branch.branches} selectedBranchId={branch.selected?.id ?? null}/>
+          </div>
+        </DashboardShell>
+      );
     } catch (e) { console.error(`[restaurant-web] menu unavailable: ${e instanceof Error ? `${e.name}: ${e.message}` : "unknown error"}`); return <RpcUnavailable/>; }
   }
   if (runtime.mode==="disabled") return null;

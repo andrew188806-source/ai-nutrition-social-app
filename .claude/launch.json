@@ -12,6 +12,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["scripts/start-mobile-demo-preview.mjs", "--web"],
       "port": 8081
+    },
+    {
+      "name": "restaurant-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--workspace", "@haocu/restaurant-web", "run", "dev"],
+      "port": 3001
     }
   ]
 }
