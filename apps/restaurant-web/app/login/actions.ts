@@ -33,6 +33,7 @@ export async function signOutRestaurant() {
       // Continue clearing local selection and leave the protected route.
     }
   }
-  cookies().set(SELECTED_RESTAURANT_COOKIE, "", { httpOnly: true, sameSite: "lax", path: "/restaurant", maxAge: 0 });
+  // R2D: must match selectedRestaurantCookieOptions' Path=/ exactly, or this clear silently no-ops.
+  cookies().set(SELECTED_RESTAURANT_COOKIE, "", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 0 });
   redirect("/login");
 }
