@@ -1,5 +1,7 @@
 # Restaurant Canonical Data Boundary
 
+> **DOC STATUS: CURRENT (one sentence HISTORICAL)** - the statement that Restaurant Console uses the mock adapter today is historical; live mode is TASTKIND_RESTAURANT_DATA_SOURCE=supabase. See docs/DOCUMENT_STATUS_INDEX.md.
+
 TastKind / 好廚 uses `packages/shared/src/domain/restaurantDomain.ts` as the canonical restaurant data model for restaurant, branch, menu, menu item, nutrition, recommendation, analytics, employee, assistant draft, and audit entities.
 
 ## Mobile App

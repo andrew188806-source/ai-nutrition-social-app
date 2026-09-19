@@ -1,5 +1,7 @@
 # Investor Demo Script
 
+> **DOC STATUS: HISTORICAL** - Phase-1 demo skeleton. See docs/DOCUMENT_STATUS_INDEX.md.
+
 Phase 1 supports a clickable skeleton for the future 3-minute story:
 
 1. User opens the mobile app.

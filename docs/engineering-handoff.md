@@ -1,6 +1,26 @@
 # Engineering Handoff
 
-This project is a mock-first MVP for AI nutrition analysis, restaurant/menu discovery, meal records, Meal Buddy social flows, chat, and group dining. Preserve existing UI and business behavior while replacing mock stores incrementally.
+**DOC STATUS: CURRENT (living technical description) — reconciled 2026-09-19 against `HEAD = origin/main = 8af3fb7d108c4124bb29ab115ea00b411287b00d`.**
+Sections are individually tagged where they are not current. Companion files: [engineering-state-registers.md](engineering-state-registers.md) (technical debt, deferred scope, modernization, vendor coupling, Admin inventory) and [DOCUMENT_STATUS_INDEX.md](DOCUMENT_STATUS_INDEX.md) (which documents are current, historical or superseded).
+
+## What this system is today
+
+TastKind／好廚 is an AI nutrition, next-meal recommendation and Meal Buddy social product with three surfaces — a consumer app (`apps/mobile`, Expo/React Native + Expo Web), a Restaurant Owner web console (`apps/restaurant-web`, Next.js 14) and a platform Admin web console (`apps/admin-web`, Next.js 14) — on a Supabase/PostgreSQL 17 backend (133 migrations, 15 Edge Functions). It is **no longer a mock-only frontend**: the Consumer, Social, Restaurant Owner and Admin Authority capabilities below run against a real Development database with real Auth. Demo/mock branches remain where marked. Nothing has been enabled in Production. The Development project's Supabase Security Advisor is not clean (summary and interpretation in [engineering-state-registers.md](engineering-state-registers.md) §9); no authority bypass was found.
+
+| Area | Status | Where to read |
+| --- | --- | --- |
+| Consumer data runtime, AI meal analysis, Recommendation (GEO → Allergy → Ingredient Avoidance → temporal → Nutrition → Taste) | `FROZEN`, Development-accepted | Root `ENGINEER_HANDOFF.md` (historical audit at `9d68eab`), `docs/consumer-runtime-phase-2*`, `docs/recommendation/` |
+| Social / Meal Buddy (cards, candidates, invite, relationship, chat, realtime, push backend) | `FROZEN` for source + Development E2E; physical-device Push acceptance not reconfirmed | Migrations `202608*`; registers TD-05 |
+| IP Codex / mascot / scale system | `FROZEN`, pushed | `docs/ip-codex-scale-system.md`; section below |
+| **Restaurant Owner console** (RA-2A–RA-2I, R1, R2A–R2E) | **`FROZEN` — closed and pushed** | Section "Restaurant Owner Console" |
+| **Admin Authority** (staff/privileged governance) | **`FROZEN` — closed and pushed** | Section "Admin Authority"; `docs/admin-authority-sop-zh-tw.md` |
+| Admin non-authority operational functionality | **Next major implementation phase — not started** | Registers §7 |
+| Group Table; collectibles ownership/transfer/marketplace; platform points | `POST_MVP` | Registers §3; section "Product decisions that shape the system" |
+| Production | Never enabled | Registers TD-03 |
+
+Phase order as currently recognised: IP Codex (closed) → Restaurant (closed) → canonical reconciliation / modernization audit (this document set) → Admin non-authority operational functionality (next) → global QA / integration / handoff → Post-MVP: Group Table → Post-MVP: collectibles / ownership transfer / marketplace and platform points economics.
+
+> **Legacy mock-era sections.** The sections from "Start And Check Commands" through "Recommended Backend Integration Order" were written when the Consumer app was mock-first. Tags: *Start And Check Commands* — `CURRENT`. *Main Mobile Routes* — `CURRENT` but incomplete (newer routes include `/recommendation`, `/social-candidates`, `/social-interest-settings`, `/allergy-settings`, `/ingredient-avoidance-settings`, `/community-card-settings`, `/codex/**`, `/meal-buddy-chat/[relationshipRef]`, `/meal-buddy-candidate-profile/[candidateRef]`). *Critical Identity Rules* and *Compatibility Fields* — `CURRENT`. *Canonical Data Sources Today*, *Mock/Demo Markers*, *Integration Boundaries*, *UI-Only*, *Social Architecture Map*, *Known Limitations*, *Recommended Backend Integration Order* — `HISTORICAL` (they describe mock stores that have since been joined by live Supabase-backed runtimes; consult `apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts` for the live composition).
 
 ## Start And Check Commands
 
@@ -219,6 +239,7 @@ Community Profile
 5. Invitations/Matches/Chats: realtime social tables.
 6. Group Dining: group tables, members, group messages.
 7. Calorie/Guilt Sharing: sharing sessions and participants.
+8. Remove legacy i18n social candidate copy and compatibility mirror fields after all screens use backend records.
 
 ## Admin Authority (Platform Management, `apps/admin-web`)
 
@@ -246,10 +267,9 @@ Staff/permission authority is a separate `admin_internal` schema authority stack
 
 **Known deferred items**: `admin.management.roles.read` / Bundle-role management; Passkey/WebAuthn (TOTP is the MVP authenticator by design, see P3H markers `TOTP_AAL2_MVP_AUTHENTICATOR_SELECTED` / `PASSKEY_NATIVE_AVAILABLE_BUT_DEFERRED`); destructive MFA-factor recovery (`MFA_FACTOR_DESTRUCTIVE_RECOVERY_DEFERRED`); a "delete another operator's TOTP factor" button in the UI (still requires direct API/database access, documented as such in the SOP rather than left silent). The add-new-staff button is done (see Live routes above).
 
-**Development migration history**: `tastkind-development` (`msbgnnoorsoefuiwluye`) is on direct-apply migration history — every migration in this stack was applied via the Management API SQL channel, not `supabase db push`. `DEVELOPMENT_MIGRATION_HISTORY_DRIFT_OPEN` is expected and should not be "fixed" by force-pushing the whole migration tree or hand-editing `schema_migrations`.
+**Development migration history**: `tastkind-development` (`msbgnnoorsoefuiwluye`) is on direct-apply migration history — every migration in this stack was applied via the Management API SQL channel, not `supabase db push`. `DEVELOPMENT_MIGRATION_HISTORY_DRIFT_OPEN` (state `NOT_MODIFIED`): the remote `supabase_migrations.schema_migrations` table (66 rows when last read on 2026-09-19) does not describe the schema, which contains objects from migrations that have no history row; the repository holds 133 migrations. This includes Restaurant R2B–R2E, which were applied to Development the same way with the history deliberately left untouched. Facts and risk are recorded in `docs/engineering-state-registers.md` TD-01.
 
 **Production**: none of this has ever been applied to Production. Before it can be, Production needs its own `TASTKIND_P3H_BROKER_DATABASE_URL` and `TASTKIND_BREAK_GLASS_PRODUCTION_DATABASE_URL` provisioned (values only, by whoever owns Production credentials — never committed), and the admin-web deployment needs `TASTKIND_ADMIN_AUTHORITY_MODE=staff` set (it defaults to a legacy Platform-Admin-table mode otherwise, which predates and is unrelated to this whole stack).
-8. Remove legacy i18n social candidate copy and compatibility mirror fields after all screens use backend records.
 
 ## IP／吉祥物圖鑑＋比例尺系統 (Consumer, `apps/mobile`)
 
@@ -274,7 +294,7 @@ Separate from the "Restaurant/Menu" section above, which describes the **Consume
 - Restaurant "about" text, public website URL, public social links (`/restaurant/settings`) — website/social links route through a `service_role`-only `v2` RPC via a Next.js API route (`app/api/restaurant/settings/*`), by design, not a gap.
 - Nutrition summary — read-only.
 
-**CATALOG AUTHORING — UI WIRED, DEVELOPMENT LIVE ACCEPTANCE PENDING** — R2B (`supabase/migrations/2026091801*`–`2026091805*`) added privileged Restaurant Owner **creation** authority for the catalog itself, closing the "UPDATE-only" gap the paragraph below used to describe. R2C wired that authority into `apps/restaurant-web`. See `docs/restaurant-owner-catalog-authoring-r2b.md` for the full RPC contract and the R2C integration notes at its end:
+**CATALOG AUTHORING — LIVE-ACCEPTED IN DEVELOPMENT, CLOSED (R2B–R2E)** — R2B (`supabase/migrations/2026091801*`–`2026091805*`) added privileged Restaurant Owner **creation** authority for the catalog itself, closing the "UPDATE-only" gap the paragraph below used to describe. R2C wired that authority into `apps/restaurant-web`. See `docs/restaurant-owner-catalog-authoring-r2b.md` for the full RPC contract and the R2C integration notes at its end:
 - Menu create/rename/lifecycle (`menu.write`) — `/restaurant/menu`'s new "菜單" panel (`components/menu/RestaurantOwnerMenuManagementPanel.tsx`). Draft/published/archived.
 - Menu Category create/rename/reorder (`menu_category.write`) — the new "分類" panel (`components/menu/RestaurantOwnerCategoryManagementPanel.tsx`). Delete is `CATEGORY_DELETE_DEFERRED` (still not implemented; no delete button rendered).
 - Menu Item create (`menu_item.write`) — `/restaurant/menu/items/new` is now a real form (`components/menu/RestaurantOwnerMenuItemCreateForm.tsx`, replacing the prior `DeferredPage` stub), reusing the restaurant's already-loaded `menus`/`categories` for its dropdowns (no new read RPC). Content edit + draft/active/archived lifecycle for existing items is inline in `LiveMenu` via `components/menu/RestaurantOwnerItemCatalogControls.tsx`. `nutrition_badge_status`/`badge_enabled`/`nutrition_id`/`tag_ids`/`image_url` are not exposed in any form field, matching the backend's structural exclusion.
@@ -284,7 +304,7 @@ Separate from the "Restaurant/Menu" section above, which describes the **Consume
 - Mock mode (`TASTKIND_RESTAURANT_DATA_SOURCE=mock`) intentionally has no write path for any of this — `/restaurant/menu/items/new` shows a plain "Demo 模式暫不支援此項寫入操作" explanation instead of a form; the existing mock `MenuListPanel` read view is untouched.
 - **R2D/R2E CLOSED THIS**: R2D applied R2B to `tastkind-development` and proved the full flow live with a real Owner — self-service catalog authoring, cross-tenant denial, tenant-consistency triggers, stale-state, duplicate-linkage, Consumer visibility gating, and RA-2 interop all pass. R2D also found and fixed a pre-existing R1 defect (`SELECTED_RESTAURANT_COOKIE`/`SELECTED_BRANCH_COOKIE` needed `Path=/`, not `Path=/restaurant`, to reach `/api/restaurant/**` — invisible for single-restaurant owners, broke every owner-write API route for a multi-restaurant one). R2D also found a second, narrower defect in frozen RA-2F (its sealed role had no RLS visibility on a `draft`-status `menu_items` row, a state R2B-5 newly made reachable) and correctly deferred it rather than patching ad hoc; R2E closed it with one additive tenant-scoped RLS policy, no RPC/RLS-body changes to RA-2F itself. See `docs/restaurant-owner-catalog-authoring-r2b.md`'s R2D/R2E sections for full detail. `RESTAURANT_OWNER_MVP_OPERATIONAL` — Restaurant Owner catalog authoring is live-accepted end to end.
 
-**NOT operational** (no DB-layer capability exists at all, not a UI gap):
+**NOT operational — `DEFERRED` product scope, not defects** (no DB-layer capability exists at all, not a UI gap; see registers §3, DF-02 to DF-05):
 - Creating a branch, or provisioning a new `restaurant_users`/`restaurant_memberships` row (no self-serve owner onboarding exists at the DB layer) — explicitly out of R2B's scope by design, a separate future concern.
 - **Restaurant name edit** — `RESTAURANT_NAME_WRITE_AUTHORITY_ABSENT`: no RPC, RLS policy, or migration anywhere writes `restaurants.name` (confirmed by exhaustive grep of every `update public.restaurants` in the migration set — only `public_website_url`, `restaurant_about`/`restaurant_about_source`, and social-link columns are ever written). Only the free-text "about" description is editable.
 - Menu/restaurant-item **image upload** — no Storage bucket, no upload/delete RPC, no UI form anywhere. `menu_items.image_url` is a plain, unmanaged, display-only `text` column.
@@ -296,6 +316,32 @@ Separate from the "Restaurant/Menu" section above, which describes the **Consume
 
 **Branch context**: the selected branch persists across page navigation as a UX preference cookie (`tastkind_restaurant_selected_branch`, R1) — it is never an authorization token; every read/write path independently re-validates the branch against the caller's real access context on every request. A stale or cross-restaurant value is silently ignored (branch ids are globally unique, so a leftover preference from a previously-selected restaurant simply won't be found in the new restaurant's branch list).
 
-**Test coverage**: ~150 Restaurant-scoped `scripts/*.mjs` files. The RA-2A–RA-2I family (~55 scripts: contract/guard/mutations/smoke/postgres-apply/development-acceptance per feature) is npm-registered at root; the `phase-2v` (tenant isolation/internal-read/performance) and `mi-e-c5-r7` (meal-identification restaurant-context) tracks are not registered anywhere and are runnable only via direct `node scripts/<file>.mjs`. No CI workflow exists in this repo. Each RA-2x round's `*-guard.mjs` is a **frozen single-round** check (pins an exact baseline commit and "exactly one migration ahead" at authoring time) — it will correctly report FAIL today purely because later rounds landed afterward; that is expected frozen-round behavior, not a regression, and these guards must never be loosened to force green.
+**Test coverage**: ~150 Restaurant-scoped `scripts/*.mjs` files. The RA-2A–RA-2I family (~55 scripts: contract/guard/mutations/smoke/postgres-apply/development-acceptance per feature) is npm-registered at root; the `phase-2v` (tenant isolation/internal-read/performance) and `mi-e-c5-r7` (meal-identification restaurant-context) tracks are not registered anywhere and are runnable only via direct `node scripts/<file>.mjs`. No CI workflow exists in this repo. Each RA-2x round's `*-guard.mjs` is a **frozen single-round** check (pins an exact baseline commit and "exactly one migration ahead" at authoring time) — it will correctly report FAIL today purely because later rounds landed afterward; that is expected frozen-round behavior, not a regression. (The R2B guard is successor-aware for exactly one authorized successor, the R2E migration, by pinning the exact final six migration filenames.)
 
-**Documentation note**: root `ENGINEER_HANDOFF.md`/`README.md` predate this entire RA-2 build-out (frozen at a 92-migration baseline) and understate what's live — treat their Restaurant paragraphs as HISTORICAL, not current.
+**Documentation note**: root `ENGINEER_HANDOFF.md`/`README.md` predate the RA-2 build-out (frozen at a 91/92-migration baseline) and the Restaurant/Admin closures; they are marked `HISTORICAL` in place (see [DOCUMENT_STATUS_INDEX.md](DOCUMENT_STATUS_INDEX.md)). This file and [engineering-state-registers.md](engineering-state-registers.md) are the current technical description.
+
+## Product decisions that shape the system
+
+These are product/domain decisions an engineer needs in order to understand *why* the system is shaped as it is. They describe intent and constraints, not working methods. Status tags: `CURRENT_PRODUCT_DECISION` = in force; `POST_MVP`/`DEFERRED` = not built.
+
+**Consumer scope.** Main Consumer feature scope is frozen; no new major Consumer feature line is assumed. Adjustments that remain allowed *inside existing features*: nutrition calculation methodology, restaurant recommendation principles, Meal Buddy matching-score composition (algorithm/rule changes, not new product lines).
+
+**Social / Meal Buddy.** Every formal social-matching entry point is mediated by a Meal Buddy Card; no parallel direct person-to-person matching ingress exists. Card meal context is derived from the selected/recommended meal — the user does not pick an internal context taxonomy. Context/scoring metadata is backend matching data.
+
+**Restaurant.** Restaurants author their own catalog through the Owner console; platform staff are not the routine data-entry operator. `menu_items.name` is tenant-local canonical text (see registers §1.1). Nutrition enrichment is not a visibility gate but is a recommendation-eligibility input.
+
+**Admin.** Three concerns stay conceptually separate — Restaurant operational administration, Platform administration, Engineering/maintenance — and authority never rests on UI hiding alone. Admin Authority is closed; the next Admin phase is non-authority operations (registers §7).
+
+**IP Codex.** UX is series-first (Series → Series Entry → Entry detail). Identity model is IP → Series → Series Entry; a Character is independent of any Series and may appear in several with different assets/dimensions/scale/metadata. The codex is not monkey-specific. Scale supports `relativeScale`, `physicalDimensions`, `visualBounds` and scale comparison; the current dataset is intentional demo data because no real product dimensions exist yet.
+
+**Collectibles — `POST_MVP`, nothing implemented.** The intended model keeps three things separate: (1) *style / catalog identity*, (2) *physical Product Instance*, (3) *current ownership*.
+- Style identification is closed-set visual recognition/retrieval against the registered Codex catalog (multiple views/angles/lighting may be kept as references). First-generation identification does not require NFC or hidden AI codes.
+- Each physical collectible has a unique permanent Product Instance ID and a unique permanent QR. The QR identifies the *instance*; it never encodes current ownership.
+- An initial scan may bind an unowned instance to the collector. An already-owned instance cannot be re-bound by another user scanning the permanent QR. Transfer (second-hand/exchange) is owner-authorised through a one-time transfer credential (code/QR or equivalent); the permanent QR is unchanged by a transfer.
+- Product constraint: the Product Instance model is meant to stay compatible with any later transaction/points system, i.e. it should not need to be reconciled against a conflicting instance model.
+
+**TastKind Points and restaurant points — `POST_MVP` / `DEFERRED`, nothing implemented.** TastKind Points, if built, are a platform-controlled economic ledger, separate from restaurant-owned membership/promotion programmes. Restaurants are not initially part of a shared points ecosystem; restaurant-specific TastKind points are deferred. Product concepts recorded as design *inputs* (not commitments): three redemption tracks — points + cash; point-based limited/free item draw or redemption; high-point pure-point designated redemption. Each redeemable item conceptually carries its own inventory, so points deduction and inventory deduction must be atomic with respect to each other.
+
+**Transactions, POS, receipts — `POS_DIRECTION_DECISION_DEFERRED`.** No choice has been made between integrating existing POS providers, a TastKind-native POS/transaction system, or a hybrid. The only standing constraint is to avoid a half-complete parallel checkout workflow that duplicates operational burden on restaurants. Any monetisation of restaurant transactions would apply only to transactions TastKind actually brings and completes through a TastKind transaction path. Receipt recognition is intended to prefer: identify restaurant → match receipt line to the existing restaurant catalog → map receipt alias / POS item code to the canonical `menu_item`/`branch_menu_item` → reuse known nutrition/catalog data, with OCR + AI estimation only as the fallback when catalog matching fails. Receipt and transaction architecture should stay compatible with either POS direction.
+
+**Group Table — `POST_MVP`.** Design and specification remain; see registers DF-06.

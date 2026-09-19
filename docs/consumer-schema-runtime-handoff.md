@@ -1,5 +1,7 @@
 # Consumer Schema Runtime Handoff
 
+> **DOC STATUS: HISTORICAL** - written before runtime integration ("Runtime integration is deferred"). See docs/DOCUMENT_STATUS_INDEX.md.
+
 Date: 2026-07-12
 Status: Future handoff. Runtime integration is deferred.
 

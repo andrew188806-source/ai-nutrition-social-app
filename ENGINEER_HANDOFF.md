@@ -1,5 +1,7 @@
 # TastKind／好廚 — authoritative MVP engineer handoff
 
+> **DOC STATUS: HISTORICAL** - audited MVP takeover snapshot frozen at baseline 9d68eab (91 migrations); pre-dates Restaurant RA-2/R2, Admin Authority and IP Codex. Current technical description: docs/engineering-handoff.md and docs/engineering-state-registers.md. See docs/DOCUMENT_STATUS_INDEX.md.
+
 ## 1. Takeover boundary and commit lineage
 
 Current audited runtime baseline: **`9d68eab2b0833c3a20d35727cff42fd1a403e24b`** — `Repair live Recommendation write composition`, on `main`. This handoff-document commit is its documentation-only successor, changing only `README.md` and `ENGINEER_HANDOFF.md`. It introduces no product, schema, function, or deployment change.

@@ -1,5 +1,7 @@
 # Roadmap
 
+> **DOC STATUS: HISTORICAL** - legacy Phase-6-era product/demo roadmap. Runtime phase names: docs/tastkind-runtime-integration-roadmap.md. Current status and sequencing: docs/engineering-handoff.md. See docs/DOCUMENT_STATUS_INDEX.md.
+
 > **Runtime Integration authority:** The current canonical Runtime Integration phase names, order, ownership boundaries, and freeze rules are defined in [`docs/tastkind-runtime-integration-roadmap.md`](./docs/tastkind-runtime-integration-roadmap.md). The phase schemes below are retained as legacy/general product and demo roadmap context and do not override that canonical runtime roadmap.
 
 ## Phase 6 Complete

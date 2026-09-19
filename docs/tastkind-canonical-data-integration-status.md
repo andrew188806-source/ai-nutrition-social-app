@@ -300,6 +300,8 @@ Phase 1A artifact:
 
 The current Restaurant Web UI remains on the existing mock adapter/repository/service path. The new Supabase read-only repository is not a production activation and does not change Mobile, Admin Web, shared canonical mock data, active migrations, or UI behavior.
 
+> **DOC STATUS: HISTORICAL** - status snapshot last updated 2026-07-11, before runtime integration. See docs/DOCUMENT_STATUS_INDEX.md.
+
 ## 20. Supabase Runtime Integration Phase 1B Status
 
 Phase 1B dependency normalization and feature-flag runtime wiring was attempted and is currently blocked.

@@ -1,5 +1,7 @@
 # API Plan
 
+> **DOC STATUS: HISTORICAL** - early-MVP plan written before the Supabase/Edge Function runtime existed. See docs/DOCUMENT_STATUS_INDEX.md.
+
 ## Future Supabase / Edge Functions
 
 - `POST /meal-analysis`: secure OpenAI call for nutrition estimation.

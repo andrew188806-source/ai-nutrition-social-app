@@ -1,5 +1,7 @@
 # 3-Minute Investor Demo Script
 
+> **DOC STATUS: HISTORICAL** - early demo script; not a statement of current capability. See docs/DOCUMENT_STATUS_INDEX.md.
+
 1. Open Mobile Consumer App and show Demo Access.
 2. Start with meal photo flow and choose 外食模式 or 自己動手做模式.
 3. Show AI/mock nutrition estimate and restaurant-aware menu identification.

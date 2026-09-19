@@ -1,5 +1,7 @@
 # Mock Data Guide
 
+> **DOC STATUS: HISTORICAL** - describes the mock-first data layout; live runtimes now exist alongside it. See docs/DOCUMENT_STATUS_INDEX.md.
+
 Mock data lives in:
 
 - `packages/shared/src/mock/tags.ts`

@@ -1,5 +1,7 @@
 # Database Schema Draft
 
+> **DOC STATUS: HISTORICAL** - early schema draft; the applied schema is supabase/migrations/. See docs/DOCUMENT_STATUS_INDEX.md.
+
 ## Domains
 
 - users, profiles, subscriptions

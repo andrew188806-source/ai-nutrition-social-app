@@ -1,5 +1,7 @@
 # Architecture
 
+> **DOC STATUS: HISTORICAL** - Phase-1 skeleton description; see docs/engineering-handoff.md. See docs/DOCUMENT_STATUS_INDEX.md.
+
 This MVP uses a monorepo with three product surfaces:
 
 - Expo mobile app for the main user journey.

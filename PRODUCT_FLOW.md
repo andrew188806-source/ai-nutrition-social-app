@@ -1,5 +1,7 @@
 # Product Flow
 
+> **DOC STATUS: HISTORICAL** - early-MVP product flow (mock-first era). See docs/DOCUMENT_STATUS_INDEX.md.
+
 ## Product Story
 
 The MVP has two equal first-priority strengths:
