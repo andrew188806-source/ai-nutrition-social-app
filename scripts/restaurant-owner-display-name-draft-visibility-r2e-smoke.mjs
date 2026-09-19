@@ -40,8 +40,8 @@ check(policyBody.length > 0 && !/menu_items\.status/.test(policyBody), "no part 
 
 // 5. This is additive only -- no historical file touched, exactly one new file.
 const migrations = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
-check(migrations.at(-1) === MIGRATION.split("/").pop(), "the new migration sorts last");
-check(migrations.length === 133, "exactly 133 migrations exist (127 historical + 5 R2B + 1 R2E)", migrations.length);
+check(migrations.slice(-3).join("|") === [MIGRATION.split("/").pop(), "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql"].join("|"), "the R2E migration is followed only by the authorized H3 and H4 hardening migrations", migrations.slice(-3));
+check(migrations.length === 135, "exactly 135 migrations exist (127 historical + 5 R2B + 1 R2E + 2 pre-Admin hardening)", migrations.length);
 
 // 6. Documentation companion exists (added later in this round; smoke re-run after docs step should
 // find it -- checked here so the suite is a single source of truth for "is R2E complete").

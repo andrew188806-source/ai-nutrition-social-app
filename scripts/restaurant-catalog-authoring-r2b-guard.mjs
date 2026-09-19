@@ -32,12 +32,16 @@ const migrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) 
 // Exact successor awareness: the final six migrations are exactly R2B-1..R2B-5 followed by the one
 // authorized R2E successor. Any other migration inserted inside the R2B chain, after R2E, or in
 // place of an R2B file fails. A future round must deliberately update this authorized list.
-const R2E_SUCCESSOR = "20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql";
+const AUTHORIZED_SUCCESSORS = [
+  "20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql",
+  "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql",
+  "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql"
+];
 const r2bNames = Object.values(FILES).map((path) => path.split("/").pop());
-const expectedTail = [...r2bNames, R2E_SUCCESSOR];
+const expectedTail = [...r2bNames, ...AUTHORIZED_SUCCESSORS];
 check(
   expectedTail.every((name, i) => migrationFiles.at(-expectedTail.length + i) === name),
-  "the final 6 migrations are exactly R2B-1..R2B-5 followed by the authorized R2E successor",
+  "the final 8 migrations are exactly R2B-1..R2B-5 followed by the authorized successors (R2E, H3, H4)",
   migrationFiles.slice(-expectedTail.length)
 );
 
