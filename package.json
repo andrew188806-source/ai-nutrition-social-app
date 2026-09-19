@@ -553,7 +553,11 @@
     "test:restaurant-catalog-authoring-r2b-postgres": "node scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs",
     "test:restaurant-owner-display-name-draft-visibility-r2e-guard": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs",
     "test:restaurant-owner-display-name-draft-visibility-r2e-smoke": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-smoke.mjs",
-    "test:restaurant-owner-display-name-draft-visibility-r2e-postgres": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs"
+    "test:restaurant-owner-display-name-draft-visibility-r2e-postgres": "node scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs",
+    "test:consumer-runtime-env-decoupling-h1-guard": "node scripts/consumer-runtime-env-decoupling-h1-guard.mjs",
+    "test:consumer-runtime-env-decoupling-h1-mutations": "node scripts/consumer-runtime-env-decoupling-h1-mutations.mjs",
+    "test:meal-photo-analysis-cors-config-h2-guard": "node scripts/meal-photo-analysis-cors-config-h2-guard.mjs",
+    "test:meal-photo-analysis-cors-config-h2-mutations": "node scripts/meal-photo-analysis-cors-config-h2-mutations.mjs"
   },
   "workspaces": [
     "apps/*",

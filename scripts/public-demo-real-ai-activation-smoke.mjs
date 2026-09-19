@@ -19,6 +19,7 @@ function expect(pass, name) {
 }
 const prefix = "EXPO_PUBLIC_TASTKIND_CONSUMER_";
 const devUrl = "https://msbgnnoorsoefuiwluye.supabase.co";
+const elsewhereUrl = "https://configured-elsewhere.supabase.co"; // H1: a different well-formed project supplied by configuration
 const publicKey = "PUBLIC_DEMO_ACTIVATION_PUBLIC_SENTINEL_NOT_A_CREDENTIAL";
 const dev = Object.freeze({
   [prefix + "AUTH_SOURCE"]: "supabase-live",
@@ -69,7 +70,7 @@ const native = {
   "react-native-url-polyfill/auto": {},
   "@supabase/supabase-js": { createClient: (url, key) => {
     sdkCalls++;
-    if (url !== devUrl && url !== devUrl + "/") throw new Error("Unexpected client URL");
+    if (url !== devUrl && url !== devUrl + "/" && url !== elsewhereUrl) throw new Error("Unexpected client URL");
     if (key !== publicKey) throw new Error("Unexpected client credential");
     return fakeClient;
   } },
@@ -132,7 +133,6 @@ try {
   for (const [label, over] of [
     ["Production", { EXPO_PUBLIC_TASTKIND_ENVIRONMENT: "production" }],
     ["Missing Development pin", { EXPO_PUBLIC_TASTKIND_ENVIRONMENT: undefined }],
-    ["Wrong project", { [prefix + "SUPABASE_URL"]: "https://wrongproject.supabase.co" }],
     ["HTTP project", { [prefix + "SUPABASE_URL"]: devUrl.replace("https:", "http:") }],
     ["URL path", { [prefix + "SUPABASE_URL"]: devUrl + "/rest/v1" }],
     ["URL query", { [prefix + "SUPABASE_URL"]: devUrl + "?redirect=1" }],
@@ -152,8 +152,12 @@ try {
   const alias = { ...dev, [prefix + "SUPABASE_URL"]: undefined, [prefix + "SUPABASE_PUBLISHABLE_KEY"]: undefined,
     EXPO_PUBLIC_SUPABASE_URL: devUrl, EXPO_PUBLIC_SUPABASE_ANON_KEY: publicKey };
   expect(compose(alias).ok && sdkCalls === 1, "Existing aliases obey the same exact Development validation");
-  expect(!compose({ ...alias, [prefix + "SUPABASE_URL"]: "https://wrongproject.supabase.co" }).ok && sdkCalls === 0,
+  expect(!compose({ ...alias, [prefix + "SUPABASE_URL"]: devUrl + "/rest/v1" }).ok && sdkCalls === 0,
     "An invalid canonical URL cannot fall back to a valid legacy URL");
+  // H1 (pre-Admin hardening): no project identity is compiled in. A different, well-formed project URL
+  // supplied by configuration is used exactly as configured; only configuration decides the project.
+  expect(compose({ ...dev, [prefix + "SUPABASE_URL"]: elsewhereUrl }).ok && sdkCalls === 1,
+    "A different well-formed project URL from configuration is accepted (no compiled-in project pin)");
   for (const [label, over] of [
     ["No upload approval", { [prefix + "MEAL_PHOTO_UPLOAD_SOURCE"]: "disabled" }],
     ["Unknown upload", { [prefix + "MEAL_PHOTO_UPLOAD_SOURCE"]: "unknown" }],
@@ -216,10 +220,14 @@ try {
       : { ok: false }; },
     downloadAndValidateImage: noNetwork, createAdminClient: noNetwork, createProvider: noNetwork, generateCandidateId: randomUUID
   };
-  const entryContext = vm.createContext({ Request, Response, Headers, Deno: { serve: (callback) => { serve = callback; } } });
+  // H2: browser origins are configuration (Function secret), not source. The harness supplies the Development demo origin exactly as the deployment does.
+  const corsModule = load("supabase/functions/meal-photo-analysis/cors.ts");
+  const entryContext = vm.createContext({ Request, Response, Headers, Deno: { serve: (callback) => { serve = callback; },
+    env: { get: (name) => (name === corsModule.MEAL_PHOTO_ANALYSIS_ALLOWED_ORIGINS_ENV ? "https://haocu-demo.vercel.app" : undefined) } } });
   const entryModule = { exports: {} };
   vm.runInContext(`(function(require,module,exports){${compile(read(edgePath), edgePath)}\n})`, entryContext)((id) => {
     if (id === "./errors.ts") return errors;
+    if (id === "./cors.ts") return corsModule;
     if (id !== "./handler.ts") throw new Error("Unexpected Edge dependency");
     return { createDefaultDependencies: () => deps, processMealPhotoAnalysisRequest: (request, passed) => {
       handlerCalls++;

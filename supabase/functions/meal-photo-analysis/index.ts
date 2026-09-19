@@ -1,5 +1,6 @@
 import { createDefaultDependencies, processMealPhotoAnalysisRequest } from "./handler.ts";
 import { buildErrorResponse } from "./errors.ts";
+import { MEAL_PHOTO_ANALYSIS_ALLOWED_ORIGINS_ENV, isAllowedOrigin, parseAllowedOrigins } from "./cors.ts";
 
 // MI-E-C4: Deno Edge Function entrypoint. JWT verification stays ON at the gateway (see
 // supabase/config.toml's [functions.meal-photo-analysis] verify_jwt = true) — this function is
@@ -9,8 +10,13 @@ import { buildErrorResponse } from "./errors.ts";
 // *which* user made the call.
 const dependencies = createDefaultDependencies();
 
-const demoOrigin = "https://haocu-demo.vercel.app";
 const invocationHeaders = ["authorization", "apikey", "content-type", "x-client-info"];
+
+// Browser origins come from configuration on every request (a rotated value applies without a redeploy).
+// Missing/empty configuration authorizes no browser origin; see ./cors.ts for the format.
+function originAllowed(request: Request): boolean {
+  return isAllowedOrigin(request.headers.get("Origin"), parseAllowedOrigins(Deno.env.get(MEAL_PHOTO_ANALYSIS_ALLOWED_ORIGINS_ENV)));
+}
 
 function withBrowserCors(request: Request, response: Response): Response {
   const headers = new Headers(response.headers);
@@ -18,7 +24,7 @@ function withBrowserCors(request: Request, response: Response): Response {
   if (!vary?.split(",").some((value) => value.trim().toLowerCase() === "origin")) {
     headers.set("Vary", vary ? `${vary}, Origin` : "Origin");
   }
-  if (request.headers.get("Origin") === demoOrigin) headers.set("Access-Control-Allow-Origin", demoOrigin);
+  if (originAllowed(request)) headers.set("Access-Control-Allow-Origin", request.headers.get("Origin") as string);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -27,7 +33,7 @@ Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     const requestedHeaders = (request.headers.get("Access-Control-Request-Headers") ?? "")
       .split(",").map((value) => value.trim().toLowerCase()).filter(Boolean);
-    const allowed = request.headers.get("Origin") === demoOrigin
+    const allowed = originAllowed(request)
       && request.headers.get("Access-Control-Request-Method") === "POST"
       && requestedHeaders.every((value) => invocationHeaders.includes(value));
     return withBrowserCors(request, new Response(null, {
