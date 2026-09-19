@@ -30,6 +30,7 @@ Company/product-strategy decisions (pricing, operating model, funding, commercia
 | `docs/restaurant-owner-catalog-authoring-r2b.md` | Restaurant catalog authoring RPC contract, plus R2C/R2D/R2E notes. |
 | `docs/restaurant-canonical-data-boundary.md` | Canonical restaurant data model boundaries (its "Restaurant Console uses a mock adapter today" sentence is `HISTORICAL`). |
 | `docs/tastkind-runtime-integration-roadmap.md` | Authoritative for Runtime Integration **phase names and ordering**. Its "Current Phase — Phase 2V" section is `SUPERSEDED` by completed work. |
+| `docs/admin-operational-surface-inventory.md` | Canonical route-level inventory of all 98 Admin registry routes and 22 legacy roots (A0): state, data source, auth, permission status, disposition, slice. Current technical planning. |
 | `docs/admin-information-architecture-ra-3-ia-p1.md` | Authoritative for Admin IA *intent* (workspaces, sensitivity classes, semantic boundaries). Its counts and availability statements are stale — the registry governs (see registers TD-07). |
 | `docs/navigation-map.md` | Mobile navigation map; incomplete for newer routes. |
 | `supabase/README.md`, `.env.example` | Configuration names and migration notes. |

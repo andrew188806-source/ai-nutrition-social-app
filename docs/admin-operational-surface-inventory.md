@@ -1,0 +1,228 @@
+# Admin operational surface inventory (A0)
+
+> **DOC STATUS: CURRENT (technical planning)** — canonical route-level inventory produced by ADMIN A0 at baseline `5018a19` and finalized by the A0 closure amendment. Governs planning for the Admin non-authority phase; the executable registry (`apps/admin-web/auth/admin-route-registry.ts`) remains the source of truth for runtime behaviour. Companion: `docs/engineering-state-registers.md` §7. See `docs/DOCUMENT_STATUS_INDEX.md`.
+
+Regenerate nothing from scratch: update rows in place when a slice changes a route.
+
+## 1. Summary
+
+- 98 registry routes: **8 LIVE, 17 DEMO, 73 NOT_ENABLED**. 97 have a page; `/admin/break-glass` is a registry-only reservation.
+- Only six `/admin` pages render real data (Platform Management). Every other `/admin` page is a scaffold (`AdminRoutePlaceholder`/`AdminRegistryPage`); DEMO means "mock UI exists on the legacy root successor".
+- 22 legacy root pages sit outside the middleware (`middleware.ts` matches only `/admin/:path*`).
+- **Any route whose only permission is `PLANNED` resolves to base-Admin (`admin_context.read`)** (`resolveAdminRouteRequirement`). See AE-1 (§4).
+- Column legend — *State*: registry availability, with PLACEHOLDER for a scaffold with no backend. *Data source*: for the `/admin` page (REAL_LIVE / MOCK / NONE / STATIC). *AE1*: needs an ADMIN-AE1 CURRENT read key before real data may be shown.
+
+## 2. Phase order (final)
+
+ADMIN-A → ADMIN-AE1 → ADMIN-B → ADMIN-C → ADMIN-D → ADMIN-E. Business Development and every DEFERRED family are outside these slices.
+
+## 3. Registry routes (98)
+
+
+### Platform Admin — Home (1)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin` | `dashboard` | DEMO | NONE on page → MOCK on legacy / | middleware + base Admin (`admin_context.read`) | `admin_context.read` (BASE) | scaffold | MISSING aggregate read RPC; catalog counts derivable | BUILD_IN_ADMIN_PHASE | / (ONE_TO_ONE) | ADMIN-D | YES | KPIs need own read key (not in registry; decided in ADMIN-AE1) |
+
+### Restaurant Ops (27)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/restaurants` | `restaurants` | DEMO | NONE on page → MOCK on legacy /menu-review | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | /menu-review (SPLIT) | ADMIN-B | YES | `restaurant-branch-status` needs restaurantId+branchId; discovery arrives via B |
+| `/admin/restaurants/verification` | `restaurant-verification` | DEMO | NONE on page → MOCK on legacy /verification | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.verification.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /verification (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/restaurants/reviews` | `restaurant-reviews` | DEMO | NONE on page → MOCK on legacy /restaurant-review | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.reviews.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /restaurant-review (SPLIT) | DEFERRED | — |  |
+| `/admin/restaurants/menu-management` | `menu-management` | DEMO | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_management.read` (PLANNED) | scaffold | DERIVED from ADMIN-B read model; source columns exist | BUILD_IN_ADMIN_PHASE | — | ADMIN-C | YES |  |
+| `/admin/restaurants/menu-management/pending` | `menu-management-pending` | DEMO | NONE on page → MOCK on legacy /pending-menu-items | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_management.pending.read` (PLANNED) | scaffold | DERIVED from ADMIN-B read model; source columns exist | BUILD_IN_ADMIN_PHASE | /pending-menu-items (ONE_TO_ONE) | ADMIN-C | YES |  |
+| `/admin/restaurants/menu-management/duplicates` | `menu-management-duplicates` | DEMO | NONE on page → MOCK on legacy /duplicate-menu-items | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_management.duplicates.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /duplicate-menu-items (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/restaurants/menu-management/aliases` | `menu-management-aliases` | DEMO | NONE on page → MOCK on legacy /alias-review, /identification-audit | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_management.aliases.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /alias-review (ONE_TO_ONE); /identification-audit (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/restaurants/menu-management/nutrition-discrepancy` | `menu-management-nutrition-discrepancy` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_management.nutrition_discrepancy.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — |  |
+| `/admin/restaurants/menu-management/data-quality` | `menu-management-data-quality` | DEMO | NONE on page → MOCK on legacy /data-quality, /menu-review, /tags | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_management.data_quality.read` (PLANNED) | scaffold | DERIVED from ADMIN-B read model; source columns exist | BUILD_IN_ADMIN_PHASE | /data-quality (ONE_TO_ONE); /menu-review (SPLIT); /tags (SPLIT) | ADMIN-C | YES |  |
+| `/admin/restaurants/[restaurantId]` | `restaurant-detail` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/about` | `restaurant-about` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.about.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/contact` | `restaurant-contact` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.contact.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/menus` | `restaurant-menus` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menus.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]` | `restaurant-menu-detail` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]/items` | `restaurant-menu-items` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_items.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]` | `restaurant-menu-item-detail` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_item.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/nutrition` | `restaurant-item-nutrition` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_item.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/ingredients` | `restaurant-item-ingredients` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_item.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — | no ingredient table; deferred |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/allergens` | `restaurant-item-allergens` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_item.read` (PLANNED) | scaffold | DERIVED from ADMIN-B read model; source columns exist | BUILD_IN_ADMIN_PHASE | — | ADMIN-C | YES | status facts from existing columns only; no certification write |
+| `/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/certification` | `restaurant-item-certification` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_item.read` (PLANNED) | scaffold | DERIVED from ADMIN-B read model; source columns exist | BUILD_IN_ADMIN_PHASE | — | ADMIN-C | YES | status facts from existing columns only; no certification write |
+| `/admin/restaurants/[restaurantId]/branches` | `restaurant-branches` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.branches.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]` | `restaurant-branch-detail` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.branches.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/status` | `restaurant-branch-status` | LIVE | NONE on page → REAL_LIVE backend (UI on legacy root) | middleware + CURRENT permission check | `admin_restaurant_branch.status.write` (CURRENT) | scaffold | EXISTS (`staff_admin_restaurant_branch_status_v1`/`_set_`, API `/api/platform-admin/restaurant-branches/[branchId]/status`) | REWIRE_TO_EXISTING_BACKEND | /restaurant-review (SPLIT) | ADMIN-A | — | UI currently only on legacy root |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/hours` | `restaurant-branch-hours` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.hours.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/contact` | `restaurant-branch-contact` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.contact.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/geo` | `restaurant-branch-geo` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.geo.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/menu-items` | `restaurant-branch-menu-items` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.restaurants.menu_items.read` (PLANNED) | scaffold | MISSING Admin read RPC; source tables exist (baseline restaurant tables) | BUILD_IN_ADMIN_PHASE | — | ADMIN-B | YES |  |
+
+### Platform Admin — Business Development (9)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/business-development` | `business-development` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/prospects` | `business-development-prospects` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.prospects.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/pipeline` | `business-development-pipeline` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.pipeline.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/follow-ups` | `business-development-follow-ups` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.followups.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/contacts` | `business-development-contacts` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.contacts.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/contracts` | `business-development-contracts` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.contracts.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/renewals` | `business-development-renewals` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.renewals.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/assignments` | `business-development-assignments` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.assignments.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+| `/admin/business-development/history` | `business-development-history` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.business_development.history.read` (PLANNED) | scaffold | NO_DATA_MODEL (no BD schema) | DEFER | — | DEFERRED | — | BD deferred by Planner decision |
+
+### Platform Admin — Operations/Marketing (8)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/operations` | `operations` | DEMO | NONE on page → MOCK on legacy /esg | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /esg (DEFER) | DEFERRED | — |  |
+| `/admin/operations/campaigns` | `operations-campaigns` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.campaigns.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — |  |
+| `/admin/operations/promotions` | `operations-promotions` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.promotions.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — |  |
+| `/admin/operations/ads` | `operations-ads` | DEMO | NONE on page → MOCK on legacy /ad-review | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.ads.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /ad-review (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/operations/sponsored` | `operations-sponsored` | DEMO | NONE on page → MOCK on legacy /sponsored, /tags | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.sponsored.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /sponsored (ONE_TO_ONE); /tags (SPLIT) | DEFERRED | — |  |
+| `/admin/operations/placements` | `operations-placements` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.placements.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — |  |
+| `/admin/operations/communications` | `operations-communications` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.communications.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — |  |
+| `/admin/operations/performance` | `operations-performance` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.operations.performance.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | — | DEFERRED | — |  |
+
+### Platform Admin — Member Support (5)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/members` | `members` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.members.read` (PLANNED) | scaffold | NO_DATA_MODEL (support cases); private-user data | PRODUCT_DECISION_REQUIRED | — | DEFERRED | — | case-scoped private-user visibility undecided |
+| `/admin/members/cases` | `member-cases` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.members.cases.read` (PLANNED) | scaffold | NO_DATA_MODEL (support cases); private-user data | PRODUCT_DECISION_REQUIRED | — | DEFERRED | — | case-scoped private-user visibility undecided |
+| `/admin/members/[memberRef]` | `member-detail` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.members.profile.read` (PLANNED) | scaffold | NO_DATA_MODEL (support cases); private-user data | PRODUCT_DECISION_REQUIRED | — | DEFERRED | — | case-scoped private-user visibility undecided |
+| `/admin/members/[memberRef]/consents` | `member-consents` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.members.consents.read` (PLANNED) | scaffold | NO_DATA_MODEL (support cases); private-user data | PRODUCT_DECISION_REQUIRED | /consents (REPLACE) | DEFERRED | — | case-scoped private-user visibility undecided |
+| `/admin/members/[memberRef]/access-history` | `member-access-history` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.members.access_history.read` (PLANNED) | scaffold | NO_DATA_MODEL (support cases); private-user data | PRODUCT_DECISION_REQUIRED | — | DEFERRED | — | case-scoped private-user visibility undecided |
+
+### Platform Admin — Social Safety (3)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/social` | `social` | DEMO | NONE on page → MOCK on legacy /social-governance | middleware + **base-Admin fallback** (PLANNED key only) | `admin.social.read` (PLANNED) | scaffold | NO_DATA_MODEL (no reports/moderation); private data | DEFER | /social-governance (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/social/reports` | `social-reports` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.social.reports.read` (PLANNED) | scaffold | NO_DATA_MODEL (no reports/moderation); private data | PRODUCT_DECISION_REQUIRED | — | DEFERRED | — |  |
+| `/admin/social/policies` | `social-policies` | DEMO | NONE on page → MOCK on legacy /tags | middleware + **base-Admin fallback** (PLANNED key only) | `admin.social.policies.read` (PLANNED) | scaffold | MISSING Admin reader; `social_interest_catalog[_label]` exists | BUILD_IN_ADMIN_PHASE | /tags (SPLIT) | ADMIN-D | YES |  |
+
+### Platform Admin — Nutrition (24)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/nutrition` | `nutrition` | DEMO | NONE on page → MOCK on legacy /exercise-governance | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | /exercise-governance (DEFER) | DEFERRED | — |  |
+| `/admin/nutrition/my-work` | `nutrition-my-work` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.my_work.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/my-work/restaurants` | `nutrition-my-work-restaurants` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.my_work.restaurants.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/my-work/cases` | `nutrition-my-work-cases` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.my_work.cases.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/my-work/members` | `nutrition-my-work-members` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.my_work.members.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/certification` | `nutrition-certification` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.certification.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/certification/pending` | `nutrition-certification-pending` | DEMO | NONE on page → MOCK on legacy /nutrition-review, /menu-review | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.certification.pending.read` (PLANNED) | scaffold | DERIVED from ADMIN-B read model; source columns exist | BUILD_IN_ADMIN_PHASE | /nutrition-review (ONE_TO_ONE); /menu-review (SPLIT) | ADMIN-C | YES | read-only view of `pending_review`; approve/reject would need new authority |
+| `/admin/nutrition/certification/discrepancy-reports` | `nutrition-certification-discrepancy` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.certification.discrepancy_reports.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/certification/remote-review` | `nutrition-certification-remote-review` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.certification.remote_review.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/certification/history` | `nutrition-certification-history` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.certification.history.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/certification/re-review` | `nutrition-certification-re-review` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.certification.re_review.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/members` | `nutrition-members` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.members.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/members/[memberRef]` | `nutrition-member-detail` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.members.detail.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/standards` | `nutrition-standards` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.standards.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/standards/scoring` | `nutrition-standards-scoring` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.standards.scoring.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/standards/recommendation` | `nutrition-standards-recommendation` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.standards.recommendation.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/standards/parameters` | `nutrition-standards-parameters` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.standards.parameters.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/assignments` | `nutrition-assignments` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.assignments.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/assignments/nutritionists` | `nutrition-assignments-nutritionists` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.assignment.nutritionists.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/assignments/regions` | `nutrition-assignments-regions` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.assignment.region.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/assignments/restaurants` | `nutrition-assignments-restaurants` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.assignment.restaurant.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/assignments/cases` | `nutrition-assignments-cases` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.assignment.case.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/assignments/workload` | `nutrition-assignments-workload` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.assignment.workload.read` (PLANNED) | scaffold | NO_DATA_MODEL (Nutritionist workflow) | DEFER | — | DEFERRED | — |  |
+| `/admin/nutrition/self-cooked-quality` | `nutrition-self-cooked-quality` | DEMO | NONE on page → MOCK on legacy /self-cooked-audit | middleware + **base-Admin fallback** (PLANNED key only) | `admin.nutrition.self_cooked_quality.read` (PLANNED) | scaffold | NO_DATA_MODEL | DEFER | /self-cooked-audit (ONE_TO_ONE) | DEFERRED | — |  |
+
+### Platform Admin — Audit (4)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/audit` | `audit` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + CURRENT permission check | `admin_audit.read` (CURRENT) | scaffold | NO_DATA_MODEL (no operational/data-access audit) | DEFER | — | DEFERRED | — |  |
+| `/admin/audit/platform-memberships` | `audit-platform-memberships` | LIVE | NONE on page → REAL_LIVE backend (UI on legacy root) | middleware + CURRENT permission check | `admin_audit.read` (CURRENT) | scaffold | EXISTS (`staff_admin_audit_log_v1`, API `/api/platform-admin/audit`) | REWIRE_TO_EXISTING_BACKEND | /audit-trail (ONE_TO_ONE) | ADMIN-A | — | UI currently only on legacy root |
+| `/admin/audit/operations` | `audit-operations` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.audit.operations.read` (PLANNED) | scaffold | NO_DATA_MODEL (no operational/data-access audit) | DEFER | — | DEFERRED | — |  |
+| `/admin/audit/data-access` | `audit-data-access` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.audit.data_access.read` (PLANNED) | scaffold | NO_DATA_MODEL (no operational/data-access audit) | DEFER | /data-access (DEFER) | DEFERRED | — |  |
+
+### Authority/Security (frozen) (9)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/login` | `admin-login` | NOT_ENABLED (functional login) | STATIC (auth form) | middleware exempt (login) | none (not registered) | functional | EXISTS (Supabase auth) | KEEP_AS_IS | /login (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/management` | `management` | LIVE | REAL_LIVE | middleware + base Admin (`admin_context.read`) | `admin_context.read` (BASE) | real | EXISTS (closed authority stack) | KEEP_AS_IS | — | DEFERRED | — |  |
+| `/admin/management/staff` | `management-staff` | LIVE | REAL_LIVE | middleware + base Admin (`admin_context.read`) | `admin_context.read` (BASE) | real | EXISTS (closed authority stack) | KEEP_AS_IS | — | DEFERRED | — |  |
+| `/admin/management/staff/[staffAccountId]` | `management-staff-detail` | LIVE | REAL_LIVE | middleware + base Admin (`admin_context.read`) | `admin_context.read` (BASE) | real | EXISTS (closed authority stack) | KEEP_AS_IS | — | DEFERRED | — |  |
+| `/admin/management/roles` | `management-roles` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.management.roles.read` (PLANNED) | scaffold | PARTIAL (frozen authority; no roles read model) | DEFER | — | DEFERRED | — | authority-frozen |
+| `/admin/management/permissions` | `management-permissions` | LIVE | REAL_LIVE | middleware + CURRENT permission check | `admin.management.permissions.read` (CURRENT) | real | EXISTS (closed authority stack) | KEEP_AS_IS | — | DEFERRED | — |  |
+| `/admin/management/settings` | `management-settings` | LIVE | REAL_LIVE | middleware + base Admin (`admin_context.read`) | `admin_context.read` (BASE) | real | EXISTS (closed authority stack) | KEEP_AS_IS | /settings (ONE_TO_ONE) | DEFERRED | — |  |
+| `/admin/management/security-log` | `management-security-log` | LIVE | REAL_LIVE | middleware + CURRENT permission check | `admin_audit.read` (CURRENT) | real | EXISTS (closed authority stack) | KEEP_AS_IS | — | DEFERRED | — |  |
+| `/admin/break-glass` | `break-glass` | NOT_ENABLED (no page) | NONE | HIDDEN; not_registered (deny); no page | none (not registered) | no page | EXISTS (frozen control plane; no UI route) | KEEP_AS_IS | — | DEFERRED | — | registry-only reservation |
+
+### Engineering/Maintenance (8)
+
+| Route | Feature id | State | Data source | Auth boundary | Permission (status) | UI | Backend | Disposition | Predecessor / duplicate | Slice | AE1 | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/admin/engineering` | `engineering` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/health` | `engineering-health` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.health.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/versions` | `engineering-versions` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.versions.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/jobs` | `engineering-jobs` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.jobs.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/push` | `engineering-push` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.push.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/geo` | `engineering-geo` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.geo.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/feature-modes` | `engineering-feature-modes` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.feature_modes.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+| `/admin/engineering/repairs` | `engineering-repairs` | NOT_ENABLED / PLACEHOLDER | NONE | middleware + **base-Admin fallback** (PLANNED key only) | `admin.engineering.repairs.read` (PLANNED) | scaffold | NO_DATA_MODEL (posture not derivable, TD-01) | DEFER | — | DEFERRED | — |  |
+
+## 4. Legacy root surfaces (22)
+
+All 22 are outside the `/admin` middleware and, except `/login`, are linked from the legacy `AdminShell` navigation (no external/demo link found beyond docs and guards). Nothing is deleted or redirected before ADMIN-E. Every state is LEGACY.
+
+| Legacy route | Purpose | Data source | Successor(s) | Disposition | Retire/replace when |
+| --- | --- | --- | --- | --- | --- |
+| `/` | Dashboard shell | STATIC | dashboard (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-D then ADMIN-E |
+| `/login` | Login shell | STATIC | admin-login (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E |
+| `/ad-review` | Ad review queue | MOCK (`mockAdReviews`, `mockRiskyKeywordFlags`) | operations-ads (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor not built: deferred) |
+| `/sponsored` | Sponsored recommendation/tag review | MOCK (`mockSponsored*`) | operations-sponsored (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred) |
+| `/verification` | Restaurant verification | MOCK (`mockVerificationReviews`) | restaurant-verification (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred) |
+| `/pending-menu-items` | Pending menu items | MOCK (restaurant mock adapter) | menu-management-pending (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-C then ADMIN-E |
+| `/duplicate-menu-items` | Duplicate menu items | MOCK (restaurant mock adapter) | menu-management-duplicates (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred: no data model) |
+| `/alias-review` | Alias review | MOCK (restaurant mock adapter) | menu-management-aliases (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred: no data model) |
+| `/identification-audit` | Identification audit | MOCK (`mockRestaurantMenuIdentificationAudits` etc.) | menu-management-aliases (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred) |
+| `/data-quality` | Data quality | MOCK (restaurant mock adapter) | menu-management-data-quality (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-C then ADMIN-E |
+| `/social-governance` | Social governance | MOCK (`mockRelationshipStatusReviews` etc.) | social (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred) |
+| `/nutrition-review` | Nutrition review | MOCK (restaurant mock adapter) | nutrition-certification-pending (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-C then ADMIN-E |
+| `/self-cooked-audit` | Self-cooked estimation audit | MOCK (`mockSelfCookedEstimationAudits`) | nutrition-self-cooked-quality (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor deferred) |
+| `/audit-trail` | Platform Admin audit trail | HYBRID (real `platformAdminAuditRuntime` + mock audit service) | audit-platform-memberships (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-A (relocate live UI) then ADMIN-E; unique live UI until A |
+| `/settings` | Settings | STATIC | management-settings (ONE_TO_ONE) | RETIRE_AFTER_SUCCESSOR | ADMIN-E (successor already LIVE) |
+| `/tags` | Tag review | MOCK (`mockTagReviews` etc.) | operations-sponsored, menu-management-data-quality, social-policies (SPLIT) | KEEP_UNTIL_SUCCESSORS_COMPLETE | after all three successors |
+| `/menu-review` | Menu review | MOCK (restaurant mock adapter services) | restaurants, menu-management-data-quality, nutrition-certification-pending (SPLIT) | KEEP_UNTIL_SUCCESSORS_COMPLETE | after all successors |
+| `/restaurant-review` | Restaurant and branch review + live branch status | HYBRID (real `PlatformAdminBranchStatus` + mock review list) | restaurants, restaurant-reviews, restaurant-branch-status (SPLIT) | KEEP_UNTIL_SUCCESSORS_COMPLETE | unique live UI until ADMIN-A |
+| `/consents` | Consent records | MOCK (`mockAdminConsents`) | member-consents (REPLACE) | REPLACE / REDIRECT_CANDIDATE | after member-consents decision |
+| `/esg` | ESG / consent + data-access overview | MOCK (`mockAdminConsents`, `mockAdminDataAccessLogs`) | operations (DEFER) | DEFERRED (no successor decision) | explicit successor decision |
+| `/exercise-governance` | Exercise governance | MOCK (`mockExerciseDataAccessLogs`, `mockHealthGoalRecommendationAudits`) | nutrition (DEFER) | DEFERRED (no successor decision) | explicit successor decision |
+| `/data-access` | Data-access log | MOCK (`mockAdminDataAccessLogs`) | audit-data-access (DEFER) | DEFERRED (no successor decision) | explicit successor decision |
+
+Counts: RETIRE_AFTER_SUCCESSOR 15 · KEEP_UNTIL_SUCCESSORS_COMPLETE 3 · REPLACE / REDIRECT_CANDIDATE 1 · DEFERRED 3.
+
+## 5. ADMIN-AE1 — required read keys (input to that slice)
+
+AE-1 direction is resolved (`AE-1_DIRECTION_RESOLVED`; implementation `PENDING_ADMIN_AE1`, classification `NARROW_AUTHORITY_SUCCESSOR_ACTIVATION`). Cross-tenant operational reads must not fall back to base Admin. Registry keys used by the accepted MVP routes (all currently `PLANNED`); ADMIN-AE1 confirms the exact set, activates only what is needed, and adds a key for the dashboard if it does not reuse one of these:
+
+- `admin.nutrition.certification.pending.read` (PLANNED)
+- `admin.restaurants.about.read` (PLANNED)
+- `admin.restaurants.branches.read` (PLANNED)
+- `admin.restaurants.contact.read` (PLANNED)
+- `admin.restaurants.geo.read` (PLANNED)
+- `admin.restaurants.hours.read` (PLANNED)
+- `admin.restaurants.menu.read` (PLANNED)
+- `admin.restaurants.menu_item.read` (PLANNED)
+- `admin.restaurants.menu_items.read` (PLANNED)
+- `admin.restaurants.menu_management.data_quality.read` (PLANNED)
+- `admin.restaurants.menu_management.pending.read` (PLANNED)
+- `admin.restaurants.menu_management.read` (PLANNED)
+- `admin.restaurants.menus.read` (PLANNED)
+- `admin.restaurants.read` (PLANNED)
+- `admin.social.policies.read` (PLANNED)
+
+The other PLANNED keys (all deferred families, 65 of them) stay PLANNED.
+
+## 6. Data-source and backend evidence (A0)
+
+- Mock origins: `@haocu/shared` `mock*` exports (legacy pages) and `adapters/mock/admin-restaurant-mock-adapter.ts` via `repositories/*` and `services/*` (legacy pages only).
+- Real origins: `server/platformAdmin*` and `server/staffAdmin*` (audit, branch status), `server/adminManagementReadRuntime.ts`, step-up broker, 10 API route handlers.
+- No Admin reader exists for restaurants/menus/items/nutrition status (owner readers `restaurant_internal_*` are membership-scoped; client RLS exposes only active/published rows).
+- No table exists for aliases, pending items, data-quality issues, duplicates, verification/review queues, social reports/moderation, support cases, analytics events, campaigns/ads/promotions, BD/Activation Code/Strategic Accounts, nutritionist assignment/certification.

@@ -14,7 +14,7 @@ TastKind／好廚 is an AI nutrition, next-meal recommendation and Meal Buddy so
 | IP Codex / mascot / scale system | `FROZEN`, pushed | `docs/ip-codex-scale-system.md`; section below |
 | **Restaurant Owner console** (RA-2A–RA-2I, R1, R2A–R2E) | **`FROZEN` — closed and pushed** | Section "Restaurant Owner Console" |
 | **Admin Authority** (staff/privileged governance) | **`FROZEN` — closed and pushed** | Section "Admin Authority"; `docs/admin-authority-sop-zh-tw.md` |
-| Admin non-authority operational functionality | **Next major implementation phase — not started** | Registers §7 |
+| Admin non-authority operational functionality | **Next major implementation phase — scope closed by A0 (ADMIN-A → AE1 → B → C → D → E; ADMIN-A unblocked; not started)** | Registers §7.6–7.8; `docs/admin-operational-surface-inventory.md` |
 | Group Table; collectibles ownership/transfer/marketplace; platform points | `POST_MVP` | Registers §3; section "Product decisions that shape the system" |
 | Production | Never enabled | Registers TD-03 |
 

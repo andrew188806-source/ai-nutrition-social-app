@@ -210,7 +210,7 @@ The next major implementation phase is **Admin remaining NON-AUTHORITY operation
 
 ### 7.1 Facts
 
-- Executable IA registry: `apps/admin-web/auth/admin-route-registry.ts` — 98 entries: **8 `LIVE`, 17 `DEMO`, 73 `NOT_ENABLED`**. Navigation is filtered by current permissions (`admin-ia-navigation.ts`).
+- Executable IA registry: `apps/admin-web/auth/admin-route-registry.ts` — 98 entries: **8 `LIVE`, 17 `DEMO`, 73 `NOT_ENABLED`**. Re-verified at `5018a19` (A0): counts unchanged; 97 entries have a page, `/admin/break-glass` is a registry-only reservation with no page file. Navigation is filtered by current permissions (`admin-ia-navigation.ts`).
 - 119 `page.tsx` files: 97 under `/admin/**` (registry-driven wrappers `createAdminRegistryPage(id)` except the management pages), 22 legacy root pages (TD-06).
 - 10 API route handlers: `/api/admin/management/staff/{authority,mutations}`, `/api/admin/step-up/{clear,enroll,enroll/verify,factors,status,verify}`, `/api/platform-admin/audit`, `/api/platform-admin/restaurant-branches/[branchId]/status`.
 - Authenticated gate: `/admin/**` middleware (`getClaims()`); every `/api/admin` mutation independently re-checks permission.
@@ -219,11 +219,11 @@ The next major implementation phase is **Admin remaining NON-AUTHORITY operation
 
 | Route | Capability |
 | --- | --- |
-| `/admin/restaurants/[restaurantId]/branches/[branchId]/status` | Governed branch lifecycle status change (RA-1C). |
-| `/admin/audit/platform-memberships` | Platform Admin membership lifecycle audit read (RA-1B). |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/status` | Governed branch lifecycle status change (RA-1C). **Authority is live; the `/admin` page is still a scaffold** — the working UI is `PlatformAdminBranchStatus` on legacy `/restaurant-review`, backed by `/api/platform-admin/restaurant-branches/[branchId]/status`. |
+| `/admin/audit/platform-memberships` | Platform Admin membership lifecycle audit read (RA-1B). **Authority is live; the `/admin` page is still a scaffold** — the working UI is on legacy `/audit-trail`, backed by `/api/platform-admin/audit`. Only the six Platform Management routes render real data on `/admin`. |
 | `/admin/management`, `/staff`, `/staff/[staffAccountId]`, `/permissions`, `/settings`, `/security-log` | Platform Management (Authority stack — closed). |
 
-### 7.3 `DEMO` (renders mock/local data, not live) — 17
+### 7.3 `DEMO` (badge only — the mock UI lives on the legacy root successor, not on the `/admin` page) — 17
 
 `/admin`, `/admin/operations`, `/admin/operations/ads`, `/admin/operations/sponsored`, `/admin/restaurants`, `/admin/restaurants/{verification,reviews,menu-management}` and `menu-management/{pending,duplicates,aliases,data-quality}`, `/admin/social`, `/admin/social/policies`, `/admin/nutrition`, `/admin/nutrition/certification/pending`, `/admin/nutrition/self-cooked-quality`.
 
@@ -251,6 +251,42 @@ The Business Development workspace (9 routes) is present in the registry but is 
 - **Duplicate / obsolete routes.** 22 legacy root pages (TD-06) duplicate registry routes; 4 restaurant-web legacy roots already redirect.
 - **IA/navigation inconsistencies.** TD-07.
 - **Rule for the next phase (product).** No new permission may be granted through UI presence alone; new operations need their own governed backend authority consistent with the sealed-role pattern. Admin Authority itself is not reopened.
+
+---
+
+### 7.6 A0 scope closure (2026-09-19, baseline `5018a19`)
+
+**Surface counts (120 surfaces = 98 registry routes + 22 legacy roots).** `LIVE` 8 (6 with real `/admin` UI; 2 authority-only, UI still on legacy roots) · `DEMO` 17 (all scaffold pages) · `NOT_ENABLED` 73 (71 scaffold placeholders + `/admin/login` functional + `/admin/break-glass` no page) · `LEGACY` 22 (15 one-to-one duplicates of registry routes, 3 split into several successors: `/tags`, `/menu-review`, `/restaurant-review`; 1 replace: `/consents`; 3 defer: `/esg`, `/exercise-governance`, `/data-access`) · `DEAD` 0. Only `/audit-trail` and `/restaurant-review` are HYBRID (real authority read plus mock); the other 20 legacy roots are MOCK (`@haocu/shared` mock exports or `adminRestaurantMockAdapter`). Every legacy root is outside the middleware and is linked from the legacy `AdminShell` navigation.
+
+**Findings that shape scope.**
+1. *Permission gap (AE-1).* Every operational route requires a `PLANNED` read permission that has no database authority: `resolveAdminRouteRequirement` maps `PLANNED`-only routes to base-Admin (`admin_context.read`). Real cross-restaurant data behind such a route would be readable by every base Admin. Making per-domain read keys `CURRENT` means catalog rows plus the application vocabulary (`CURRENT_ADMIN_PERMISSION_KEYS` has 10 keys). That is an authority extension; its direction is now resolved (§7.8, AE-1) and it is realized by ADMIN-AE1.
+2. *Restaurant read-model gap confirmed.* Baseline tables (`restaurants`, `restaurant_branches`, `menus`, `menu_items`, `branch_menu_items`, `menu_item_nutrition`) carry lifecycle status and nutrition status, but RLS exposes only `active`/`published` rows to clients and the ten `restaurant_internal_*_v1/v2` readers are Owner-membership-scoped. The only Admin reader is the single-branch status preview (`staff_admin_restaurant_branch_status_v1(restaurant_id, branch_id)`): no list, search, or discovery. Ownership counts, operational status roll-ups and draft/archived visibility have no Admin path.
+3. *Missing data models.* No table exists for menu-item aliases, pending menu items, data-quality issues, duplicate candidates, verification cases, review queues, social reports/moderation, member support cases, analytics events, campaigns/promotions/ads, BD/prospects/contracts, Activation Code, Strategic Accounts, nutritionist assignment/certification. Social tables that exist (`meal_buddy_*`, `social_*`) are private-user data whose Admin visibility is a product decision.
+4. `social_interest_catalog[_label]` (RLS-hardened in H4) is public-class lookup data and the one Social source that needs no privacy decision.
+
+### 7.7 Admin MVP scope (closed) and slice order
+
+Route-level detail for all 98 registry routes and 22 legacy roots: **`docs/admin-operational-surface-inventory.md`** (canonical; do not rediscover).
+
+| Slice | Scope | Backend | Class | Prerequisite |
+| --- | --- | --- | --- | --- |
+| ADMIN-A | Move the two live UIs onto `restaurant-branch-status` and `audit-platform-memberships` (REWIRE_TO_EXISTING_BACKEND) | Exists (RA-1B/1C, API routes) | SMALL | none |
+| ADMIN-AE1 | Activate only the operational read keys the MVP routes need (§7.8 AE-1) through the existing catalog/entitlement/route-requirement machinery; prove a base Admin without grants cannot read | Narrow authority successor activation | MEDIUM | ADMIN-A |
+| ADMIN-B | Restaurant operational read model + 15 read-only routes: `restaurants`, `restaurant-detail/-about/-contact`, `-branches`, `-branch-detail/-hours/-contact/-geo/-menu-items`, `-menus`, `-menu-detail`, `-menu-items`, `-menu-item-detail`, `-item-nutrition` (drafts/archived, nutrition status, lifecycle, owner-membership counts) | NEW non-authority read RPCs (sealed-role pattern) | LARGE | ADMIN-AE1 |
+| ADMIN-C | Derived read-only queues: `menu-management`, `-pending`, `-data-quality`, `nutrition-certification-pending` (read of `pending_review`), `restaurant-item-allergens`, `restaurant-item-certification` (status facts only) — 6 routes | Derived from B | MEDIUM | ADMIN-B |
+| ADMIN-D | `social-policies` read-only from `social_interest_catalog[_label]`; `/admin` dashboard counts | Small NEW read RPCs | SMALL | ADMIN-B |
+| ADMIN-E | Legacy cleanup per §7.8 dispositions | none | SMALL | A–D |
+
+Sequence: **ADMIN-A → ADMIN-AE1 → ADMIN-B → ADMIN-C → ADMIN-D → ADMIN-E**. Ordering rule: shared read model → derived queues → DEMO→REAL → legacy cleanup last. ADMIN-A is unblocked. (Correction to the first A0 note: ADMIN-B is 15 routes, ADMIN-C is 6; `restaurant-item-ingredients` has no source table and is deferred.) Slice counts over the 98 registry routes: A 2, B 15, C 6, D 2, DEFERRED 73.
+
+### 7.8 Planner decisions (A0 closure) and deferred scope
+
+- **AE-1 — `AE-1_DIRECTION_RESOLVED`; implementation `PENDING_ADMIN_AE1`.** Cross-tenant operational data for specific operational roles must be protected by explicit `CURRENT` read permissions via the existing permission catalog + entitlement + route-requirement architecture. **No base-Admin (`admin_context.read`) fallback** for these reads. **No blanket activation**: only the keys the accepted MVP routes require become `CURRENT` (least operational privilege); the other 65 `PLANNED` keys stay `PLANNED`. **No Authority redesign**: Primary, step-up, break-glass semantics untouched. Classification `NARROW_AUTHORITY_SUCCESSOR_ACTIVATION`. ADMIN-AE1 will enumerate the exact keys (the inventory §5 lists the candidates), verify which exist as PLANNED, activate/add only those, and prove base Admin without grants is denied.
+- **BD workspace — DEFERRED** for the current Admin MVP (`BD_WORKSPACE_NEXT_PHASE_SCOPE_DECISION_REQUIRED` closed). All 9 routes are preserved as future scope. Not implemented: Activation Code, Strategic Accounts, BD attribution, commission mechanics, BD schema. Company operating decisions stay in `governance/`. BD is not a blocker.
+- **Legacy roots.** The 15 one-to-one duplicates: `RETIRE_AFTER_SUCCESSOR` in ADMIN-E once canonical successors are live and validated (not deleted now). The split-successor pages `/tags`, `/menu-review`, `/restaurant-review`: `KEEP_UNTIL_SUCCESSORS_COMPLETE`. `/consents`: `REPLACE / REDIRECT_CANDIDATE`. `/esg`, `/exercise-governance`, `/data-access`: deferred until an explicit successor decision. Where a duplicate's own successor is deferred, retirement waits for that successor.
+- **Restaurant pricing and recurring dish-quota policy:** not in the current Admin MVP; relevant only if subscription/commercial tooling is later explicitly scoped; not a blocker.
+- **Deferred families (no data model or new authority):** Business Development, Operations/marketing, Member Support (private-user visibility is a product decision), Social reports/moderation and Meal Buddy private-data ops, alias/duplicate/verification/review queues, Nutritionist workflow (POST_MVP; certification *writes* need new authority), Audit operations/data-access, Engineering (TD-01), Analytics (`NO_DATA_MODEL`), `management-roles` and `break-glass` (authority-frozen).
+- Nothing is retired or redirected before ADMIN-E.
 
 ---
 
