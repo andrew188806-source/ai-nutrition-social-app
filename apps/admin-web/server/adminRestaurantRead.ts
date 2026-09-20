@@ -24,7 +24,12 @@ const CONTRACTS = Object.freeze({
   branchDetail: "staff_admin_restaurant_branch_detail_v1",
   branchContact: "staff_admin_restaurant_branch_contact_v1",
   branchHours: "staff_admin_restaurant_branch_hours_v1",
-  branchGeo: "staff_admin_restaurant_branch_geo_v1"
+  branchGeo: "staff_admin_restaurant_branch_geo_v1",
+  menuList: "staff_admin_restaurant_menu_list_v1",
+  menuDetail: "staff_admin_restaurant_menu_detail_v1",
+  menuItemList: "staff_admin_restaurant_menu_item_list_v1",
+  menuItemDetail: "staff_admin_restaurant_menu_item_detail_v1",
+  branchMenuItemList: "staff_admin_restaurant_branch_menu_item_list_v1"
 } as const);
 type ContractName = (typeof CONTRACTS)[keyof typeof CONTRACTS];
 
@@ -96,6 +101,32 @@ export type BranchGeoData = Readonly<{
   geocodeStatus: string | null; geocodeProvider: string | null; geocodeResolvedAt: string | null; geocodeAttempts: number | null;
 }>;
 
+// ADMIN-B3 types: Menu / Menu Item reads (same contract-envelope rules; fields exactly as B1 returns them).
+export type MenuRow = Readonly<{ menuId: string; restaurantId: string; name: string; status: string; categoryCount: number; itemCount: number }>;
+export type MenuListData = Readonly<{ restaurantId: string; items: readonly MenuRow[]; limit: number; offset: number; hasMore: boolean }>;
+export type MenuCategory = Readonly<{ categoryId: string; name: string; sortOrder: number; itemCount: number }>;
+export type MenuDetailData = Readonly<{ menuId: string; restaurantId: string; name: string; status: string; categories: readonly MenuCategory[] }>;
+export type MenuItemRow = Readonly<{
+  menuItemId: string; restaurantId: string; name: string; status: string; menuId: string; menuName: string;
+  categoryId: string; categoryName: string; nutritionBadgeStatus: string; badgeEnabled: boolean;
+}>;
+export type MenuItemListData = Readonly<{ restaurantId: string; menuId: string | null; items: readonly MenuItemRow[]; limit: number; offset: number; hasMore: boolean }>;
+export type CurrentNutrition = Readonly<{
+  source: string | null; verifiedStatus: string | null; confidenceScore: number | null; servingSize: string | null;
+  calories: number | null; protein: number | null; carbohydrates: number | null; fat: number | null; fiber: number | null;
+  sugar: number | null; sodium: number | null; saturatedFat: number | null; updatedAt: string | null;
+}>;
+export type MenuItemDetailData = Readonly<{
+  menuItemId: string; restaurantId: string; name: string; description: string | null; imageUrl: string | null; status: string;
+  menuId: string; menuName: string; categoryId: string; categoryName: string; allergens: readonly string[];
+  nutritionBadgeStatus: string; badgeEnabled: boolean; branchLinkCount: number; currentNutrition: CurrentNutrition | null;
+}>;
+export type BranchMenuItemRow = Readonly<{
+  branchMenuItemId: string; branchId: string; restaurantId: string; menuItemId: string; menuItemName: string; menuItemStatus: string;
+  branchSpecificName: string | null; price: number; availability: string; soldOut: boolean; branchSpecificStatus: string;
+}>;
+export type BranchMenuItemListData = Readonly<{ branchId: string; restaurantId: string; items: readonly BranchMenuItemRow[]; limit: number; offset: number; hasMore: boolean }>;
+
 // ---------------------------------------------------------------------------------------------------------------
 // Parsers (return null on any structural mismatch -> `unavailable`)
 // ---------------------------------------------------------------------------------------------------------------
@@ -114,6 +145,33 @@ function parsePage<T>(raw: Rec, row: (v: unknown) => T | null): { items: T[]; li
   const items: T[] = [];
   for (const item of raw.items) { const parsed = row(item); if (parsed === null) return null; items.push(parsed); }
   return { items, limit: raw.limit, offset: raw.offset, hasMore: raw.hasMore };
+}
+function parseMenuRow(m: unknown): MenuRow | null {
+  if (!isRec(m) || !str(m.menuId) || !str(m.restaurantId) || !str(m.name) || !str(m.status) || !int(m.categoryCount) || !int(m.itemCount)) return null;
+  return Object.freeze({ menuId: m.menuId, restaurantId: m.restaurantId, name: m.name, status: m.status, categoryCount: m.categoryCount, itemCount: m.itemCount });
+}
+function parseMenuItemRow(m: unknown): MenuItemRow | null {
+  if (!isRec(m) || !str(m.menuItemId) || !str(m.restaurantId) || !str(m.name) || !str(m.status) || !str(m.menuId) || !str(m.menuName)
+    || !str(m.categoryId) || !str(m.categoryName) || !str(m.nutritionBadgeStatus) || typeof m.badgeEnabled !== "boolean") return null;
+  return Object.freeze({ menuItemId: m.menuItemId, restaurantId: m.restaurantId, name: m.name, status: m.status, menuId: m.menuId, menuName: m.menuName,
+    categoryId: m.categoryId, categoryName: m.categoryName, nutritionBadgeStatus: m.nutritionBadgeStatus, badgeEnabled: m.badgeEnabled });
+}
+function parseBranchMenuItemRow(m: unknown): BranchMenuItemRow | null {
+  if (!isRec(m) || !str(m.branchMenuItemId) || !str(m.branchId) || !str(m.restaurantId) || !str(m.menuItemId) || !str(m.menuItemName) || !str(m.menuItemStatus)
+    || !strOrNull(m.branchSpecificName) || typeof m.price !== "number" || !Number.isFinite(m.price) || !str(m.availability)
+    || typeof m.soldOut !== "boolean" || !str(m.branchSpecificStatus)) return null;
+  return Object.freeze({ branchMenuItemId: m.branchMenuItemId, branchId: m.branchId, restaurantId: m.restaurantId, menuItemId: m.menuItemId,
+    menuItemName: m.menuItemName, menuItemStatus: m.menuItemStatus, branchSpecificName: m.branchSpecificName, price: m.price,
+    availability: m.availability, soldOut: m.soldOut, branchSpecificStatus: m.branchSpecificStatus });
+}
+function parseCurrentNutrition(n: unknown): CurrentNutrition | null | undefined {
+  if (n === null) return null;
+  if (!isRec(n) || !strOrNull(n.source) || !strOrNull(n.verifiedStatus) || !numOrNull(n.confidenceScore) || !strOrNull(n.servingSize) || !strOrNull(n.updatedAt)
+    || !numOrNull(n.calories) || !numOrNull(n.protein) || !numOrNull(n.carbohydrates) || !numOrNull(n.fat) || !numOrNull(n.fiber)
+    || !numOrNull(n.sugar) || !numOrNull(n.sodium) || !numOrNull(n.saturatedFat)) return undefined;
+  return Object.freeze({ source: n.source, verifiedStatus: n.verifiedStatus, confidenceScore: n.confidenceScore, servingSize: n.servingSize,
+    calories: n.calories, protein: n.protein, carbohydrates: n.carbohydrates, fat: n.fat, fiber: n.fiber, sugar: n.sugar,
+    sodium: n.sodium, saturatedFat: n.saturatedFat, updatedAt: n.updatedAt });
 }
 function parseInterval(i: unknown): HoursInterval | null {
   if (!isRec(i) || !str(i.start) || !str(i.end) || !int(i.endDayOffset)) return null;
@@ -206,6 +264,74 @@ export function readBranchHours(restaurantId: string, branchId: string): Promise
     for (const c of raw.closures) { if (!isRec(c) || !str(c.startsAt) || !strOrNull(c.endsAt)) return null; closures.push({ startsAt: c.startsAt, endsAt: c.endsAt }); }
     return Object.freeze({ branchId, restaurantId, timezoneName: raw.timezoneName, weeklyHoursConfigured: raw.weeklyHoursConfigured,
       weekly: Object.freeze(weekly), special: Object.freeze(special), closures: Object.freeze(closures) });
+  });
+}
+
+export function readMenuList(restaurantId: string, page: number): Promise<ReadResult<MenuListData>> {
+  if (!isValidReadId(restaurantId) || !Number.isInteger(page) || page < 1 || page > RESTAURANT_LIST_MAX_PAGE) return Promise.resolve({ state: "invalid_request" });
+  const offset = (page - 1) * RESTAURANT_LIST_PAGE_SIZE;
+  return call(CONTRACTS.menuList, { p_restaurant_id: restaurantId, p_limit: RESTAURANT_LIST_PAGE_SIZE, p_offset: offset }, (raw) => {
+    const parsed = parsePage(raw, parseMenuRow);
+    if (!parsed || raw.restaurantId !== restaurantId || parsed.limit !== RESTAURANT_LIST_PAGE_SIZE || parsed.offset !== offset
+      || parsed.items.some((m) => m.restaurantId !== restaurantId)) return null;
+    return Object.freeze({ restaurantId, ...parsed });
+  });
+}
+
+export function readMenuDetail(restaurantId: string, menuId: string): Promise<ReadResult<MenuDetailData>> {
+  if (!isValidReadId(restaurantId) || !isValidReadId(menuId)) return Promise.resolve({ state: "invalid_request" });
+  return call(CONTRACTS.menuDetail, { p_restaurant_id: restaurantId, p_menu_id: menuId }, (raw) => {
+    if (raw.restaurantId !== restaurantId || raw.menuId !== menuId || !str(raw.name) || !str(raw.status) || !list(raw.categories)) return null;
+    const categories: MenuCategory[] = [];
+    for (const c of raw.categories) {
+      if (!isRec(c) || !str(c.categoryId) || !str(c.name) || typeof c.sortOrder !== "number" || !Number.isInteger(c.sortOrder) || !int(c.itemCount)) return null;
+      categories.push(Object.freeze({ categoryId: c.categoryId, name: c.name, sortOrder: c.sortOrder, itemCount: c.itemCount }));
+    }
+    return Object.freeze({ menuId, restaurantId, name: raw.name, status: raw.status, categories: Object.freeze(categories) });
+  });
+}
+
+/** Menu-scoped item list: the route is `/menus/[menuId]/items`, so B1 is always called with the exact Restaurant + Menu pair. */
+export function readMenuItemList(restaurantId: string, menuId: string, page: number): Promise<ReadResult<MenuItemListData>> {
+  if (!isValidReadId(restaurantId) || !isValidReadId(menuId) || !Number.isInteger(page) || page < 1 || page > RESTAURANT_LIST_MAX_PAGE) return Promise.resolve({ state: "invalid_request" });
+  const offset = (page - 1) * RESTAURANT_LIST_PAGE_SIZE;
+  return call(CONTRACTS.menuItemList, { p_restaurant_id: restaurantId, p_menu_id: menuId, p_limit: RESTAURANT_LIST_PAGE_SIZE, p_offset: offset }, (raw) => {
+    const parsed = parsePage(raw, parseMenuItemRow);
+    if (!parsed || raw.restaurantId !== restaurantId || raw.menuId !== menuId || parsed.limit !== RESTAURANT_LIST_PAGE_SIZE || parsed.offset !== offset
+      || parsed.items.some((m) => m.restaurantId !== restaurantId || m.menuId !== menuId)) return null;
+    return Object.freeze({ restaurantId, menuId, ...parsed });
+  });
+}
+
+/**
+ * Shared by the item-detail and item-nutrition pages (nutrition is presentation of `currentNutrition` from this one
+ * contract; there is no separate nutrition RPC). B1 keys the item by Restaurant + item id, so the route's menu id is
+ * enforced here: an item that does not live under the requested menu is `not_found`, never returned.
+ */
+export function readMenuItemDetail(restaurantId: string, menuId: string, menuItemId: string): Promise<ReadResult<MenuItemDetailData>> {
+  if (!isValidReadId(restaurantId) || !isValidReadId(menuId) || !isValidReadId(menuItemId)) return Promise.resolve({ state: "invalid_request" });
+  return call(CONTRACTS.menuItemDetail, { p_restaurant_id: restaurantId, p_menu_item_id: menuItemId }, (raw) => {
+    if (raw.restaurantId !== restaurantId || raw.menuItemId !== menuItemId || !str(raw.name) || !strOrNull(raw.description) || !strOrNull(raw.imageUrl)
+      || !str(raw.status) || !str(raw.menuId) || !str(raw.menuName) || !str(raw.categoryId) || !str(raw.categoryName) || !list(raw.allergens)
+      || !str(raw.nutritionBadgeStatus) || typeof raw.badgeEnabled !== "boolean" || !int(raw.branchLinkCount)) return null;
+    const allergens: string[] = [];
+    for (const a of raw.allergens) { if (!str(a)) return null; allergens.push(a); }
+    const currentNutrition = parseCurrentNutrition(raw.currentNutrition);
+    if (currentNutrition === undefined) return null;
+    return Object.freeze({ menuItemId, restaurantId, name: raw.name, description: raw.description, imageUrl: raw.imageUrl, status: raw.status,
+      menuId: raw.menuId, menuName: raw.menuName, categoryId: raw.categoryId, categoryName: raw.categoryName, allergens: Object.freeze(allergens),
+      nutritionBadgeStatus: raw.nutritionBadgeStatus, badgeEnabled: raw.badgeEnabled, branchLinkCount: raw.branchLinkCount, currentNutrition });
+  }).then((result): ReadResult<MenuItemDetailData> => (result.state === "ready" && result.data.menuId !== menuId ? { state: "not_found" } : result));
+}
+
+export function readBranchMenuItemList(restaurantId: string, branchId: string, page: number): Promise<ReadResult<BranchMenuItemListData>> {
+  if (!isValidReadId(restaurantId) || !isValidReadId(branchId) || !Number.isInteger(page) || page < 1 || page > RESTAURANT_LIST_MAX_PAGE) return Promise.resolve({ state: "invalid_request" });
+  const offset = (page - 1) * RESTAURANT_LIST_PAGE_SIZE;
+  return call(CONTRACTS.branchMenuItemList, { p_restaurant_id: restaurantId, p_branch_id: branchId, p_limit: RESTAURANT_LIST_PAGE_SIZE, p_offset: offset }, (raw) => {
+    const parsed = parsePage(raw, parseBranchMenuItemRow);
+    if (!parsed || raw.restaurantId !== restaurantId || raw.branchId !== branchId || parsed.limit !== RESTAURANT_LIST_PAGE_SIZE || parsed.offset !== offset
+      || parsed.items.some((m) => m.restaurantId !== restaurantId || m.branchId !== branchId)) return null;
+    return Object.freeze({ restaurantId, branchId, ...parsed });
   });
 }
 

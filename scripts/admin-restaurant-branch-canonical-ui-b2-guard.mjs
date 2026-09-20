@@ -83,7 +83,9 @@ check("each page is created through the canonical operational gate with its own 
 });
 check("adapter maps exactly the nine B1 contracts (no replacement RPC) and each read uses the expected contract", () => {
   const used = [...adapterCode.matchAll(/"(staff_admin_[a-z_0-9]+)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(used, Object.values(B2).map((v) => v[2]).sort());
+  // ADMIN-B3 (exact successor) adds five more B1 contracts to the same adapter; the nine B2 contracts are unchanged.
+  const B3_CONTRACTS = ["staff_admin_restaurant_menu_list_v1", "staff_admin_restaurant_menu_detail_v1", "staff_admin_restaurant_menu_item_list_v1", "staff_admin_restaurant_menu_item_detail_v1", "staff_admin_restaurant_branch_menu_item_list_v1"];
+  assert.deepEqual(used, [...Object.values(B2).map((v) => v[2]), ...B3_CONTRACTS].sort());
   assert.equal((adapterCode.match(/\.rpc\(/g) ?? []).length, 1); // single shared call site
   const pairs = { readRestaurantList: "list", readRestaurantDetail: "detail", readRestaurantAbout: "about", readRestaurantContact: "contact", readBranchList: "branchList", readBranchDetail: "branchDetail", readBranchContact: "branchContact", readBranchHours: "branchHours", readBranchGeo: "branchGeo" };
   for (const [fn, key] of Object.entries(pairs)) {
@@ -146,7 +148,7 @@ check("parent/child safety: nested reads always pass BOTH restaurantId and branc
 check("bounded pagination: fixed page size 20, page -> offset, page bounded to B1's offset ceiling; no search/filter/limit-from-URL", () => {
   assert.match(adapter, /RESTAURANT_LIST_PAGE_SIZE = 20;/); assert.match(adapter, /RESTAURANT_LIST_MAX_PAGE = 500/);
   assert.match(adapterCode, /p_limit: RESTAURANT_LIST_PAGE_SIZE, p_offset: offset/);
-  assert.equal((adapterCode.match(/p_limit: RESTAURANT_LIST_PAGE_SIZE/g) ?? []).length, 2);
+  assert.equal((adapterCode.match(/p_limit: RESTAURANT_LIST_PAGE_SIZE/g) ?? []).length, 2 + 3); // B2 lists + ADMIN-B3 lists
   for (const id of ["restaurants", "restaurant-branches"]) { assert.match(pages[id], /parsePageParam\(searchParams\.page\)/); assert.doesNotMatch(pages[id], /searchParams\.(limit|offset|q|search|filter)/); }
   assert.match(read(VIEWS), /\[1-9\]\[0-9\]\{0,5\}/);
 });
@@ -159,14 +161,14 @@ check("registry: exactly the nine B2 routes moved to LIVE; the six B3 routes and
   const before = avail(base.replace(/\r\n/g, "\n")), now = avail(read(REGISTRY));
   assert.deepEqual(Object.keys(before).sort(), Object.keys(now).sort());
   const changed = Object.keys(now).filter((id) => now[id] !== before[id]).sort();
-  assert.deepEqual(changed, Object.keys(B2).sort());
+  assert.deepEqual(changed, [...Object.keys(B2), ...Object.keys(B3)].sort()); // ADMIN-B3 successor: the six B3 routes are LIVE too
   for (const id of Object.keys(B2)) assert.equal(now[id], "LIVE", id);
-  for (const id of Object.keys(B3)) assert.notEqual(now[id], "LIVE", id);
-  assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 73 - 8);
-  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 8 + 9);
+  for (const id of Object.keys(B3)) assert.equal(now[id], "LIVE", id);
+  assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 73 - 8 - 6);
+  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 8 + 9 + 6);
 });
-check("B3 routes untouched: the six pages are still registry scaffolds; ingredients stays NOT_ENABLED", () => {
-  for (const [id, file] of Object.entries(B3)) { const src = read(file); assert.ok(src.includes(`createAdminRegistryPage("${id}")`), id); assert.equal(git("diff", "--name-only", BASELINE, "--", file), ""); }
+check("B3 routes are wired by ADMIN-B3 (operational gate, not scaffolds); ingredients stays NOT_ENABLED", () => {
+  for (const [id, file] of Object.entries(B3)) { const src = read(file); assert.ok(src.includes(`createAdminOperationalPage<`) && src.includes(`>("${id}",`), id); }
   assert.equal(route("restaurant-item-ingredients").availability, "NOT_ENABLED");
 });
 check("ADMIN-A unchanged: the branch-status and membership-audit pages/components are byte-identical to the baseline; legacy roots untouched", () => {
@@ -183,7 +185,8 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
     "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-mutations.mjs",
     "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs",
     "scripts/pre-admin-hardening-h3-h4-guard.mjs",
-    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md"
+    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
+    "apps/admin-web/components/admin-shell/AdminMenuViews.tsx", ...Object.values(B3), "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs"
   ]);
   assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
   assert.ok(!changed.has(VOCAB));

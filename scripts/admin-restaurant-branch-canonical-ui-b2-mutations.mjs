@@ -41,7 +41,7 @@ const mutants = [
   { id: "B2", name: "a B2 route is mapped to the wrong permission (contact -> about)", file: REGISTRY, fn: routeLine("restaurant-contact", (l) => l.replace('requiredPermissions: ["admin.restaurants.contact.read"]', 'requiredPermissions: ["admin.restaurants.about.read"]')) },
   { id: "C", name: "the restaurant list reads the detail contract", file: ADAPTER, fn: once("return call(CONTRACTS.list, {", "return call(CONTRACTS.detail, {") },
   { id: "D", name: "raw table access introduced in the adapter", file: ADAPTER, fn: once("const result = await createAdminSupabaseServerClient().rpc(contract, { ...args });", "const result = await createAdminSupabaseServerClient().from('restaurants').select('id');") },
-  { id: "E", name: "a B3 route is switched LIVE", file: REGISTRY, fn: routeLine("restaurant-menus", (l) => l.replace(/availability: "NOT_ENABLED"/, 'availability: "LIVE"')) },
+  { id: "E", name: "a B3 route is switched back to NOT_ENABLED", file: REGISTRY, fn: routeLine("restaurant-menus", (l) => l.replace(/availability: "LIVE"/, 'availability: "NOT_ENABLED"')) },
   { id: "E2", name: "a deferred route (ingredients) is switched LIVE", file: REGISTRY, fn: routeLine("restaurant-item-ingredients", (l) => l.replace(/availability: "NOT_ENABLED"/, 'availability: "LIVE"')) },
   { id: "E3", name: "one B2 route is left un-wired (not LIVE)", file: REGISTRY, fn: routeLine("restaurant-branch-hours", (l) => l.replace('availability: "LIVE"', 'availability: "NOT_ENABLED"')) },
   { id: "F", name: "a mutation call (fetch) is introduced into the adapter", file: ADAPTER, fn: once("export function readRestaurantList(", "void fetch('/api/x', { method: 'POST' });\nexport function readRestaurantList(") },

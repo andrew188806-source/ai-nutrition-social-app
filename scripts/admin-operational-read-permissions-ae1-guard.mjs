@@ -273,7 +273,8 @@ check("frozen authority and ADMIN-A code are untouched: changed paths are inside
     "scripts/admin-operational-read-permissions-ae1-guard.mjs",
     "scripts/admin-operational-read-permissions-ae1-mutations.mjs",
     "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs",
-    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md"
+    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
+    "apps/admin-web/components/admin-shell/AdminMenuViews.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/nutrition/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/branches/[branchId]/menu-items/page.tsx", "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs"
   ]);
   const outside = [...changed].filter((file) => !allowed.has(file));
   assert.deepEqual(outside, []);

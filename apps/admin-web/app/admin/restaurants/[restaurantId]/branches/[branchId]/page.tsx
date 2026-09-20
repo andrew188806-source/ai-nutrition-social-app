@@ -28,6 +28,7 @@ export default createAdminOperationalPage<{ restaurantId: string; branchId: stri
             { label: "聯絡資料", href: `${base}/contact`, allowed: has(context, "admin.restaurants.contact.read") },
             { label: "營業時間與休業", href: `${base}/hours`, allowed: has(context, "admin.restaurants.hours.read") },
             { label: "地理資料", href: `${base}/geo`, allowed: has(context, "admin.restaurants.geo.read") },
+            { label: "分店餐點", href: `${base}/menu-items`, allowed: has(context, "admin.restaurants.menu_items.read") },
             { label: "分店狀態（變更）", href: `${base}/status`, allowed: has(context, "admin_restaurant_branch.status.write") }
           ]} />
         </>

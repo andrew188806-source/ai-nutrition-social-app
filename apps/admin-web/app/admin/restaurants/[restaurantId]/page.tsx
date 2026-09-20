@@ -30,7 +30,8 @@ export default createAdminOperationalPage<{ restaurantId: string }>("restaurant-
           <SubLinks links={[
             { label: "介紹", href: `${base}/about`, allowed: has(context, "admin.restaurants.about.read") },
             { label: "聯絡資料", href: `${base}/contact`, allowed: has(context, "admin.restaurants.contact.read") },
-            { label: "分店", href: `${base}/branches`, allowed: has(context, "admin.restaurants.branches.read") }
+            { label: "分店", href: `${base}/branches`, allowed: has(context, "admin.restaurants.branches.read") },
+            { label: "菜單", href: `${base}/menus`, allowed: has(context, "admin.restaurants.menus.read") }
           ]} />
         </>
       )}
