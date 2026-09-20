@@ -31,23 +31,23 @@ const CONTRACTS = Object.freeze({
   menuItemDetail: "staff_admin_restaurant_menu_item_detail_v1",
   branchMenuItemList: "staff_admin_restaurant_branch_menu_item_list_v1"
 } as const);
-type ContractName = (typeof CONTRACTS)[keyof typeof CONTRACTS];
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
-const str = (v: unknown): v is string => typeof v === "string";
-const strOrNull = (v: unknown): v is string | null => v === null || typeof v === "string";
-const int = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+export const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
+export const str = (v: unknown): v is string => typeof v === "string";
+export const strOrNull = (v: unknown): v is string | null => v === null || typeof v === "string";
+export const int = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 const numOrNull = (v: unknown): v is number | null => v === null || (typeof v === "number" && Number.isFinite(v));
-const list = (v: unknown): v is unknown[] => Array.isArray(v);
+export const list = (v: unknown): v is unknown[] => Array.isArray(v);
 
 /** Identifier shape accepted by B1 (1-200 chars, no surrounding whitespace). Checked before any call. */
 export function isValidReadId(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && value.length <= 200 && value === value.trim();
 }
 
-async function call<T>(
-  contract: ContractName,
+/** Shared contract call site (ADMIN-B and ADMIN-C reads); the only `.rpc` in the Admin read layer. */
+export async function call<T>(
+  contract: string,
   args: Readonly<Record<string, string | number | null>>,
   parse: (raw: Rec) => T | null
 ): Promise<ReadResult<T>> {
@@ -140,7 +140,7 @@ function parseBranchRow(b: unknown): BranchRow | null {
   if (!isRec(b) || !str(b.branchId) || !str(b.restaurantId) || !str(b.name) || !strOrNull(b.district) || !str(b.status)) return null;
   return Object.freeze({ branchId: b.branchId, restaurantId: b.restaurantId, name: b.name, district: b.district, status: b.status });
 }
-function parsePage<T>(raw: Rec, row: (v: unknown) => T | null): { items: T[]; limit: number; offset: number; hasMore: boolean } | null {
+export function parsePage<T>(raw: Rec, row: (v: unknown) => T | null): { items: T[]; limit: number; offset: number; hasMore: boolean } | null {
   if (!list(raw.items) || !int(raw.limit) || !int(raw.offset) || typeof raw.hasMore !== "boolean" || raw.items.length > raw.limit) return null;
   const items: T[] = [];
   for (const item of raw.items) { const parsed = row(item); if (parsed === null) return null; items.push(parsed); }

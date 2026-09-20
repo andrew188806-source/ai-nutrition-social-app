@@ -134,7 +134,7 @@ check("no raw client table access and no mutation surface: only the shared rpc c
   }
   for (const src of [...Object.values(pages), read(MENU_VIEWS)]) assert.doesNotMatch(src, /<form|<button|<input|<textarea|<select|method=|onSubmit|onClick/i);
   const changed = [...git("diff", "--name-only", BASELINE).split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")].filter(Boolean);
-  assert.deepEqual(changed.filter((f) => /^apps\/admin-web\/app\/api\//.test(f) || /^supabase\//.test(f)), []);
+  assert.deepEqual(changed.filter((f) => /^apps\/admin-web\/app\/api\//.test(f) || (/^supabase\//.test(f) && f !== "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql")), []); // ADMIN-C adds exactly one additive migration
 });
 check("contract states are validated, not collapsed: forbidden/invalid_request/not_found/unavailable distinct; identifiers echo-checked; item's menu enforced", () => {
   const echo = {
@@ -180,12 +180,12 @@ check("data minimisation: no owner identity, email, plan, legal name or raw/inte
 check("registry: exactly the six B3 routes moved to LIVE; B2 stays LIVE; ADMIN-C, deferred (ingredients/allergens/certification) and every other route status unchanged", () => {
   const before = availOf(git("show", `${BASELINE}:${REGISTRY}`).replace(/\r\n/g, "\n")), now = availOf(read(REGISTRY));
   assert.deepEqual(Object.keys(before).sort(), Object.keys(now).sort());
-  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), Object.keys(B3).sort());
+  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), [...Object.keys(B3), ...ADMIN_C_ROUTES].sort()); // ADMIN-C (exact successor) moves its four routes DEMO -> LIVE
   for (const id of Object.keys(B3)) { assert.equal(before[id], "NOT_ENABLED", id); assert.equal(now[id], "LIVE", id); }
   for (const id of B2_IDS) assert.equal(now[id], "LIVE", id);
-  for (const id of ADMIN_C_ROUTES) assert.equal(now[id], before[id], id);
+  for (const id of ADMIN_C_ROUTES) { assert.equal(before[id], "DEMO", id); assert.equal(now[id], "LIVE", id); }
   for (const id of ["restaurant-item-ingredients", "restaurant-item-allergens", "restaurant-item-certification"]) if (now[id] !== undefined) assert.equal(now[id], "NOT_ENABLED", id);
-  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 17 + 6);
+  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 17 + 6 + 4);
   assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 65 - 6);
 });
 check("ingredient route remains DEFERRED: NOT_ENABLED, its page byte-identical (registry scaffold), and no ingredient source is read or parsed anywhere in B3", () => {
@@ -195,7 +195,7 @@ check("ingredient route remains DEFERRED: NOT_ENABLED, its page byte-identical (
   for (const src of [...Object.values(pages), adapter, read(MENU_VIEWS)]) assert.doesNotMatch(src, /ingredient/i);
 });
 check("ADMIN-C exclusion: no queue/aggregate page exists in B3; the menu-management pages are byte-identical to the baseline", () => {
-  assert.equal(git("diff", "--name-only", BASELINE, "--", "apps/admin-web/app/admin/restaurants/menu-management", "apps/admin-web/app/admin/nutrition-certification"), "");
+  // the four ADMIN-C queue pages are wired by ADMIN-C (exact successor); their own guard pins them
   for (const src of Object.values(pages)) assert.doesNotMatch(src, /pending|data-quality|待審|待處理/i);
 });
 check("ADMIN-B2 unchanged: seven B2 pages are byte-identical; restaurant-detail and branch-detail differ only by the added B3 navigation links", () => {
@@ -222,7 +222,7 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
   const allowed = new Set([
     REGISTRY, ADAPTER, MENU_VIEWS, "package.json",
     ...Object.values(B3).map((v) => v[0]), B2_FILES["restaurant-detail"], B2_FILES["restaurant-branch-detail"],
-    "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs",
+    "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs", "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "apps/admin-web/server/adminReviewQueueRead.ts", "apps/admin-web/components/admin-shell/AdminQueueViews.tsx", "apps/admin-web/app/admin/restaurants/menu-management/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/pending/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/data-quality/page.tsx", "apps/admin-web/app/admin/nutrition/certification/pending/page.tsx", "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs", "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs", "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs", "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs", "apps/admin-web/server/adminRestaurantRead.ts", "package.json",
     "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-mutations.mjs",
     "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs",
     "scripts/pre-admin-hardening-h3-h4-guard.mjs",
@@ -230,7 +230,7 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
   ]);
   assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
   assert.ok(!changed.has(VOCAB));
-  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/")), []);
+  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && f !== "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql"), []); // ADMIN-C adds exactly one additive migration
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
 });
 

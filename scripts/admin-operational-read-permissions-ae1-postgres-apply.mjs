@@ -67,8 +67,8 @@ try {
   const identity = (await runner.query("select current_user, current_setting('is_superuser') as superuser")).rows[0];
   check("migration runner is a NON-superuser postgres (the platform shape; a superuser gate would hide owner/ACL problems)", identity.current_user === "postgres" && identity.superuser === "off", identity);
 
-  // The exact ADMIN-B1 successor (20260920020000) is proven by its own gate; this gate covers the 136 migrations through AE1.
-  const files = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql") && f !== "20260920020000_admin_restaurant_operational_read_foundation_b1.sql").sort();
+  // The exact ADMIN-B1 (20260920020000) and ADMIN-C (20260920030000) successors are proven by their own gates; this gate covers the 136 migrations through AE1.
+  const files = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql") && f !== "20260920020000_admin_restaurant_operational_read_foundation_b1.sql" && f !== "20260920030000_admin_operational_review_queues_c.sql").sort();
   for (const file of files.filter((f) => f !== AE1)) {
     try { await runner.query(fs.readFileSync(path.join(MIGRATIONS, file), "utf8")); applied += 1; }
     catch (error) { check(`predecessor applies: ${file}`, false, { code: error.code, message: String(error.message).slice(0, 600) }); throw error; }

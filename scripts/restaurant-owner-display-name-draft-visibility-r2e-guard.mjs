@@ -29,7 +29,7 @@ if (source === null) {
 // --- ordering: this is the final migration in the repo --------------------------------------------
 const migrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
 // Exact successor awareness: R2E is followed by precisely the two authorized pre-Admin hardening migrations (H3, H4).
-check(migrationFiles.slice(-5).join("|") === [MIGRATION.split("/").pop(), "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql", "20260920010000_admin_operational_read_permissions_ae1.sql", "20260920020000_admin_restaurant_operational_read_foundation_b1.sql"].join("|"), "R2E is followed only by the authorized H3, H4, ADMIN-AE1 and ADMIN-B1 migrations", migrationFiles.slice(-3));
+check(migrationFiles.slice(-6).join("|") === [MIGRATION.split("/").pop(), "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql", "20260920010000_admin_operational_read_permissions_ae1.sql", "20260920020000_admin_restaurant_operational_read_foundation_b1.sql", "20260920030000_admin_operational_review_queues_c.sql"].join("|"), "R2E is followed only by the authorized H3, H4, ADMIN-AE1, ADMIN-B1 and ADMIN-C migrations", migrationFiles.slice(-3));
 check(migrationFiles.length >= 133, "at least 133 migrations exist (127 historical + 5 R2B + 1 R2E)", migrationFiles.length);
 
 // --- target role and new policy -------------------------------------------------------------------

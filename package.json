@@ -570,7 +570,10 @@
     "test:admin-restaurant-branch-canonical-ui-b2-guard": "node scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs",
     "test:admin-restaurant-branch-canonical-ui-b2-mutations": "node scripts/admin-restaurant-branch-canonical-ui-b2-mutations.mjs",
     "test:admin-menu-canonical-ui-b3-guard": "node scripts/admin-menu-canonical-ui-b3-guard.mjs",
-    "test:admin-menu-canonical-ui-b3-mutations": "node scripts/admin-menu-canonical-ui-b3-mutations.mjs"
+    "test:admin-menu-canonical-ui-b3-mutations": "node scripts/admin-menu-canonical-ui-b3-mutations.mjs",
+    "test:admin-operational-review-queues-c-guard": "node scripts/admin-operational-review-queues-c-guard.mjs",
+    "test:admin-operational-review-queues-c-mutations": "node scripts/admin-operational-review-queues-c-mutations.mjs",
+    "test:admin-operational-review-queues-c-postgres": "node scripts/admin-operational-review-queues-c-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",
