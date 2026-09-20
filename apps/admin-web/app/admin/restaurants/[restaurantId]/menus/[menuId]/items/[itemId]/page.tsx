@@ -32,7 +32,11 @@ export default createAdminOperationalPage<{ restaurantId: string; menuId: string
             <h3 className="mb-3 text-sm font-bold text-slate-950">現行營養資料</h3>
             <NutritionFacts nutrition={result.data.currentNutrition} />
           </ReadySection>
-          <SubLinks links={[{ label: "營養資料（專頁）", href: `${base}/nutrition`, allowed: has(context, "admin.restaurants.menu_item.read") }]} />
+          <SubLinks links={[
+            { label: "營養資料（專頁）", href: `${base}/nutrition`, allowed: has(context, "admin.restaurants.menu_item.read") },
+            { label: "過敏原（專頁）", href: `${base}/allergens`, allowed: has(context, "admin.restaurants.menu_item.read") },
+            { label: "營養審核現況（專頁）", href: `${base}/certification`, allowed: has(context, "admin.restaurants.menu_item.read") }
+          ]} />
         </>
       )}
     </article>

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// ADMIN-C guard: the four read-only Admin review-queue routes over four purpose-built read contracts. Static; no network.
+// ADMIN-C guard: the SIX canonical ADMIN-C routes. ADMIN-C1 = four read-only review queues over four purpose-built read contracts;
+// ADMIN-C2 = two per-item factual read surfaces (allergens, certification status) that REUSE the ADMIN-B1 item-detail contract. Static; no network.
 import assert from "node:assert/strict";
 import child from "node:child_process";
 import fs from "node:fs";
@@ -8,7 +9,8 @@ import ts from "typescript";
 
 const ROOT = process.cwd();
 const SUITE = "admin-operational-review-queues-c-guard";
-const BASELINE = "46bfb62457d2e0d86752334481649797ac860db3";
+const BASELINE = "46bfb62457d2e0d86752334481649797ac860db3"; // ADMIN-B3 (pushed) = the ADMIN-C1 baseline
+const C1_COMMIT = "6df4660eec5a59ca9f320dad6be0d5486e807924"; // ADMIN-C1 (local) = the ADMIN-C2 baseline
 const MIGRATION = "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql";
 const REGISTRY = "apps/admin-web/auth/admin-route-registry.ts";
 const VOCAB = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
@@ -28,15 +30,23 @@ const C = Object.freeze({
   "menu-management-data-quality": [`${APP}/restaurants/menu-management/data-quality/page.tsx`, "readMenuManagementDataQuality", "dataQuality", "staff_admin_menu_management_data_quality_v1", "admin.restaurants.menu_management.data_quality.read", "/admin/restaurants/menu-management/data-quality"],
   "nutrition-certification-pending": [`${APP}/nutrition/certification/pending/page.tsx`, "readNutritionCertificationPending", "certificationPending", "staff_admin_nutrition_certification_pending_v1", "admin.nutrition.certification.pending.read", "/admin/nutrition/certification/pending"]
 });
+// ADMIN-C2: id -> [page file, exact key, canonical path]. Both reuse readMenuItemDetail (staff_admin_restaurant_menu_item_detail_v1).
+const IT = `${APP}/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]`;
+const C2 = Object.freeze({
+  "restaurant-item-allergens": [`${IT}/allergens/page.tsx`, "admin.restaurants.menu_item.read", "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/allergens"],
+  "restaurant-item-certification": [`${IT}/certification/page.tsx`, "admin.restaurants.menu_item.read", "/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/certification"]
+});
+const ITEM_DETAIL = `${IT}/page.tsx`;
+const C1_FILES = [MIGRATION, ADAPTER, Q_VIEWS, ...Object.values(C).map((v) => v[0])];
 const B_IDS = ["restaurants", "restaurant-detail", "restaurant-about", "restaurant-contact", "restaurant-branches", "restaurant-branch-detail", "restaurant-branch-contact", "restaurant-branch-hours", "restaurant-branch-geo",
   "restaurant-menus", "restaurant-menu-detail", "restaurant-menu-items", "restaurant-branch-menu-items", "restaurant-menu-item-detail", "restaurant-item-nutrition"];
 const R = `${APP}/restaurants`;
 const B_FILES = [`${R}/page.tsx`, `${R}/[restaurantId]/page.tsx`, `${R}/[restaurantId]/about/page.tsx`, `${R}/[restaurantId]/contact/page.tsx`, `${R}/[restaurantId]/branches/page.tsx`,
   `${R}/[restaurantId]/branches/[branchId]/page.tsx`, `${R}/[restaurantId]/branches/[branchId]/contact/page.tsx`, `${R}/[restaurantId]/branches/[branchId]/hours/page.tsx`, `${R}/[restaurantId]/branches/[branchId]/geo/page.tsx`,
   `${R}/[restaurantId]/menus/page.tsx`, `${R}/[restaurantId]/menus/[menuId]/page.tsx`, `${R}/[restaurantId]/menus/[menuId]/items/page.tsx`, `${R}/[restaurantId]/branches/[branchId]/menu-items/page.tsx`,
-  `${R}/[restaurantId]/menus/[menuId]/items/[itemId]/page.tsx`, `${R}/[restaurantId]/menus/[menuId]/items/[itemId]/nutrition/page.tsx`, B3_VIEWS, B_VIEWS, FACTORY];
+  `${R}/[restaurantId]/menus/[menuId]/items/[itemId]/nutrition/page.tsx`, B3_VIEWS, B_VIEWS, FACTORY];
 const ADMIN_A_FILES = ["apps/admin-web/app/admin/audit/platform-memberships/page.tsx", `${R}/[restaurantId]/branches/[branchId]/status/page.tsx`, "apps/admin-web/components/admin-shell/AdminBranchStatusWorkspace.tsx", "apps/admin-web/components/admin-shell/AdminMembershipAudit.tsx", "apps/admin-web/components/PlatformAdminBranchStatus.tsx"];
-const DEFERRED_ROUTES = ["menu-management-duplicates", "menu-management-aliases", "menu-management-nutrition-discrepancy", "nutrition-certification", "nutrition-certification-discrepancy", "nutrition-certification-remote-review", "nutrition-certification-history", "nutrition-certification-re-review", "restaurant-item-ingredients", "restaurant-item-allergens", "restaurant-item-certification"];
+const DEFERRED_ROUTES = ["menu-management-duplicates", "menu-management-aliases", "menu-management-nutrition-discrepancy", "nutrition-certification", "nutrition-certification-discrepancy", "nutrition-certification-remote-review", "nutrition-certification-history", "nutrition-certification-re-review", "restaurant-item-ingredients"];
 const LEGACY_ROOTS = ["pending-menu-items", "data-quality", "nutrition-review", "menu-review", "tags"].map((r) => `apps/admin-web/app/${r}`);
 const EXPECTED_REASONS = ["item_status_draft", "menu_belongs_to_other_restaurant", "badge_without_current_nutrition", "multiple_current_nutrition", "badge_pending_review", "nutrition_record_pending_review"];
 
@@ -65,7 +75,7 @@ try {
 const route = (id) => registry.exports.ADMIN_ROUTE_REGISTRY.find((r) => r.id === id);
 const availOf = (text) => Object.fromEntries([...text.matchAll(/defineRoute\(\{ id: "([^"]+)",[^\n]*?availability: "([A-Z_]+)"/g)].map((m) => [m[1], m[2]]));
 
-check("exact four-route ADMIN-C scope: each canonical path exists in the registry, has a real page file and is LIVE", () => {
+check("ADMIN-C1 exact four-queue scope (unchanged): each canonical path exists in the registry, has a real page file and is LIVE", () => {
   assert.equal(Object.keys(C).length, 4);
   for (const [id, [file, , , , , routePath]] of Object.entries(C)) {
     assert.equal(route(id).route, routePath, id);
@@ -181,15 +191,16 @@ check("data minimisation: queue rows carry ids, names, the lifecycle/review fact
 check("registry: exactly the four ADMIN-C routes moved DEMO -> LIVE; the 15 ADMIN-B routes stay LIVE; ADMIN-D/E and every deferred route status is unchanged", () => {
   const before = availOf(git("show", `${BASELINE}:${REGISTRY}`).replace(/\r\n/g, "\n")), now = availOf(read(REGISTRY));
   assert.deepEqual(Object.keys(before).sort(), Object.keys(now).sort());
-  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), Object.keys(C).sort());
+  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), [...Object.keys(C), ...Object.keys(C2)].sort());
   for (const id of Object.keys(C)) { assert.equal(before[id], "DEMO", id); assert.equal(now[id], "LIVE", id); }
+  for (const id of Object.keys(C2)) { assert.equal(before[id], "NOT_ENABLED", id); assert.equal(now[id], "LIVE", id); }
   for (const id of B_IDS) assert.equal(now[id], "LIVE", id);
   for (const id of DEFERRED_ROUTES) assert.equal(now[id], before[id], id);
-  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 23 + 4);
+  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 23 + 4 + 2);
   assert.equal(Object.values(now).filter((v) => v === "DEMO").length, 16 - 4);
-  assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 59);
+  assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 59 - 2);
 });
-check("ADMIN-B unchanged: the 15 canonical pages and their shared views/gate are byte-identical to the baseline; the B1 contracts and the B read layer differ only by the exported shared helpers", () => {
+check("ADMIN-B unchanged: 14 of the 15 canonical pages (all but item-detail) and their shared views/gate are byte-identical to the baseline; the B1 contracts and the B read layer differ only by the exported shared helpers", () => {
   for (const file of B_FILES) assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
   const diff = git("diff", "-U0", BASELINE, "--", B_ADAPTER).split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   assert.ok(diff.length > 0 && diff.every((l) => /^[+-](export )?(const |async function |function |\/\*\* Shared|type ContractName)|^[+-]\s*contract: (ContractName|string),$|^[+-]$/.test(l)), diff.join(" | "));
@@ -218,7 +229,7 @@ check("changed paths are inside the exact ADMIN-C allow-list", () => {
   const lines = (v) => v.split(/\r?\n/).filter(Boolean);
   const changed = new Set([...lines(git("diff", "--name-only", BASELINE)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
   const allowed = new Set([
-    MIGRATION, REGISTRY, B_ADAPTER, ADAPTER, Q_VIEWS, "package.json", ...Object.values(C).map((v) => v[0]),
+    MIGRATION, REGISTRY, B_ADAPTER, ADAPTER, Q_VIEWS, "package.json", ...Object.values(C).map((v) => v[0]), ...Object.values(C2).map((v) => v[0]), ITEM_DETAIL,
     "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs",
     "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs",
     "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs",
@@ -227,6 +238,73 @@ check("changed paths are inside the exact ADMIN-C allow-list", () => {
     "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md"
   ]);
   assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
+});
+
+// ------------------------------------------------------------------------------------------------ ADMIN-C2
+const c2pages = Object.fromEntries(Object.entries(C2).map(([id, v]) => [id, read(v[0])]));
+const c2Code = Object.fromEntries(Object.entries(c2pages).map(([id, s]) => [id, stripTsComments(s)]));
+check("ADMIN-C2: the canonical ADMIN-C set is exactly SIX routes (C1 four queues + two item status pages), all LIVE, each path in the registry with a real page file", () => {
+  const six = [...Object.keys(C), ...Object.keys(C2)];
+  assert.equal(new Set(six).size, 6);
+  for (const [id, [file, , routePath]] of Object.entries(C2)) { assert.equal(route(id).route, routePath, id); assert.ok(fs.existsSync(path.join(ROOT, file)), file); }
+  for (const id of six) assert.equal(route(id).availability, "LIVE", id);
+});
+check("ADMIN-C2: both item pages require exactly admin.restaurants.menu_item.read (no admin_context.read fallback, no new key, not the certification-queue key) and are created through the canonical operational gate", () => {
+  const queueKeys = Object.values(C).map((v) => v[4]);
+  for (const [id, [, key]] of Object.entries(C2)) {
+    assert.deepEqual([...route(id).requiredPermissions], [key], id);
+    assert.ok(vocabulary.exports.CURRENT_ADMIN_PERMISSION_KEYS.includes(key), key);
+    assert.ok(!queueKeys.includes(key), id);
+    assert.ok(c2pages[id].includes("createAdminOperationalPage<") && c2pages[id].includes(`>("${id}",`), `${id} gate/route id`);
+    assert.doesNotMatch(c2pages[id], /admin_context\.read|admin\.nutrition\.certification\.pending|readNutritionCertificationPending|adminReviewQueueRead/);
+  }
+});
+check("ADMIN-C2: both pages REUSE the existing ADMIN-B1 item-detail read boundary (readMenuItemDetail with the full Restaurant/Menu/Item chain) - no new RPC, no new adapter read, no migration", () => {
+  for (const [id, src] of Object.entries(c2pages)) {
+    assert.match(src, /readMenuItemDetail\(params\.restaurantId, params\.menuId, params\.itemId\)/, id);
+    assert.deepEqual([...new Set([...src.matchAll(/\bread[A-Z][A-Za-z]+\(/g)].map((m) => m[0]))], ["readMenuItemDetail("], id);
+    const imported = [...src.matchAll(/import \{([^}]*)\} from "apps\/admin-web\/server\/([A-Za-z]+)"/g)].map((m) => [m[2], m[1].trim()]);
+    assert.deepEqual(imported, [["adminRestaurantRead", "readMenuItemDetail"]], id);
+    assert.doesNotMatch(src, /\.rpc\(|supabase|staff_admin_/i, id);
+  }
+  // hierarchy enforcement lives once, in the shared adapter (wrong menu -> not_found), and is unchanged
+  assert.match(stripTsComments(read(B_ADAPTER)), /result\.data\.menuId !== menuId \? \{ state: "not_found" \} : result/);
+  for (const file of [B_ADAPTER, ADAPTER, "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql"]) assert.equal(git("diff", "--name-only", C1_COMMIT, "--", file), "", file);
+  const lines = (v) => v.split(/\r?\n/).filter(Boolean);
+  assert.deepEqual([...lines(git("diff", "--name-only", C1_COMMIT, "--", "supabase")), ...lines(git("ls-files", "--others", "--exclude-standard", "--", "supabase"))], []);
+  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(MIGRATION)); // still the ADMIN-C1 migration: C2 adds none
+});
+check("ADMIN-C2 read-only boundary: no form/button/input, no server action, no fetch or table access, no approve/reject/certify/edit/recalculate, no Nutritionist workflow, no mock or static data", () => {
+  for (const [id, src] of Object.entries(c2pages)) {
+    assert.doesNotMatch(src, /<form|<button|<input|<textarea|<select|method=|onSubmit|onClick|"use server"/i, id);
+    assert.doesNotMatch(c2Code[id], /\.from\(|\.insert\(|\.update\(|\.delete\(|\bfetch\(|createClient\(|service_role/, id);
+    assert.doesNotMatch(c2Code[id].replace(/'approved'/g, ""), /(approve|reject|certify|revoke|recalculat|nutritionist|consultation)/i, id);
+    assert.doesNotMatch(src, /adapters\/mock|@haocu\/shared|mock[A-Z]|\/services\/|\/repositories\/|const [A-Za-z]+ = \[\s*[\{"']/, id);
+  }
+});
+check("ADMIN-C2 no inference: allergens are rendered only from the contract's allergens[] (no description/AI/keyword derivation, empty state is explicit); certification shows only the contract's status facts (no certified verdict, no confidence interpretation, explicit none-state)", () => {
+  const a = c2pages["restaurant-item-allergens"], c = c2pages["restaurant-item-certification"];
+  assert.match(a, /result\.data\.allergens/);
+  assert.doesNotMatch(c2Code["restaurant-item-allergens"], /data\.description|imageUrl|includes\(|matchAll|\.match\(|\.test\(|\bai\b|infer|guess|nutrition/i);
+  assert.ok(a.includes('data-c2-allergens="none"') && a.includes("result.data.allergens.length === 0"));
+  for (const field of ["nutritionBadgeStatus", "badgeEnabled", "verifiedStatus", "source", "updatedAt"]) assert.ok(c.includes(field), field);
+  assert.ok(c.includes("result.data.currentNutrition === null") && c.includes('data-c2-certification="none"'));
+  assert.doesNotMatch(c2Code["restaurant-item-certification"], /confidenceScore|已認證|未認證|認證通過|certified|isCertified|allergen|calories|protein/i);
+  for (const [id, src] of Object.entries(c2pages)) assert.ok(src.includes("ReadFailureNotice"), `${id} renders forbidden/invalid/not_found/unavailable`);
+});
+check("ADMIN-C2 navigation: the item-detail page gained ONLY the two contextual links (each gated by its own exact key); everything else on it is byte-identical to the ADMIN-B3 baseline; the sidebar is untouched", () => {
+  const d = read(ITEM_DETAIL);
+  assert.ok(d.includes("`${base}/allergens`") && d.includes("`${base}/certification`") && d.includes("`${base}/nutrition`"));
+  assert.equal((d.match(/allowed: has\(context, "admin\.restaurants\.menu_item\.read"\)/g) ?? []).length, 3);
+  const diff = git("diff", "-U0", BASELINE, "--", ITEM_DETAIL).split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+  assert.ok(diff.length > 0 && diff.every((l) => /SubLinks links=|\{ label: "|^\+\s*\]\} \/>$/.test(l)), diff.join(" | "));
+  assert.equal(git("diff", "--name-only", BASELINE, "--", "apps/admin-web/components/admin-shell/admin-ia-navigation.ts", "apps/admin-web/components/admin-shell/AdminShell.tsx"), "");
+});
+check("ADMIN-C1 unchanged by C2: the four queue pages, their adapter, views and migration are byte-identical to the ADMIN-C1 commit; their four contracts and keys are still exactly as shipped", () => {
+  for (const file of C1_FILES) assert.equal(git("diff", "--name-only", C1_COMMIT, "--", file), "", file);
+  assert.equal(Object.keys(bodies).length, 4);
+  for (const [id, [, , , contract, key]] of Object.entries(C)) { assert.deepEqual([...route(id).requiredPermissions], [key], id); assert.ok(bodies[contract], contract); }
+  assert.equal(git("cat-file", "-t", C1_COMMIT), "commit");
 });
 
 const failures = checks.filter((c) => !c.pass);

@@ -44,7 +44,7 @@ const ADMIN_A_FILES = [
   "apps/admin-web/components/PlatformAdminBranchStatus.tsx"
 ];
 const ADMIN_C_ROUTES = ["menu-management", "menu-management-pending", "menu-management-data-quality", "nutrition-certification-pending"];
-const DEFERRED_PAGES = ["ingredients", "allergens", "certification"].map((leaf) => `${APP}/[restaurantId]/menus/[menuId]/items/[itemId]/${leaf}/page.tsx`);
+const DEFERRED_PAGES = ["ingredients"].map((leaf) => `${APP}/[restaurantId]/menus/[menuId]/items/[itemId]/${leaf}/page.tsx`);
 
 const checks = [];
 function check(name, fn) {
@@ -180,13 +180,14 @@ check("data minimisation: no owner identity, email, plan, legal name or raw/inte
 check("registry: exactly the six B3 routes moved to LIVE; B2 stays LIVE; ADMIN-C, deferred (ingredients/allergens/certification) and every other route status unchanged", () => {
   const before = availOf(git("show", `${BASELINE}:${REGISTRY}`).replace(/\r\n/g, "\n")), now = availOf(read(REGISTRY));
   assert.deepEqual(Object.keys(before).sort(), Object.keys(now).sort());
-  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), [...Object.keys(B3), ...ADMIN_C_ROUTES].sort()); // ADMIN-C (exact successor) moves its four routes DEMO -> LIVE
+  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), [...Object.keys(B3), ...ADMIN_C_ROUTES, "restaurant-item-allergens", "restaurant-item-certification"].sort()); // ADMIN-C1 (four DEMO -> LIVE) and ADMIN-C2 (two NOT_ENABLED -> LIVE) exact successors
   for (const id of Object.keys(B3)) { assert.equal(before[id], "NOT_ENABLED", id); assert.equal(now[id], "LIVE", id); }
   for (const id of B2_IDS) assert.equal(now[id], "LIVE", id);
   for (const id of ADMIN_C_ROUTES) { assert.equal(before[id], "DEMO", id); assert.equal(now[id], "LIVE", id); }
-  for (const id of ["restaurant-item-ingredients", "restaurant-item-allergens", "restaurant-item-certification"]) if (now[id] !== undefined) assert.equal(now[id], "NOT_ENABLED", id);
-  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 17 + 6 + 4);
-  assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 65 - 6);
+  assert.equal(now["restaurant-item-ingredients"], "NOT_ENABLED");
+  for (const id of ["restaurant-item-allergens", "restaurant-item-certification"]) { assert.equal(before[id], "NOT_ENABLED", id); assert.equal(now[id], "LIVE", id); } // ADMIN-C2 exact successor
+  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 17 + 6 + 4 + 2);
+  assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 65 - 6 - 2);
 });
 check("ingredient route remains DEFERRED: NOT_ENABLED, its page byte-identical (registry scaffold), and no ingredient source is read or parsed anywhere in B3", () => {
   assert.equal(route("restaurant-item-ingredients").availability, "NOT_ENABLED");
@@ -222,7 +223,7 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
   const allowed = new Set([
     REGISTRY, ADAPTER, MENU_VIEWS, "package.json",
     ...Object.values(B3).map((v) => v[0]), B2_FILES["restaurant-detail"], B2_FILES["restaurant-branch-detail"],
-    "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs", "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "apps/admin-web/server/adminReviewQueueRead.ts", "apps/admin-web/components/admin-shell/AdminQueueViews.tsx", "apps/admin-web/app/admin/restaurants/menu-management/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/pending/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/data-quality/page.tsx", "apps/admin-web/app/admin/nutrition/certification/pending/page.tsx", "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs", "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs", "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs", "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs", "apps/admin-web/server/adminRestaurantRead.ts", "package.json",
+    "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs", "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "apps/admin-web/server/adminReviewQueueRead.ts", "apps/admin-web/components/admin-shell/AdminQueueViews.tsx", "apps/admin-web/app/admin/restaurants/menu-management/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/pending/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/data-quality/page.tsx", "apps/admin-web/app/admin/nutrition/certification/pending/page.tsx", "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs", "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs", "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs", "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs", "apps/admin-web/server/adminRestaurantRead.ts", "package.json", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/allergens/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/certification/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/page.tsx",
     "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-mutations.mjs",
     "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs",
     "scripts/pre-admin-hardening-h3-h4-guard.mjs",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ADMIN-C mutation suite: every mutant must be killed by the ADMIN-C guard. Mutants are applied in place and ALWAYS
+// ADMIN-C (C1 queues + C2 item status pages) mutation suite: every mutant must be killed by the ADMIN-C guard. Mutants are applied in place and ALWAYS
 // restored (finally + signal handlers); the run ends by proving the tree is byte-identical and the guard passes again.
 import child from "node:child_process";
 import crypto from "node:crypto";
@@ -19,7 +19,11 @@ const DQ = `${APP}/restaurants/menu-management/data-quality/page.tsx`;
 const CERT = `${APP}/nutrition/certification/pending/page.tsx`;
 const B3_MENUS = `${APP}/restaurants/[restaurantId]/menus/page.tsx`;
 const STATUS = `${APP}/restaurants/[restaurantId]/branches/[branchId]/status/page.tsx`;
-const files = [MIGRATION, REGISTRY, ADAPTER, B_ADAPTER, OVERVIEW, PENDING, DQ, CERT, B3_MENUS, STATUS];
+const IT = `${APP}/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]`;
+const ALLERGENS = `${IT}/allergens/page.tsx`;
+const CERTIFICATION = `${IT}/certification/page.tsx`;
+const ITEM_DETAIL = `${IT}/page.tsx`;
+const files = [MIGRATION, REGISTRY, ADAPTER, B_ADAPTER, OVERVIEW, PENDING, DQ, CERT, B3_MENUS, STATUS, ALLERGENS, CERTIFICATION, ITEM_DETAIL];
 const original = new Map(files.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8")]));
 const sha = (v) => crypto.createHash("sha256").update(v).digest("hex");
 function restore() { for (const [f, text] of original) fs.writeFileSync(path.join(ROOT, f), text); }
@@ -73,7 +77,30 @@ const mutants = [
   { id: "L", name: "an ADMIN-B page (menus) is altered", file: B3_MENUS, fn: append("\n// tampered\n") },
   { id: "M", name: "the ADMIN-A branch-status page is altered", file: STATUS, fn: append("\n// tampered\n") },
   { id: "N", name: "the error state is collapsed (ready parse returns an empty list on malformed reasons)", file: ADAPTER, fn: once("if (!list(v) || v.length === 0) return null;", "if (!list(v)) return [];") },
-  { id: "O", name: "customer/owner identity leaks into the overview page (auth user id)", file: OVERVIEW, fn: once("<td className=\"py-2 pr-4\"><StatusPill status={row.status} /></td>", "<td className=\"py-2 pr-4\"><StatusPill status={row.status} />{String((row as unknown as { auth_user_id?: string }).auth_user_id)}</td>") }
+  { id: "O", name: "customer/owner identity leaks into the overview page (auth user id)", file: OVERVIEW, fn: once("<td className=\"py-2 pr-4\"><StatusPill status={row.status} /></td>", "<td className=\"py-2 pr-4\"><StatusPill status={row.status} />{String((row as unknown as { auth_user_id?: string }).auth_user_id)}</td>") },
+  // ---- ADMIN-C2 ----
+  { id: "C2-A", name: "allergen page uses static values", file: ALLERGENS, fn: once("export default createAdminOperationalPage", "const staticAllergens = [\"peanut\", \"milk\"];\nvoid staticAllergens;\nexport default createAdminOperationalPage") },
+  { id: "C2-A2", name: "allergen page switched to a mock adapter", file: ALLERGENS, fn: once('import { createAdminOperationalPage }', 'import { adminRestaurantMockAdapter } from "apps/admin-web/adapters/mock/admin-restaurant-mock-adapter";\nvoid adminRestaurantMockAdapter;\nimport { createAdminOperationalPage }') },
+  { id: "C2-A3", name: "allergens are inferred from the description", file: ALLERGENS, fn: once("result.data.allergens.length === 0 ? (", "result.data.allergens.length === 0 && !result.data.description ? (") },
+  { id: "C2-B", name: "certification page invents a fake certification verdict", file: CERTIFICATION, fn: once("<h3 className=\"mb-3 mt-5", "<p>已認證</p>\n          <h3 className=\"mb-3 mt-5") },
+  { id: "C2-B2", name: "certification page interprets the confidence score", file: CERTIFICATION, fn: once("{ label: \"更新時間\"", "{ label: \"信心\", value: String(result.data.currentNutrition.confidenceScore) },\n                { label: \"更新時間\"") },
+  { id: "C2-B3", name: "certification none-state removed (manufactures a state for a missing record)", file: CERTIFICATION, fn: once("result.data.currentNutrition === null ? (", "result.data.currentNutrition === undefined ? (") },
+  { id: "C2-C", name: "wrong permission substituted for the allergens route (menu_items.read)", file: REGISTRY, fn: routeLine("restaurant-item-allergens", (l) => l.replace('requiredPermissions: ["admin.restaurants.menu_item.read"]', 'requiredPermissions: ["admin.restaurants.menu_items.read"]')) },
+  { id: "C2-C2", name: "the certification page borrows the certification-queue key", file: REGISTRY, fn: routeLine("restaurant-item-certification", (l) => l.replace('requiredPermissions: ["admin.restaurants.menu_item.read"]', 'requiredPermissions: ["admin.nutrition.certification.pending.read"]')) },
+  { id: "C2-D", name: "admin_context.read fallback on the certification route", file: REGISTRY, fn: routeLine("restaurant-item-certification", (l) => l.replace('requiredPermissions: ["admin.restaurants.menu_item.read"]', 'requiredPermissions: ["admin_context.read"]')) },
+  { id: "C2-D2", name: "admin_context.read referenced in the allergens page", file: ALLERGENS, fn: append("\n// admin_context.read\n") },
+  { id: "C2-E", name: "a new fake certification RPC is introduced into the adapter", file: B_ADAPTER, fn: append("\nexport const fakeCertificationContract = \"staff_admin_item_certification_v1\";\n") },
+  { id: "C2-E2", name: "the certification page reads a new/other read function", file: CERTIFICATION, fn: (x) => x.replace(/\r\n/g, "\n").split("readMenuItemDetail").join("readMenuDetail") },
+  { id: "C2-F", name: "an approve/reject control is added to the certification page", file: CERTIFICATION, fn: once("<h3 className=\"mb-3 mt-5", "<button type=\"submit\">approve</button>\n          <h3 className=\"mb-3 mt-5") },
+  { id: "C2-F2", name: "an edit form is added to the allergens page", file: ALLERGENS, fn: once("<div className=\"mb-4\">", "<form method=\"post\"><input name=\"allergen\" /></form>\n          <div className=\"mb-4\">") },
+  { id: "C2-F3", name: "a server action is introduced into the certification page", file: CERTIFICATION, fn: once('import { createAdminOperationalPage }', '"use server";\nimport { createAdminOperationalPage }') },
+  { id: "C2-G", name: "the wrong-menu hierarchy check is removed from the shared adapter", file: B_ADAPTER, fn: once("result.data.menuId !== menuId ? { state: \"not_found\" } : result", "result") },
+  { id: "C2-G2", name: "the allergens page drops the menu id from the read (child-only lookup)", file: ALLERGENS, fn: once("readMenuItemDetail(params.restaurantId, params.menuId, params.itemId)", "readMenuItemDetail(params.restaurantId, params.itemId, params.itemId)") },
+  { id: "C2-H", name: "the allergens route is left NOT_ENABLED", file: REGISTRY, fn: routeLine("restaurant-item-allergens", (l) => l.replace('availability: "LIVE"', 'availability: "NOT_ENABLED"')) },
+  { id: "C2-H2", name: "the certification route is left NOT_ENABLED", file: REGISTRY, fn: routeLine("restaurant-item-certification", (l) => l.replace('availability: "LIVE"', 'availability: "NOT_ENABLED"')) },
+  { id: "C2-I", name: "the allergens page bundles the queue adapter (certification-queue authority)", file: ALLERGENS, fn: once('import { readMenuItemDetail } from "apps/admin-web/server/adminRestaurantRead";', 'import { readMenuItemDetail } from "apps/admin-web/server/adminRestaurantRead";\nimport { readNutritionCertificationPending } from "apps/admin-web/server/adminReviewQueueRead";\nvoid readNutritionCertificationPending;') },
+  { id: "C2-J", name: "an item-detail navigation link is gated by the wrong key", file: ITEM_DETAIL, fn: once('{ label: "過敏原（專頁）", href: `${base}/allergens`, allowed: has(context, "admin.restaurants.menu_item.read") }', '{ label: "過敏原（專頁）", href: `${base}/allergens`, allowed: has(context, "admin.restaurants.menu_items.read") }') },
+  { id: "C2-K", name: "the item-detail page is altered beyond the two links", file: ITEM_DETAIL, fn: append("\n// tampered\n") }
 ];
 
 function runGuard() {
