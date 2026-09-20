@@ -563,7 +563,10 @@
     "test:pre-admin-hardening-h3-h4-postgres": "node scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs",
     "test:admin-operational-read-permissions-ae1-guard": "node scripts/admin-operational-read-permissions-ae1-guard.mjs",
     "test:admin-operational-read-permissions-ae1-mutations": "node scripts/admin-operational-read-permissions-ae1-mutations.mjs",
-    "test:admin-operational-read-permissions-ae1-postgres": "node scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs"
+    "test:admin-operational-read-permissions-ae1-postgres": "node scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs",
+    "test:admin-restaurant-operational-read-foundation-b1-guard": "node scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs",
+    "test:admin-restaurant-operational-read-foundation-b1-mutations": "node scripts/admin-restaurant-operational-read-foundation-b1-mutations.mjs",
+    "test:admin-restaurant-operational-read-foundation-b1-postgres": "node scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

@@ -63,9 +63,9 @@ try {
     try { await runner.query(fs.readFileSync(path.join(MIGRATIONS, file), "utf8")); applied += 1; }
     catch (error) { check(`migration applies: ${file}`, false, { code: error.code, position: error.position, message: String(error.message).slice(0, 800) }); throw error; }
   }
-  check("001. every migration applied; total is exactly 136; R2E is followed only by the authorized H3, H4 and ADMIN-AE1 migrations",
-    applied === files.length && files.length === 136 && files.slice(-4).join("|") === ["20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql", "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql", "20260920010000_admin_operational_read_permissions_ae1.sql"].join("|"),
-    { applied, total: files.length, last: files.slice(-4) });
+  check("001. every migration applied; total is exactly 137; R2E is followed only by the authorized H3, H4, ADMIN-AE1 and ADMIN-B1 migrations",
+    applied === files.length && files.length === 137 && files.slice(-5).join("|") === ["20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql", "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql", "20260920010000_admin_operational_read_permissions_ae1.sql", "20260920020000_admin_restaurant_operational_read_foundation_b1.sql"].join("|"),
+    { applied, total: files.length, last: files.slice(-5) });
 
   await q("grant anon, authenticated, service_role to postgres");
   await q("insert into auth.users(id,email) values ($1,'a@invalid.test'),($2,'b@invalid.test'),($3,'stranger@invalid.test'),($4,'disabled@invalid.test'),($5,'staff@invalid.test'),($6,'inactive@invalid.test')", [A, B, STRANGER, DISABLED, NO_PERMISSION, INACTIVE]);

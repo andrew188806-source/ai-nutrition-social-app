@@ -30,7 +30,7 @@ check(fs.existsSync(path.join(root, H3)) && fs.existsSync(path.join(root, H4)), 
 check(migrations.slice(at - 1, at + 2).join("|") === [R2E, path.basename(H3), path.basename(H4)].join("|"), "H3 and H4 follow R2E immediately, in that order", migrations.slice(at - 1, at + 3));
 check(migrations.length >= 135 && migrations.includes(R2E), "at least 135 migrations exist including the R2E successor", migrations.length);
 const changed = git(["diff", "--name-status", BASELINE, "--", "supabase/migrations"]).split("\n").filter(Boolean);
-check(changed.every((line) => /^A\t/.test(line)) && changed.every((line) => [path.basename(H3), path.basename(H4), "20260920010000_admin_operational_read_permissions_ae1.sql"].some((n) => line.endsWith(n)) || !line.includes("supabase/migrations")), "no historical migration was modified or removed since the baseline (only H3/H4 and the exact ADMIN-AE1 successor added)", changed);
+check(changed.every((line) => /^A\t/.test(line)) && changed.every((line) => [path.basename(H3), path.basename(H4), "20260920010000_admin_operational_read_permissions_ae1.sql", "20260920020000_admin_restaurant_operational_read_foundation_b1.sql"].some((n) => line.endsWith(n)) || !line.includes("supabase/migrations")), "no historical migration was modified or removed since the baseline (only H3/H4 and the exact ADMIN-AE1 and ADMIN-B1 successors added)", changed);
 
 // ---------------- H3 -----------------------------------------------------------------------------------
 const h3 = read(H3), h3Code = strip(h3), p3h = read(P3H);

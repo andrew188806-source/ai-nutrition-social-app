@@ -231,7 +231,8 @@ const migrationCode = migration.split("\n").filter((line) => !line.trimStart().s
 check("migration is the exact additive successor (name, single file, predecessor untouched)", () => {
   assert.ok(fs.existsSync(path.join(ROOT, MIGRATION)));
   const all = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
-  assert.equal(all.at(-1), path.basename(MIGRATION));
+  assert.equal(all.at(-2), path.basename(MIGRATION)); // ADMIN-B1 is the one authorized later successor
+  assert.equal(all.at(-1), "20260920020000_admin_restaurant_operational_read_foundation_b1.sql");
   const holders = all.filter((f) => read(`supabase/migrations/${f}`).includes(DASHBOARD_KEY));
   assert.deepEqual(holders, [path.basename(MIGRATION)]);
 });
@@ -265,6 +266,7 @@ check("frozen authority and ADMIN-A code are untouched: changed paths are inside
   const changed = new Set([...lines(git("diff", "--name-only", BASELINE)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
   const allowed = new Set([
     MIGRATION, VOCAB, REGISTRY, "package.json",
+    "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-mutations.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs",
     "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs",
     "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs",
     "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs",

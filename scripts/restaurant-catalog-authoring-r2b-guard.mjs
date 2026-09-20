@@ -36,13 +36,14 @@ const AUTHORIZED_SUCCESSORS = [
   "20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql",
   "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql",
   "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql",
-  "20260920010000_admin_operational_read_permissions_ae1.sql"
+  "20260920010000_admin_operational_read_permissions_ae1.sql",
+  "20260920020000_admin_restaurant_operational_read_foundation_b1.sql"
 ];
 const r2bNames = Object.values(FILES).map((path) => path.split("/").pop());
 const expectedTail = [...r2bNames, ...AUTHORIZED_SUCCESSORS];
 check(
   expectedTail.every((name, i) => migrationFiles.at(-expectedTail.length + i) === name),
-  "the final 9 migrations are exactly R2B-1..R2B-5 followed by the authorized successors (R2E, H3, H4, ADMIN-AE1)",
+  "the final 10 migrations are exactly R2B-1..R2B-5 followed by the authorized successors (R2E, H3, H4, ADMIN-AE1, ADMIN-B1)",
   migrationFiles.slice(-expectedTail.length)
 );
 
