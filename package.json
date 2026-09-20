@@ -560,7 +560,10 @@
     "test:meal-photo-analysis-cors-config-h2-mutations": "node scripts/meal-photo-analysis-cors-config-h2-mutations.mjs",
     "test:pre-admin-hardening-h3-h4-guard": "node scripts/pre-admin-hardening-h3-h4-guard.mjs",
     "test:pre-admin-hardening-h3-h4-mutations": "node scripts/pre-admin-hardening-h3-h4-mutations.mjs",
-    "test:pre-admin-hardening-h3-h4-postgres": "node scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs"
+    "test:pre-admin-hardening-h3-h4-postgres": "node scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs",
+    "test:admin-operational-read-permissions-ae1-guard": "node scripts/admin-operational-read-permissions-ae1-guard.mjs",
+    "test:admin-operational-read-permissions-ae1-mutations": "node scripts/admin-operational-read-permissions-ae1-mutations.mjs",
+    "test:admin-operational-read-permissions-ae1-postgres": "node scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",

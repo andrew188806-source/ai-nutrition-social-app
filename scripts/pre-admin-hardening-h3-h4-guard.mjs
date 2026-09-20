@@ -30,7 +30,7 @@ check(fs.existsSync(path.join(root, H3)) && fs.existsSync(path.join(root, H4)), 
 check(migrations.slice(at - 1, at + 2).join("|") === [R2E, path.basename(H3), path.basename(H4)].join("|"), "H3 and H4 follow R2E immediately, in that order", migrations.slice(at - 1, at + 3));
 check(migrations.length >= 135 && migrations.includes(R2E), "at least 135 migrations exist including the R2E successor", migrations.length);
 const changed = git(["diff", "--name-status", BASELINE, "--", "supabase/migrations"]).split("\n").filter(Boolean);
-check(changed.every((line) => /^A\t/.test(line)) && changed.every((line) => [path.basename(H3), path.basename(H4)].some((n) => line.endsWith(n)) || !line.includes("supabase/migrations")), "no historical migration was modified or removed since the baseline (only H3/H4 added)", changed);
+check(changed.every((line) => /^A\t/.test(line)) && changed.every((line) => [path.basename(H3), path.basename(H4), "20260920010000_admin_operational_read_permissions_ae1.sql"].some((n) => line.endsWith(n)) || !line.includes("supabase/migrations")), "no historical migration was modified or removed since the baseline (only H3/H4 and the exact ADMIN-AE1 successor added)", changed);
 
 // ---------------- H3 -----------------------------------------------------------------------------------
 const h3 = read(H3), h3Code = strip(h3), p3h = read(P3H);
@@ -91,8 +91,12 @@ const clientReaders = users.filter((f) => f.startsWith("apps/mobile/"));
 check(clientReaders.every((f) => !/anon/i.test(read(f).replace(/\/\/[^\n]*/g, "").match(/[^\n]*social_interest_catalog[^\n]*/g)?.join("\n") ?? "")), "no client read path of the lookup tables references the anon role", clientReaders);
 
 // ---------------- predecessor Admin / Social contracts intact --------------------------------------------
-const untouched = ["supabase/migrations/20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql", "supabase/migrations/20260818010000_social_interest_catalog_and_profile_selections.sql", "apps/admin-web/server/adminStepUpMutationRuntime.ts", "apps/admin-web/auth/admin-route-registry.ts"];
-check(untouched.every((f) => git(["diff", "--name-only", BASELINE, "--", f]).trim() === ""), "P3H migration, the interest-catalog migration and the Admin runtime/registry are byte-unchanged since the baseline");
+const untouched = ["supabase/migrations/20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql", "supabase/migrations/20260818010000_social_interest_catalog_and_profile_selections.sql", "apps/admin-web/server/adminStepUpMutationRuntime.ts"];
+check(untouched.every((f) => git(["diff", "--name-only", BASELINE, "--", f]).trim() === ""), "P3H migration, the interest-catalog migration and the Admin step-up runtime are byte-unchanged since the baseline");
+// The Admin route registry may differ from the baseline ONLY by the exact ADMIN-AE1 permission-status/key lines.
+const KEY_LINE = /^[+-]\s*\{ key: "admin[._a-z]*", status: "(CURRENT|PLANNED)", description: /;
+const registryDiff = git(["diff", "-U0", BASELINE, "--", "apps/admin-web/auth/admin-route-registry.ts"]).split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
+check(registryDiff.every((l) => KEY_LINE.test(l)), "the Admin route registry is unchanged since the baseline except exact permission-key status lines (ADMIN-AE1)", registryDiff.filter((l) => !KEY_LINE.test(l)));
 const adminCaller = read("apps/admin-web/server/adminStepUpMutationRuntime.ts");
 check(/authorization\.session\.client\.rpc\(/.test(adminCaller) && !/service_role|serviceRole|SUPABASE_SERVICE/.test(adminCaller), "admin-web calls the v2 RPCs only through the authenticated user-session client (authenticated is the only caller role needed)");
 

@@ -96,9 +96,9 @@ try {
     try { await runner.query(fs.readFileSync(path.join(MIGRATIONS, file), "utf8")); applied += 1; }
     catch (error) { check(`migration applies: ${file}`, false, { code: error.code, position: error.position, message: String(error.message).slice(0, 500) }); throw error; }
   }
-  // Exact successor awareness: the 5 R2B migrations are followed only by the authorized R2E, H3 and H4 migrations.
-  const AUTHORIZED_TAIL = [...CANDIDATES, "20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql", "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql"];
-  check("001. every migration applied; the 5 R2B migrations are followed only by the authorized R2E, H3 and H4 migrations, in order",
+  // Exact successor awareness: the 5 R2B migrations are followed only by the authorized R2E, H3, H4 and ADMIN-AE1 migrations.
+  const AUTHORIZED_TAIL = [...CANDIDATES, "20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql", "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql", "20260920010000_admin_operational_read_permissions_ae1.sql"];
+  check("001. every migration applied; the 5 R2B migrations are followed only by the authorized R2E, H3, H4 and ADMIN-AE1 migrations, in order",
     applied === files.length && AUTHORIZED_TAIL.every((name, i) => files.at(-AUTHORIZED_TAIL.length + i) === name),
     { applied, total: files.length, tail: files.slice(-AUTHORIZED_TAIL.length) });
 

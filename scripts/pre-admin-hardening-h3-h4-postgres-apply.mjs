@@ -67,7 +67,8 @@ try {
   const identity = (await runner.query("select current_user, current_setting('is_superuser') as superuser")).rows[0];
   check("migration runner is a NON-superuser postgres (the platform shape)", identity.current_user === "postgres" && identity.superuser === "off", identity);
 
-  const files = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
+  // The exact ADMIN-AE1 successor (20260920010000) is proven by its own gate; this gate covers the 135 migrations through H4.
+  const files = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql") && f !== "20260920010000_admin_operational_read_permissions_ae1.sql").sort();
   const predecessors = files.filter((f) => f !== H3 && f !== H4);
   for (const file of predecessors) {
     try { await runner.query(fs.readFileSync(path.join(MIGRATIONS, file), "utf8")); applied += 1; }
