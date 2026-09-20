@@ -189,7 +189,8 @@ check("the B1 route family maps exactly to CURRENT AE1 keys and is NOT marked LI
     const r = mod.exports.ADMIN_ROUTE_REGISTRY.find((x) => x.id === id);
     assert.deepEqual([...r.requiredPermissions], [key], id);
     assert.ok(m.exports.CURRENT_ADMIN_PERMISSION_KEYS.includes(key), key);
-    assert.notEqual(r.availability, "LIVE", id);
+    // ADMIN-B2 (exact successor) moves nine of these routes LIVE; the six ADMIN-B3 routes must stay scaffolds.
+    if (["restaurant-menus", "restaurant-menu-detail", "restaurant-menu-items", "restaurant-branch-menu-items", "restaurant-menu-item-detail", "restaurant-item-nutrition"].includes(id)) assert.notEqual(r.availability, "LIVE", id);
   }
   assert.equal(Object.keys(B_ROUTES).length, 15);
 });
@@ -207,11 +208,12 @@ check("ADMIN-A / ADMIN-AE1 unchanged and no UI touched: changed paths are inside
     "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs",
     "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs",
     "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs",
-    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md"
+    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
+    "apps/admin-web/server/adminRestaurantRead.ts", "apps/admin-web/components/admin-shell/AdminOperationalPage.tsx", "apps/admin-web/components/admin-shell/AdminRestaurantViews.tsx", "apps/admin-web/app/admin/restaurants/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/about/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/contact/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/branches/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/branches/[branchId]/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/branches/[branchId]/contact/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/branches/[branchId]/hours/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/branches/[branchId]/geo/page.tsx", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-mutations.mjs", "apps/admin-web/auth/admin-route-registry.ts"
   ]);
   assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
-  for (const frozen of [AE1_MIGRATION, REGISTRY, VOCAB]) assert.ok(!changed.has(frozen), `${frozen} changed`);
-  assert.ok(![...changed].some((f) => f.startsWith("apps/")), "no app/UI file may change in B1");
+  for (const frozen of [AE1_MIGRATION, VOCAB]) assert.ok(!changed.has(frozen), `${frozen} changed`);
+  assert.ok(![...changed].some((f) => f.startsWith("apps/") && !f.startsWith("apps/admin-web/")), "no app outside admin-web may change");
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
 });
 

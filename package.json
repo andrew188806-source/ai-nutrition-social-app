@@ -566,7 +566,9 @@
     "test:admin-operational-read-permissions-ae1-postgres": "node scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs",
     "test:admin-restaurant-operational-read-foundation-b1-guard": "node scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs",
     "test:admin-restaurant-operational-read-foundation-b1-mutations": "node scripts/admin-restaurant-operational-read-foundation-b1-mutations.mjs",
-    "test:admin-restaurant-operational-read-foundation-b1-postgres": "node scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs"
+    "test:admin-restaurant-operational-read-foundation-b1-postgres": "node scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs",
+    "test:admin-restaurant-branch-canonical-ui-b2-guard": "node scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs",
+    "test:admin-restaurant-branch-canonical-ui-b2-mutations": "node scripts/admin-restaurant-branch-canonical-ui-b2-mutations.mjs"
   },
   "workspaces": [
     "apps/*",
