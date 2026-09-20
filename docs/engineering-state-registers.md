@@ -219,8 +219,8 @@ The next major implementation phase is **Admin remaining NON-AUTHORITY operation
 
 | Route | Capability |
 | --- | --- |
-| `/admin/restaurants/[restaurantId]/branches/[branchId]/status` | Governed branch lifecycle status change (RA-1C). **Authority is live; the `/admin` page is still a scaffold** — the working UI is `PlatformAdminBranchStatus` on legacy `/restaurant-review`, backed by `/api/platform-admin/restaurant-branches/[branchId]/status`. |
-| `/admin/audit/platform-memberships` | Platform Admin membership lifecycle audit read (RA-1B). **Authority is live; the `/admin` page is still a scaffold** — the working UI is on legacy `/audit-trail`, backed by `/api/platform-admin/audit`. Only the six Platform Management routes render real data on `/admin`. |
+| `/admin/restaurants/[restaurantId]/branches/[branchId]/status` | Governed branch lifecycle status change (RA-1C). **Real UI live on `/admin` since ADMIN-A** (`AdminBranchStatusWorkspace` hosting `PlatformAdminBranchStatus`, backed by `/api/platform-admin/restaurant-branches/[branchId]/status`); legacy `/restaurant-review` retained until ADMIN-E. |
+| `/admin/audit/platform-memberships` | Platform Admin membership lifecycle audit read (RA-1B). **Real UI live on `/admin` since ADMIN-A** (`AdminMembershipAudit`, backed by `/api/platform-admin/audit`); legacy `/audit-trail` retained until ADMIN-E. Eight `/admin` routes now render real data. |
 | `/admin/management`, `/staff`, `/staff/[staffAccountId]`, `/permissions`, `/settings`, `/security-log` | Platform Management (Authority stack — closed). |
 
 ### 7.3 `DEMO` (badge only — the mock UI lives on the legacy root successor, not on the `/admin` page) — 17
@@ -270,7 +270,7 @@ Route-level detail for all 98 registry routes and 22 legacy roots: **`docs/admin
 
 | Slice | Scope | Backend | Class | Prerequisite |
 | --- | --- | --- | --- | --- |
-| ADMIN-A | Move the two live UIs onto `restaurant-branch-status` and `audit-platform-memberships` (REWIRE_TO_EXISTING_BACKEND) | Exists (RA-1B/1C, API routes) | SMALL | none |
+| ADMIN-A | **DONE, ACCEPTED (`ADMIN_A_ACCEPTANCE_PASS`, authenticated Development live acceptance 44/44 — see inventory §1a)** — the two live UIs now render on `restaurant-branch-status` and `audit-platform-memberships` (REWIRE_TO_EXISTING_BACKEND; no backend/authority change; legacy roots retained) | Exists (RA-1B/1C, API routes) | SMALL | none |
 | ADMIN-AE1 | Activate only the operational read keys the MVP routes need (§7.8 AE-1) through the existing catalog/entitlement/route-requirement machinery; prove a base Admin without grants cannot read | Narrow authority successor activation | MEDIUM | ADMIN-A |
 | ADMIN-B | Restaurant operational read model + 15 read-only routes: `restaurants`, `restaurant-detail/-about/-contact`, `-branches`, `-branch-detail/-hours/-contact/-geo/-menu-items`, `-menus`, `-menu-detail`, `-menu-items`, `-menu-item-detail`, `-item-nutrition` (drafts/archived, nutrition status, lifecycle, owner-membership counts) | NEW non-authority read RPCs (sealed-role pattern) | LARGE | ADMIN-AE1 |
 | ADMIN-C | Derived read-only queues: `menu-management`, `-pending`, `-data-quality`, `nutrition-certification-pending` (read of `pending_review`), `restaurant-item-allergens`, `restaurant-item-certification` (status facts only) — 6 routes | Derived from B | MEDIUM | ADMIN-B |
