@@ -2,9 +2,8 @@
 // R2B static source-freeze guard. No database, no network. Verifies the shape of the 5 new R2B
 // migrations (permission keys, RPC names, sealed-role properties, trigger names, RLS structure,
 // prohibited privileges) and that no frozen predecessor migration or Auth/Admin authority object
-// was touched. This is a frozen single-round check: expected to report FAIL once a later round
-// lands on top of it, matching every other guard in this repository -- never loosen it to force
-// green.
+// was touched. Later rounds are accepted only when named in the exact successor list below; never
+// loosen it to accept arbitrary future migrations.
 import fs from "node:fs";
 const ROOT = process.cwd();
 const read = (file) => fs.readFileSync(`${ROOT}/${file}`, "utf8");
@@ -38,13 +37,14 @@ const AUTHORIZED_SUCCESSORS = [
   "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql",
   "20260920010000_admin_operational_read_permissions_ae1.sql",
   "20260920020000_admin_restaurant_operational_read_foundation_b1.sql",
-  "20260920030000_admin_operational_review_queues_c.sql"
+  "20260920030000_admin_operational_review_queues_c.sql",
+  "20260921010000_admin_dashboard_social_policy_reads_d.sql"
 ];
 const r2bNames = Object.values(FILES).map((path) => path.split("/").pop());
 const expectedTail = [...r2bNames, ...AUTHORIZED_SUCCESSORS];
 check(
   expectedTail.every((name, i) => migrationFiles.at(-expectedTail.length + i) === name),
-  "the final 11 migrations are exactly R2B-1..R2B-5 followed by the authorized successors (R2E, H3, H4, ADMIN-AE1, ADMIN-B1, ADMIN-C)",
+  "the final 12 migrations are exactly R2B-1..R2B-5 followed by the authorized successors (R2E, H3, H4, ADMIN-AE1, ADMIN-B1, ADMIN-C, ADMIN-D)",
   migrationFiles.slice(-expectedTail.length)
 );
 

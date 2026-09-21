@@ -12,6 +12,7 @@ const SUITE = "admin-operational-review-queues-c-guard";
 const BASELINE = "46bfb62457d2e0d86752334481649797ac860db3"; // ADMIN-B3 (pushed) = the ADMIN-C1 baseline
 const C1_COMMIT = "6df4660eec5a59ca9f320dad6be0d5486e807924"; // ADMIN-C1 (local) = the ADMIN-C2 baseline
 const MIGRATION = "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql";
+const D_MIGRATION = "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql";
 const REGISTRY = "apps/admin-web/auth/admin-route-registry.ts";
 const VOCAB = "apps/admin-web/auth/admin-current-permission-vocabulary.ts";
 const ADAPTER = "apps/admin-web/server/adminReviewQueueRead.ts";
@@ -188,20 +189,30 @@ check("no mock or static queue data: no mock adapter, @haocu/shared mock exports
 check("data minimisation: queue rows carry ids, names, the lifecycle/review fact, reasons and timestamps only — no owner identity, auth id, email, legal name, plan, consumer or audit data", () => {
   for (const src of [...Object.values(pages), adapter, read(Q_VIEWS), sql]) assert.doesNotMatch(src.replace(/'approved'/g, ""), /legal_?name|"plan"|\.plan\b|auth_user|restaurant_user|\bemail\b|meal_record|consumer_|audit_log|staff_management|last_?error|fingerprint/i);
 });
-check("registry: exactly the four ADMIN-C routes moved DEMO -> LIVE; the 15 ADMIN-B routes stay LIVE; ADMIN-D/E and every deferred route status is unchanged", () => {
+check("registry: ADMIN-C's six routes and ADMIN-B's 15 stay LIVE; the exact two ADMIN-D successors are also LIVE", () => {
   const before = availOf(git("show", `${BASELINE}:${REGISTRY}`).replace(/\r\n/g, "\n")), now = availOf(read(REGISTRY));
   assert.deepEqual(Object.keys(before).sort(), Object.keys(now).sort());
-  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), [...Object.keys(C), ...Object.keys(C2)].sort());
+  assert.deepEqual(Object.keys(now).filter((id) => now[id] !== before[id]).sort(), [...Object.keys(C), ...Object.keys(C2), "dashboard", "social-policies"].sort());
   for (const id of Object.keys(C)) { assert.equal(before[id], "DEMO", id); assert.equal(now[id], "LIVE", id); }
   for (const id of Object.keys(C2)) { assert.equal(before[id], "NOT_ENABLED", id); assert.equal(now[id], "LIVE", id); }
   for (const id of B_IDS) assert.equal(now[id], "LIVE", id);
   for (const id of DEFERRED_ROUTES) assert.equal(now[id], before[id], id);
-  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 23 + 4 + 2);
-  assert.equal(Object.values(now).filter((v) => v === "DEMO").length, 16 - 4);
+  assert.equal(now.dashboard, "LIVE"); assert.equal(now["social-policies"], "LIVE");
+  assert.equal(Object.values(now).filter((v) => v === "LIVE").length, 23 + 4 + 2 + 2);
+  assert.equal(Object.values(now).filter((v) => v === "DEMO").length, 16 - 4 - 2);
   assert.equal(Object.values(now).filter((v) => v === "NOT_ENABLED").length, 59 - 2);
 });
-check("ADMIN-B unchanged: 14 of the 15 canonical pages (all but item-detail) and their shared views/gate are byte-identical to the baseline; the B1 contracts and the B read layer differ only by the exported shared helpers", () => {
-  for (const file of B_FILES) assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
+check("ADMIN-B unchanged except the exact ADMIN-D PageControls caption successor; the B1 contracts and read layer preserve their boundaries", () => {
+  for (const file of B_FILES.filter((file) => file !== B_VIEWS)) assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
+  const viewDiff = git("diff", "-U0", BASELINE, "--", B_VIEWS).split("\n").filter((line) => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line));
+  assert.deepEqual(viewDiff, [
+    "-/** Minimal previous/next controls over the bounded B1 page (`?page=N`, 20 rows). */",
+    "-export function PageControls({ basePath, page, hasMore }: { basePath: string; page: number; hasMore: boolean }) {",
+    "+/** Minimal previous/next controls over a bounded page (`?page=N`). */",
+    "+export function PageControls({ basePath, page, hasMore, pageSize = 20 }: { basePath: string; page: number; hasMore: boolean; pageSize?: number }) {",
+    "-      <span>第 {page} 頁 · 每頁 20 筆</span>",
+    "+      <span>第 {page} 頁 · 每頁 {pageSize} 筆</span>"
+  ]);
   const diff = git("diff", "-U0", BASELINE, "--", B_ADAPTER).split("\n").filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   assert.ok(diff.length > 0 && diff.every((l) => /^[+-](export )?(const |async function |function |\/\*\* Shared|type ContractName)|^[+-]\s*contract: (ContractName|string),$|^[+-]$/.test(l)), diff.join(" | "));
   const b1 = "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql";
@@ -214,28 +225,30 @@ check("ADMIN-A unchanged, legacy roots untouched (retirement stays ADMIN-E), ADM
   assert.equal(git("diff", "--name-only", BASELINE, "--", VOCAB, "supabase/migrations/20260920010000_admin_operational_read_permissions_ae1.sql"), "");
   assert.doesNotMatch(migration, /staff_permission_catalog|staff_permission_entitlements/);
 });
-check("database change is additive and exact: one new migration, no historical migration modified or removed, no other supabase/api/function path changed", () => {
+check("database changes remain additive and exact: ADMIN-C plus the one ADMIN-D successor; no historical migration modified or removed", () => {
   const lines = (v) => v.split(/\r?\n/).filter(Boolean);
   const status = lines(git("diff", "--name-status", BASELINE));
   assert.deepEqual(status.filter((l) => /\tsupabase\//.test(l) && !/^A\t/.test(l)), []);
   const changed = new Set([...lines(git("diff", "--name-only", BASELINE)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
-  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && f !== MIGRATION), []);
+  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && ![MIGRATION, D_MIGRATION].includes(f)), []);
   assert.deepEqual([...changed].filter((f) => /^apps\/admin-web\/app\/api\//.test(f)), []);
   assert.ok(changed.has(MIGRATION));
-  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(MIGRATION));
+  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(D_MIGRATION));
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
 });
 check("changed paths are inside the exact ADMIN-C allow-list", () => {
   const lines = (v) => v.split(/\r?\n/).filter(Boolean);
   const changed = new Set([...lines(git("diff", "--name-only", BASELINE)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
   const allowed = new Set([
-    MIGRATION, REGISTRY, B_ADAPTER, ADAPTER, Q_VIEWS, "package.json", ...Object.values(C).map((v) => v[0]), ...Object.values(C2).map((v) => v[0]), ITEM_DETAIL,
+    MIGRATION, REGISTRY, B_ADAPTER, B_VIEWS, ADAPTER, Q_VIEWS, "package.json", ...Object.values(C).map((v) => v[0]), ...Object.values(C2).map((v) => v[0]), ITEM_DETAIL,
     "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs",
     "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs",
     "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs",
     "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs", "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs",
     "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs",
-    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md"
+    "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
+    D_MIGRATION, "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx",
+    "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   ]);
   assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
 });
@@ -271,8 +284,9 @@ check("ADMIN-C2: both pages REUSE the existing ADMIN-B1 item-detail read boundar
   assert.match(stripTsComments(read(B_ADAPTER)), /result\.data\.menuId !== menuId \? \{ state: "not_found" \} : result/);
   for (const file of [B_ADAPTER, ADAPTER, "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql"]) assert.equal(git("diff", "--name-only", C1_COMMIT, "--", file), "", file);
   const lines = (v) => v.split(/\r?\n/).filter(Boolean);
-  assert.deepEqual([...lines(git("diff", "--name-only", C1_COMMIT, "--", "supabase")), ...lines(git("ls-files", "--others", "--exclude-standard", "--", "supabase"))], []);
-  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(MIGRATION)); // still the ADMIN-C1 migration: C2 adds none
+  const successorSupabase = [...lines(git("diff", "--name-only", C1_COMMIT, "--", "supabase")), ...lines(git("ls-files", "--others", "--exclude-standard", "--", "supabase"))];
+  assert.deepEqual(successorSupabase, [D_MIGRATION]);
+  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(D_MIGRATION));
 });
 check("ADMIN-C2 read-only boundary: no form/button/input, no server action, no fetch or table access, no approve/reject/certify/edit/recalculate, no Nutritionist workflow, no mock or static data", () => {
   for (const [id, src] of Object.entries(c2pages)) {

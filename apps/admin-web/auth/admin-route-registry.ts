@@ -312,7 +312,7 @@ export type AdminRouteDefinition = Readonly<{
 const defineRoute = <const T extends AdminRouteDefinition>(definition: T): T => definition;
 
 export const ADMIN_ROUTE_REGISTRY = [
-  defineRoute({ id: "dashboard", parentId: null, zhTWLabel: "總覽", internalName: "Dashboard", route: "/admin", requiredPermissions: ["admin_context.read"], availability: "DEMO", dataClass: "PUBLIC", intendedStaffDomains: ["BUSINESS_DEVELOPMENT", "PLATFORM_OPERATIONS", "RESTAURANT_OPERATIONS", "MEMBER_SUPPORT", "SOCIAL_OPERATIONS", "NUTRITION_OPERATIONS", "NUTRITION_OPERATIONS_LEAD", "DATA_CONTENT_QUALITY", "AUDIT_SECURITY", "PLATFORM_MANAGEMENT", "ENGINEERING_MAINTAINER"], legacyRoutes: [{ route: "/", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 10 }),
+  defineRoute({ id: "dashboard", parentId: null, zhTWLabel: "總覽", internalName: "Dashboard", route: "/admin", requiredPermissions: ["admin_context.read"], availability: "LIVE", dataClass: "RESTAURANT_OPERATIONAL", intendedStaffDomains: ["BUSINESS_DEVELOPMENT", "PLATFORM_OPERATIONS", "RESTAURANT_OPERATIONS", "MEMBER_SUPPORT", "SOCIAL_OPERATIONS", "NUTRITION_OPERATIONS", "NUTRITION_OPERATIONS_LEAD", "DATA_CONTENT_QUALITY", "AUDIT_SECURITY", "PLATFORM_MANAGEMENT", "ENGINEERING_MAINTAINER"], legacyRoutes: [{ route: "/", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 10 }),
   defineRoute({ id: "admin-login", parentId: null, zhTWLabel: "管理員登入", internalName: "Admin Login", route: "/admin/login", requiredPermissions: [], availability: "NOT_ENABLED", dataClass: "SECURITY_AUTH", intendedStaffDomains: [], legacyRoutes: [{ route: "/login", semantics: "ONE_TO_ONE" }], navigationVisibility: "HIDDEN", order: 1 }),
 
   // ---------------------------------------------------------------------
@@ -392,7 +392,7 @@ export const ADMIN_ROUTE_REGISTRY = [
 
   defineRoute({ id: "social", parentId: null, zhTWLabel: "社交安全", internalName: "Social Safety", route: "/admin/social", requiredPermissions: ["admin.social.read"], availability: "DEMO", dataClass: "PRIVATE_SOCIAL", intendedStaffDomains: ["SOCIAL_OPERATIONS"], legacyRoutes: [{ route: "/social-governance", semantics: "ONE_TO_ONE" }], navigationVisibility: "ORDINARY", order: 50 }),
   defineRoute({ id: "social-reports", parentId: "social", zhTWLabel: "檢舉案件", internalName: "Social Reports", route: "/admin/social/reports", requiredPermissions: ["admin.social.reports.read"], availability: "NOT_ENABLED", dataClass: "PRIVATE_SOCIAL", intendedStaffDomains: ["SOCIAL_OPERATIONS"], legacyRoutes: [], navigationVisibility: "ORDINARY", order: 10 }),
-  defineRoute({ id: "social-policies", parentId: "social", zhTWLabel: "社交安全政策", internalName: "Social Safety Policies", route: "/admin/social/policies", requiredPermissions: ["admin.social.policies.read"], availability: "DEMO", dataClass: "PUBLIC", intendedStaffDomains: ["SOCIAL_OPERATIONS", "AUDIT_SECURITY"], legacyRoutes: [{ route: "/tags", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 20 }),
+  defineRoute({ id: "social-policies", parentId: "social", zhTWLabel: "社交安全政策", internalName: "Social Safety Policies", route: "/admin/social/policies", requiredPermissions: ["admin.social.policies.read"], availability: "LIVE", dataClass: "PUBLIC", intendedStaffDomains: ["SOCIAL_OPERATIONS", "AUDIT_SECURITY"], legacyRoutes: [{ route: "/tags", semantics: "SPLIT" }], navigationVisibility: "ORDINARY", order: 20 }),
 
   // ---------------------------------------------------------------------
   // NUTRITION PROFESSIONAL MANAGEMENT -- professional Nutritionist work.

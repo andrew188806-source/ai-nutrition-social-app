@@ -68,12 +68,12 @@ export function SubLinks({ links }: { links: readonly Readonly<{ label: string; 
   );
 }
 
-/** Minimal previous/next controls over the bounded B1 page (`?page=N`, 20 rows). */
-export function PageControls({ basePath, page, hasMore }: { basePath: string; page: number; hasMore: boolean }) {
+/** Minimal previous/next controls over a bounded page (`?page=N`). */
+export function PageControls({ basePath, page, hasMore, pageSize = 20 }: { basePath: string; page: number; hasMore: boolean; pageSize?: number }) {
   return (
     <nav aria-label="分頁" className="mt-4 flex items-center gap-4 text-sm">
       {page > 1 ? <Link className="rounded-lg border border-slate-300 px-3 py-1.5 font-bold" href={`${basePath}?page=${page - 1}`}>上一頁</Link> : <span className="text-slate-300">上一頁</span>}
-      <span>第 {page} 頁 · 每頁 20 筆</span>
+      <span>第 {page} 頁 · 每頁 {pageSize} 筆</span>
       {hasMore ? <Link className="rounded-lg border border-slate-300 px-3 py-1.5 font-bold" href={`${basePath}?page=${page + 1}`}>下一頁</Link> : <span className="text-slate-300">下一頁</span>}
     </nav>
   );

@@ -573,7 +573,10 @@
     "test:admin-menu-canonical-ui-b3-mutations": "node scripts/admin-menu-canonical-ui-b3-mutations.mjs",
     "test:admin-operational-review-queues-c-guard": "node scripts/admin-operational-review-queues-c-guard.mjs",
     "test:admin-operational-review-queues-c-mutations": "node scripts/admin-operational-review-queues-c-mutations.mjs",
-    "test:admin-operational-review-queues-c-postgres": "node scripts/admin-operational-review-queues-c-postgres-apply.mjs"
+    "test:admin-operational-review-queues-c-postgres": "node scripts/admin-operational-review-queues-c-postgres-apply.mjs",
+    "test:admin-dashboard-social-policies-d-guard": "node scripts/admin-dashboard-social-policies-d-guard.mjs",
+    "test:admin-dashboard-social-policies-d-mutations": "node scripts/admin-dashboard-social-policies-d-mutations.mjs",
+    "test:admin-dashboard-social-policies-d-postgres": "node scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   },
   "workspaces": [
     "apps/*",
