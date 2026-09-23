@@ -16,6 +16,7 @@ import {
 import { getAdminAuthConfig } from "../config/admin-auth";
 import {
   issueAdminStepUpReceipt,
+  readAdminStepUpDatabaseTime,
   readAdminStepUpReceiptStatus,
   revokeAdminStepUpReceipt
 } from "./adminStepUpBroker";
@@ -151,7 +152,11 @@ export async function handleAdminStepUpFreshVerify(request: Request): Promise<Re
     if (factors.error || !factor) return json({ ok: false, error: "totp_factor_required" }, 422);
     const verified = await authorized.client.auth.mfa.challengeAndVerify(input);
     if (verified.error) return json({ ok: false, error: "totp_verification_failed" }, 422);
-    const verifiedAt = new Date().toISOString();
+    const verificationTime = await readAdminStepUpDatabaseTime();
+    if (verificationTime.state !== "ready") {
+      return json({ ok: false, error: "step_up_broker_unavailable" }, 503);
+    }
+    const verifiedAt = verificationTime.value;
 
     const [userResult, sessionResult] = await Promise.all([
       authorized.client.auth.getUser(),

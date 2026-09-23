@@ -92,7 +92,8 @@ check("RA-1A changes no Consumer, Social, GEO or Restaurant runtime",
 check("RA-1A adds no Admin page, repository, service or mock",
   lifecycle.manifest.every((file) => !/^apps\/admin-web\/(app|repositories|services|adapters|components|view-models)\//.test(file)));
 check("RA-1A does not modify .env.example or any lockfile",
-  lifecycle.manifest.every((file) => file !== ".env.example" && !/lock/i.test(file)));
+  lifecycle.manifest.every((file) => file !== ".env.example"
+    && !/(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|Pipfile\.lock|poetry\.lock)$/.test(file)));
 
 const pkg = JSON.parse(read("package.json"));
 check("package.json adds exactly the three RA-1A script keys and nothing else",

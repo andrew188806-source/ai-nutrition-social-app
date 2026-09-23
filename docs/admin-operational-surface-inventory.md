@@ -8,13 +8,13 @@ Regenerate nothing from scratch: update rows in place when a slice changes a rou
 
 - 98 registry routes: **31 LIVE, 10 DEMO, 57 NOT_ENABLED** after the Development-accepted ADMIN-D implementation (A0 baseline was 8/17/73). 97 have a page; `/admin/break-glass` is a registry-only reservation.
 - Thirty-one `/admin` pages now render real data: six Platform Management pages, two ADMIN-A pages, all 15 ADMIN-B pages, all six ADMIN-C pages, and the two ADMIN-D pages. Remaining DEMO pages are scaffolds whose mock UI, if any, lives on a legacy root successor.
-- 22 legacy root pages sit outside the middleware (`middleware.ts` matches only `/admin/:path*`).
+- 22 legacy root pages sit outside the middleware (`middleware.ts` matches only `/admin/:path*`); after ADMIN-E1 they are data-free redirects, gateways, or unavailable states.
 - Any route whose only permission is still `PLANNED` resolves to base-Admin (`admin_context.read`) (`resolveAdminRouteRequirement`). **ADMIN-AE1 closed this for the accepted MVP surface**: the 22 accepted ADMIN-B/C/D routes (and the deferred `restaurant-item-ingredients`, which shares `admin.restaurants.menu_item.read`) require an explicit CURRENT key. The dashboard route itself remains base-Admin; its protected aggregate panel independently requires `admin.dashboard.counts.read` and is not called or rendered without it. All deferred families still fall back to base-Admin scaffolds (unchanged, no data).
 - Column legend — *State*: registry availability, with PLACEHOLDER for a scaffold with no backend. *Data source*: for the `/admin` page (REAL_LIVE / MOCK / NONE / STATIC). *AE1*: needs an ADMIN-AE1 CURRENT read key before real data may be shown.
 
 ## 1e. ADMIN-D status (Development accepted)
 
-**ADMIN_D_ACCEPTANCE_PASS. ADMIN-D is implemented and accepted on `tastkind-development`: post-apply verification passed and live acceptance passed 31/31. Dashboard split authority and independent SQL-count equality passed; Social permission isolation, database equality, pagination/bounds, anonymous denial and write denial passed; representative ADMIN-B/C and Social Runtime regressions passed; acceptance fixtures were cleaned. Production remains untouched.** The two canonical routes are LIVE; legacy `/` and `/tags` remain untouched for ADMIN-E, which has not started.
+**ADMIN_D_ACCEPTANCE_PASS. ADMIN-D is implemented and accepted on `tastkind-development`: post-apply verification passed and live acceptance passed 31/31. Dashboard split authority and independent SQL-count equality passed; Social permission isolation, database equality, pagination/bounds, anonymous denial and write denial passed; representative ADMIN-B/C and Social Runtime regressions passed; acceptance fixtures were cleaned. Production remains untouched.** The two canonical routes are LIVE; legacy `/` and `/tags` were subsequently cleaned in ADMIN-E1; this paragraph records the earlier ADMIN-D acceptance snapshot.
 
 | Route | Contract | Authority | Canonical facts | Read-only boundary |
 | --- | --- | --- | --- | --- |
@@ -237,7 +237,7 @@ ADMIN-A → ADMIN-AE1 → ADMIN-B → ADMIN-C → ADMIN-D → ADMIN-E. Business 
 
 ## 4. Legacy root surfaces (22)
 
-All 22 are outside the `/admin` middleware and, except `/login`, are linked from the legacy `AdminShell` navigation (no external/demo link found beyond docs and guards). Nothing is deleted or redirected before ADMIN-E. Every state is LEGACY.
+This table preserves the A0 baseline classification. All 22 were outside `/admin` middleware and previously linked by the legacy `AdminShell`. ADMIN-E1 final dispositions appear in §4a; the old shell is now unreferenced by user-facing pages and the canonical `/admin` navigation is authoritative.
 
 | Legacy route | Purpose | Data source | Successor(s) | Disposition | Retire/replace when |
 | --- | --- | --- | --- | --- | --- |
@@ -328,3 +328,36 @@ Migration `20260920020000_admin_restaurant_operational_read_foundation_b1.sql`. 
 - Real origins: `server/platformAdmin*` and `server/staffAdmin*` (audit, branch status), `server/adminManagementReadRuntime.ts`, step-up broker, 10 API route handlers.
 - No Admin reader exists for restaurants/menus/items/nutrition status (owner readers `restaurant_internal_*` are membership-scoped; client RLS exposes only active/published rows).
 - No table exists for aliases, pending items, data-quality issues, duplicates, verification/review queues, social reports/moderation, support cases, analytics events, campaigns/ads/promotions, BD/Activation Code/Strategic Accounts, nutritionist assignment/certification.
+
+## 4a. ADMIN-E1 final legacy disposition (local)
+
+The 22 root paths remain for URL compatibility but none renders a mock record or calls a legacy mock service. A static unavailable page conveys no authority. Gateway links lead only to LIVE canonical routes, where normal `/admin` middleware and exact permission checks apply. The old `AdminShell` file is frozen for historical guard compatibility but is not imported by any active page, so its navigation is inactive.
+
+| Legacy route | A0 state | Final treatment | Final behavior / successor |
+| --- | --- | --- | --- |
+| `/` | STATIC | REDIRECT_TO_LIVE_SUCCESSOR | `/admin` |
+| `/login` | STATIC | REDIRECT_TO_LIVE_SUCCESSOR | `/admin/login` |
+| `/ad-review` | MOCK | RETIRED_NOT_AVAILABLE | Ads successor DEMO; no queue |
+| `/sponsored` | MOCK | RETIRED_NOT_AVAILABLE | Sponsored successor DEMO; no queue |
+| `/verification` | MOCK | RETIRED_NOT_AVAILABLE | Verification successor DEMO; no queue |
+| `/pending-menu-items` | MOCK | REDIRECT_TO_LIVE_SUCCESSOR | `/admin/restaurants/menu-management/pending` |
+| `/duplicate-menu-items` | MOCK | RETIRED_NOT_AVAILABLE | Duplicates successor DEMO; no queue |
+| `/alias-review` | MOCK | RETIRED_NOT_AVAILABLE | Aliases successor DEMO; no queue |
+| `/identification-audit` | MOCK | RETIRED_NOT_AVAILABLE | Aliases successor DEMO; no audit rows |
+| `/data-quality` | MOCK | REDIRECT_TO_LIVE_SUCCESSOR | `/admin/restaurants/menu-management/data-quality` |
+| `/social-governance` | MOCK | RETIRED_NOT_AVAILABLE | Social successor DEMO; no review rows |
+| `/nutrition-review` | MOCK | REDIRECT_TO_LIVE_SUCCESSOR | `/admin/nutrition/certification/pending` |
+| `/self-cooked-audit` | MOCK | RETIRED_NOT_AVAILABLE | Self-cooked successor DEMO; no audit rows |
+| `/audit-trail` | HYBRID | REDIRECT_TO_LIVE_SUCCESSOR | `/admin/audit/platform-memberships` |
+| `/settings` | STATIC | REDIRECT_TO_LIVE_SUCCESSOR | `/admin/management/settings` |
+| `/tags` | MOCK | COMPATIBILITY_GATEWAY | Links to LIVE data-quality and social-policies; sponsored deferred |
+| `/menu-review` | MOCK | COMPATIBILITY_GATEWAY | Links to LIVE restaurants, data-quality, nutrition pending |
+| `/restaurant-review` | HYBRID | COMPATIBILITY_GATEWAY | Links to LIVE restaurants; branch status via canonical detail; review queue deferred |
+| `/consents` | MOCK | DEFERRED_NO_DATA | Member-consents decision pending; no private records |
+| `/esg` | MOCK | DEFERRED_NO_DATA | No product successor decision; no data |
+| `/exercise-governance` | MOCK | DEFERRED_NO_DATA | No product successor decision; no data |
+| `/data-access` | MOCK | DEFERRED_NO_DATA | No product successor decision; no data |
+
+ADMIN-A, ADMIN-AE1, ADMIN-B, ADMIN-C, and ADMIN-D remain closed/Development-accepted. ADMIN-E1 is local-only. Registry counts remain **31 LIVE / 10 DEMO / 57 NOT_ENABLED**; no deferred key or base-Admin fallback was activated. Remaining mock-backed Admin **user-facing root surfaces: zero**. Frozen mock adapters and their old shell remain in source because historical tests reference them; they are unreachable from active pages. AAL2 now takes a database clock reading immediately after TOTP verification; the 15-minute constraint and SQL gate are unchanged. The minimal `.gitattributes` LF policy introduces no historical normalization. Highest-privilege Demo login, Consumer/Restaurant/Admin live deployment linkage, and the five `admin-a.acceptance.*` fixture cleanup remain E2 live work. Production untouched. See [deployment-local-access-matrix.md](deployment-local-access-matrix.md).
+
+Local E1 guard, 11/11 E1 mutants, 1.7-second clock-drift smoke, admin-web typecheck and production build pass. The current ADMIN-D, H2 CORS, H3/H4, R2B and R2E guards pass; D/H2/H3-H4 mutants pass. Some frozen ADMIN-A/AE1/B1/B2/B3/C and P3H phase guards retain exact earlier-commit path allowlists or assert that legacy pages have not yet changed. Those historical phase assertions fail on the intentional E1 successor; their canonical `/admin`, authority, migration and Edge sources are byte-identical to `d88d100`, which the E1 guard checks. No frozen guard source was altered to conceal that incompatibility.

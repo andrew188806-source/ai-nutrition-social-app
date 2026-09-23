@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // ADMIN-B3 guard: the six Menu / Menu Item canonical read-only pages over the ADMIN-B1 contracts. Static; no network.
 import assert from "node:assert/strict";
+import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -222,9 +223,14 @@ check("ADMIN-B2 unchanged: seven B2 pages are byte-identical; restaurant-detail 
   // the nine B2 contracts and reads are still exactly as B2 shipped them
   for (const c of B2_CONTRACTS) assert.ok(adapterCode.includes(`"${c}"`), c);
 });
-check("ADMIN-A unchanged: the branch-status and membership-audit pages/components are byte-identical to the baseline; legacy roots untouched", () => {
+check("ADMIN-A remains frozen; legacy roots are preserved or match exact ADMIN-E1 retirement", () => {
   for (const file of ADMIN_A_FILES) assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
-  assert.equal(git("diff", "--name-only", BASELINE, "--", "apps/admin-web/app/restaurant-review", "apps/admin-web/app/audit-trail", "apps/admin-web/app/api"), "");
+  assert.equal(git("diff", "--name-only", BASELINE, "--", "apps/admin-web/app/api"), "");
+  for (const route of ["restaurant-review", "audit-trail"]) {
+    const file = `apps/admin-web/app/${route}/page.tsx`;
+    if (isExactAdminE1Successor()) assert.ok(matchesE1Source(file, read(file)), file);
+    else assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
+  }
   for (const id of ["restaurant-branch-status", "audit-platform-memberships"]) assert.equal(route(id).availability, "LIVE");
 });
 check("no database or authority change: no migration, RPC, RLS, permission or vocabulary edit; changed paths are inside the exact B3 allow-list", () => {
@@ -240,7 +246,7 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
     "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
     "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql", "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx", "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   ]);
-  assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
+  assert.deepEqual(unexpectedSuccessorPaths(changed, allowed), []);
   assert.ok(!changed.has(VOCAB));
   assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && !["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql"].includes(f)), []); // exact ADMIN-C and ADMIN-D additive successors
   assert.equal(git("cat-file", "-t", BASELINE), "commit");

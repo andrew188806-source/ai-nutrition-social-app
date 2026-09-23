@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // ADMIN-B2 guard: the nine Restaurant / Branch canonical read-only pages over the ADMIN-B1 contracts. Static; no network.
 import assert from "node:assert/strict";
+import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -172,9 +173,14 @@ check("B3 routes are wired by ADMIN-B3 (operational gate, not scaffolds); ingred
   for (const [id, file] of Object.entries(B3)) { const src = read(file); assert.ok(src.includes(`createAdminOperationalPage<`) && src.includes(`>("${id}",`), id); }
   assert.equal(route("restaurant-item-ingredients").availability, "NOT_ENABLED");
 });
-check("ADMIN-A unchanged: the branch-status and membership-audit pages/components are byte-identical to the baseline; legacy roots untouched", () => {
+check("ADMIN-A remains frozen; legacy roots are preserved or match exact ADMIN-E1 retirement", () => {
   for (const file of ADMIN_A_FILES) assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
-  assert.equal(git("diff", "--name-only", BASELINE, "--", "apps/admin-web/app/restaurant-review", "apps/admin-web/app/audit-trail", "apps/admin-web/app/api"), "");
+  assert.equal(git("diff", "--name-only", BASELINE, "--", "apps/admin-web/app/api"), "");
+  for (const route of ["restaurant-review", "audit-trail"]) {
+    const file = `apps/admin-web/app/${route}/page.tsx`;
+    if (isExactAdminE1Successor()) assert.ok(matchesE1Source(file, read(file)), file);
+    else assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
+  }
   for (const id of ["restaurant-branch-status", "audit-platform-memberships"]) assert.equal(route(id).availability, "LIVE");
 });
 check("no database or authority change: no migration, RPC, RLS, permission or vocabulary edit; changed paths are inside the exact B2 allow-list", () => {
@@ -190,7 +196,7 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
     "apps/admin-web/components/admin-shell/AdminMenuViews.tsx", ...Object.values(B3), "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs", "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "apps/admin-web/server/adminReviewQueueRead.ts", "apps/admin-web/components/admin-shell/AdminQueueViews.tsx", "apps/admin-web/app/admin/restaurants/menu-management/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/pending/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/data-quality/page.tsx", "apps/admin-web/app/admin/nutrition/certification/pending/page.tsx", "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs", "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs", "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs", "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs", "apps/admin-web/server/adminRestaurantRead.ts", "package.json", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/allergens/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/certification/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/page.tsx",
     "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql", "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx", "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   ]);
-  assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
+  assert.deepEqual(unexpectedSuccessorPaths(changed, allowed), []);
   assert.ok(!changed.has(VOCAB));
   assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && !["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql"].includes(f)), []); // exact ADMIN-C and ADMIN-D additive successors
   assert.equal(git("cat-file", "-t", BASELINE), "commit");

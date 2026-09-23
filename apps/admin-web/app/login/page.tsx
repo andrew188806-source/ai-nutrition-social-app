@@ -1,6 +1,5 @@
-import { AdminShell } from "../../components/AdminShell";
-import { zhTW } from "../../../../lib/i18n/zh-TW";
+import { redirect } from "next/navigation";
 
-export default function AdminLoginPage() {
-  return <AdminShell title={zhTW.admin.loginTitle} subtitle={zhTW.admin.loginSubtitle} />;
+export default function LegacyAdminRedirect() {
+  redirect("/admin/login");
 }

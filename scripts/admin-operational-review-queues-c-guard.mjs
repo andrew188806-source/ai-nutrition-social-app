@@ -2,6 +2,7 @@
 // ADMIN-C guard: the SIX canonical ADMIN-C routes. ADMIN-C1 = four read-only review queues over four purpose-built read contracts;
 // ADMIN-C2 = two per-item factual read surfaces (allergens, certification status) that REUSE the ADMIN-B1 item-detail contract. Static; no network.
 import assert from "node:assert/strict";
+import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -218,9 +219,13 @@ check("ADMIN-B unchanged except the exact ADMIN-D PageControls caption successor
   const b1 = "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql";
   assert.equal(git("diff", "--name-only", BASELINE, "--", b1), "");
 });
-check("ADMIN-A unchanged, legacy roots untouched (retirement stays ADMIN-E), ADMIN-AE1 vocabulary and catalogue untouched", () => {
+check("ADMIN-A and AE1 stay frozen; legacy roots are preserved or match exact ADMIN-E1 retirement", () => {
   for (const file of ADMIN_A_FILES) assert.equal(git("diff", "--name-only", BASELINE, "--", file), "", file);
-  for (const dir of LEGACY_ROOTS) assert.equal(git("diff", "--name-only", BASELINE, "--", dir), "", dir);
+  for (const dir of LEGACY_ROOTS) {
+    const file = `${dir}/page.tsx`;
+    if (isExactAdminE1Successor()) assert.ok(matchesE1Source(file, read(file)), file);
+    else assert.equal(git("diff", "--name-only", BASELINE, "--", dir), "", dir);
+  }
   for (const id of ["restaurant-branch-status", "audit-platform-memberships"]) assert.equal(route(id).availability, "LIVE");
   assert.equal(git("diff", "--name-only", BASELINE, "--", VOCAB, "supabase/migrations/20260920010000_admin_operational_read_permissions_ae1.sql"), "");
   assert.doesNotMatch(migration, /staff_permission_catalog|staff_permission_entitlements/);
@@ -250,7 +255,7 @@ check("changed paths are inside the exact ADMIN-C allow-list", () => {
     D_MIGRATION, "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx",
     "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   ]);
-  assert.deepEqual([...changed].filter((f) => !allowed.has(f)), []);
+  assert.deepEqual(unexpectedSuccessorPaths(changed, allowed), []);
 });
 
 // ------------------------------------------------------------------------------------------------ ADMIN-C2

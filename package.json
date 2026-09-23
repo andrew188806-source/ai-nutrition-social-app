@@ -576,7 +576,10 @@
     "test:admin-operational-review-queues-c-postgres": "node scripts/admin-operational-review-queues-c-postgres-apply.mjs",
     "test:admin-dashboard-social-policies-d-guard": "node scripts/admin-dashboard-social-policies-d-guard.mjs",
     "test:admin-dashboard-social-policies-d-mutations": "node scripts/admin-dashboard-social-policies-d-mutations.mjs",
-    "test:admin-dashboard-social-policies-d-postgres": "node scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
+    "test:admin-dashboard-social-policies-d-postgres": "node scripts/admin-dashboard-social-policies-d-postgres-apply.mjs",
+    "test:admin-e1-guard": "node scripts/admin-e1-guard.mjs",
+    "test:admin-e1-mutations": "node scripts/admin-e1-mutations.mjs",
+    "test:admin-e1-clock-smoke": "node scripts/admin-e1-clock-smoke.mjs"
   },
   "workspaces": [
     "apps/*",

@@ -45,6 +45,26 @@ export type BrokerResult<T> =
 
 function validUuid(value: string): boolean { return UUID.test(value); }
 
+// Read the same clock domain used by the receipt issuer immediately after the
+// Auth TOTP challenge succeeds. A fast application clock must not place the
+// verification timestamp in the database's future.
+export async function readAdminStepUpDatabaseTime(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<BrokerResult<string>> {
+  const pool = poolFor(env);
+  if (!pool) return Object.freeze({ state: "unavailable" as const });
+  try {
+    const result = await pool.query<{ verified_at: Date | string }>(
+      "select pg_catalog.clock_timestamp() as verified_at", []
+    );
+    const timestamp = new Date(result.rows[0]?.verified_at);
+    if (!Number.isFinite(timestamp.getTime())) return Object.freeze({ state: "unavailable" as const });
+    return Object.freeze({ state: "ready" as const, value: timestamp.toISOString() });
+  } catch {
+    return Object.freeze({ state: "unavailable" as const });
+  }
+}
+
 export async function issueAdminStepUpReceipt(
   input: Readonly<{
     actorId: string;

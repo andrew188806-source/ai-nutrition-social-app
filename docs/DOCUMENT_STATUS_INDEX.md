@@ -1,6 +1,6 @@
 # Document Status Index
 
-**DOC STATUS: CURRENT** — reconciled 2026-09-19 against `HEAD = origin/main = 8af3fb7d108c4124bb29ab115ea00b411287b00d`.
+**DOC STATUS: CURRENT** — updated for local ADMIN-E1 on baseline `d88d1000a26810dfca0f70586f11e594b3a2e44a`; E2 live acceptance remains pending.
 
 Purpose: let a reader tell, for any document in this repository, whether it describes the system **now**, is a **frozen contract** for a closed phase, is **history**, or has been **superseded**. Historical documents are kept for traceability; they are not deleted, and where they could mislead they carry an in-place status banner pointing back here.
 
@@ -24,13 +24,14 @@ Company/product-strategy decisions (pricing, operating model, funding, commercia
 | --- | --- |
 | `docs/engineering-handoff.md` | Living technical description. Legacy mock-era sections inside it are individually tagged. |
 | `docs/engineering-state-registers.md` | Debt / deferred / modernization / coupling / Admin inventory. |
+| `docs/deployment-local-access-matrix.md` | ADMIN-E1 local deployment evidence and E2 live checklist. |
 | `docs/DOCUMENT_STATUS_INDEX.md` | This file. |
 | `docs/admin-authority-sop-zh-tw.md` | Operator-facing Admin Authority procedure (《最高權限開啟 SOP》). |
 | `docs/ip-codex-scale-system.md` | IP Codex contract. |
 | `docs/restaurant-owner-catalog-authoring-r2b.md` | Restaurant catalog authoring RPC contract, plus R2C/R2D/R2E notes. |
 | `docs/restaurant-canonical-data-boundary.md` | Canonical restaurant data model boundaries (its "Restaurant Console uses a mock adapter today" sentence is `HISTORICAL`). |
 | `docs/tastkind-runtime-integration-roadmap.md` | Authoritative for Runtime Integration **phase names and ordering**. Its "Current Phase — Phase 2V" section is `SUPERSEDED` by completed work. |
-| `docs/admin-operational-surface-inventory.md` | Canonical route-level inventory of all 98 Admin registry routes and 22 legacy roots (A0): state, data source, auth, permission status, disposition, slice. Current technical planning. |
+| `docs/admin-operational-surface-inventory.md` | Canonical route-level inventory of all 98 Admin registry routes and 22 legacy roots (A0): state, data source, auth, permission status, disposition, slice. Current inventory plus ADMIN-E1 final legacy disposition. |
 | `docs/admin-information-architecture-ra-3-ia-p1.md` | Authoritative for Admin IA *intent* (workspaces, sensitivity classes, semantic boundaries). Its counts and availability statements are stale — the registry governs (see registers TD-07). |
 | `docs/navigation-map.md` | Mobile navigation map; incomplete for newer routes. |
 | `supabase/README.md`, `.env.example` | Configuration names and migration notes. |

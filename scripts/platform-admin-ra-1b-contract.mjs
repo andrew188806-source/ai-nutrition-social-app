@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { isExactAdminE1Successor, matchesE1Source } from "./admin-e1-historical-successor.mjs";
 
 const require_ = createRequire(import.meta.url);
 const requireReact = createRequire(new URL("../apps/admin-web/package.json", import.meta.url));
@@ -64,6 +65,8 @@ export function auditSources(sources) {
   for (const file of [READ, TRANSPORT, RUNTIME]) check(`${file} is server-only`, /^import "server-only";/.test(sources[file] ?? ""));
   const reader = sources[READ] ?? "", transport = sources[TRANSPORT] ?? "", runtime = sources[RUNTIME] ?? "";
   const dto = sources[DTO] ?? "", page = sources[PAGE] ?? "", ui = sources[UI] ?? "";
+  const e1Round = isExactAdminE1Successor();
+  const exactE1AuditRetirement = e1Round && matchesE1Source(PAGE, page);
   check("identity verification precedes RA-1A context", reader.indexOf("await transport.verifyIdentity()") > 0
     && reader.indexOf("await transport.verifyIdentity()") < reader.indexOf("await transport.readContext()"));
   check("RA-1A context and audit permission are mandatory", reader.includes('import { assertPlatformAdminPermission, resolvePlatformAdminContext } from "./platformAdminAuthority"')
@@ -87,11 +90,18 @@ export function auditSources(sources) {
     && transport.includes("AbortSignal.timeout(8000)"));
   check("endpoint responses are private and uncacheable", runtime.includes('"Cache-Control": "private, no-store"') && runtime.includes('Vary: "Authorization"'));
   check("canonical JSON endpoint composes real read only", runtime.includes("const result = await readPlatformAdminAudit(") && !/mock.*(logs|events)|adminAuditService/.test(runtime));
-  check("page and route are dynamic", [PAGE, ROUTE].every((file) => sources[file]?.includes('export const dynamic = "force-dynamic"')
-    && sources[file]?.includes("export const revalidate = 0")));
-  check("page consumes bounded result before mock services", page.includes('<PlatformAdminAudit result={composition.result} />')
-    && page.indexOf('if (composition.mode === "live")') < page.indexOf("adminAuditService.listAuditLogs()"));
-  check("mock display is labelled explicitly", page.includes("示範資料（Mock）") && page.includes("不授予管理員權限"));
+  check("page and route are dynamic, or exact E1 audit retirement", e1Round
+    ? exactE1AuditRetirement && sources[ROUTE]?.includes('export const dynamic = "force-dynamic"')
+      && sources[ROUTE]?.includes("export const revalidate = 0")
+    : [PAGE, ROUTE].every((file) => sources[file]?.includes('export const dynamic = "force-dynamic"')
+      && sources[file]?.includes("export const revalidate = 0")));
+  check("page consumes bounded result before mock services, or exact E1 redirect", e1Round
+    ? exactE1AuditRetirement && page.includes('redirect("/admin/audit/platform-memberships")')
+    : page.includes('<PlatformAdminAudit result={composition.result} />')
+      && page.indexOf('if (composition.mode === "live")') < page.indexOf("adminAuditService.listAuditLogs()"));
+  check("mock display is labelled explicitly, or E1 exposes no mock data", e1Round
+    ? exactE1AuditRetirement && !/mock|adminAuditService|PlatformAdminAudit/.test(page)
+    : page.includes("示範資料（Mock）") && page.includes("不授予管理員權限"));
   check("live UI has no mock service", !/adminAuditService|mock|actor|targetId|reason|metadata/.test(ui));
   check("only nonprivileged publishable configuration", transport.includes("sb_publishable_")
     && !/SUPABASE_SERVICE|SERVICE_ROLE|sb_secret_|NEXT_PUBLIC_/.test(PRODUCT_PATHS.map((file) => sources[file]).join("\n")));
