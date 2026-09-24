@@ -5,6 +5,7 @@ import { getAdminRoute } from "../../../../../components/admin-shell/admin-ia-na
 import { createAdminSupabaseServerClient } from "../../../../../auth/supabase-server";
 import { StaffAuthorityPanel, type StaffAuthority } from "../../../../../components/admin-shell/StaffAuthorityPanel";
 import { PrimaryWizard } from "../../../../../components/admin-shell/PrimaryWizard";
+import { ManagerPresetPanel } from "../../../../../components/admin-shell/ManagerPresetPanel";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -34,7 +35,12 @@ type DetailRow = Readonly<{
   updated_at: string;
 }>;
 
-async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
+async function StaffDetailView({ staffAccountId, actorSubject, actorCanWrite, actorCanConsoleAdmission }: {
+  staffAccountId: string;
+  actorSubject: string;
+  actorCanWrite: boolean;
+  actorCanConsoleAdmission: boolean;
+}) {
   if (!UUID.test(staffAccountId)) notFound();
   const client = createAdminSupabaseServerClient();
   const [detailResult, authorityResult] = await Promise.all([
@@ -95,6 +101,13 @@ async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
       })() : null}
 
       <PrimaryWizard staffAccountId={staffAccountId} />
+
+      <ManagerPresetPanel
+        actorCanWrite={actorCanWrite && Boolean(detail)}
+        actorCanConsoleAdmission={actorCanConsoleAdmission}
+        selfTarget={detail?.auth_user_id === actorSubject}
+        staffAccountId={staffAccountId}
+      />
 
       {authority ? (
         <section className="grid gap-4 sm:grid-cols-2">
@@ -163,5 +176,10 @@ async function StaffDetailView({ staffAccountId }: { staffAccountId: string }) {
 
 export default createAdminManagementParamPage<{ staffAccountId: string }>(
   "management-staff-detail",
-  (_context, params) => <StaffDetailView staffAccountId={params.staffAccountId} />
+  (context, params) => <StaffDetailView
+    actorCanConsoleAdmission={context.permissions.includes("admin.management.staff.console_admission.write")}
+    actorCanWrite={context.permissions.includes("admin.management.staff.permission.write")}
+    actorSubject={context.subject}
+    staffAccountId={params.staffAccountId}
+  />
 );
