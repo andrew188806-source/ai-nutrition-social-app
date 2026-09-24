@@ -75,11 +75,24 @@ export function matchesE1Source(file, source) {
   return Object.hasOwn(E1_SOURCE_SHA256, file)
     && hash(source) === E1_SOURCE_SHA256[file];
 }
+// After the E1 push the fixed baseline moved to the E1 commit itself. The ADMIN-E final live closure record is the one local
+// commit on top of it, with exactly these document/rule digests and every other E1 product pin unchanged.
+export const E2_CLOSURE_BASE = "31b55d3101c08a48f868b7988ce8ad6332e2f3fd";
+export const EFINAL_TRANSITION_SHA256 = Object.freeze({
+  'docs/deployment-local-access-matrix.md': "90d5e4a20641a5f968539e8bb5fa9dab9e8369a3e3d09f6f96d53e7444108f97",
+  'docs/engineering-handoff.md': "8bb5050cfa8642ec47304f34c09ef5cbe76491c1453d9314817971e67c0cd77a",
+  'docs/engineering-state-registers.md': "3e9105c2a8323568a93b6fc23bd1cceda2256a3ce156aa175eef394cded43ec7",
+  'scripts/admin-e1-rules.mjs': "48ca98fc8f0f350e4d87d17938e8fdf59488b5949b30c2a6367a5ebb7b570083",
+});
 export function exactAdminE1SuccessorState() {
   try {
-    if (git("rev-parse", "HEAD^") !== E1_PARENT || git("rev-parse", "origin/main") !== E1_PARENT) return null;
-    if (git("rev-list", "--left-right", "--count", "HEAD...origin/main") !== "1\t0") return null;
-    for (const [state, overrides] of [["pre-e2", {}], ["e2r", E2R_TRANSITION_SHA256]]) {
+    const parent = git("rev-parse", "HEAD^"), origin = git("rev-parse", "origin/main");
+    const legacy = parent === E1_PARENT && origin === E1_PARENT;
+    const closure = parent === E2_CLOSURE_BASE && origin === E2_CLOSURE_BASE;
+    if (!legacy && !closure) return null;
+    if (git("rev-list", "--left-right", "--count", "HEAD...origin/main") !== "1	0") return null;
+    const states = legacy ? [["pre-e2", {}], ["e2r", E2R_TRANSITION_SHA256]] : [["final", EFINAL_TRANSITION_SHA256]];
+    for (const [state, overrides] of states) {
       if (E1_SOURCE_PATHS.every((file) =>
         fs.existsSync(path.join(root, file))
         && hash(fs.readFileSync(path.join(root, file))) === (overrides[file] ?? E1_SOURCE_SHA256[file])

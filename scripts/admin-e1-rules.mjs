@@ -84,8 +84,8 @@ export function validateAdminE1(s, baseline) {
     && s.matrix.includes("msbgnnoorsoefuiwluye")
     && !/tastkind-production|production\.supabase\.co/i.test(s.matrix)
     && !/https:\/\/[^\s|`]*?(?:restaurant|admin)[^\s|`]*?\.vercel\.app/i.test(s.matrix);
-  check(preE2Matrix || validateAdminE2R(s).length === 0,
-    "matrix is exact pre-E2 handoff or exact E2R discovered transition");
+  check(preE2Matrix || validateAdminEFinal(s).length === 0,
+    "matrix is exact pre-E2 handoff or exact ADMIN-E final live closure record");
   check(!/(?:password|totp_secret|service_role_key|recovery_secret)\s*[:=]\s*[^\s`]+/i.test(s.matrix+s.inventory+s.registers+s.handoff), "no Demo credential in E1 documentation");
   check(s.matrix.includes("Access-Control-Allow-Origin: *") && /no wildcard/i.test(s.matrix)
     && (preE2Matrix ? s.matrix.includes("Only then deploy/redeploy") : s.matrix.includes("before deployment")),
@@ -180,6 +180,76 @@ export function validateAdminE2R(s) {
     "old ADMIN-A fixture cleanup is recorded without rerunning it");
   check(!/(?:password|totp_secret|service_role_key|recovery_secret|TASTKIND_P3H_BROKER_DATABASE_URL)\s*[:=]\s*[^\s`]+/i.test(docs)
     && !/sb_secret_[a-z0-9]+|service_role\s*=|BEGIN (?:RSA |EC )?PRIVATE KEY/i.test(docs),
+    "no credential or private environment value in tracked handoff");
+  return failures;
+}
+
+export const EFINAL_REMOTE_SOURCE = "31b55d3101c08a48f868b7988ce8ad6332e2f3fd";
+export const EFINAL_OPERATIONAL_KEYS = Object.freeze([
+  "admin.dashboard.counts.read", "admin.nutrition.certification.pending.read", "admin.restaurants.about.read",
+  "admin.restaurants.branches.read", "admin.restaurants.contact.read", "admin.restaurants.geo.read",
+  "admin.restaurants.hours.read", "admin.restaurants.menu_item.read", "admin.restaurants.menu_items.read",
+  "admin.restaurants.menu.read", "admin.restaurants.menu_management.data_quality.read",
+  "admin.restaurants.menu_management.pending.read", "admin.restaurants.menu_management.read",
+  "admin.restaurants.menus.read", "admin.restaurants.read", "admin.social.policies.read"
+]);
+
+// Source-only ADMIN-E final live closure record. It records accepted live evidence without probing a remote system.
+export function validateAdminEFinal(s) {
+  const failures = [];
+  const check = (pass, label) => { if (!pass) failures.push(label); };
+  const matrix = s.matrix ?? "", registers = s.registers ?? "", handoff = s.handoff ?? "";
+  const docs = `${matrix}\n${registers}\n${handoff}`;
+  const tick = (value) => "`" + value + "`";
+  const rows = Object.fromEntries(["Consumer", "Restaurant", "Admin"].map((surface) => [surface,
+    matrix.split("\n").find((line) => line.startsWith(`| ${surface} |`)) ?? ""]));
+  for (const [surface, url] of Object.entries(E2R_DEMO_URLS)) {
+    const cells = rows[surface].split("|").map((part) => part.trim());
+    check(cells[2] === tick(url) && cells[3] === tick(EFINAL_REMOTE_SOURCE), `${surface} exact fixed URL and final remote source`);
+  }
+  const actualUrls = new Set([...matrix.matchAll(/https:\/\/[a-z0-9.-]+\.vercel\.app\b/g)].map((m) => m[0]));
+  check(actualUrls.size === 3 && [...actualUrls].every((url) => Object.values(E2R_DEMO_URLS).includes(url)), "only three exact Demo hosts");
+  check([matrix, registers, handoff].every((doc) => doc.includes("ADMIN-E final live closure") || doc.includes("ADMIN-E FINAL LIVE CLOSURE"))
+    && matrix.includes("LIVE PASS") && !/WAITING_FOR_DEPLOYMENT_ENABLEMENT_AND_PRIMARY_RECOVERY|NOT PRIMARY READY/.test(docs),
+    "final closure is recorded across handoff documents and no stale partial state remains");
+  check(matrix.includes("msbgnnoorsoefuiwluye") && matrix.includes("tastkind-development") && !/tastkind-production|production\.supabase\.co/i.test(docs),
+    "Development backend is exact and Production backend is not substituted");
+  check(["TASTKIND_SUPABASE_URL", "TASTKIND_SUPABASE_PUBLISHABLE_KEY", "TASTKIND_ADMIN_AUTHORITY_MODE", "TASTKIND_P3H_BROKER_DATABASE_URL", "TASTKIND_ADMIN_AUDIT_DATA_SOURCE"]
+    .every((name) => matrix.includes(tick(name))) && matrix.includes(tick("sin1"))
+    && !/TASTKIND_(?:SUPABASE_URL|SUPABASE_PUBLISHABLE_KEY|ADMIN_AUTHORITY_MODE|P3H_BROKER_DATABASE_URL|ADMIN_AUDIT_DATA_SOURCE)\s*=/.test(docs),
+    "Admin environment names, sin1 region and no committed value");
+  check(matrix.includes("tastkind_admin_step_up_broker") && matrix.includes("permanent, intended runtime infrastructure")
+    && matrix.includes("staff_step_up_receipt_issuer_authority") && matrix.includes("port 6543")
+    && matrix.includes("No `service_role` key and no owner/`postgres` database credential"),
+    "permanent least-privilege P3H broker is documented without credentials");
+  check(matrix.includes("Break-glass does **not** let an actor grant itself Primary authority")
+    && matrix.includes(tick("self_target_denied")) && matrix.includes("cross-account P3F/P3E operations")
+    && matrix.includes("must therefore never run the Primary Wizard on the founder's own account")
+    && matrix.includes("ZERO usable PRIMARY READY accounts") && matrix.includes("fully closed"),
+    "first Primary bootstrap is cross-principal and self-target denial is unchanged");
+  const steps = [...matrix.matchAll(/^\| ([1-8]) \| (.+) \|$/gm)];
+  check(steps.length === 8 && steps.every((match, index) => Number(match[1]) === index + 1 && match[2].startsWith(tick(E2R_PRIMARY_STEPS[index])))
+    && steps[6]?.[2].includes("explicit high-privilege confirmation phrase required") && steps[7]?.[2].includes("through canonical console admission"),
+    "exact eight-step Primary contract");
+  check(matrix.includes("exactly **two** usable PRIMARY READY accounts") && matrix.includes("no live Break-glass activation")
+    && matrix.includes("no effective temporary Break-glass entitlement"), "two Primary accounts and no live Break-glass recorded");
+  check(EFINAL_OPERATIONAL_KEYS.every((key) => matrix.includes(tick(key))) && matrix.includes("sixteen operational keys")
+    && matrix.includes("PLANNED and deferred keys were never granted") && matrix.includes(tick("deferred = false"))
+    && matrix.includes("No direct table `INSERT`/`UPDATE`"), "exact sixteen CURRENT operational grants, no PLANNED or deferred, no direct writes");
+  check(matrix.includes("base Admin") && matrix.includes("does not leak staff rows") && matrix.includes("Temporary fixtures were revoked, banned and removed"),
+    "lower-privilege negative evidence is recorded");
+  check(matrix.includes("The 22 legacy roots") && matrix.includes("None renders a mock operational record"), "legacy root closure is recorded");
+  check(matrix.includes("verify_jwt = true") && matrix.includes("11/11 PASS") && matrix.includes("MEAL_PHOTO_ANALYSIS_ALLOWED_ORIGINS=https://haocu-demo.vercel.app")
+    && matrix.includes("no wildcard") && matrix.includes("Access-Control-Allow-Origin: *") && matrix.includes("config before deployment")
+    && matrix.includes("zero direct browser requests to `api.openai.com`") && matrix.includes("GLOBAL_QA_PERFORMANCE_DEBT"),
+    "Consumer CORS/E2E acceptance and font debt classification");
+  check(rows.Restaurant.includes("307 → /login?reason=session") && rows.Restaurant.includes("real Development data") && rows.Restaurant.includes("No client Supabase ref"),
+    "Restaurant stable evidence");
+  check(matrix.includes("Five obsolete `admin-a.acceptance.*` fixtures") && matrix.includes("7 → 2") && matrix.includes("470 → 475")
+    && matrix.includes("`schema_migrations` stays at 66") && matrix.includes("Production Supabase was never accessed"),
+    "ADMIN-A cleanup, migration count and Production boundary");
+  check(!/(?:password|totp_secret|service_role_key|recovery_secret|TASTKIND_P3H_BROKER_DATABASE_URL)\s*[:=]\s*[^\s`]+/i.test(docs)
+    && !/sb_secret_[a-z0-9]+|service_role\s*=|BEGIN (?:RSA |EC )?PRIVATE KEY|postgres(?:ql)?:\/\/[^\s`]+/i.test(docs),
     "no credential or private environment value in tracked handoff");
   return failures;
 }
