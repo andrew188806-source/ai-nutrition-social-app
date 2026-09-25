@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
 import crypto from "node:crypto";
+import { isExactMrbSuccessor, MRB_COMMIT, MRB_PRODUCT_PATHS } from "./admin-mrb-successor-manifest.mjs";
 import {
   RA1A_BASELINE, RA1A_BASELINE_MIGRATION_COUNT, RA1A_BASELINE_SUBJECT, RA1A_COMMIT_SUBJECT,
   RA1A_MIGRATION, RA1A_MIGRATION_SHA256, RA1A_NPM_KEYS, RA1A_PATHS, RA1A_PRODUCT_PATHS,
@@ -81,7 +82,15 @@ const violations = auditRa1aSources(sources);
 check("the RA-1A source security contract holds in full", violations.length === 0, violations);
 
 // ---------------------------------------------------------------- scope containment
-const productOutsideRound = lifecycle.manifest.filter((file) =>
+const mrbInAncestry = child.spawnSync("git", ["merge-base", "--is-ancestor", MRB_COMMIT, head],
+  { cwd: root, stdio: "ignore" }).status === 0;
+const laterProductPaths = mrbInAncestry
+  ? lines(git(["diff", "--name-only", MRB_COMMIT, "--", "apps/admin-web", "apps/mobile", "apps/restaurant-web", "supabase", "packages/shared", "lib"]))
+  : [];
+const exactMrb = isExactMrbSuccessor();
+const scopeManifest = [...new Set([...lifecycle.manifest, ...worktreePaths, ...laterProductPaths])]
+  .filter((file) => !(exactMrb && MRB_PRODUCT_PATHS.includes(file)));
+const productOutsideRound = scopeManifest.filter((file) =>
   (file.startsWith("apps/") || file.startsWith("packages/") || file.startsWith("supabase/") || file.startsWith("lib/"))
   && !RA1A_PRODUCT_PATHS.includes(file));
 check("RA-1A touches no product path outside its own three", productOutsideRound.length === 0, productOutsideRound);
@@ -90,7 +99,7 @@ check("RA-1A changes no Edge Function",
 check("RA-1A changes no Consumer, Social, GEO or Restaurant runtime",
   lifecycle.manifest.every((file) => !/^apps\/(mobile|restaurant-web)\//.test(file)));
 check("RA-1A adds no Admin page, repository, service or mock",
-  lifecycle.manifest.every((file) => !/^apps\/admin-web\/(app|repositories|services|adapters|components|view-models)\//.test(file)));
+  scopeManifest.every((file) => !/^apps\/admin-web\/(app|repositories|services|adapters|components|view-models)\//.test(file)));
 check("RA-1A does not modify .env.example or any lockfile",
   lifecycle.manifest.every((file) => file !== ".env.example"
     && !/(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|Pipfile\.lock|poetry\.lock)$/.test(file)));

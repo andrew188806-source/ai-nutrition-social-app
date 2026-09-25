@@ -2,6 +2,7 @@
 // ADMIN-B2 guard: the nine Restaurant / Branch canonical read-only pages over the ADMIN-B1 contracts. Static; no network.
 import assert from "node:assert/strict";
 import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
+import { unexpectedMrbApiOrSupabase } from "./admin-mrb-successor-manifest.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -122,7 +123,7 @@ check("no raw client table access and no mutation surface: only the shared rpc c
   }
   const changed = [...git("diff", "--name-only", BASELINE).split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")].filter(Boolean);
   const authorizedMigrations = new Set(["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql"]);
-  assert.deepEqual(changed.filter((f) => /^apps\/admin-web\/app\/api\//.test(f) || (/^supabase\//.test(f) && !authorizedMigrations.has(f))), []); // exact ADMIN-C and ADMIN-D additive successors
+  assert.deepEqual(unexpectedMrbApiOrSupabase(changed, authorizedMigrations), []); // exact C/D migrations and pinned later MRB read route only
 });
 check("contract states are validated, not collapsed: ready/forbidden/invalid_request/not_found stay distinct; malformed or error -> unavailable; identifiers are echo-checked", () => {
   for (const s of ["forbidden", "invalid_request", "not_found", "unavailable"]) assert.ok(adapterCode.includes(`"${s}"`), s);

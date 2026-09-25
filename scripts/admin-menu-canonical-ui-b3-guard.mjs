@@ -2,6 +2,7 @@
 // ADMIN-B3 guard: the six Menu / Menu Item canonical read-only pages over the ADMIN-B1 contracts. Static; no network.
 import assert from "node:assert/strict";
 import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
+import { unexpectedMrbApiOrSupabase } from "./admin-mrb-successor-manifest.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -136,7 +137,7 @@ check("no raw client table access and no mutation surface: only the shared rpc c
   for (const src of [...Object.values(pages), read(MENU_VIEWS)]) assert.doesNotMatch(src, /<form|<button|<input|<textarea|<select|method=|onSubmit|onClick/i);
   const changed = [...git("diff", "--name-only", BASELINE).split("\n"), ...git("ls-files", "--others", "--exclude-standard").split("\n")].filter(Boolean);
   const authorizedMigrations = new Set(["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql"]);
-  assert.deepEqual(changed.filter((f) => /^apps\/admin-web\/app\/api\//.test(f) || (/^supabase\//.test(f) && !authorizedMigrations.has(f))), []); // exact ADMIN-C and ADMIN-D additive successors
+  assert.deepEqual(unexpectedMrbApiOrSupabase(changed, authorizedMigrations), []); // exact C/D migrations and pinned later MRB read route only
 });
 check("contract states are validated, not collapsed: forbidden/invalid_request/not_found/unavailable distinct; identifiers echo-checked; item's menu enforced", () => {
   const echo = {

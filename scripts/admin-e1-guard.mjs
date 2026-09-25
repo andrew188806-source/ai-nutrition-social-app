@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import cp from "node:child_process";
 import crypto from "node:crypto";
+import { isExactMrbSuccessor } from "./admin-mrb-successor-manifest.mjs";
 import { BASELINE, FILES, ROUTES, baselineFile, readSources, validateAdminE1 } from "./admin-e1-rules.mjs";
 const root = process.cwd();
 const pages = fs.readdirSync("apps/admin-web/app", { withFileTypes: true })
@@ -43,7 +44,8 @@ if (changedProtected.length) {
   const localFreeze = head !== mrbBaseline && git("rev-parse","HEAD^") === mrbBaseline
     && git("rev-list","--left-right","--count","HEAD...origin/main") === "1\t0";
   assert.equal(origin,mrbBaseline,"ADMIN-MRB exact predecessor remains origin/main");
-  assert.ok(head === mrbBaseline || localFreeze,"only the pinned ADMIN-MRB local successor may change E1-protected sources");
+  assert.ok(head === mrbBaseline || localFreeze || isExactMrbSuccessor(),
+    "only the pinned ADMIN-MRB local successor or its exact guard closure may change E1-protected sources");
   assert.ok(changedProtected.every((file) => Object.hasOwn(mrbSources,file)),
     `unexpected E1-protected changes: ${changedProtected.filter((file) => !Object.hasOwn(mrbSources,file)).join(", ")}`);
   for (const [file,expected] of Object.entries(mrbSources)) {

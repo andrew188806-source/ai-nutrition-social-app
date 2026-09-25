@@ -3,6 +3,7 @@
 // ADMIN-C2 = two per-item factual read surfaces (allergens, certification status) that REUSE the ADMIN-B1 item-detail contract. Static; no network.
 import assert from "node:assert/strict";
 import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
+import { unexpectedMrbApiOrSupabase } from "./admin-mrb-successor-manifest.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -236,7 +237,8 @@ check("database changes remain additive and exact: ADMIN-C plus the one ADMIN-D 
   assert.deepEqual(status.filter((l) => /\tsupabase\//.test(l) && !/^A\t/.test(l)), []);
   const changed = new Set([...lines(git("diff", "--name-only", BASELINE)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
   assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && ![MIGRATION, D_MIGRATION].includes(f)), []);
-  assert.deepEqual([...changed].filter((f) => /^apps\/admin-web\/app\/api\//.test(f)), []);
+  assert.deepEqual(unexpectedMrbApiOrSupabase([...changed], new Set([MIGRATION, D_MIGRATION]))
+    .filter((f) => /^apps\/admin-web\/app\/api\//.test(f)), []);
   assert.ok(changed.has(MIGRATION));
   assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(D_MIGRATION));
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
