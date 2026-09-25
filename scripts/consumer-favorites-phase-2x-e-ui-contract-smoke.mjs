@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
+import { acceptsFavoritesLocalMealBoundary, collectGqa1SuccessorEvidence } from "./gqa-1-successor-manifest.mjs";
 
 const root = process.cwd();
 const checks = [];
@@ -102,7 +103,7 @@ try {
   check("meal-log has no mealFavoriteIds route-local favorite array", !/mealFavoriteIds/.test(mealLogSrc));
   check("meal-log has no route-local favorite Set or array keyed by meal record id", !/useState.*string\[\].*\[\].*meal|mealFav|toggleMealFav/i.test(mealLogSrc));
   check("MealFoodCard has no isFavorited or onToggleFavorite interactive props", !/isFavorited.*bool|onToggleFavorite.*void/i.test(mealLogSrc));
-  check("MealFoodCard renders static targetUnavailable label for unsupported meals — cannot become visually saved", /consumerFavorites\.targetUnavailable/.test(mealLogSrc));
+  check("unsupported local meals remain isolated under the historical MealFoodCard or exact GQA-1 successor", acceptsFavoritesLocalMealBoundary(mealLogSrc, collectGqa1SuccessorEvidence()));
   check("MealFoodCard Pressable does not wrap a favorite toggle callback", !/<Pressable[^>]*onPress={onToggleFavorite}/.test(mealLogSrc) && !/<Pressable[^>]*onPress={.*meal.*ids/.test(mealLogSrc));
   check("meal-log uses diary.favoriteCta and diary.favoritedCta only in non-MealFoodCard contexts", !/(favoriteLabel|favoritedLabel)\s*=\s*\{diary\.(favoriteCta|favoritedCta)\}/.test(mealLogSrc));
   check("unsupported local meal does not enter live favorites list: menuItemFavorites is entityType=menu_item and MealCard has no menuItemId field", !/menuItemId.*MealCard|MealCard.*menuItemId/.test(mealLogSrc) && /entityType.*menu_item/.test(mealLogSrc));
