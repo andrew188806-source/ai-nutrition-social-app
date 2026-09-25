@@ -29,7 +29,7 @@ import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/toke
 
 const diningGoals = ["都可以", "均衡餐", "高蛋白", "低熱量", "低碳水", "清爽型", "飽足型", "蔬食", "放縱餐"];
 const cuisineTypes = ["都可以", "日式", "中式", "韓式", "美式", "義式", "泰式", "港式", "火鍋", "燒肉", "咖啡廳", "早午餐"];
-const diningSituations = ["都可以", "自己吃", "找飯友", "四人桌", "約會", "家庭聚餐", "商務聚餐", "深夜宵夜", "運動後補充", "放鬆聊天"];
+const diningSituations = ["都可以", "自己吃", "找飯友", "約會", "家庭聚餐", "商務聚餐", "深夜宵夜", "運動後補充", "放鬆聊天"];
 const locationScopes = ["附近", "全部", "自訂地點"];
 
 const locationTree = {
@@ -97,7 +97,6 @@ export default function RestaurantsScreen() {
   const [pendingRestaurant, setPendingRestaurant] = useState<Restaurant | null>(null);
   const [diningDateOption, setDiningDateOption] = useState<DiningDateOption>(zhTW.mobile.refinedLogic.mealBuddyCard.diningDateOptions[0]);
   const [customDiningDate, setCustomDiningDate] = useState("");
-  const [pendingTableRestaurant, setPendingTableRestaurant] = useState<Restaurant | null>(null);
   const [createdRestaurantIds, setCreatedRestaurantIds] = useState<string[]>([]);
   const favoriteComposition = useMemo(() => {
     try {
@@ -214,30 +213,9 @@ export default function RestaurantsScreen() {
     openMealBuddyPanel(restaurant);
   }
 
-  function startTableFromDetail(restaurant: Restaurant) {
+  function startTableFromDetail(_restaurant: Restaurant) {
     setDetailRestaurant(null);
-    setPendingTableRestaurant(restaurant);
-  }
-
-  function openRestaurantTableFlow(action: "find" | "create") {
-    // Integration entry: Restaurant -> existing Four-Person Table module.
-    if (!pendingTableRestaurant) {
-      return;
-    }
-    router.push({
-      pathname: "/meal-buddies",
-      params: {
-        restaurantActionType: action === "create" ? "createFourPersonTable" : "findFourPersonTable",
-        restaurantId: pendingTableRestaurant.restaurantId,
-        restaurantLocation: filters.location,
-        restaurantName: pendingTableRestaurant.name,
-        restaurantTags: pendingTableRestaurant.tags.join("、"),
-        section: "tables",
-        tableAction: action,
-        tableTime: "今晚 19:00"
-      }
-    });
-    setPendingTableRestaurant(null);
+    router.push("/group-tables");
   }
 
   if (catalog.state.status === "loading") {
@@ -289,7 +267,7 @@ export default function RestaurantsScreen() {
       </Pressable>
 
       <SnowCard tone="primary">
-        <SnowSectionHeader title="餐廳智慧推薦" subtitle="AI 會綜合今日已吃內容、剩餘營養需求、熱門度、飯友機會與四人桌機會，先幫你排出適合今天的餐廳。" />
+        <SnowSectionHeader title="餐廳智慧推薦" subtitle={zhTW.mobile.restaurants.recommendationContext} />
         <View style={styles.snowChipRow}>
           {getActiveFilterLabels(filters).map((label) => (
             <Chip key={label} label={label} />
@@ -369,9 +347,9 @@ export default function RestaurantsScreen() {
                     <Icon name="bookmark" size={16} color={snow.primaryDeep} />
                     <Text style={styles.saveButtonText}>{saved ? zhTW.mobile.consumerFavorites.active : zhTW.mobile.consumerFavorites.inactive}</Text>
                   </Pressable>
-                  <Pressable accessibilityRole="button" style={styles.tablePill} onPress={() => setPendingTableRestaurant(restaurant)}>
+                  <Pressable accessibilityRole="button" style={styles.tablePill} onPress={() => router.push("/group-tables")}>
                     <Icon name="table4" size={14} color={snow.sub} />
-                    <Text style={styles.tablePillText}>{zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta}</Text>
+                    <Text style={styles.tablePillText}>{zhTW.mobile.groupTables.deferredStatus}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -407,12 +385,6 @@ export default function RestaurantsScreen() {
         })}
       </View>
 
-      <RestaurantTableActionModal
-        restaurant={pendingTableRestaurant}
-        onClose={() => setPendingTableRestaurant(null)}
-        onCreate={() => openRestaurantTableFlow("create")}
-        onFind={() => openRestaurantTableFlow("find")}
-      />
 
       <SnowCard tone="primary">
         <SnowSectionHeader title={zhTW.mobile.restaurants.sponsoredTitle} subtitle={zhTW.mobile.restaurants.sponsoredBody} />
@@ -428,15 +400,14 @@ export default function RestaurantsScreen() {
       </SnowCard>
 
       <SnowCard tone="primary">
-        <PremiumBadge label={zhTW.mobile.premiumUi.premiumTables} />
-        <SnowSectionHeader title={zhTW.mobile.restaurants.groupTableTitle} subtitle={zhTW.mobile.restaurants.groupTableBody} />
-        <Text style={styles.privacyNote}>{zhTW.mobile.correctedFlow.aaTableRule}</Text>
+        <SnowSectionHeader title={zhTW.mobile.groupTables.deferredTitle} subtitle={zhTW.mobile.groupTables.deferredStatus} />
+        <Text style={styles.privacyNote}>{zhTW.mobile.groupTables.deferredBody}</Text>
         <View style={styles.ctaRow2}>
           <View style={styles.ctaItem}>
-            <PrimaryButton icon="table4" label={zhTW.mobile.correctedFlow.createGroupTable} onPress={() => router.push("/meal-buddies?section=tables")} />
+            <PrimaryButton icon="table4" label={zhTW.mobile.groupTables.deferredStatus} onPress={() => router.push("/group-tables")} />
           </View>
           <View style={styles.ctaItem}>
-            <SecondaryButton icon="table4" label={zhTW.mobile.correctedFlow.viewTonightTable} onPress={() => router.push("/meal-buddies?section=tables")} />
+            <SecondaryButton icon="table4" label={zhTW.mobile.groupTables.deferredTitle} onPress={() => router.push("/group-tables")} />
           </View>
         </View>
       </SnowCard>
@@ -519,7 +490,7 @@ function RestaurantRecommendationModal({
             {draftFilters.mode === "ai" ? (
               <View style={styles.aiModeCard}>
                 <Text style={styles.reasonTitle}>AI 將根據：</Text>
-                {["今日營養缺口", "歷史飲食習慣", "目前位置", "距離與熱門度", "附近飯友機會", "附近四人桌機會"].map((item) => (
+                {zhTW.mobile.restaurants.recommendationFactors.map((item) => (
                   <Text key={item} style={styles.reasonItem}>✓ {item}</Text>
                 ))}
                 <Text style={styles.privacyNote}>進行推薦</Text>
@@ -633,40 +604,6 @@ function RestaurantRecommendationModal({
               <Text style={styles.updateButtonText}>更新推薦</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function RestaurantTableActionModal({
-  onClose,
-  onCreate,
-  onFind,
-  restaurant
-}: {
-  onClose: () => void;
-  onCreate: () => void;
-  onFind: () => void;
-  restaurant: Restaurant | null;
-}) {
-  return (
-    <Modal transparent animationType="fade" visible={Boolean(restaurant)} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>四人餐桌</Text>
-            <Pressable accessibilityRole="button" onPress={onClose}>
-              <Text style={styles.closeText}>取消</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.privacyNote}>{restaurant?.name} 可以尋找現有四人桌，也可以用這間餐廳建立一桌。</Text>
-          <Pressable accessibilityRole="button" style={styles.socialButton} onPress={onFind}>
-            <Text style={styles.socialButtonText}>尋找餐桌</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" style={[styles.socialButton, styles.secondarySocialButton]} onPress={onCreate}>
-            <Text style={styles.socialButtonText}>建立餐桌</Text>
-          </Pressable>
         </View>
       </View>
     </Modal>
@@ -888,7 +825,7 @@ function RestaurantDetailModal({
                     onPress={() => onCreateCard(restaurant)}
                   />
                   <View style={styles.detailSecondaryCta}>
-                    <SecondaryButton icon="table4" label={zhTW.mobile.refinedLogic.mealBuddyCard.fourPersonTableCta} onPress={() => onCreateTable(restaurant)} />
+                    <SecondaryButton icon="table4" label={zhTW.mobile.groupTables.deferredStatus} onPress={() => onCreateTable(restaurant)} />
                   </View>
                   {/* MI-E-C5-R7-C1: carries DURABLE IDS ONLY into the capture flow. Names, districts,
                       menus and catalog objects stay here — naming the venue on the analysis screen is
@@ -1008,7 +945,6 @@ function getRecommendationReasons(restaurant: Restaurant, filters: RestaurantFil
 
 function getSocialHint(restaurant: Restaurant) {
   if (restaurant.name === "好初健康碗") return "附近有 3 位飯友可能也想吃";
-  if (restaurant.name === "森日蔬食廚房") return "有 1 個四人桌正在揪團";
   return "附近有人收藏過這家店";
 }
 
@@ -1029,7 +965,6 @@ function inferCuisineType(restaurant: Restaurant) {
 
 function getSituationBoost(restaurant: Restaurant, situation: string) {
   if (situation === "找飯友" && getSocialHint(restaurant).includes("飯友")) return 22;
-  if (situation === "四人桌" && getSocialHint(restaurant).includes("四人桌")) return 24;
   if (situation === "運動後補充" && restaurant.tags.some((tag) => tag.includes("高蛋白") || tag.includes("增肌"))) return 20;
   if (situation === "自己吃" && restaurant.distanceDisplay.includes("m")) return 12;
   return 0;

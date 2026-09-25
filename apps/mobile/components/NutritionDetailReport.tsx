@@ -7,7 +7,7 @@ import { fonts, hexA, radius, snowPalette as colors } from "../theme/tokens";
 export function NutritionDetailReport({ summary }: { summary: TodayNutritionSummary }) {
   const t = zhTW.mobile.todayNutritionSummary.detail;
   const items = getNutritionDetailItems(summary);
-  const suggestions = [...summary.reminders.map((reminder) => reminder.label), getHydrationTip()];
+  const suggestions = summary.reminders.map((reminder) => reminder.label);
 
   return (
     <Card>
@@ -22,13 +22,13 @@ export function NutritionDetailReport({ summary }: { summary: TodayNutritionSumm
           </View>
         ))}
       </View>
-      <View style={styles.suggestionList}>
+      {suggestions.length ? <View style={styles.suggestionList}>
         <Text style={styles.suggestionTitle}>{t.suggestionsTitle}</Text>
-        {suggestions.map((suggestion) => (
-          <Text key={suggestion} style={styles.suggestionItem}>
-            • {suggestion}
-          </Text>
-        ))}
+        {suggestions.map((suggestion) => <Text key={suggestion} style={styles.suggestionItem}>• {suggestion}</Text>)}
+      </View> : null}
+      <View style={styles.suggestionList}>
+        <Text style={styles.suggestionTitle}>{t.genericSuggestionsTitle}</Text>
+        <Text style={styles.suggestionItem}>• {getHydrationTip()}</Text>
       </View>
     </Card>
   );

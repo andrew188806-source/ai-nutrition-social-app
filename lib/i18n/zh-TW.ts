@@ -414,7 +414,8 @@ export const zhTW = {
         sodiumNote: "外食湯品與醃漬物鈉含量較高，建議多喝水並選擇清淡配菜。",
         addedSugarNote: "手搖飲與甜點是常見的添加糖來源，建議適量攝取。",
         saturatedFatNote: "油炸與油煎料理飽和脂肪較高，可與清蒸或水煮交替。",
-        hydrationTip: "今日尚未記錄飲水量，建議全天維持 1500-2000ml 飲水。",
+        hydrationTip: "記得依自身需求補充水分。",
+        genericSuggestionsTitle: "一般提醒（非依紀錄計算）",
         suggestionsTitle: "今日建議與提醒"
       }
     },
@@ -979,8 +980,11 @@ export const zhTW = {
         { label: "營養平衡分數", value: "82", note: "表現良好" }
       ],
       savedIntake: {
+        genericGuidanceTitle: "一般飲食提醒",
+        genericGuidanceBody: "以下是一般飲食提醒，並非依照你今天的紀錄計算的個人建議。",
+        recordedLunchTitle: "已記錄午餐",
         title: "今日攝取量",
-        body: "這餐已經完成記錄，今日營養摘要已更新。",
+        body: "查看已儲存的飲食紀錄與今日營養摘要。",
         savedMessage: "已加入今日飲食",
         caloriesTitle: "今日熱量",
         proteinTitle: "蛋白質",
@@ -1009,6 +1013,26 @@ export const zhTW = {
       goalTags: ["熱量管理", "增肌", "飲食紀錄"]
     },
     mealLog: {
+      canonical: {
+        title: "美食日記",
+        recentWindow: "近七天飲食紀錄",
+        boundedWindow: "每次顯示七天內最多 100 筆已儲存紀錄。",
+        loading: "正在讀取已儲存的飲食紀錄…",
+        empty: "這段期間還沒有已儲存的飲食紀錄。",
+        unavailable: "目前無法讀取飲食紀錄，請稍後重試。",
+        signInRequired: "請登入以查看自己的飲食紀錄。",
+        previousWeek: "前七天",
+        nextWeek: "後七天",
+        retry: "重試",
+        noNutrition: "此筆紀錄沒有可顯示的營養數值。",
+        recordLimit: "此期間只顯示最近 100 筆紀錄。",
+        favoritesTitle: "收藏餐點",
+        favoritesUnavailable: "目前無法讀取收藏餐點。",
+        favoritesEmpty: "目前沒有收藏餐點。",
+        viewToday: "查看今日攝取量",
+        mealTypes: { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", late_night: "宵夜", snack: "點心", other: "其他" },
+        sources: { restaurant: "餐廳", self_made: "自煮", manual: "手動記錄", ai_estimated: "AI 估算" }
+      },
       foodMemoryTitle: "美食日記線索",
       foodMemorySubtitle: "用來回想餐廳、支援聊天話題、推薦下一餐與找相似飲食同好。",
       searchPlaceholder: "搜尋餐廳、餐點、筆記或標籤",
@@ -2191,7 +2215,7 @@ export const zhTW = {
       privacyTitle: "可見度由使用者控制",
       privacyBody: "每位使用者都可以控制照片、完整檔案、健康目標與飲食標籤是否公開。",
       upgradeTitle: "Premium 讓社交探索更值得信任",
-      premiumValues: ["更多配對次數", "查看完整飯友資料", "健康目標模式", "更清楚的配對原因", "可發起四人餐桌"],
+      premiumValues: ["更多配對次數", "查看完整飯友資料", "健康目標模式", "更清楚的配對原因"],
       explanation: "適合度依共同標籤、近期餐點、營養習慣與用餐意圖建立，不是外貌或約會導向。",
       sharedTags: ["高蛋白", "熱量管理", "找午餐夥伴", "一起控制飲食"],
       freePreview: ["匿名頭像", "部分共同標籤", "基本適合度"],
@@ -2242,6 +2266,8 @@ export const zhTW = {
       groupBranchCta: "看看四人餐桌"
     },
     restaurants: {
+      recommendationContext: "依目前可用的餐廳與菜單資訊顯示推薦。多人餐桌功能仍在開發中。",
+      recommendationFactors: ["今日營養缺口", "歷史飲食習慣", "目前位置", "距離與熱門度", "附近飯友機會"],
       list: [
         { name: "好初健康碗", distance: "850m", score: "96%", tags: ["藍勾勾認證", "有營養標示", "高蛋白菜單"] },
         { name: "森日蔬食廚房", distance: "1.2km", score: "88%", tags: ["蔬食選項", "低卡選項", "有營養標示"] },
@@ -2260,6 +2286,11 @@ export const zhTW = {
       groupTableCta: "揪 4 人一起吃"
     },
     groupTables: {
+      mealBuddySubtitle: "飯友推薦與一對一聊天可繼續使用；多人餐桌仍在開發中。",
+      deferredTitle: "多人餐桌",
+      deferredStatus: "開發中 · Post-MVP",
+      deferredBody: "多人餐桌與共同餐點推薦規劃在後續版本。現在無法建立、加入或邀請餐桌，也沒有多人聊天室。",
+      deferredRestaurantBody: "這間餐廳目前沒有可使用的多人餐桌功能。",
       createCta: "發起四人餐桌",
       createLockedTitle: "Premium 才能發起新餐桌",
       createLockedBody: "Free 可以瀏覽與加入有限餐桌；Premium 可發起餐桌並獲得更高曝光。",

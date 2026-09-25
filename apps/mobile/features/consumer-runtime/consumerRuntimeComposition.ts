@@ -25,6 +25,7 @@ import { getConsumerMealRuntimeFlags } from "../consumer-meals/featureFlags";
 import type { ConsumerMealRuntimeFlags } from "../consumer-meals/types";
 import type { ConsumerPlannedMeal, ConsumerPlannedMealsReadResult } from "../consumer-meals/types";
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
+import type { ConsumerMealRecordsService } from "../consumer-meals/consumerMealRecordsService";
 import type { ConsumerPlannedMealV2Service } from "../consumer-meals/consumerPlannedMealV2Service";
 import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseMealContracts";
 import { getConsumerMealIdentificationFinalizationRuntimeFlags } from "../meal-identification-finalization/featureFlags";
@@ -344,6 +345,7 @@ export type ConsumerRuntimeComposition = {
   mealPhotoAnalysisService: MealPhotoAnalysisService;
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMealsReadResult>;
   createOverviewService(timezone: string): ConsumerTodayIntakeOverviewService;
+  mealRecordsService: ConsumerMealRecordsService | null;
 };
 
 export type ConsumerRuntimeCompositionResult =
@@ -558,6 +560,7 @@ function createMealRuntimeParts(input: {
   // runtime, while an actual B2 composition always enters this function.
   const {
     createConsumerMealRecordWriteService,
+    createConsumerMealRecordsService,
     createConsumerPlannedMealV2Service,
     createConsumerPlannedMealsService,
     createConsumerTodayIntakeOverviewService
@@ -697,6 +700,9 @@ function createMealRuntimeParts(input: {
     plannedMealService,
     mealPhotoUploadService,
     mealPhotoAnalysisService,
+    mealRecordsService: overviewFlags.mealRecordsSource === "supabase-live"
+      ? createConsumerMealRecordsService(overviewFlags, dependencies)
+      : null,
     getPlannedMeals: (plannedDate: string) => plannedMealsService.getCurrentUserPlannedMeals({ plannedDate }),
     createOverviewService: (timezone: string) => input.overviewService ?? createConsumerTodayIntakeOverviewService(
       overviewFlags,

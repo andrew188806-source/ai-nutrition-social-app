@@ -114,9 +114,9 @@ export function RankedMealBuddyCard({
           <Pressable disabled={Boolean(pendingInviteType)} style={[styles.primaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onEatTogether)}>
             <Text style={styles.primaryButtonText}>{pendingInviteType === "meal" ? "已送出邀請" : "邀請吃飯"}</Text>
           </Pressable>
-          <Pressable disabled={Boolean(pendingInviteType)} style={[styles.secondaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onInviteTable)}>
+          {onInviteTable ? <Pressable disabled={Boolean(pendingInviteType)} style={[styles.secondaryButton, pendingInviteType && styles.disabledButton]} onPress={(event) => runAction(event, onInviteTable)}>
             <Text style={styles.secondaryButtonText}>{pendingInviteType === "table" ? "已送出邀請" : "邀請加入4人桌"}</Text>
-          </Pressable>
+          </Pressable> : null}
         </View>
       </Card>
     </Pressable>
@@ -155,7 +155,7 @@ export function MealBuddyRecommendationList({
             isPremiumMode={isPremiumMode}
             onChat={() => onChat?.(candidate)}
             onEatTogether={() => onEatTogether?.(candidate)}
-            onInviteTable={() => onInviteTable?.(candidate)}
+            onInviteTable={onInviteTable ? () => onInviteTable(candidate) : undefined}
             onViewCard={() => onViewCard?.(candidate)}
             pendingInviteType={pendingInviteForCandidate?.(candidate) ?? null}
           />

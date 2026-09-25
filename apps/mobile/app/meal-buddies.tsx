@@ -11,7 +11,6 @@ import { getCommunityCardSettings } from "../features/community-card-settings";
 import {
   addMealBuddyChatMessage,
   addMealBuddyChatSystemMessage,
-  createOrOpenGroupTableChat,
   createOrOpenMealSessionChat,
   createMealBuddyInvite,
   createMealBuddyCard,
@@ -67,7 +66,7 @@ import { resolveCommunityProfileDisplay, type AvatarSource, type CommunityProfil
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { clearU1NextMealBuddyPrefill, consumeU1NextMealBuddyPrefill, type U1NextMealBuddyPrefillViewModel } from "../features/next-meal-prototype";
 import { storage } from "../lib/storage";
-import { GroupTablesContent } from "./group-tables";
+import { GroupTableDeferred } from "../features/group-tables/GroupTableDeferred";
 
 type MealBuddySection = "discover" | "cards" | "friends" | "gatherings" | "tables";
 type MyFriendsTab = "matched" | "invitations" | "chats";
@@ -189,7 +188,11 @@ function safelyParseRecommendationGroups(raw: string): RecommendationGroup[] {
 type MatchedFriend = MockMatchedBuddy;
 type GatheringRecord = MockGatheringRecord;
 
-const gatheringRecords = mockGatheringRecords;
+const gatheringRecords = {
+  hosting: mockGatheringRecords.hosting.filter((record) => record.source !== "group_table" && !record.tableId),
+  joined: mockGatheringRecords.joined.filter((record) => record.source !== "group_table" && !record.tableId),
+  ended: mockGatheringRecords.ended.filter((record) => record.source !== "group_table" && !record.tableId)
+};
 
 export default function MealBuddyHomeScreen() {
   const router = useRouter();
@@ -281,8 +284,8 @@ export default function MealBuddyHomeScreen() {
   useMealBuddyPushRouting(openRelationshipAreaFromNotification);
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
-  const chats = getMealBuddyChats();
-  const invites = getMealBuddyInvites();
+  const chats = getMealBuddyChats().filter((chat) => chat.threadType !== "group" && !chat.tableId);
+  const invites = getMealBuddyInvites().filter((invite) => invite.type !== "table");
   const matchedFriends = getVisibleMatchedFriends(invites);
   const openCommunityProfile = (profileId?: string) => {
     if (profileId) {
@@ -373,7 +376,7 @@ export default function MealBuddyHomeScreen() {
   return (
     <PlaceholderScreen
       title={zhTW.mobile.mainSections.friendsTitle}
-      subtitle="營養分析、飯友推薦、聊天與四人餐桌都在這裡，先選一個想進行的社交吃飯情境。"
+      subtitle={zhTW.mobile.groupTables.mealBuddySubtitle}
     >
       <UpgradePromptModal
         actionLabel="稍後再說"
@@ -427,10 +430,6 @@ export default function MealBuddyHomeScreen() {
           }}
           onInviteEat={(candidate, card) => {
             createMealBuddyInvite(candidate, "meal", card);
-            setSocialVersion((version) => version + 1);
-          }}
-          onInviteTable={(candidate, card) => {
-            createMealBuddyInvite(candidate, "table", card);
             setSocialVersion((version) => version + 1);
           }}
           onOpenChat={(candidate, card) => {
@@ -534,10 +533,6 @@ export default function MealBuddyHomeScreen() {
             acceptMealBuddyInvite(invite);
             const updatedInvite = getMealBuddyInvites().find((item) => item.id === invite.id) ?? invite;
             setSocialVersion((version) => version + 1);
-            if (invite.type === "table") {
-              setAcceptedMealInvite(updatedInvite);
-              return;
-            }
             setFriendInitialTab("chats");
             setActiveSection("friends");
           }}
@@ -547,17 +542,14 @@ export default function MealBuddyHomeScreen() {
           }}
           onOpenChat={(record) => {
             let targetChat;
-            if (record.source === "group_table" || record.tableId) {
-              targetChat = createOrOpenGroupTableChat(record.chatName, record.tableId, record.chatThreadId);
-            } else {
-              targetChat = createOrOpenMealSessionChat({
+            if (record.source === "group_table" || record.tableId) return;
+            targetChat = createOrOpenMealSessionChat({
                 buddyId: record.buddyId,
                 chatThreadId: record.chatThreadId,
                 participantProfileId: record.participantProfileId,
                 userName: record.participantProfileId ?? record.chatName ?? record.id,
                 relatedMeal: record.name || "一般飯友飯局"
               });
-            }
             setSocialVersion((version) => version + 1);
             setFocusedChatId(targetChat.id);
             setFocusedChatName(chatDisplayName(targetChat, resolveChatProfileDisplay(targetChat)));
@@ -567,28 +559,7 @@ export default function MealBuddyHomeScreen() {
         />
       ) : null}
       {activeSection === "tables" ? (
-        <GroupTablesContent
-          restaurantContext={
-            params.restaurantName
-              ? {
-                  action: params.restaurantActionType === "createFourPersonTable" || params.tableAction === "create" ? "create" : "find",
-                  restaurantId: params.restaurantId ?? `restaurant-${params.restaurantName}`,
-                  restaurantLocation: params.restaurantLocation ?? "",
-                  restaurantName: params.restaurantName,
-                  restaurantTags: params.restaurantTags?.split("、").filter(Boolean) ?? [],
-                  suggestedTime: params.tableTime ?? "今晚 19:00"
-                }
-              : undefined
-          }
-          onOpenChat={({ chatThreadId, tableId, tableName }) => {
-            const chat = createOrOpenGroupTableChat(tableName, tableId, chatThreadId);
-            setSocialVersion((version) => version + 1);
-            setFocusedChatId(chat.id);
-            setFocusedChatName(chatDisplayName(chat, resolveChatProfileDisplay(chat)));
-            setFriendInitialTab("chats");
-            setActiveSection("friends");
-          }}
-        />
+        <GroupTableDeferred fromRestaurant={Boolean(params.restaurantName)} />
       ) : null}
     </PlaceholderScreen>
   );
@@ -646,7 +617,6 @@ function DiscoverSection({
   onGoToMealTables,
   onGoToPendingInvites,
   onInviteEat,
-  onInviteTable,
   onOpenChat,
   onOpenPremium,
   onOpenRealCandidateProfile,
@@ -676,7 +646,6 @@ function DiscoverSection({
   onGoToMealTables: () => void;
   onGoToPendingInvites: () => void;
   onInviteEat: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
-  onInviteTable: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenChat: (candidate: RankedMealBuddyCandidate, card: MealBuddyCard) => void;
   onOpenPremium: () => void;
   onOpenRealCandidateProfile: (candidateRef: string) => void;
@@ -786,7 +755,7 @@ function DiscoverSection({
             </Pressable>
             <Pressable style={[styles.actionButton, styles.actionButtonNeutral]} onPress={onGoToFourSeatTableCreation}>
               <Icon name="table4" size={16} color={snow.ink} />
-              <Text style={styles.actionButtonLabel}>多人飯局</Text>
+              <Text style={styles.actionButtonLabel}>{zhTW.mobile.groupTables.deferredTitle} · {zhTW.mobile.groupTables.deferredStatus}</Text>
             </Pressable>
           </View>
 
@@ -898,7 +867,6 @@ function DiscoverSection({
                       items={group.items}
                       onChat={(candidate) => onOpenChat(candidate, group.card)}
                       onEatTogether={(candidate) => onInviteEat(candidate, group.card)}
-                      onInviteTable={(candidate) => onInviteTable(candidate, group.card)}
                       pendingInviteForCandidate={(candidate) => getPendingInviteForCandidate(candidate.userId, getMealBuddyCardId(group.card))?.type ?? null}
                       onViewCard={(candidate) => {
                         onOpenProfile(candidate.userId);
@@ -941,13 +909,6 @@ function DiscoverSection({
         onEatTogether={() => {
           if (previewCandidate && previewCard) {
             onInviteEat(previewCandidate, previewCard);
-          }
-          setPreviewCandidate(null);
-          setPreviewCard(null);
-        }}
-        onInviteTable={() => {
-          if (previewCandidate && previewCard) {
-            onInviteTable(previewCandidate, previewCard);
           }
           setPreviewCandidate(null);
           setPreviewCard(null);
@@ -1133,7 +1094,7 @@ function CandidateCommunityModal({
   onChat: () => void;
   onClose: () => void;
   onEatTogether: () => void;
-  onInviteTable: () => void;
+  onInviteTable?: () => void;
 }) {
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   if (!candidate) {
@@ -1213,9 +1174,9 @@ function CandidateCommunityModal({
               <Pressable style={styles.modalPrimaryAction} onPress={onEatTogether}>
                 <Text style={styles.modalPrimaryActionText}>🍽 {modalCopy.eatAction}</Text>
               </Pressable>
-              <Pressable style={styles.modalOutlineAction} onPress={onInviteTable}>
+              {onInviteTable ? <Pressable style={styles.modalOutlineAction} onPress={onInviteTable}>
                 <Text style={styles.modalOutlineActionText}>👥 {modalCopy.tableAction}</Text>
-              </Pressable>
+              </Pressable> : null}
             </View>
 
             <Pressable style={styles.moreInfoToggle} onPress={() => setShowMoreInfo((value) => !value)}>
@@ -1353,11 +1314,13 @@ function MyFriendsSection({
     if (sort === "認識時間") return b.knownSince.localeCompare(a.knownSince);
     return b.lastTable.localeCompare(a.lastTable);
   });
-  const sortedChats = activeTab === "chats" ? getMealBuddyChats() : chats;
+  const sortedChats = activeTab === "chats" ? getMealBuddyChats().filter((chat) => chat.threadType !== "group" && !chat.tableId) : chats;
   const visibleInvites = invites.filter((invite) => invite.status === "pending" || invite.direction === "sent");
 
   if (mode === "chat") {
-    const chat = selectedChat ?? chats.find((item) => item.participantProfileId === selectedFriend.profileId);
+    const chat = selectedChat?.threadType === "group" || selectedChat?.tableId
+      ? null
+      : selectedChat ?? chats.find((item) => item.participantProfileId === selectedFriend.profileId);
     return (
       <FriendChatMode
         friend={selectedFriend}
@@ -2172,7 +2135,6 @@ function MealEventDetail({ invite, onBack, onCancel, onOpenChat, onViewInviteDet
         onChat={() => onOpenChat(record)}
         onClose={() => setSelectedParticipant(null)}
         onEatTogether={() => onOpenChat(record)}
-        onInviteTable={() => onOpenChat(record)}
       />
     </Card>
   );

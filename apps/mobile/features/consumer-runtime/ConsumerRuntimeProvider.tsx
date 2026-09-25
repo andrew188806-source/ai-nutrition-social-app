@@ -11,6 +11,7 @@ import {
   type ConsumerRuntimeState
 } from "./consumerRuntimeComposition";
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
+import type { ConsumerMealRecordsService } from "../consumer-meals/consumerMealRecordsService";
 import type { ConsumerAnalysisMealWriteDraft } from "./consumerMealWriteMapper";
 import type { ConsumerMealWriteRuntimeState } from "./consumerMealWriteRuntime";
 import type {
@@ -65,6 +66,7 @@ export type ConsumerRuntimeContextValue = {
   consumerDataRevision: number;
   mealDataRevision: number;
   overviewService: ConsumerTodayIntakeOverviewService | null;
+  mealRecordsService: ConsumerMealRecordsService | null;
 };
 
 const unavailableState: ConsumerRuntimeState = {
@@ -324,7 +326,8 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
       mealIdentificationFinalizationState.finalizationDataRevision +
       plannedMealState.revision +
       plannedMealMutationRevision,
-    overviewService
+    overviewService,
+    mealRecordsService: composition.ok ? composition.value.mealRecordsService : null
   }), [
     composition,
     controller,

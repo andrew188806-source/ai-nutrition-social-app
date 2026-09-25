@@ -110,15 +110,10 @@ export default function TodayIntakeScreen() {
       subtitle={intake.body}
     >
       <Card tone="premium">
-        <Text style={styles.savedBadge}>{intake.savedMessage}</Text>
         <View style={styles.hero}>
-          <View style={styles.scoreRing}>
-            <Text style={styles.scoreText}>82</Text>
-          </View>
           <View style={styles.flex}>
-            <Text style={styles.heroTitle}>{intake.insight}</Text>
-            <Text style={styles.heroBody}>{intake.dinnerAdvice}</Text>
-            <Text style={styles.heroBody}>{intake.balanceNote}</Text>
+            <Text style={styles.heroTitle}>{intake.genericGuidanceTitle}</Text>
+            <Text style={styles.heroBody}>{intake.genericGuidanceBody}</Text>
           </View>
         </View>
       </Card>
@@ -146,9 +141,8 @@ export default function TodayIntakeScreen() {
         </View>
       </Card>
 
-      <Card tone="mint">
-        <SectionTitle title={zhTW.mobile.plannedDinner.lunchRecommendationLabel} subtitle={zhTW.mobile.plannedDinner.lunchAdvice[0]} />
-        {lunchRow ? (
+      {lunchRow ? <Card tone="mint">
+        <SectionTitle title={intake.recordedLunchTitle} />
           <View style={styles.currentMealCard}>
             <View style={styles.mealHeader}>
               <Text style={styles.mealTime}>{lunchRow.meal.mealPeriod}</Text>
@@ -162,8 +156,7 @@ export default function TodayIntakeScreen() {
             </Text>
             <TagRow tags={[lunchRow.meal.source ?? "manual", zhTW.mobile.refinedLogic.analysisFlow.saveMealRecord]} />
           </View>
-        ) : null}
-      </Card>
+      </Card> : null}
 
       <Card tone="amber">
         <SectionTitle title={daily.plannedMealTitle} />
@@ -342,36 +335,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#ffffff",
     fontSize: 14,
-    fontWeight: "900"
-  },
-  savedBadge: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: "#ffffff",
-    color: colors.teal,
-    fontSize: 12,
-    fontWeight: "900",
-    marginBottom: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  scoreRing: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderColor: "#ffffff",
-    borderRadius: 42,
-    borderWidth: 5,
-    backgroundColor: colors.teal,
-    height: 82,
-    shadowColor: "#2d6b52",
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    width: 82
-  },
-  scoreText: {
-    color: "#ffffff",
-    fontSize: 28,
     fontWeight: "900"
   },
   secondaryButton: {

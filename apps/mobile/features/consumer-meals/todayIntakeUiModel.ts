@@ -301,6 +301,5 @@ function buildReminders(input: { mealCount: number; proteinProgress: number; has
   const reminders: TodayIntakeUiSummary["reminders"] = [];
   if (input.mealCount > 0 && input.proteinProgress < 0.55) reminders.push({ key: "lowProtein", label: reminderText.lowProtein });
   if (input.mealCount > 0 && !input.hasVegetable) reminders.push({ key: "lowVegetable", label: reminderText.lowVegetable });
-  if (input.mealCount >= 2 && reminders.length < 2) reminders.push({ key: "highSodium", label: reminderText.highSodium });
   return reminders.slice(0, 2);
 }
