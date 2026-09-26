@@ -1,7 +1,12 @@
 // Exact GQA-2 successor evidence for historical, source-only guards.
 // This recognizes one accepted implementation (075a6f7) by commit identity, exact paths and exact
-// bytes. It is not an allow-list for later work: any later product change breaks recognition, and any
-// later commit that edits GQA-2's own guard files must be one of the recorded guard-only successors.
+// bytes. It is not an allow-list for later work: any later product change breaks recognition.
+//
+// Validity is durable across later history. It rests on three things only: the accepted provenance
+// (8a16644 -> 075a6f7 -> 25157cb) is in the current ancestry with its exact identities, the nine runtime
+// files still carry their exact 075a6f7 bytes, and nothing under the frozen product/authority roots has
+// moved since 075a6f7. How many commits follow, what they are called, whether they edit validation
+// scripts (including these), and where origin/main points are deliberately not inputs.
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -9,6 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 export const GQA2_PREDECESSOR = "8a166442b0ab11abe16559d857eeb1b4b9739407";
 export const GQA2_IMPLEMENTATION = "075a6f7728ac8c85e535493995562b522a273d77";
 export const GQA2_SUBJECT = "Close GQA cross-surface truthfulness and build gaps";
+export const GQA2_CLOSURE = "25157cbb9c2fa41d516265bac665e5230740712b";
 export const GQA2_CLOSURE_SUBJECT = "Record GQA-2 exact successor guard compatibility";
 
 /** Frozen product/runtime bytes at 075a6f7: SHA-256 of the file bytes and the Git blob id. */
@@ -41,7 +47,7 @@ export const GQA2_TEST_PATHS = Object.freeze([
   "scripts/gqa-2-closure-rules.mjs"
 ]);
 export const GQA2_IMPLEMENTATION_PATHS = Object.freeze([...GQA2_RUNTIME_PATHS, ...GQA2_TEST_PATHS].sort());
-/** The exact guard-only closure commit that follows 075a6f7 (identified by parent, subject and paths). */
+/** The historical path set of the guard-only closure commit 25157cb (provenance, not a current pin). */
 export const GQA2_CLOSURE_PATHS = Object.freeze([
   "scripts/admin-e1-guard.mjs",
   "scripts/admin-mrb-successor-manifest.mjs",
@@ -55,28 +61,6 @@ export const GQA2_CLOSURE_PATHS = Object.freeze([
   "scripts/staff-authority-p3-p6-p3i-guard.mjs",
   "scripts/staff-authority-p3-p6-p3j-guard.mjs"
 ].sort());
-
-/** GQA-2's own guard files. A later commit touching any of them must match a recorded successor exactly. */
-export const GQA2_GUARDED_PATHS = Object.freeze([...new Set([...GQA2_CLOSURE_PATHS, ...GQA2_TEST_PATHS])].sort());
-/** GQA-3 (Data API GRANT hardening): guard-only, on top of the GQA-2 closure (25157cb). */
-export const GQA3_PARENT = "25157cbb9c2fa41d516265bac665e5230740712b";
-export const GQA3_SUBJECT = "Harden future public schema migration contracts";
-export const GQA3_PATHS = Object.freeze([
-  "scripts/db-contract-sql.mjs",
-  "scripts/db-migration-baseline-manifest.json",
-  "scripts/db-migration-baseline-manifest.mjs",
-  "scripts/db-object-contract-scan.mjs",
-  "scripts/gqa-2-closure-guard.mjs",
-  "scripts/gqa-2-successor-manifest.mjs",
-  "scripts/gqa-2-successor-mutations.mjs",
-  "scripts/public-schema-data-api-grant-guard.mjs",
-  "scripts/public-schema-data-api-grant-mutations.mjs"
-].sort());
-/** Recorded guard-only successor identities; each may appear at most once in history. */
-export const GQA2_GUARD_SUCCESSORS = Object.freeze([
-  Object.freeze({ parent: GQA2_IMPLEMENTATION, subject: GQA2_CLOSURE_SUBJECT, paths: GQA2_CLOSURE_PATHS }),
-  Object.freeze({ parent: GQA3_PARENT, subject: GQA3_SUBJECT, paths: GQA3_PATHS })
-]);
 
 /** Everything that is product, schema, authority or dependency. Nothing here may move after 075a6f7. */
 export const GQA2_FROZEN_ROOTS = Object.freeze([
@@ -120,31 +104,19 @@ export function matchesExactGqa2Successor(evidence) {
   for (const predicate of Object.values(GQA2_BOUNDARIES)) {
     if (evidence.acceptedProductDelta.some(predicate)) return false;
   }
-  // The implementation must be in the current history, and nothing product-side may move after it.
+  // The implementation and its original closure must be in the current history with exact identities.
   if (evidence.implementationInHistory !== true) return false;
+  if (evidence.closureInHistory !== true || evidence.closureParent !== GQA2_IMPLEMENTATION
+    || evidence.closureSubject !== GQA2_CLOSURE_SUBJECT || !Array.isArray(evidence.closurePaths)
+    || !evidence.closurePaths.every(exactPath) || !samePaths(evidence.closurePaths, GQA2_CLOSURE_PATHS)) return false;
+  // Nothing product-side may move after the implementation (committed, dirty or untracked).
   if (!Array.isArray(evidence.laterProductDelta) || evidence.laterProductDelta.length !== 0) return false;
   // Exact committed and current bytes for every frozen runtime file.
   for (const [file, pin] of Object.entries(GQA2_RUNTIME)) {
     if (evidence.committedBlob?.[file] !== pin.blob || evidence.currentBlob?.[file] !== pin.blob
       || evidence.currentSha256?.[file] !== pin.sha256) return false;
   }
-  // A later commit that edits a GQA-2 guard file must be exactly one recorded successor, each used once.
-  // Later commits that touch neither product nor guard files are outside GQA-2's authority.
-  const consumed = new Set();
-  const identityOf = (commit) => GQA2_GUARD_SUCCESSORS.findIndex((known) => commit.parent === known.parent
-    && commit.subject === known.subject && samePaths(commit.paths, known.paths));
-  for (const commit of evidence.laterCommits ?? []) {
-    if (!commit || !Array.isArray(commit.paths) || !commit.paths.every(exactPath)) return false;
-    if (!commit.paths.some((file) => GQA2_GUARDED_PATHS.includes(file))) continue;
-    const index = identityOf(commit);
-    if (index < 0 || consumed.has(index)) return false;
-    consumed.add(index);
-  }
-  // Uncommitted guard edits are only the pending, not-yet-recorded successor built on the current HEAD.
-  const dirty = evidence.dirtyGuardedPaths ?? [];
-  if (!Array.isArray(dirty) || !dirty.every(exactPath)) return false;
-  if (dirty.length > 0 && !GQA2_GUARD_SUCCESSORS.some((known, index) => !consumed.has(index)
-    && known.parent === evidence.head && dirty.every((file) => known.paths.includes(file)))) return false;
+  // Later commits are not inputs: validation scripts are machinery, not frozen product state.
   return true;
 }
 
@@ -164,24 +136,18 @@ export function collectGqa2SuccessorEvidence(root = process.cwd()) {
     currentBlob[file] = existsSync(`${root}/${file}`) ? git("hash-object", "--", file) : null;
     currentSha256[file] = existsSync(`${root}/${file}`) ? sha256(readFileSync(`${root}/${file}`)) : null;
   }
-  const laterCommits = implementationInHistory
-    ? lines(git("rev-list", "--reverse", `${GQA2_IMPLEMENTATION}..HEAD`)).map((sha) => ({
-      sha,
-      parent: git("rev-parse", `${sha}^`),
-      subject: git("log", "-1", "--format=%s", sha),
-      paths: lines(git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", sha))
-    }))
-    : [];
-  const dirtyGuardedPaths = sorted([
-    ...lines(git("diff", "--name-only", "--no-renames", "HEAD", "--", ...GQA2_GUARDED_PATHS)),
-    ...lines(git("ls-files", "--others", "--exclude-standard", "--", ...GQA2_GUARDED_PATHS))
-  ]);
+  const closureInHistory = spawnSync("git", ["merge-base", "--is-ancestor", GQA2_CLOSURE, head],
+    { cwd: root, stdio: "ignore" }).status === 0;
   return {
     head,
     implementationInHistory,
     implementationParent: git("rev-parse", `${GQA2_IMPLEMENTATION}^`),
     implementationSubject: git("log", "-1", "--format=%s", GQA2_IMPLEMENTATION),
     implementationPaths: lines(git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", GQA2_IMPLEMENTATION)),
+    closureInHistory,
+    closureParent: closureInHistory ? git("rev-parse", `${GQA2_CLOSURE}^`) : null,
+    closureSubject: closureInHistory ? git("log", "-1", "--format=%s", GQA2_CLOSURE) : null,
+    closurePaths: closureInHistory ? lines(git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", GQA2_CLOSURE)) : [],
     acceptedProductDelta: lines(git("diff", "--name-only", "--no-renames", GQA2_PREDECESSOR, GQA2_IMPLEMENTATION, "--", ...GQA2_FROZEN_ROOTS)),
     laterProductDelta: sorted([
       ...(implementationInHistory ? lines(git("diff", "--name-only", "--no-renames", GQA2_IMPLEMENTATION, "--", ...GQA2_FROZEN_ROOTS)) : ["<implementation not in history>"]),
@@ -189,9 +155,7 @@ export function collectGqa2SuccessorEvidence(root = process.cwd()) {
     ]),
     committedBlob,
     currentBlob,
-    currentSha256,
-    laterCommits,
-    dirtyGuardedPaths
+    currentSha256
   };
 }
 

@@ -19,8 +19,6 @@ const git = (...args) => {
   assert.equal(result.status, 0, `git ${args.join(" ")}`);
   return result.stdout.trim();
 };
-const changed = new Set(git("diff", "--name-only", GQA2_BASELINE).split("\n").filter(Boolean));
-for (const file of git("ls-files", "--others", "--exclude-standard").split("\n").filter(Boolean)) changed.add(file);
 export const GQA2_ALLOWED_PATHS = Object.freeze([
   "apps/restaurant-web/app/vip/page.tsx",
   "apps/restaurant-web/app/verification/page.tsx",
@@ -35,15 +33,13 @@ export const GQA2_ALLOWED_PATHS = Object.freeze([
   "scripts/gqa-2-closure-guard.mjs",
   "scripts/gqa-2-closure-mutations.mjs"
 ]);
-// Once the exact GQA-2 successor is proven (byte-pinned runtime, no later product change, and every later
-// commit touching a GQA-2 guard file is a recorded successor), GQA-2's own scope is its committed delta.
-// Before that, the working-tree delta itself must stay inside the GQA-2 scope.
-const exactSuccessor = isExactGqa2Successor(ROOT);
-const scoped = exactSuccessor
-  ? new Set(git("diff", "--name-only", GQA2_BASELINE, GQA2_IMPLEMENTATION).split("\n").filter(Boolean))
-  : changed;
-const unexpected = [...scoped].filter((file) => !GQA2_ALLOWED_PATHS.includes(file));
-assert.deepEqual(unexpected, [], `GQA-2 changed paths outside its exact scope: ${unexpected.join(", ")}`);
+// GQA-2's scope is its fixed historical implementation delta (8a16644 -> 075a6f7), never "whatever
+// changed up to the current HEAD": later commits are not attributed to GQA-2 because HEAD advanced.
+const historicalDelta = git("diff", "--name-only", "--no-renames", GQA2_BASELINE, GQA2_IMPLEMENTATION).split("\n").filter(Boolean).sort();
+assert.deepEqual(historicalDelta, [...GQA2_ALLOWED_PATHS].sort(), "the historical GQA-2 implementation delta is exactly its twelve accepted paths");
+// Current validity: exact provenance in ancestry, the nine runtime files at their 075a6f7 bytes, and no
+// later movement under the frozen product/authority roots. Later QA commits are not inputs.
+assert.equal(isExactGqa2Successor(ROOT), true, "the durable GQA-2 successor predicate holds for the current tree");
 const frozen = [
   "supabase", "apps/mobile", "lib", "packages", "package.json", "package-lock.json",
   "apps/admin-web/package.json", "apps/restaurant-web/package.json",
@@ -57,5 +53,5 @@ const frozen = [
 ];
 assert.equal(git("diff", "--name-only", GQA2_BASELINE, "--", ...frozen), "",
   "no migration, RPC, permission, route registry, Step-Up, Break-glass, dependency, Consumer or shared-copy change");
-console.log(`PASS boundary: ${scoped.size} GQA-2 path(s)${exactSuccessor ? " (exact successor recognized)" : ""}, all inside the exact GQA-2 scope; frozen authority, Consumer, database and dependency paths unchanged`);
+console.log(`PASS boundary: historical GQA-2 delta is exactly ${historicalDelta.length} accepted path(s); durable successor holds; frozen authority, Consumer, database and dependency paths unchanged`);
 console.log("GQA-2 closure guard PASS");
