@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   GQA2_CLOSURE_PATHS, GQA2_CLOSURE_SUBJECT, GQA2_IMPLEMENTATION, GQA2_PREDECESSOR, GQA2_RUNTIME,
-  GQA2_RUNTIME_PATHS, GQA2_SUBJECT, collectGqa2SuccessorEvidence, isAcceptedGqa2RuntimePath,
-  matchesExactGqa2Successor
+  GQA2_RUNTIME_PATHS, GQA2_SUBJECT, GQA3_PARENT, GQA3_PATHS, GQA3_SUBJECT, collectGqa2SuccessorEvidence,
+  isAcceptedGqa2RuntimePath, matchesExactGqa2Successor
 } from "./gqa-2-successor-manifest.mjs";
 
 const evidence = collectGqa2SuccessorEvidence();
@@ -14,6 +14,20 @@ assert.equal(matchesExactGqa2Successor(evidence), true, "the exact GQA-2 impleme
 const exactClosure = Object.freeze({ sha: "c".repeat(40), parent: GQA2_IMPLEMENTATION, subject: GQA2_CLOSURE_SUBJECT, paths: [...GQA2_CLOSURE_PATHS] });
 assert.equal(matchesExactGqa2Successor({ ...structuredClone(evidence), laterCommits: [exactClosure] }), true,
   "the exact guard-only closure commit is recognized");
+// Deterministic shapes, independent of whether GQA-3 is still a working-tree candidate or committed.
+const exactGqa3 = Object.freeze({ sha: "e".repeat(40), parent: GQA3_PARENT, subject: GQA3_SUBJECT, paths: [...GQA3_PATHS] });
+const unguarded = Object.freeze({ sha: "a".repeat(40), parent: exactGqa3.sha, subject: "Later docs-only work", paths: ["docs/later-note.md", "scripts/later-unrelated-guard.mjs"] });
+const shape = (patch) => ({ ...structuredClone(evidence), head: "f".repeat(40), laterCommits: [exactClosure], dirtyGuardedPaths: [], ...patch });
+const recognized = [
+  ["the exact GQA-3 guard-only successor is recognized", shape({ head: exactGqa3.sha, laterCommits: [exactClosure, exactGqa3] })],
+  ["a later commit touching neither product nor GQA-2 guard files is outside GQA-2 authority",
+    shape({ head: unguarded.sha, laterCommits: [exactClosure, exactGqa3, unguarded] })],
+  ["the pending GQA-3 candidate (uncommitted guard edits on its recorded parent) is recognized",
+    shape({ head: GQA3_PARENT, dirtyGuardedPaths: ["scripts/gqa-2-closure-guard.mjs", "scripts/gqa-2-successor-manifest.mjs", "scripts/gqa-2-successor-mutations.mjs"] })],
+  ["the historical GQA-2 closure candidate (guard edits on 075a6f7, before the closure commit) is recognized",
+    shape({ head: GQA2_IMPLEMENTATION, laterCommits: [], dirtyGuardedPaths: ["scripts/gqa-2-successor-manifest.mjs"] })]
+];
+for (const [name, candidate] of recognized) assert.equal(matchesExactGqa2Successor(candidate), true, name);
 
 let killed = 0;
 const reject = (name, change) => {
@@ -65,10 +79,31 @@ reject("wrong implementation commit subject", (e) => { e.implementationSubject =
 reject("implementation not in current history", (e) => { e.implementationInHistory = false; });
 reject("extra path in the implementation commit", (e) => { e.implementationPaths.push("apps/admin-web/app/admin/management/extra/page.tsx"); });
 reject("missing runtime path in the accepted delta", (e) => { e.acceptedProductDelta.pop(); });
-reject("unrelated successor commit accepted", (e) => { e.laterCommits = [{ ...exactClosure, subject: "Unrelated later work" }]; });
+reject("unrelated successor commit editing GQA-2 guard files", (e) => { e.laterCommits = [{ ...exactClosure, subject: "Unrelated later work" }]; });
 reject("closure commit with wrong parent", (e) => { e.laterCommits = [{ ...exactClosure, parent: GQA2_PREDECESSOR }]; });
 reject("closure commit with an extra product path", (e) => { e.laterCommits = [{ ...exactClosure, paths: [...GQA2_CLOSURE_PATHS, "apps/admin-web/app/admin/x/page.tsx"] }]; });
-reject("second later commit", (e) => { e.laterCommits = [exactClosure, { ...exactClosure, sha: "d".repeat(40) }]; });
+reject("closure identity replayed by a second later commit", (e) => { e.laterCommits = [exactClosure, { ...exactClosure, sha: "d".repeat(40) }]; });
+const rejectShape = (name, patch) => {
+  assert.equal(matchesExactGqa2Successor(shape(patch)), false, `survived: ${name}`);
+  killed += 1;
+  console.log(`KILLED ${String(killed).padStart(2, "0")} ${name}`);
+};
+rejectShape("GQA-3 identity with an extra product path", { laterCommits: [exactClosure, { ...exactGqa3, paths: [...GQA3_PATHS, "apps/admin-web/app/admin/x/page.tsx"] }] });
+rejectShape("GQA-3 identity with an extra guard path", { laterCommits: [exactClosure, { ...exactGqa3, paths: [...GQA3_PATHS, "scripts/gqa-2-closure-rules.mjs"] }] });
+rejectShape("GQA-3 identity missing a path", { laterCommits: [exactClosure, { ...exactGqa3, paths: GQA3_PATHS.slice(1) }] });
+rejectShape("GQA-3 identity with wrong parent", { laterCommits: [exactClosure, { ...exactGqa3, parent: GQA2_IMPLEMENTATION }] });
+rejectShape("GQA-3 identity with wrong subject", { laterCommits: [exactClosure, { ...exactGqa3, subject: "Harden everything" }] });
+rejectShape("GQA-3 identity replayed", { laterCommits: [exactClosure, exactGqa3, { ...exactGqa3, sha: "b".repeat(40) }] });
+rejectShape("later guard edit by a different subject after GQA-3", { laterCommits: [exactClosure, exactGqa3,
+  { sha: "b".repeat(40), parent: exactGqa3.sha, subject: "Tweak GQA-2 guard", paths: ["scripts/gqa-2-closure-guard.mjs"] }] });
+rejectShape("wildcard path in an otherwise unguarded later commit", { laterCommits: [exactClosure, { ...unguarded, paths: ["docs/*"] }] });
+rejectShape("prefix path in an otherwise unguarded later commit", { laterCommits: [exactClosure, { ...unguarded, paths: ["scripts/"] }] });
+rejectShape("later commit without a path list", { laterCommits: [exactClosure, { ...unguarded, paths: undefined }] });
+rejectShape("dirty guard edits on an unrelated HEAD", { head: "9".repeat(40), dirtyGuardedPaths: ["scripts/gqa-2-closure-guard.mjs"] });
+rejectShape("dirty guard edit outside the pending successor's paths", { head: GQA3_PARENT, dirtyGuardedPaths: ["scripts/gqa-2-closure-rules.mjs"] });
+rejectShape("dirty closure-guard edits on 075a6f7 once the closure is already recorded", { head: GQA2_IMPLEMENTATION, dirtyGuardedPaths: ["scripts/gqa-2-closure-guard.mjs"] });
+rejectShape("dirty guard edits after GQA-3 is already recorded", { head: exactGqa3.sha, laterCommits: [exactClosure, exactGqa3], dirtyGuardedPaths: ["scripts/gqa-2-closure-guard.mjs"] });
+rejectShape("wildcard dirty guard path", { head: GQA3_PARENT, dirtyGuardedPaths: ["scripts/gqa-2-*"] });
 reject("changed dependency manifest", later("package.json"));
 reject("changed lockfile", later("package-lock.json"));
 reject("changed app package manifest", later("apps/admin-web/package.json"));
@@ -92,4 +127,4 @@ for (const file of ["scripts/platform-admin-ra-1a-guard.mjs", "scripts/staff-aut
   assert.ok(!/["'`]apps\/[a-z-]+\/\*\*|startsWith\(["'`]apps\/restaurant-web\/["'`]\)\s*\|\|\s*exactGqa2/.test(source), `${file} has no wildcard or prefix GQA-2 allowance`);
 }
 assert.equal(GQA2_SUBJECT, "Close GQA cross-surface truthfulness and build gaps");
-console.log(`GQA-2 successor mutations PASS: ${killed} rejected, 2 exact shapes recognized`);
+console.log(`GQA-2 successor mutations PASS: ${killed} rejected, ${2 + recognized.length} exact shapes recognized`);

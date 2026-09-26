@@ -1,0 +1,702 @@
+{
+ "baseline": "25157cbb9c2fa41d516265bac665e5230740712b",
+ "count": 139,
+ "aggregateSha256": "ffeb592224b1ccd16bf20bfabb478148f113a4a646d36179abf69df59fb78770",
+ "entries": [
+  {
+   "path": "supabase/migrations/20260712120000_create_restaurant_platform_baseline.sql",
+   "blob": "c483ee108677d6604af69f7725d69564bd1d991c",
+   "sha256": "c5a8825840ff38f26c369966cb4af6abccaf1bc9c44f721f62fd96d99a7fb980"
+  },
+  {
+   "path": "supabase/migrations/20260712130100_consumer_schema_phase_1_3_consumer_enums_and_helpers.sql",
+   "blob": "8d71be850fa5d0bc3e0c763f08ad5da474647c54",
+   "sha256": "0235e2e12a331e4fbd77bd68e056874a809e93345f9b42f33bc509ff7c516a1c"
+  },
+  {
+   "path": "supabase/migrations/20260712130200_consumer_schema_phase_1_3_consumer_profiles.sql",
+   "blob": "ba43a73a8a97ee01d2713dcdcf46ceee9a5b1ebf",
+   "sha256": "1738766e1cd2f5a81a51d44aee1899d17b761dfccb5f4be019d3ec1e08df2ac8"
+  },
+  {
+   "path": "supabase/migrations/20260712130300_consumer_schema_phase_1_3_consumer_preferences_and_goals.sql",
+   "blob": "aa98855c8b48847c66a79c09670fce0e7fcbc00e",
+   "sha256": "127a64fbd11a34f1629e2510345ba0c2feb1058011c75ffc687ae633336bcef2"
+  },
+  {
+   "path": "supabase/migrations/20260712130400_consumer_schema_phase_1_3_meal_records.sql",
+   "blob": "428ea97336b45c911038ed7d8d9f4c71af4eae3f",
+   "sha256": "456f732f88b670c67d853323665c8d3b6c4b8c0825ce0b616d82fe5f8ee1e88e"
+  },
+  {
+   "path": "supabase/migrations/20260712130500_consumer_schema_phase_1_3_meal_analysis_and_corrections.sql",
+   "blob": "07348c09c73be8c5408109ef25baad49966bd353",
+   "sha256": "e12e8bdab34583cbc5b29b5345e7c95181e0cff9be3b0d3ec7624c80ba3da3fe"
+  },
+  {
+   "path": "supabase/migrations/20260712130600_consumer_schema_phase_1_3_meal_consumption_and_sharing.sql",
+   "blob": "1f64a7ddb3dae95ed9cb0088af59f8ee93ce4a05",
+   "sha256": "21bad3887cf7281f96ea9bc818ae5d8f020aed5796ff3e2abbcb83c6031a4ad4"
+  },
+  {
+   "path": "supabase/migrations/20260712130700_consumer_schema_phase_1_3_planned_meals_and_daily_summaries.sql",
+   "blob": "600b10bc611fdf97128dd7bb9c807489293ee066",
+   "sha256": "f641a23fd2659e396acebf4ac73cb1441ec6b4acd5d058b8d0f7bf872c933860"
+  },
+  {
+   "path": "supabase/migrations/20260712130800_consumer_schema_phase_1_3_ratings_and_favorites.sql",
+   "blob": "ea828b27771ffb30968c8280e57d83e940475a23",
+   "sha256": "baa8f3225eec4e1392e0707f8591bcc86c8e4e411c906a58f9a5821784b483d3"
+  },
+  {
+   "path": "supabase/migrations/20260712130900_consumer_schema_phase_1_3_recommendation_feedback.sql",
+   "blob": "901871469297f101517257e7a51117d6f944a55f",
+   "sha256": "f2108951ff72b7dbf655f8b2486362cdcfe4e155804edd68d4ef740f33d5a788"
+  },
+  {
+   "path": "supabase/migrations/20260712131000_consumer_schema_phase_1_3_consumer_privacy_and_consents.sql",
+   "blob": "69a06c481f529225066a349f57fad16ab2889e0a",
+   "sha256": "b628503a5deafb547135b7fe7194065b61f21442f86a4eed6b5a3112e2a2a1aa"
+  },
+  {
+   "path": "supabase/migrations/20260712131100_consumer_schema_phase_1_3_consumer_audit_and_legacy_mapping.sql",
+   "blob": "1b277908ac36e2a0cb11e10254e522e3f698b6e0",
+   "sha256": "86694fe4fb07b005faa8da5442c362d0c831001adadd5e070394abb558a39bef"
+  },
+  {
+   "path": "supabase/migrations/20260712131200_consumer_schema_phase_1_3_consumer_indexes.sql",
+   "blob": "ec19e19b2d940eab1a2fe1f61dddc4a04ca71452",
+   "sha256": "33d790162f7f884fc4cc77fa3dd570db7eedd09a84eae701dbe4dd739def8e51"
+  },
+  {
+   "path": "supabase/migrations/20260712131300_consumer_schema_phase_1_3_consumer_public_private_views.sql",
+   "blob": "3f9dcbc68afa86ece21d674b59269a43a839aad6",
+   "sha256": "9d270cb4858d9ec58a864b34cf9dfa84c64eafe0661cfcd0ad46ebfd88239cc5"
+  },
+  {
+   "path": "supabase/migrations/20260712131400_consumer_schema_phase_1_3_consumer_rls_policy_drafts.sql",
+   "blob": "57ba373c0b912fb73985fca6976c70fc110f9292",
+   "sha256": "9f0c923d9a47369dd3722bd3513c7b2c0c38ac5e63ad2501bcb7b77373830394"
+  },
+  {
+   "path": "supabase/migrations/20260713030100_consumer_schema_phase_1_3_authenticated_profile_select_grant.sql",
+   "blob": "5b1a1d77571221c93e756e6fa31b54ac0e072391",
+   "sha256": "333e00b5c0d357957516da8fdb29b6e62a9734354c0af17d99ad8bf7e75545b0"
+  },
+  {
+   "path": "supabase/migrations/20260713040100_consumer_schema_phase_1_3_authenticated_meal_read_grants.sql",
+   "blob": "08a14b7f35a87dfe1a222d078537a1ba02b492a6",
+   "sha256": "90433d9bffbee67302bdf37b5afa94bd2cf5b2720fe0f645487b746d5a81c60e"
+  },
+  {
+   "path": "supabase/migrations/20260713050100_consumer_schema_phase_1_3_atomic_meal_record_write_function.sql",
+   "blob": "288ebbbcc41dbdadf3fee8556fb62b6a401f2c4f",
+   "sha256": "63bf696df277191723ef856004ae0a7ec8e8bf069b52e7e068f076e1c1b1884d"
+  },
+  {
+   "path": "supabase/migrations/20260713060100_consumer_schema_phase_1_3_authenticated_daily_summary_read_grant.sql",
+   "blob": "965935be024f60712e40b2031aa0a7eab61c9ac3",
+   "sha256": "f76c3c63c29a5df2789428c688effda0b24cc635fed525dff631211f9a23e0fd"
+  },
+  {
+   "path": "supabase/migrations/20260713070100_consumer_schema_phase_1_3_atomic_daily_summary_persistence_function.sql",
+   "blob": "a745c529627b13412e45045d76d99b61ca45286d",
+   "sha256": "88d2fcb0bf162ffd1a9ce815b039586d79c464f50ddd72e2fdd1f39d96fedd6c"
+  },
+  {
+   "path": "supabase/migrations/20260713080100_consumer_schema_phase_1_3_authenticated_planned_meal_read_grant.sql",
+   "blob": "b5d0a7e4f45688a73ca38521dda7acaae9dd440f",
+   "sha256": "98d7509befd707da4cd4fa56303df4604dd0702ddc0baf47a53845e22303911c"
+  },
+  {
+   "path": "supabase/migrations/20260713090100_consumer_schema_phase_1_3_atomic_planned_meal_write_functions.sql",
+   "blob": "e3c425a29f613e24a7a6c34a06debc5086270a01",
+   "sha256": "49116a33ac834f254b60da77c46003298f713d88ad28d599abcd77079c8f2a6a"
+  },
+  {
+   "path": "supabase/migrations/20260715010000_extend_published_nutrition_provenance.sql",
+   "blob": "f87d8e97c4fb9ca17349ebc9e5f421c08fd99ca5",
+   "sha256": "3fc2427908ebcade5521c5a7b10577d5a7ccf67c72506e8d525c3327c9be2262"
+  },
+  {
+   "path": "supabase/migrations/20260715020000_consumer_public_next_meal_candidates_v1.sql",
+   "blob": "5f267de6d3da37b42a91dfb9bc478102ab1fd91b",
+   "sha256": "62bbfb7c305cc8d7fb929841553b0064ef302308e58e2c5115c2c7237984aaea"
+  },
+  {
+   "path": "supabase/migrations/20260715030000_restaurant_public_published_nutrition_v1.sql",
+   "blob": "a6cbd22afcd75c7e2d5153d11d9da5c671ce6d7c",
+   "sha256": "04e1e4e68bfd1834f031ea2e9ff7d9c24f66df593d119d57e1e571db1a62b74f"
+  },
+  {
+   "path": "supabase/migrations/20260715040000_revoke_raw_nutrition_direct_read_access.sql",
+   "blob": "03efa95cd291a7d372d42330dab03b34409f6769",
+   "sha256": "c81481169b86a4f563400682fe9acccff9948f1a9b2eecc507d43480210ab904"
+  },
+  {
+   "path": "supabase/migrations/20260715050000_create_restaurant_membership_foundation.sql",
+   "blob": "38224d06c7b167e390977ef2a6dec932b8d6092a",
+   "sha256": "6cc33b0703d84cf81523017842edb771568004e36df649515971ab61628ba035"
+  },
+  {
+   "path": "supabase/migrations/20260715060000_fix_restaurant_membership_rpc_execute_grants.sql",
+   "blob": "bfa5f10a62da90e7de2f4412b69f4f0c78f54327",
+   "sha256": "f72533104b310709b1b9d907f0cff9e6fa69d51c9aa610f05f27094ebf151240"
+  },
+  {
+   "path": "supabase/migrations/20260716010000_fix_restaurant_membership_rpc_execute_grants_as_owner.sql",
+   "blob": "eb7627fb595fc7df6615bda10d9790afc08f35fd",
+   "sha256": "0e5192f25b41afc0a589dda303120941a2c05bfb388039c8a8a3b21b88875e48"
+  },
+  {
+   "path": "supabase/migrations/20260716020000_restore_restaurant_membership_context_reader_set_option.sql",
+   "blob": "afb111ef62a15161477aeae1473ec3e72379d46f",
+   "sha256": "8250411cc312edd67b56c734a4560ae40b3a02dc72220ad75d401a88ab2cda6f"
+  },
+  {
+   "path": "supabase/migrations/20260716030000_add_restaurant_projection_integrity_constraints.sql",
+   "blob": "a57d8a4be63549cf6b69e2ea7d48c02630db5abb",
+   "sha256": "a17b2248dcf5e54a00866b35c42685940b7b3e9ffedf8796b43205ed71be39f7"
+  },
+  {
+   "path": "supabase/migrations/20260716040000_create_restaurant_internal_read_rls.sql",
+   "blob": "11aaa0cf9796e950cfbc20633e04e3123589920c",
+   "sha256": "a59d9bef27ac2218b76e7c2654cf1c2b8673d60632ed19219e78c1483bbef304"
+  },
+  {
+   "path": "supabase/migrations/20260716050000_create_restaurant_internal_read_rpcs_as_owner.sql",
+   "blob": "cf3bacd404bdef8cac5dc9c31a219573b02991ac",
+   "sha256": "52dc521bdc39977ef5cf41240714dfb8c5a109f85ffbc9981e2d4b64e3e097e8"
+  },
+  {
+   "path": "supabase/migrations/20260716060000_restore_restaurant_internal_reader_set_option.sql",
+   "blob": "9689e5b3a6499f8f37bbbd3b7484f2aa266029c6",
+   "sha256": "2d9e1ca5e1c07c278609871a9b349ad78fadddf2ee842d5311cfc8f4447eb412"
+  },
+  {
+   "path": "supabase/migrations/20260717010000_consumer_ratings_authenticated_read_and_atomic_write.sql",
+   "blob": "7f5a7760684c776d018357fd3c65806141711f23",
+   "sha256": "2ca5f0d1e26d7f39748e59df2d9e82da3455e48ce233b72566c43687c9ae432f"
+  },
+  {
+   "path": "supabase/migrations/20260718010000_consumer_favorites_authenticated_read.sql",
+   "blob": "62ecfc592e6c7e5bfa7c3796bffb62189343a8d8",
+   "sha256": "64c3c35b149c129c82f7ac4bf89e4d320db6635a9a6122891d8f97a79547e616"
+  },
+  {
+   "path": "supabase/migrations/20260718020000_consumer_favorites_atomic_write.sql",
+   "blob": "9318b7f38486a2073261d42fdf38525c81e64434",
+   "sha256": "63257e599b51551a4425eb03b26a5a21319c97fafeb9e7fad08a8c4ec8311475"
+  },
+  {
+   "path": "supabase/migrations/20260719010000_consumer_recommendation_feedback_atomic_write.sql",
+   "blob": "da54114fd0956af24f3db3f2227c4fd4186d39da",
+   "sha256": "52a0d5708d6f7b32fca573750cc141342774c52467d90dc65efb650d0652af5e"
+  },
+  {
+   "path": "supabase/migrations/20260720010000_consumer_meal_record_create_idempotency.sql",
+   "blob": "4312bd558104366aecd5c3e4541094e0368125c2",
+   "sha256": "703e724909a96ce7f63a9654ea155cad11d3dbfe5aec29aa99a7296ab16ffb14"
+  },
+  {
+   "path": "supabase/migrations/20260720020000_consumer_planned_meal_contract_v2.sql",
+   "blob": "794e802450c25dd3c1f26f33d22d88e17556feae",
+   "sha256": "9a3dc8d1030498cc55bc056e66141777e28962dc1b42543c6474a6677e678e11"
+  },
+  {
+   "path": "supabase/migrations/20260721010000_consumer_planned_meal_version_conflict_sqlstate.sql",
+   "blob": "eef6e26ea83712300f91243a62185baa5ae1de43",
+   "sha256": "07dbe94a2d82902f332447005e446f48a6f2c732ae450d6f23f15be62bccf572"
+  },
+  {
+   "path": "supabase/migrations/20260723010000_revoke_restaurant_menu_raw_browser_select.sql",
+   "blob": "e2ef76706f188285bc1ef64896b86ba50e121382",
+   "sha256": "aa79869d3ddf958ceb484504644d915934920d215a4047e996ba198368a53daf"
+  },
+  {
+   "path": "supabase/migrations/20260724010000_consumer_public_restaurant_catalog_v1.sql",
+   "blob": "6e85dac26e2c6064a5df3e725a7d56ef48d8970d",
+   "sha256": "8511e8426f4f6af202b197c6d4d9891953279ab2f9e85315caf947337b239782"
+  },
+  {
+   "path": "supabase/migrations/20260724020000_consumer_meal_identification_atomic_finalization.sql",
+   "blob": "dafe2b7b51fe26618fad61bff512a5a9b11fa07d",
+   "sha256": "58c2bdf615c2801868810c5cd394abe96f17568326091d06cea6c044a64c27c5"
+  },
+  {
+   "path": "supabase/migrations/20260724030000_meal_source_record_timing_contract_correction.sql",
+   "blob": "10c96649298260fc617173bea4df5806a680857c",
+   "sha256": "84c689af239c530d9e98c1065041b1a4b332e63c09fcd0be0bc505eea5505b50"
+  },
+  {
+   "path": "supabase/migrations/20260725010000_meal_photo_analysis_meal_analyses_additive_columns.sql",
+   "blob": "e15837b3253f7b502099861b350104b8c1bce8ed",
+   "sha256": "51d3ee42112d0f6edba0fa9215d41b28642b252731d7f335d31166c343e3fcdc"
+  },
+  {
+   "path": "supabase/migrations/20260725020000_meal_photo_analysis_meal_corrections_verification_status.sql",
+   "blob": "adc33624c62a2d81fb04d1a356458721af931d3d",
+   "sha256": "37696884d3304682e30389d0f5ed148c5d816765bf7c751ea23b26b54433c370"
+  },
+  {
+   "path": "supabase/migrations/20260725030000_meal_photo_analysis_private_storage_bucket.sql",
+   "blob": "f15094244aefd223c97be7080362999588b498a8",
+   "sha256": "7185bdd28290ff9262bce2bc42ceddd706498108f5482209798c7338f6f58ae9"
+  },
+  {
+   "path": "supabase/migrations/20260726010000_meal_photo_analysis_service_role_table_grants.sql",
+   "blob": "dd4f9d51d17e805cb8a4719f4bb4ed102c82c8d9",
+   "sha256": "b6d42cd2bda8e1e42097e50a46fe23e3b7498457ef6767312c85ea22940393c7"
+  },
+  {
+   "path": "supabase/migrations/20260727010000_extend_meal_identification_finalization_for_existing_analysis.sql",
+   "blob": "eedbdfb7274c111885cf1d808d7c2429a396fc6d",
+   "sha256": "e01a2ae044503fdb69008e9b2fe228d6299400bf56b03441083d0f0402e91cf2"
+  },
+  {
+   "path": "supabase/migrations/20260728010000_correct_existing_analysis_finalization_v3.sql",
+   "blob": "b12c8b897de476b7af9c99e0a76ba1238ea250cb",
+   "sha256": "5efddeb83653ec6508dc69d4a6496ec42f6083ea895b6c53b953f9f1a90b439a"
+  },
+  {
+   "path": "supabase/migrations/20260729010000_persist_user_confirmed_for_accepted_analysis_finalization.sql",
+   "blob": "a49ae23d6ad6bb28cae7b5730330786b5cf0bc5e",
+   "sha256": "0a7655a8dbd63d656720a7eea4734786dc13ac82ab5faa5a9a1861322d9b17b8"
+  },
+  {
+   "path": "supabase/migrations/20260802010000_finalize_meal_identification_v3_restaurant_context.sql",
+   "blob": "031b48a95db7b1f41731b6935d476bada5c1a6a8",
+   "sha256": "3a615486820cfe3eed76b697de97bc3d8304f7ca76c76b68f285a73ba71f495b"
+  },
+  {
+   "path": "supabase/migrations/20260803010000_finalize_meal_identification_v3_ledger_restaurant_identity.sql",
+   "blob": "7a54285f517458cd86dd76acbc473d811d6922df",
+   "sha256": "d33c3981463b323e049119bcfe6e268006c4c3c5cb7c90912c4d270c4bab5238"
+  },
+  {
+   "path": "supabase/migrations/20260804010000_relax_ai_candidate_restaurant_identity_constraint.sql",
+   "blob": "33010a5f389d065c7ebcbc7f19a8dc781bfef1f1",
+   "sha256": "a3c17f71d060f09050970be44eee877034afdb1285369215ee5e5399a638b0bf"
+  },
+  {
+   "path": "supabase/migrations/20260808010000_consumer_taste_foundation_authenticated_reads.sql",
+   "blob": "4128c1d1810f6027464e0bd160787b62585d3785",
+   "sha256": "54e51411283db764a7f87d446272c50b759a5feed2901b61a389098514e065a5"
+  },
+  {
+   "path": "supabase/migrations/20260810010000_social_block_authority.sql",
+   "blob": "48a472e48bcf5c2d881b49f440039f66eeda408e",
+   "sha256": "9484f1e2e199267c40e46cf783bd4078b294fca36591aec097831b921c3f4c50"
+  },
+  {
+   "path": "supabase/migrations/20260810020000_social_participation_authority.sql",
+   "blob": "cc0e4b08d3cbf6cd3b39869bdbee4cc8ecd4562b",
+   "sha256": "dcb896bab2dca7382c71ffb8bf141940723e4c9f55a58ac33ff96222812b6535"
+  },
+  {
+   "path": "supabase/migrations/20260810030000_social_candidate_authorization_authority.sql",
+   "blob": "b8a3732417fd3c93a3c3f22743ccc19cf0cd65ef",
+   "sha256": "f0127ed726dd252022126ba6eac9399d39478ec61f80ef68bf2abe945fa1801f"
+  },
+  {
+   "path": "supabase/migrations/20260810040000_social_authorized_pair_read_authority.sql",
+   "blob": "4b2217bc9adf2413e5160bf4627bf73d2d92517c",
+   "sha256": "2b3c57851cf52e3259aaa8df5a68f911672c9cb885205e4148e6faea979fad6a"
+  },
+  {
+   "path": "supabase/migrations/20260810050000_social_runtime_executor_role.sql",
+   "blob": "bf9c8c374c5a3a1793bc686b8c6a20fe60bcb779",
+   "sha256": "501243dbc6b7179259be32b2d627d21d1e2d11f93dc31dde4c8fea26958eecbc"
+  },
+  {
+   "path": "supabase/migrations/20260811010000_social_canonical_candidate_pool.sql",
+   "blob": "454d074ad787f17ba2619ee7492d05fccc5618cf",
+   "sha256": "0d5c683d129038527a6b72db8ea28d87e94efe18a39928d13b4fc82e5f0ba9fb"
+  },
+  {
+   "path": "supabase/migrations/20260811020000_social_candidate_taste_sources.sql",
+   "blob": "9187d675b4b15c37ba173801a9c1eb9dd85495ed",
+   "sha256": "e0859f801c040002e855f2b03e27a5f8f95fd037c23210223a1ce29881bbe624"
+  },
+  {
+   "path": "supabase/migrations/20260811030000_social_exposure_entitlement_authenticated_read.sql",
+   "blob": "d55eb9a1ad1f26151fa7deef0c50717350904849",
+   "sha256": "4b9667de8cc2f6933737c8677e131f2b5139ef8f005ed20da2ee06e1e17c9bad"
+  },
+  {
+   "path": "supabase/migrations/20260811040000_social_public_profile_projection.sql",
+   "blob": "6901831014ee1c1b5ec82e0da0f3427961d0f9a5",
+   "sha256": "b9c616dab7f8cadc3a75cd6f5014c42afadb00ecfaed87cacf1d72cfd307ce07"
+  },
+  {
+   "path": "supabase/migrations/20260817010000_meal_buddy_card_authority.sql",
+   "blob": "ad4b9791834b94afa982c278a7574ba56f280f2c",
+   "sha256": "dde9a3f0a80ce4b80aa58fb7e4b1123217f429ed30764bdd0016e3d8017e49e4"
+  },
+  {
+   "path": "supabase/migrations/20260817020000_meal_buddy_card_write_authority.sql",
+   "blob": "0d1a47ea991aaff68d68352ba9b5b8cd75c30be1",
+   "sha256": "cae979fde6b94a69ef3e565be080096791a510ecc35f106e5948a8b81dfbba1a"
+  },
+  {
+   "path": "supabase/migrations/20260817030000_meal_buddy_candidate_pool_authority.sql",
+   "blob": "b9d3872f3ce89389676a9bea96d9a6fbc597d173",
+   "sha256": "d495154d415654ff60190f2f26f4ecb782ecb0db47a1344525fd99d026fcb27e"
+  },
+  {
+   "path": "supabase/migrations/20260817040000_meal_buddy_card_write_authority_membership_hygiene.sql",
+   "blob": "26d1f782713b6162ba26f4ec063a804502715be8",
+   "sha256": "1aa8bdc46ad2a55beecb9dbd9a6d7bfaa33ed324d0626fae3ec24c3d6cb9b71f"
+  },
+  {
+   "path": "supabase/migrations/20260817050000_meal_buddy_candidate_pool_authority_membership_hygiene.sql",
+   "blob": "0e723d0d121f0a2166fc55dd1cb64859949c52b9",
+   "sha256": "98d386697fffc852344b7f25ed1996eff198ea8682498ac7f08c1cb622db2ed1"
+  },
+  {
+   "path": "supabase/migrations/20260818010000_social_interest_catalog_and_profile_selections.sql",
+   "blob": "de66204b6b87f45bcecd6fd89b0fc8631479a4f1",
+   "sha256": "313cfc323970d69a9e4d7e4d0849a3facbe45dc43512ddfd01fdd38f3b10d012"
+  },
+  {
+   "path": "supabase/migrations/20260818020000_social_interest_catalog_v1_data.sql",
+   "blob": "3e8de62a6ed79a969cc7411dea1b1b22e5fe7617",
+   "sha256": "b731d78590880c9a82acc582589ac8b73eb28ba99a9d1a4119ad2e9907b61e46"
+  },
+  {
+   "path": "supabase/migrations/20260818030000_social_public_interest_projection.sql",
+   "blob": "99c9ea4cdd2c5487e27bc1dba38ff72436996181",
+   "sha256": "d34ff29d2a317efad6da6aacc8a36d087b95d4812778e0e0d2a9de5aab70bca1"
+  },
+  {
+   "path": "supabase/migrations/20260819010000_meal_buddy_candidate_card_restaurant_projection.sql",
+   "blob": "c2b091c1d2037b780cb03b65370cfff4c3f8b0c3",
+   "sha256": "7128c7d40b70b6d4efe8e1602173859394e48afe165521cfa8acfa4e6dc7b5c0"
+  },
+  {
+   "path": "supabase/migrations/20260820010000_meal_buddy_food_context_authority.sql",
+   "blob": "527bd5f2ca76060d2e4b645284766190c27e2f64",
+   "sha256": "9adf0e2c2fb74b197c9dd1b318c8800bf86a0b56bc5fa1a5cb45acd649b30981"
+  },
+  {
+   "path": "supabase/migrations/20260821010000_meal_buddy_recommendation_context_handoff.sql",
+   "blob": "4e4474041be27e711e79fcd814dba4a751ddc7a3",
+   "sha256": "43a00b6c5c08ba65073ed57bf944fd846f0d438b8b0b9c3bb4e458d6930214f6"
+  },
+  {
+   "path": "supabase/migrations/20260822010000_social_interest_settings_atomic_replace.sql",
+   "blob": "8fea9ff5d48a91bf13ccf5693fd686dcca0aad22",
+   "sha256": "cd71997f1c707fc60500d95d18dbf0ff66c23f57a664e1f777ebbc50ec64e312"
+  },
+  {
+   "path": "supabase/migrations/20260823010000_meal_buddy_relationship_authority.sql",
+   "blob": "a0a222db19985ef14194a27403a4ae3e449a5595",
+   "sha256": "0d9b83c76adf9e59c913badb948b2d61f80560b62b22763f49bbb5a7233eb12c"
+  },
+  {
+   "path": "supabase/migrations/20260823020000_meal_buddy_chat_authority.sql",
+   "blob": "807d96504442a2e81d6f492434a0a2366b30758c",
+   "sha256": "b48c911c9239e545d713b69fc15faa2cc259c84d645214e18823b844991b43b8"
+  },
+  {
+   "path": "supabase/migrations/20260824010000_meal_buddy_unfriend_authority.sql",
+   "blob": "2333ed3d28c38fafca4e46f5c68222b51d8f2f17",
+   "sha256": "c6727996482dc862648c383611c0a75f45a1b885a3e4435be07d3436fc3f6ccf"
+  },
+  {
+   "path": "supabase/migrations/20260824020000_meal_buddy_chat_realtime_authority.sql",
+   "blob": "5b52f6c4afbf44cf4f9956d8fbdfd81d79882d7a",
+   "sha256": "48abf2eec814d233712285bb0aefb7d0fdb8b54a20a6037b8166377b362f1045"
+  },
+  {
+   "path": "supabase/migrations/20260824030000_meal_buddy_push_notification_authority.sql",
+   "blob": "df40268bab64c37bae9df28ece67323950554379",
+   "sha256": "603c13dd4e02972e5b08bd48f98eb7224741f347ac7193a400e3e6ad228aa6d7"
+  },
+  {
+   "path": "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql",
+   "blob": "3d2a71f649e50b22e9b9fa7a5de48a4a17a1fc33",
+   "sha256": "ee7e779073f0984ddb73866e816376fad4f60f5be1571554c0e65578080eb6d2"
+  },
+  {
+   "path": "supabase/migrations/20260826010000_restaurant_geocode_source_authority.sql",
+   "blob": "5fc3b2feeb19c6f3483eacb4881e4ff86cf9a9ce",
+   "sha256": "2d8e812b274a289e2252780cd8aa396402dae94ddbcbc32a57ea0172beb9d7a0"
+  },
+  {
+   "path": "supabase/migrations/20260828010000_candidate_taste_data_authority.sql",
+   "blob": "17e0451312b277a3601851cad8006f40f2a48194",
+   "sha256": "62fddf7e9534197a92d70aa0d73f02eec5ff50cc92e30bb54b4383ab8ff166d4"
+  },
+  {
+   "path": "supabase/migrations/20260829010000_private_taste_normalization_authority.sql",
+   "blob": "b4a6b06633a0f258ff48ef26d31725cfb419792d",
+   "sha256": "01985a5edebcd6dad0429c0a93e0901a453d35dfd5ec1ab4f76001355e11eecb"
+  },
+  {
+   "path": "supabase/migrations/20260830010000_candidate_allergen_data_authority.sql",
+   "blob": "9d2f4b42d41a02579d9395ef2ad4adddff201947",
+   "sha256": "eccebb25a1d705786256a67c028e35c7a2e2298d39c6036051c5eb0b2ea32b5a"
+  },
+  {
+   "path": "supabase/migrations/20260831010000_user_allergy_setting_authority.sql",
+   "blob": "aed27ae9c7409338386b03380c0f854fc7f76a8e",
+   "sha256": "117994481084313b8c5ef2d9483064a0ec893324589a14e6e286cd85f43171a0"
+  },
+  {
+   "path": "supabase/migrations/20260901010000_candidate_ingredient_avoidance_data_authority.sql",
+   "blob": "70c885faa9debe184b892fab25c161a1dc966487",
+   "sha256": "3e03a4ba3e93a43763861c1669e4193c6b830dcbda2fea630d44b999d11477bd"
+  },
+  {
+   "path": "supabase/migrations/20260902010000_user_ingredient_avoidance_setting_authority.sql",
+   "blob": "a7f6454d4114bbf80ada00635be5d664608cba14",
+   "sha256": "44509ecfd6cefde1ff5360c932a33452a90bd199bbd20d075ce7df0093279e0f"
+  },
+  {
+   "path": "supabase/migrations/20260903010000_meal_buddy_card_branch_context_authority.sql",
+   "blob": "6a303d4544f93ca79b89d9d22428ec9dfd310496",
+   "sha256": "d7a68e3bd0ad3d95e5c46db8a30e60f45d4cb228d74ecf3a430bd32899c5bff1"
+  },
+  {
+   "path": "supabase/migrations/20260904010000_platform_admin_authority.sql",
+   "blob": "9e1e5f93601524615cb402d613e36387d2156ff3",
+   "sha256": "b97b45c6090e8b0284da4da7b24b7de3cde4a87f0b7d25583216fabd07048a44"
+  },
+  {
+   "path": "supabase/migrations/20260904020000_platform_admin_branch_status_authority.sql",
+   "blob": "ac89dc84efeb25dea6b2e96e080b5c7af4c23a15",
+   "sha256": "dac22c901da171d44b2f064024d10b00f31d78e9fe27f51341baca69a3b44f5a"
+  },
+  {
+   "path": "supabase/migrations/20260904030000_restaurant_owner_branch_menu_item_sold_out_authority.sql",
+   "blob": "020833049ac8ed1dbfa62cf686a78278ab3c5d69",
+   "sha256": "b28a496dda43383e96d977c8e54ef54e6619f77bb2a1c3d949fe422bf36ecc01"
+  },
+  {
+   "path": "supabase/migrations/20260904040000_restaurant_owner_branch_menu_item_sold_out_preview.sql",
+   "blob": "ef887fd090022c74185bda3fa6cc8b61966ca441",
+   "sha256": "84cf0285a1087a2386fcc3e70d8f75d3d6b28023c843361e42fcd37ab0ef7376"
+  },
+  {
+   "path": "supabase/migrations/20260905010000_restaurant_owner_branch_menu_item_availability_authority.sql",
+   "blob": "bee9e4f5de6fe2594bcc10f1bed50f4e3596f28d",
+   "sha256": "83522a06b01611c06a665eca66f2921b5d57cd9114973b257a3e374f203aac33"
+  },
+  {
+   "path": "supabase/migrations/20260905020000_restaurant_owner_branch_menu_item_price_authority.sql",
+   "blob": "23d3cc12ef666d87c9c899de50257ba446e323f4",
+   "sha256": "2994111d807fd28ea5c4081a6410c8dad1a3e228ef0bf53e7e89beb5011fd4d1"
+  },
+  {
+   "path": "supabase/migrations/20260905030000_restaurant_owner_branch_menu_item_visibility_authority.sql",
+   "blob": "088c1787898d6b6e71c583819b28eefbb7d3861c",
+   "sha256": "0476c1809129f55ed81c606439bbdaadeacec2a0be6ac7a3a93eed75d11a0654"
+  },
+  {
+   "path": "supabase/migrations/20260906010000_restaurant_owner_branch_display_name_authority.sql",
+   "blob": "6f36c8f5e2d5f058b41be92b44f2e0fd0e4b145c",
+   "sha256": "8306120338b4a87da695ebc4964df3fde9ae091646027c812566d7519b0f3247"
+  },
+  {
+   "path": "supabase/migrations/20260906020000_restaurant_owner_branch_menu_item_display_name_authority.sql",
+   "blob": "159e59c63f98a36438c5bcecdaaf03a57bc347d1",
+   "sha256": "fbbd5a2c4955af3343af61ed00fd5c61686679ad1158a4b0986a789c8e4074f4"
+  },
+  {
+   "path": "supabase/migrations/20260906030000_restaurant_owner_branch_temporal_authority.sql",
+   "blob": "5fa7b8854907cb965e5c85d931e38975f16e785d",
+   "sha256": "a4cbdcad2f83bde7fa08b0496b48d55b95c4c228353705b3ed2decc2dbbcf151"
+  },
+  {
+   "path": "supabase/migrations/20260907010000_consumer_temporal_activation_ra_2h_p3.sql",
+   "blob": "ffb02cba425c17e56409c0ceafb33a09cae394da",
+   "sha256": "d902f2b25e29956afc2f7da4c050a3fdb4415b858f2957c7f8afbeee1d4b9a09"
+  },
+  {
+   "path": "supabase/migrations/20260910010000_restaurant_owner_branch_public_phone_authority.sql",
+   "blob": "6d49fe4a21c599620cadd4f3fa727ac91199844f",
+   "sha256": "682d29eedcfaa4d974599aa743e923a25199dfa2fecf1d390767f2a8a8a2c06e"
+  },
+  {
+   "path": "supabase/migrations/20260910020000_restaurant_owner_public_website_authority.sql",
+   "blob": "d5a99cf98a9695366c897760d978b46b6e0dfb57",
+   "sha256": "423235ad9839c8d8ebf592f4b49f45fa3b465f7b13c92e10b9ef5aeb2f1775ca"
+  },
+  {
+   "path": "supabase/migrations/20260910030000_restaurant_owner_public_social_links_authority.sql",
+   "blob": "9e7692d6f39d6decd500fce7ca42901610dca5e5",
+   "sha256": "d41c759c5556af7415a6284c54f7aee35e8a3ab340fe43b0f7402fb99bd9cc9f"
+  },
+  {
+   "path": "supabase/migrations/20260910040000_restaurant_owner_public_social_links_canonical_storage_r1.sql",
+   "blob": "4f0c62d7a4b8629f9a1e116817929c89228a09f8",
+   "sha256": "5adaeb9aa840670a4fc249ce9f243c1bf785ccc98398e27349dd61972190995c"
+  },
+  {
+   "path": "supabase/migrations/20260910050000_restaurant_url_server_only_mutation_authority.sql",
+   "blob": "2e0a0241b8d78f48b1c115a28ebe5ceba9d7557b",
+   "sha256": "72e9807956a263f54ecf7b70bb81bf9958d99944eff22f8b438795e500ec742d"
+  },
+  {
+   "path": "supabase/migrations/20260910060000_restaurant_owner_about_authority.sql",
+   "blob": "6819cabfc5612e49c2bc9ddf571b0f9cfd441999",
+   "sha256": "8287e9272cc900a16916691b26a00db5aceab512af71f5474645cd18a462c6f9"
+  },
+  {
+   "path": "supabase/migrations/20260910070000_restaurant_owner_about_visibility_universe_r1.sql",
+   "blob": "ed7316dc9154c0364fb88c10d3cecd2f338c57be",
+   "sha256": "f8cc74ef3351c1581dd8d3f6a524a015f52b76cce1a6985a089926e7094e69e8"
+  },
+  {
+   "path": "supabase/migrations/20260912010000_staff_authority_p3_p6_p1a_foundation.sql",
+   "blob": "aae1e6c42d16c4f0336df3b4fbe9177cb353f854",
+   "sha256": "68a938a04b898f8d25b2ee7c9176cd3e9c97b3f324e66cbc1b70b1ad61470ddf"
+  },
+  {
+   "path": "supabase/migrations/20260912020000_staff_authority_p3_p6_p1b_entitlement_foundation.sql",
+   "blob": "890ee26b88f05df3577556d9a4f31ccf03dff503",
+   "sha256": "c60becab5009051a01311e53dc7d8fa6c9072925aaa283cda3abff56b6e455c4"
+  },
+  {
+   "path": "supabase/migrations/20260912030000_staff_authority_p3_p6_p1c_materializer_audit.sql",
+   "blob": "233b31d4bdd15702b75b226c684a9393f3fd1647",
+   "sha256": "c4f3877f889582a3af14533f530135beced7ba68a7d11f82e23f2b4ea996e835"
+  },
+  {
+   "path": "supabase/migrations/20260912040000_staff_authority_p3_p6_p2a_effective_permission_resolver.sql",
+   "blob": "f078e3cb7d38cd95ed33d0b54af69e411bff540a",
+   "sha256": "140c0bd790c428d2153671d373d4e5a362de962714f0630741820fc93ece699d"
+  },
+  {
+   "path": "supabase/migrations/20260912050000_staff_authority_p3_p6_p2b_platform_admin_compatibility.sql",
+   "blob": "a5bcdf11a4541a00b88cd8aa1f782e6286f9d5af",
+   "sha256": "12b70090b757d32df79fbb3bbeda206f16a4458f3b1d091bf9476c59b16a410e"
+  },
+  {
+   "path": "supabase/migrations/20260913010000_staff_authority_p3_p6_p2d_b0_a_protected_read_authority.sql",
+   "blob": "ad385184b26201215206b5a4ca8909d8206725f4",
+   "sha256": "cd9aabb50c82b1308542a178cbf436116e620573a2371dc16b7811d0f5431658"
+  },
+  {
+   "path": "supabase/migrations/20260913020000_staff_authority_p3_p6_p2d_b0_b_branch_mutation_authority.sql",
+   "blob": "5bf56d38061d6b302c3a8826500a49248d64b267",
+   "sha256": "26e757ff7b26471179c5e626094795bc30aa436087fcaa8244f5870ac3bf0a76"
+  },
+  {
+   "path": "supabase/migrations/20260914010000_staff_management_p3_p6_p3a_authority_foundation.sql",
+   "blob": "4213b60d96104553906d4f3762c45ac6c8c35d03",
+   "sha256": "7f24c439f5c052d1912516e8b3328a9b24e3df5977ad20eaefdc9758303c2611"
+  },
+  {
+   "path": "supabase/migrations/20260914020000_staff_management_p3_p6_p3b_account_operator.sql",
+   "blob": "b9891223d78b0bcf8f1291f792eeebcca7e542c6",
+   "sha256": "a58bee65c8a0f14289fff0f3354b81ddc1d8223536b7b750698e324fdf48ec91"
+  },
+  {
+   "path": "supabase/migrations/20260914030000_staff_management_p3_p6_p3c_delegation_operator.sql",
+   "blob": "71844496cee74617f88c804d430a70164450dfbc",
+   "sha256": "9140a6bac29b56c00bccdc3eee40f9023ef19fb474dfff46a6a8c0e90ff9d5f4"
+  },
+  {
+   "path": "supabase/migrations/20260914040000_staff_management_p3_p6_p3d_delegated_permission_operator.sql",
+   "blob": "8aba6a6c1557ef8af885ae64a5e191e783d3f41f",
+   "sha256": "350db01448691a93bdf215032d3cd325ea87d124742afcbecc0f7d61016d1c90"
+  },
+  {
+   "path": "supabase/migrations/20260915010000_staff_management_p3_p6_p3e_console_admission_operator.sql",
+   "blob": "36b62d7be4bab6f26f46ec09ba3156b3ab9d0656",
+   "sha256": "f83dc938ead180f0264a051035609a09351256b89317c6e99ddd787b01af2196"
+  },
+  {
+   "path": "supabase/migrations/20260915020000_staff_management_p3_p6_p3f_privileged_permission_operator.sql",
+   "blob": "4199a9981e8ba05bd1e510827f8be62a89232672",
+   "sha256": "fcfb4b50f9cc2d97efb136dbdbc6c41ef069261f17312e43c5d1ffa3bb3468b3"
+  },
+  {
+   "path": "supabase/migrations/20260915030000_staff_management_p3_p6_p3g_break_glass_control_plane.sql",
+   "blob": "5240593f2b43844d3174eeaa538ab899b85b2368",
+   "sha256": "16f9b4456ec10af8f421eebdb84cc8c2352aa8ecd4a8e97516a79e81d1c9de04"
+  },
+  {
+   "path": "supabase/migrations/20260916010000_staff_management_p3_p6_p3g_r1_extend_collation_repair.sql",
+   "blob": "505014ee3e8fe72464fd35c96f79845b339ecfd0",
+   "sha256": "2ce554a8cc639fcf8d994c90b128dd666c0799a75e6b9047a1591a9319ab2dfc"
+  },
+  {
+   "path": "supabase/migrations/20260916020000_staff_management_p3_p6_p3h_step_up_authority.sql",
+   "blob": "8f747e5967ae180af5832f21419c33a73f98d00e",
+   "sha256": "c0b97719823f6ca8b5f9ab66253d821989de60b50d8c84a1e529d4c737e096c0"
+  },
+  {
+   "path": "supabase/migrations/20260916030000_staff_management_p3_p6_p3i_management_read_authority.sql",
+   "blob": "7b7d4af49c74f148c870583de6aa2119c16e4aec",
+   "sha256": "eda7665720c30aabefd50849ec441b28299f637bb0a9c5bd234f8a981a583ef3"
+  },
+  {
+   "path": "supabase/migrations/20260916040000_staff_management_p3_p6_p3j_security_audit_read_authority.sql",
+   "blob": "bb346f13917e038af5459767236512de3d31b037",
+   "sha256": "79e3e2a2802ba0b7a8eab4a7b58e50bf1c596983f1b0f29995e15e3b176f37dc"
+  },
+  {
+   "path": "supabase/migrations/20260918010000_restaurant_catalog_tenant_consistency_r2b_1.sql",
+   "blob": "be3d9992e96a9cdaba6933d8db804794fe9d0c9c",
+   "sha256": "a52dd77e7134b5da4947746eb0254d7dfb9367be982f7269b2c0983680e69e20"
+  },
+  {
+   "path": "supabase/migrations/20260918020000_restaurant_owner_menu_authoring_authority_r2b_2.sql",
+   "blob": "4c75000afbc3447960cb3a735474b64c6b7be829",
+   "sha256": "340d9bc1fa389ca0886f7f82938fde00bc4a5d9bfc65477d27a693ccf4c104b5"
+  },
+  {
+   "path": "supabase/migrations/20260918030000_restaurant_owner_menu_category_authoring_authority_r2b_3.sql",
+   "blob": "14e5d366197e091236e3285d15ee52b54ade7b6b",
+   "sha256": "3ec12c68b700b4a97fbb82973fdfa1b9d1962cd988a8fa9e7913e69c6c1a070b"
+  },
+  {
+   "path": "supabase/migrations/20260918040000_restaurant_owner_menu_item_authoring_authority_r2b_4.sql",
+   "blob": "0a0cc5efb8d0c882ad3fd0b614dbab1dbf3d6429",
+   "sha256": "d237f595dc976da2de9273da870700b06445ae424095696134d9368d57d12893"
+  },
+  {
+   "path": "supabase/migrations/20260918050000_restaurant_owner_branch_menu_item_linkage_authority_r2b_5.sql",
+   "blob": "26aee6fd8fd65b239b103d287be5cfebd6585375",
+   "sha256": "13fad5fdddb8f5842655652f05f4e09d78b32da9a9d4971e871b4a52d7d0ad8e"
+  },
+  {
+   "path": "supabase/migrations/20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql",
+   "blob": "78e59c056637700167f7396319e64fa7a244cb79",
+   "sha256": "f35cd5bb70d86aefb687aefc17821bcdef6681d6c615cd707aec626093329e05"
+  },
+  {
+   "path": "supabase/migrations/20260919020000_staff_management_v2_outer_acl_hardening_h3.sql",
+   "blob": "2d0f1a361f02eb32b55eb95e76ed5543c7491d91",
+   "sha256": "e8280acafa4a6506c7c1cb9671894483def266e00dbf7ce5b8cf4e2f6a6eab42"
+  },
+  {
+   "path": "supabase/migrations/20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql",
+   "blob": "d1a7fcdf144cb86ae0339b84aed213b2cb354d5c",
+   "sha256": "a8cc833cd5b6e8777cf82e68b8aad61372b9274932921220a246d30b33c7380e"
+  },
+  {
+   "path": "supabase/migrations/20260920010000_admin_operational_read_permissions_ae1.sql",
+   "blob": "21ad4437f6d8bece831410d1dcca884ed52387ec",
+   "sha256": "c858233de6f0609a5a6ad45398a47321a13becd048b57097e2d961e37f533575"
+  },
+  {
+   "path": "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql",
+   "blob": "9cb2cf36de216b028daf0ad80980d4032afb26a9",
+   "sha256": "ac535454e83aaa28de292319c51a402398588f95353cd775941c524c11349954"
+  },
+  {
+   "path": "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql",
+   "blob": "a0c864d1d47e8214b96ff6707ab9932c2319cbe1",
+   "sha256": "f02a61137554ae48c1a1a5281acd3a49bc032c76f0f9d837d7b9cef5723a1ccd"
+  },
+  {
+   "path": "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql",
+   "blob": "f1bdb27a4e6dc9409548dc4c7c4ef324af0ff8e2",
+   "sha256": "5047cf2384303d8afe88e9381a8f0f6bf1d3f4af2258b17f1bf4b167682bcfba"
+  }
+ ]
+}

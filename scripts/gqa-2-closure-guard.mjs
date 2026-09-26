@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import cp from "node:child_process";
 import { GQA2_BASELINE, ROOT, readGqa2Sources, validateGqa2, behaviourGqa2 } from "./gqa-2-closure-rules.mjs";
-import { GQA2_CLOSURE_PATHS, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
+import { GQA2_IMPLEMENTATION, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
 
 const staticFailures = validateGqa2(readGqa2Sources());
 assert.deepEqual(staticFailures, [], staticFailures.join("; "));
@@ -35,10 +35,14 @@ export const GQA2_ALLOWED_PATHS = Object.freeze([
   "scripts/gqa-2-closure-guard.mjs",
   "scripts/gqa-2-closure-mutations.mjs"
 ]);
-// After the implementation, only the exact guard-only closure paths are recognized, and only while the
-// exact GQA-2 successor (byte-pinned runtime, no later product change) is proven.
-const acceptedClosure = isExactGqa2Successor(ROOT) ? GQA2_CLOSURE_PATHS : [];
-const unexpected = [...changed].filter((file) => !GQA2_ALLOWED_PATHS.includes(file) && !acceptedClosure.includes(file));
+// Once the exact GQA-2 successor is proven (byte-pinned runtime, no later product change, and every later
+// commit touching a GQA-2 guard file is a recorded successor), GQA-2's own scope is its committed delta.
+// Before that, the working-tree delta itself must stay inside the GQA-2 scope.
+const exactSuccessor = isExactGqa2Successor(ROOT);
+const scoped = exactSuccessor
+  ? new Set(git("diff", "--name-only", GQA2_BASELINE, GQA2_IMPLEMENTATION).split("\n").filter(Boolean))
+  : changed;
+const unexpected = [...scoped].filter((file) => !GQA2_ALLOWED_PATHS.includes(file));
 assert.deepEqual(unexpected, [], `GQA-2 changed paths outside its exact scope: ${unexpected.join(", ")}`);
 const frozen = [
   "supabase", "apps/mobile", "lib", "packages", "package.json", "package-lock.json",
@@ -53,5 +57,5 @@ const frozen = [
 ];
 assert.equal(git("diff", "--name-only", GQA2_BASELINE, "--", ...frozen), "",
   "no migration, RPC, permission, route registry, Step-Up, Break-glass, dependency, Consumer or shared-copy change");
-console.log(`PASS boundary: ${changed.size} changed path(s), all inside the exact GQA-2 scope; frozen authority, Consumer, database and dependency paths unchanged`);
+console.log(`PASS boundary: ${scoped.size} GQA-2 path(s)${exactSuccessor ? " (exact successor recognized)" : ""}, all inside the exact GQA-2 scope; frozen authority, Consumer, database and dependency paths unchanged`);
 console.log("GQA-2 closure guard PASS");

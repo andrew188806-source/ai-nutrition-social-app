@@ -1,6 +1,7 @@
 // Exact GQA-2 successor evidence for historical, source-only guards.
 // This recognizes one accepted implementation (075a6f7) by commit identity, exact paths and exact
-// bytes. It is not an allow-list for later work: any later product change breaks recognition.
+// bytes. It is not an allow-list for later work: any later product change breaks recognition, and any
+// later commit that edits GQA-2's own guard files must be one of the recorded guard-only successors.
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -55,6 +56,28 @@ export const GQA2_CLOSURE_PATHS = Object.freeze([
   "scripts/staff-authority-p3-p6-p3j-guard.mjs"
 ].sort());
 
+/** GQA-2's own guard files. A later commit touching any of them must match a recorded successor exactly. */
+export const GQA2_GUARDED_PATHS = Object.freeze([...new Set([...GQA2_CLOSURE_PATHS, ...GQA2_TEST_PATHS])].sort());
+/** GQA-3 (Data API GRANT hardening): guard-only, on top of the GQA-2 closure (25157cb). */
+export const GQA3_PARENT = "25157cbb9c2fa41d516265bac665e5230740712b";
+export const GQA3_SUBJECT = "Harden future public schema migration contracts";
+export const GQA3_PATHS = Object.freeze([
+  "scripts/db-contract-sql.mjs",
+  "scripts/db-migration-baseline-manifest.json",
+  "scripts/db-migration-baseline-manifest.mjs",
+  "scripts/db-object-contract-scan.mjs",
+  "scripts/gqa-2-closure-guard.mjs",
+  "scripts/gqa-2-successor-manifest.mjs",
+  "scripts/gqa-2-successor-mutations.mjs",
+  "scripts/public-schema-data-api-grant-guard.mjs",
+  "scripts/public-schema-data-api-grant-mutations.mjs"
+].sort());
+/** Recorded guard-only successor identities; each may appear at most once in history. */
+export const GQA2_GUARD_SUCCESSORS = Object.freeze([
+  Object.freeze({ parent: GQA2_IMPLEMENTATION, subject: GQA2_CLOSURE_SUBJECT, paths: GQA2_CLOSURE_PATHS }),
+  Object.freeze({ parent: GQA3_PARENT, subject: GQA3_SUBJECT, paths: GQA3_PATHS })
+]);
+
 /** Everything that is product, schema, authority or dependency. Nothing here may move after 075a6f7. */
 export const GQA2_FROZEN_ROOTS = Object.freeze([
   "apps", "lib", "packages", "supabase", "package.json", "package-lock.json", "scripts/break-glass-control.mjs"
@@ -105,12 +128,23 @@ export function matchesExactGqa2Successor(evidence) {
     if (evidence.committedBlob?.[file] !== pin.blob || evidence.currentBlob?.[file] !== pin.blob
       || evidence.currentSha256?.[file] !== pin.sha256) return false;
   }
-  // Any commit after 075a6f7 is either absent, or exactly the recorded guard-only closure.
+  // A later commit that edits a GQA-2 guard file must be exactly one recorded successor, each used once.
+  // Later commits that touch neither product nor guard files are outside GQA-2's authority.
+  const consumed = new Set();
+  const identityOf = (commit) => GQA2_GUARD_SUCCESSORS.findIndex((known) => commit.parent === known.parent
+    && commit.subject === known.subject && samePaths(commit.paths, known.paths));
   for (const commit of evidence.laterCommits ?? []) {
-    if (commit.parent !== GQA2_IMPLEMENTATION || commit.subject !== GQA2_CLOSURE_SUBJECT
-      || !commit.paths.every(exactPath) || !samePaths(commit.paths, GQA2_CLOSURE_PATHS)) return false;
+    if (!commit || !Array.isArray(commit.paths) || !commit.paths.every(exactPath)) return false;
+    if (!commit.paths.some((file) => GQA2_GUARDED_PATHS.includes(file))) continue;
+    const index = identityOf(commit);
+    if (index < 0 || consumed.has(index)) return false;
+    consumed.add(index);
   }
-  if ((evidence.laterCommits ?? []).length > 1) return false;
+  // Uncommitted guard edits are only the pending, not-yet-recorded successor built on the current HEAD.
+  const dirty = evidence.dirtyGuardedPaths ?? [];
+  if (!Array.isArray(dirty) || !dirty.every(exactPath)) return false;
+  if (dirty.length > 0 && !GQA2_GUARD_SUCCESSORS.some((known, index) => !consumed.has(index)
+    && known.parent === evidence.head && dirty.every((file) => known.paths.includes(file)))) return false;
   return true;
 }
 
@@ -138,6 +172,10 @@ export function collectGqa2SuccessorEvidence(root = process.cwd()) {
       paths: lines(git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", sha))
     }))
     : [];
+  const dirtyGuardedPaths = sorted([
+    ...lines(git("diff", "--name-only", "--no-renames", "HEAD", "--", ...GQA2_GUARDED_PATHS)),
+    ...lines(git("ls-files", "--others", "--exclude-standard", "--", ...GQA2_GUARDED_PATHS))
+  ]);
   return {
     head,
     implementationInHistory,
@@ -152,7 +190,8 @@ export function collectGqa2SuccessorEvidence(root = process.cwd()) {
     committedBlob,
     currentBlob,
     currentSha256,
-    laterCommits
+    laterCommits,
+    dirtyGuardedPaths
   };
 }
 
