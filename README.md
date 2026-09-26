@@ -2,6 +2,8 @@
 
 > **DOC STATUS: HISTORICAL** - frozen at audited baseline 9d68eab (91 migrations); pre-dates Restaurant RA-2/R2, Admin Authority and IP Codex. Current technical description: docs/engineering-handoff.md and docs/engineering-state-registers.md. See docs/DOCUMENT_STATUS_INDEX.md.
 
+> **Handoff entry point:** [docs/handoff/00_INDEX/MASTER_HANDOFF_INDEX.md](docs/handoff/00_INDEX/MASTER_HANDOFF_INDEX.md) — the canonical, current index for product, engineering, security, deployment and company topics.
+
 TastKind／好廚 is an AI nutrition, meal recommendation, and Meal Buddy Social MVP. The declared MVP mainline is complete for professional engineer handoff; it is no longer a mock-only frontend. Live capabilities remain explicitly configured and actor-scoped, and demo/local branches still exist where noted below.
 
 ## Audited baseline and commit lineage

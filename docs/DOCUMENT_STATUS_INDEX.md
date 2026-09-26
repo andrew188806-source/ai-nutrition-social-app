@@ -2,6 +2,8 @@
 
 **DOC STATUS: CURRENT** — updated for local ADMIN-E1 on baseline `d88d1000a26810dfca0f70586f11e594b3a2e44a`; E2 live acceptance remains pending.
 
+> **Preferred navigation (GQA-4, 2026-09-26, reconciled at `44101e938c1dfa030a97e906971a04394757762b`):** start at [docs/handoff/00_INDEX/MASTER_HANDOFF_INDEX.md](handoff/00_INDEX/MASTER_HANDOFF_INDEX.md). It gives every topic one canonical home (product, engineering, security/authority, deployment, finance, corporate/legal, IP/patent, business/monetization, operations/GTM, Post-MVP, decision registers). This index remains the per-document status classification for the technical layer; the baseline and E2 wording above are the historical ADMIN-E1 context (ADMIN-E has since closed live, see the handoff). Superseded claims are consolidated in [docs/handoff/11_DECISION_REGISTERS/SUPERSEDED_DECISIONS.md](handoff/11_DECISION_REGISTERS/SUPERSEDED_DECISIONS.md).
+
 Purpose: let a reader tell, for any document in this repository, whether it describes the system **now**, is a **frozen contract** for a closed phase, is **history**, or has been **superseded**. Historical documents are kept for traceability; they are not deleted, and where they could mislead they carry an in-place status banner pointing back here.
 
 Status vocabulary: `CURRENT` · `FROZEN` (closed-phase contract or evidence; authoritative for that phase only) · `TECH_DEBT` · `DEFERRED` · `POST_MVP` · `HISTORICAL` · `SUPERSEDED` · `BLOCKED` · `TBD`.
@@ -22,7 +24,8 @@ Company/product-strategy decisions (pricing, operating model, funding, commercia
 
 | Document | Notes |
 | --- | --- |
-| `docs/engineering-handoff.md` | Living technical description. Legacy mock-era sections inside it are individually tagged. |
+| `docs/handoff/**` | **Canonical handoff navigation** (GQA-4). `PRIVATE_INTERNAL`; finance, corporate/legal, IP, business and GTM sections are `NOT_FOR_VENDOR_EXPORT_BY_DEFAULT`. |
+| `docs/engineering-handoff.md` | Living technical description. Legacy mock-era sections inside it are individually tagged. A few later statements are stale (temporary step-up broker wording, ADMIN-E "small debts" fixed by GQA-2, "next Admin phase"); see `docs/handoff/11_DECISION_REGISTERS/SUPERSEDED_DECISIONS.md` SD-12–SD-14. |
 | `docs/engineering-state-registers.md` | Debt / deferred / modernization / coupling / Admin inventory. |
 | `docs/deployment-local-access-matrix.md` | ADMIN-E1 local deployment evidence and E2 live checklist. |
 | `docs/DOCUMENT_STATUS_INDEX.md` | This file. |

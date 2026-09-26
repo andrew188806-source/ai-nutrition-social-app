@@ -1,0 +1,39 @@
+# 決定狀態索引（Decision Status Index）
+
+> **分類** `DECISION_REGISTER` · **狀態** `CANONICAL_CURRENT` · **最後對帳** 2026-09-26 · **機密** `PRIVATE_INTERNAL` · `NOT_FOR_VENDOR_EXPORT_BY_DEFAULT` · 入口：[MASTER_HANDOFF_INDEX](MASTER_HANDOFF_INDEX.md)
+
+讓創辦人快速看到每類決定在哪裡。沒有證據的討論**不會**被升級成凍結決定。
+
+| 狀態 | 意義 | 數量 | 清單 |
+| --- | --- | --- | --- |
+| `FROZEN` | 有證據、已接受或已凍結 | 26 | [FROZEN_DECISIONS](../11_DECISION_REGISTERS/FROZEN_DECISIONS.md) |
+| `CURRENT_DIRECTION` | 目前方向，尚未成為凍結決定 | 見下表 | 本頁 |
+| `OPEN` | 待決定 | 19 | [OPEN_DECISIONS](../11_DECISION_REGISTERS/OPEN_DECISIONS.md) |
+| `SUPERSEDED` | 已被取代 | 21 | [SUPERSEDED_DECISIONS](../11_DECISION_REGISTERS/SUPERSEDED_DECISIONS.md) |
+| `EXTERNAL_RECHECK_REQUIRED` | 需外部／live 查證 | 30 | [EXTERNAL_RECHECK_REQUIRED](../11_DECISION_REGISTERS/EXTERNAL_RECHECK_REQUIRED.md) |
+| `LEGAL_TAX_ADVICE_REQUIRED` | 需律師／會計師意見 | 見下表 | [PROFESSIONAL_ADVICE_REQUIRED](../06_CORPORATE_LEGAL/PROFESSIONAL_ADVICE_REQUIRED.md) |
+| `POST_MVP` | MVP 之後 | 見下表 | [POST_MVP_PRODUCT](../01_PRODUCT/POST_MVP_PRODUCT.md) |
+
+## CURRENT_DIRECTION（方向，非凍結）
+
+| 主題 | 方向 | 正式所在 |
+| --- | --- | --- |
+| 資金路徑 | 群眾募資／補助／貸款 → 股權募資 | [FINANCE_PRODUCT_ROADMAP](../05_FINANCE/FINANCE_PRODUCT_ROADMAP.md) |
+| 第一輪股權募資 | 約 NT$25M／20M／15M、約 15%（規劃假設） | [FUNDRAISING_ROUNDS](../05_FINANCE/FUNDRAISING_ROUNDS.md) |
+| 台灣平台擴建 | 約 NT$50M–80M（未來規劃） | [FUNDRAISING_ROUNDS](../05_FINANCE/FUNDRAISING_ROUNDS.md) |
+| 台北市新創補助 | 不等股權輪；先備資料，符合資格即申請 | [SUBSIDIES_LOANS](../05_FINANCE/SUBSIDIES_LOANS.md) |
+| 台灣法人 | 群眾募資路徑需要 | [TAIWAN_ENTITY](../06_CORPORATE_LEGAL/TAIWAN_ENTITY.md) |
+| 全球母公司 | Delaware C-Corp | [GLOBAL_TOPCO](../06_CORPORATE_LEGAL/GLOBAL_TOPCO.md) |
+| 專利 | 獲准後再評估授權／轉讓／公司取得；國際擴展成本可能依未來協議由公司負擔 | [LICENSING_TRANSFER_OPTIONS](../07_IP_PATENT/LICENSING_TRANSFER_OPTIONS.md) |
+| 多人餐桌建置順序 | GT-1～GT-9 | [GROUP_TABLE_FUTURE_PLAN](../10_POST_MVP/GROUP_TABLE_FUTURE_PLAN.md) |
+| 廣告 | 兩層概念（一般聯播網＋情境廣告） | [ADVERTISING_MONETIZATION](../08_BUSINESS_MONETIZATION/ADVERTISING_MONETIZATION.md) |
+| 中華電信 | 策略選項，未確認 | [MARKET_VALIDATION](../09_OPERATIONS_GTM/MARKET_VALIDATION.md) |
+| 開發流程 | Planner 規劃、Claude Desktop 暫任實作、創辦人推送 | [DEVELOPMENT_WORKFLOW](../02_ENGINEERING/DEVELOPMENT_WORKFLOW.md) |
+
+## LEGAL_TAX_ADVICE_REQUIRED
+
+公司法律交易順序、持股移轉、稅務（移轉訂價、CFC／PFIC、美台）、證券法遵、專利授權／估值／稅務／可執行性、同意書與照片保存、廣告隱私、徽章名稱 —— 見 [PROFESSIONAL_ADVICE_REQUIRED](../06_CORPORATE_LEGAL/PROFESSIONAL_ADVICE_REQUIRED.md)。
+
+## POST_MVP
+
+多人餐桌與桌菜模式、收藏品／所有權轉移／市集、TastKind 點數、餐廳點數、POS 與收據辨識擴充 —— 見 [POST_MVP_PRODUCT](../01_PRODUCT/POST_MVP_PRODUCT.md)。

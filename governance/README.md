@@ -11,6 +11,8 @@ This directory is internal company material. It may contain pricing hypotheses, 
 
 Reconciled against repository `HEAD = origin/main = 8af3fb7d108c4124bb29ab115ea00b411287b00d` (2026-09-19).
 
+> **GQA-4 (2026-09-26):** the canonical handoff entry point is now [`docs/handoff/00_INDEX/MASTER_HANDOFF_INDEX.md`](../docs/handoff/00_INDEX/MASTER_HANDOFF_INDEX.md). It gives each topic one canonical home and links back to the files in this directory, which remain the source for owner product decisions (ODR), the operating model and the funding-route memory. The same vendor-export rule applies to `docs/handoff/`: the whole tree is `PRIVATE_INTERNAL`, and its finance, corporate/legal, IP/patent, business and GTM sections and decision registers are `NOT_FOR_VENDOR_EXPORT_BY_DEFAULT`. The 2026-09-19 exclusion of founder-private patent material is superseded only to the extent the GQA-4 brief directs: high-level patent ownership and cost responsibility are recorded in `docs/handoff/07_IP_PATENT/`; personal financial structuring remains excluded.
+
 ## Two layers, two purposes
 
 | Layer | Answers | Where |
