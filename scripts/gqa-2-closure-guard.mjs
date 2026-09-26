@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import cp from "node:child_process";
 import { GQA2_BASELINE, ROOT, readGqa2Sources, validateGqa2, behaviourGqa2 } from "./gqa-2-closure-rules.mjs";
+import { GQA2_CLOSURE_PATHS, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
 
 const staticFailures = validateGqa2(readGqa2Sources());
 assert.deepEqual(staticFailures, [], staticFailures.join("; "));
@@ -34,7 +35,10 @@ export const GQA2_ALLOWED_PATHS = Object.freeze([
   "scripts/gqa-2-closure-guard.mjs",
   "scripts/gqa-2-closure-mutations.mjs"
 ]);
-const unexpected = [...changed].filter((file) => !GQA2_ALLOWED_PATHS.includes(file));
+// After the implementation, only the exact guard-only closure paths are recognized, and only while the
+// exact GQA-2 successor (byte-pinned runtime, no later product change) is proven.
+const acceptedClosure = isExactGqa2Successor(ROOT) ? GQA2_CLOSURE_PATHS : [];
+const unexpected = [...changed].filter((file) => !GQA2_ALLOWED_PATHS.includes(file) && !acceptedClosure.includes(file));
 assert.deepEqual(unexpected, [], `GQA-2 changed paths outside its exact scope: ${unexpected.join(", ")}`);
 const frozen = [
   "supabase", "apps/mobile", "lib", "packages", "package.json", "package-lock.json",

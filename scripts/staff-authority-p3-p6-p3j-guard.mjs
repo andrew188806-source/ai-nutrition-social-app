@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
 import { isBoundedP3BSuccessor, P3K_MANAGEMENT_PAGES } from "./staff-authority-p3-p6-p3b-successor-awareness.mjs";
+import { isAcceptedGqa2RuntimePath, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
 
 const ROOT = process.cwd();
 const MIGRATION = "supabase/migrations/20260916040000_staff_management_p3_p6_p3j_security_audit_read_authority.sql";
@@ -56,8 +57,11 @@ function exactVocabHasNoNewKeys(v) {
 }
 
 const candidatePaths = [...new Set([...git("diff", "--name-only", P3H_BASELINE).split(/\r?\n/), ...git("ls-files", "--others", "--exclude-standard").split(/\r?\n/)])].filter(Boolean);
-check(!candidatePaths.some((p) => /^apps\/(mobile|restaurant-web)\//.test(p)), "no mobile or restaurant app path changed since P3H");
-const managementPathsChanged = candidatePaths.filter((p) => /apps\/admin-web\/app\/admin\/management/.test(p));
+// The exact GQA-2 successor (075a6f7, byte-pinned) is the only later change recognized here.
+const exactGqa2 = isExactGqa2Successor();
+check(!candidatePaths.filter((p) => !isAcceptedGqa2RuntimePath(p, exactGqa2)).some((p) => /^apps\/(mobile|restaurant-web)\//.test(p)), "no mobile or restaurant app path changed since P3H");
+const managementPathsChanged = candidatePaths.filter((p) => /apps\/admin-web\/app\/admin\/management/.test(p))
+  .filter((p) => P3K_MANAGEMENT_PAGES.includes(p) || !isAcceptedGqa2RuntimePath(p, exactGqa2));
 check(managementPathsChanged.every((p) => P3K_MANAGEMENT_PAGES.includes(p)), "any changed Platform Management page is within the accepted P3K route surface", managementPathsChanged);
 const candidateText = candidatePaths.filter((p) => fs.existsSync(path.join(ROOT, p)) && fs.statSync(path.join(ROOT, p)).isFile()).map((p) => fs.readFileSync(path.join(ROOT, p), "utf8")).join("\n");
 check(!/(?:postgres(?:ql)?:\/\/[^\s'\"]+:[^\s'\"]+@|sb_secret_[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{20,}\.)/.test(candidateText), "candidate contains no committed credential-shaped value");

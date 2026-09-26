@@ -4,6 +4,8 @@ import fs from "node:fs";
 import cp from "node:child_process";
 import crypto from "node:crypto";
 import { isExactMrbSuccessor } from "./admin-mrb-successor-manifest.mjs";
+import { GQA1_IMPLEMENTATION, GQA1_PRODUCT_PATHS, isExactGqa1Successor } from "./gqa-1-successor-manifest.mjs";
+import { GQA2_RUNTIME, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
 import { BASELINE, FILES, ROUTES, baselineFile, readSources, validateAdminE1 } from "./admin-e1-rules.mjs";
 const root = process.cwd();
 const pages = fs.readdirSync("apps/admin-web/app", { withFileTypes: true })
@@ -41,16 +43,34 @@ if (changedProtected.length) {
     return result.stdout.trim();
   };
   const head = git("rev-parse","HEAD"), origin = git("rev-parse","origin/main");
-  const localFreeze = head !== mrbBaseline && git("rev-parse","HEAD^") === mrbBaseline
-    && git("rev-list","--left-right","--count","HEAD...origin/main") === "1\t0";
-  assert.equal(origin,mrbBaseline,"ADMIN-MRB exact predecessor remains origin/main");
-  assert.ok(head === mrbBaseline || localFreeze || isExactMrbSuccessor(),
-    "only the pinned ADMIN-MRB local successor or its exact guard closure may change E1-protected sources");
-  assert.ok(changedProtected.every((file) => Object.hasOwn(mrbSources,file)),
-    `unexpected E1-protected changes: ${changedProtected.filter((file) => !Object.hasOwn(mrbSources,file)).join(", ")}`);
-  for (const [file,expected] of Object.entries(mrbSources)) {
-    assert.equal(crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"),expected,
-      `ADMIN-MRB source pin: ${file}`);
+  const fileSha = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+  if (origin === mrbBaseline) {
+    // Original ADMIN-MRB local topology, unchanged.
+    const localFreeze = head !== mrbBaseline && git("rev-parse","HEAD^") === mrbBaseline
+      && git("rev-list","--left-right","--count","HEAD...origin/main") === "1\t0";
+    assert.ok(head === mrbBaseline || localFreeze || isExactMrbSuccessor(),
+      "only the pinned ADMIN-MRB local successor or its exact guard closure may change E1-protected sources");
+    assert.ok(changedProtected.every((file) => Object.hasOwn(mrbSources,file)),
+      `unexpected E1-protected changes: ${changedProtected.filter((file) => !Object.hasOwn(mrbSources,file)).join(", ")}`);
+    for (const [file,expected] of Object.entries(mrbSources)) {
+      assert.equal(fileSha(file),expected,`ADMIN-MRB source pin: ${file}`);
+    }
+  } else {
+    // Pushed history: every E1-protected change belongs to an exact accepted successor in the chain
+    // ADMIN-MRB -> GQA-1 -> GQA-2, each proven by its own manifest, and carries that successor's bytes.
+    // The staff detail page moves from the MRB pin to the exact GQA-2 pin and to nothing else.
+    const gqa2 = isExactGqa2Successor(), gqa1 = isExactGqa1Successor();
+    assert.ok(isExactMrbSuccessor(), "the exact ADMIN-MRB chain (MRB, its guard closure, GQA-1, GQA-2) is in history");
+    const owner = (file) => gqa2 && Object.hasOwn(GQA2_RUNTIME,file) ? "gqa2"
+      : gqa1 && GQA1_PRODUCT_PATHS.includes(file) ? "gqa1"
+        : Object.hasOwn(mrbSources,file) ? "mrb" : null;
+    const unowned = changedProtected.filter((file) => owner(file) === null);
+    assert.deepEqual(unowned,[],`unexpected E1-protected changes: ${unowned.join(", ")}`);
+    for (const file of changedProtected) {
+      if (owner(file) === "gqa2") assert.equal(fileSha(file),GQA2_RUNTIME[file].sha256,`GQA-2 source pin: ${file}`);
+      else if (owner(file) === "mrb") assert.equal(fileSha(file),mrbSources[file],`ADMIN-MRB source pin: ${file}`);
+      else assert.equal(git("hash-object","--",file),git("rev-parse",`${GQA1_IMPLEMENTATION}:${file}`),`GQA-1 source pin: ${file}`);
+    }
   }
 }
 const eol = cp.spawnSync("git",["ls-files","--eol"],{cwd:root,encoding:"utf8",maxBuffer:5*1024*1024});
