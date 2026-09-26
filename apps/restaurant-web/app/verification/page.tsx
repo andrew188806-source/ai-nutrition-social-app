@@ -1,26 +1,12 @@
-import { DashboardShell } from "../../components/DashboardShell";
-import { Card } from "../../components/RestaurantCards";
-import { zhTW } from "../../../../lib/i18n/zh-TW";
+import { DeferredCapabilityNotice } from "../../components/runtime/DeferredCapabilityNotice";
 
+// No Restaurant verification submission or review capability exists yet; this route stays
+// reachable but shows no submission, review status or badge.
 export default function RestaurantVerificationPage() {
   return (
-    <DashboardShell title={zhTW.restaurant.verificationTitle} subtitle={zhTW.restaurant.verificationSubtitle}>
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900">{zhTW.restaurant.blueBadgeNote}</div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        {zhTW.restaurant.verificationSteps.map((step) => (
-          <Card key={step.title}>
-            <h2 className="text-lg font-bold text-stone-950">{step.title}</h2>
-            <p className="mt-2 text-sm leading-6 text-stone-600">{step.body}</p>
-          </Card>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        <Card>
-          <p className="text-lg font-bold text-teal-800">{zhTW.restaurant.verificationStatus}</p>
-        </Card>
-      </div>
-    </DashboardShell>
+    <DeferredCapabilityNotice
+      body="店家藍勾勾驗證的申請與審核流程尚未啟用。目前無法提交驗證資料，也沒有任何送審或審核狀態。"
+      title="藍勾勾驗證"
+    />
   );
 }

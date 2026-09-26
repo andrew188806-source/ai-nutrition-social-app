@@ -1,23 +1,12 @@
-import { DashboardShell } from "../../components/DashboardShell";
-import { Card, Section } from "../../components/RestaurantCards";
-import { zhTW } from "../../../../lib/i18n/zh-TW";
+import { DeferredCapabilityNotice } from "../../components/runtime/DeferredCapabilityNotice";
 
+// No VIP membership, member-agreement data or subscription capability exists yet; this route stays
+// reachable but only states that the feature is not enabled.
 export default function RestaurantVipPage() {
   return (
-    <DashboardShell title={zhTW.restaurant.vipTitle} subtitle={zhTW.restaurant.vipSubtitle}>
-      <Section title={zhTW.restaurant.vipTitle} subtitle={zhTW.mobile.permissions.vipBody}>
-        <div className="grid gap-4 md:grid-cols-2">
-          {zhTW.restaurant.vipMembers.map((member) => (
-            <Card key={member.name}>
-              <div className="flex items-start justify-between gap-4">
-                <h2 className="text-lg font-bold text-stone-950">{member.name}</h2>
-                <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-800">{member.consent}</span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-stone-600">{member.insight}</p>
-            </Card>
-          ))}
-        </div>
-      </Section>
-    </DashboardShell>
+    <DeferredCapabilityNotice
+      body="店家 VIP 會員與使用者同意資料功能尚未啟用。目前沒有任何會員、同意紀錄或會員洞察可供查看，也無法訂閱或購買 VIP 方案。"
+      title="VIP 會員與同意資料"
+    />
   );
 }

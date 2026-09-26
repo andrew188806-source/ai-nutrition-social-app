@@ -6,6 +6,7 @@ import { createAdminSupabaseServerClient } from "../../../../../auth/supabase-se
 import { StaffAuthorityPanel, type StaffAuthority } from "../../../../../components/admin-shell/StaffAuthorityPanel";
 import { PrimaryWizard } from "../../../../../components/admin-shell/PrimaryWizard";
 import { ManagerPresetPanel } from "../../../../../components/admin-shell/ManagerPresetPanel";
+import { resolvePrimaryWizardTargetRelation } from "../../../../../auth/admin-primary-wizard-target";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -50,6 +51,9 @@ async function StaffDetailView({ staffAccountId, actorSubject, actorCanWrite, ac
   const rows = (detailResult.error ? [] : (detailResult.data as DetailRow[] | null)) ?? [];
   const detail = rows[0];
   const authority = (authorityResult.error ? null : (authorityResult.data as StaffAuthority)) ?? null;
+  // Stable identity only: the verified actor subject vs the target's Auth user ID (unique per
+  // staff account). Without a readable detail row the relation stays "unknown".
+  const targetRelation = resolvePrimaryWizardTargetRelation({ actorSubject, targetAuthUserId: detail?.auth_user_id });
 
   // detail is null either because the account does not exist, or because the caller lacks
   // admin.management.staff.read. The two are indistinguishable from here by design (the read
@@ -100,7 +104,7 @@ async function StaffDetailView({ staffAccountId, actorSubject, actorCanWrite, ac
         );
       })() : null}
 
-      <PrimaryWizard staffAccountId={staffAccountId} />
+      <PrimaryWizard staffAccountId={staffAccountId} targetRelation={targetRelation} />
 
       <ManagerPresetPanel
         actorCanWrite={actorCanWrite && Boolean(detail)}

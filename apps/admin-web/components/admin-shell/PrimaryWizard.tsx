@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { StepUpCard } from "./StepUpCard";
 import { postJson, submitMutation } from "./adminMutationClient";
+import {
+  isPrimaryWizardSelfTargetBlocked,
+  type PrimaryWizardTargetRelation
+} from "../../auth/admin-primary-wizard-target";
 
 export const PRIMARY_READY_KEYS = [
   "admin.management.read",
@@ -79,7 +83,15 @@ function effectiveKeys(snapshot: AuthoritySnapshot): ReadonlySet<string> {
   return new Set(snapshot.entitlements.filter((item) => item.status === "active").map((item) => item.permissionKey));
 }
 
-export function PrimaryWizard({ staffAccountId }: { staffAccountId: string }) {
+const SELF_TARGET_MESSAGE = "不能對自己的人員帳號執行此精靈：Primary 權限必須由另一位已獨立完成 TOTP 與 Step-Up 的 Primary 授予（系統也會以 self_target_denied 拒絕）。";
+
+export function PrimaryWizard({ staffAccountId, targetRelation = "unknown" }: {
+  staffAccountId: string;
+  targetRelation?: PrimaryWizardTargetRelation;
+}) {
+  // Pre-warning only. The database's self_target_denied stays the final authority, including
+  // when the relation is "unknown" because the target's Auth user ID could not be read.
+  const selfTargetBlocked = isPrimaryWizardSelfTargetBlocked(targetRelation);
   const [confirmPhrase, setConfirmPhrase] = useState("");
   const [effective, setEffective] = useState<ReadonlySet<string>>(new Set());
   const [stepStates, setStepStates] = useState<Readonly<Record<string, StepState>>>({});
@@ -99,6 +111,10 @@ export function PrimaryWizard({ staffAccountId }: { staffAccountId: string }) {
   const ready = PRIMARY_READY_KEYS.every((key) => effective.has(key));
 
   const runFrom = useCallback(async () => {
+    if (selfTargetBlocked) {
+      setMessage(SELF_TARGET_MESSAGE);
+      return;
+    }
     setRunning(true);
     setMessage(null);
     await refreshEffective();
@@ -130,7 +146,7 @@ export function PrimaryWizard({ staffAccountId }: { staffAccountId: string }) {
     setMessage("已完成全部步驟。");
     setRunning(false);
     await refreshEffective();
-  }, [steps, staffAccountId, refreshEffective]);
+  }, [selfTargetBlocked, steps, staffAccountId, refreshEffective]);
 
   return (
     <section className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50 p-5">
@@ -146,6 +162,11 @@ export function PrimaryWizard({ staffAccountId }: { staffAccountId: string }) {
         依序透過既有的 P3B／P3C／P3E／P3F／P3H 正式操作，逐項授予此人員成為 Primary 所需的八項權限；不建立任何資料庫超級角色。
         若中途 Step-Up 逾期，重新驗證後點「繼續精靈」即可從中斷的那一步接續，不會重複已完成的授予。
       </p>
+      {selfTargetBlocked ? (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900" data-primary-wizard-self-target="blocked" role="alert">
+          {SELF_TARGET_MESSAGE}
+        </p>
+      ) : null}
       <StepUpCard />
       <label className="block text-xs font-bold text-rose-700">
         高權限確認片語（用於最後一步 permission.write，需完全一致）：
@@ -173,7 +194,7 @@ export function PrimaryWizard({ staffAccountId }: { staffAccountId: string }) {
       </ol>
       <button
         className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-50"
-        disabled={running || ready}
+        disabled={running || ready || selfTargetBlocked}
         onClick={() => void runFrom()}
         type="button"
       >
