@@ -1,13 +1,14 @@
 // Exact GQA-1 successor evidence for the historical Favorites 2X-E UI smoke.
 // This recognizes one accepted Consumer implementation, not a future runtime allow-list.
-// It is history-durable: validity comes from exact commit identities in the current ancestry and
-// the frozen Consumer runtime bytes, never from where origin/main happens to point.
+// It is history-durable: validity comes from the exact provenance cb287bd -> 03cec4f -> 8a16644 in the
+// current ancestry, the frozen Consumer runtime (bytes and truthfulness semantics), and nothing else.
+// How many commits follow, what they are called, whether they edit validation scripts (including this
+// one, its mutations, the Favorites smoke or the truthfulness guard), and where origin/main points are
+// deliberately not inputs: validators are machinery, not frozen product state.
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import {
-  GQA2_CLOSURE_PATHS, GQA2_CLOSURE_SUBJECT, GQA2_IMPLEMENTATION
-} from "./gqa-2-successor-manifest.mjs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 export const GQA1_PREDECESSOR = "cb287bd33fc6cea858dcc0b2dce77de89506682e";
 export const GQA1_IMPLEMENTATION = "03cec4f3b0baf4303035c983fdb24a8b761e949d";
@@ -35,6 +36,7 @@ export const GQA1_IMPLEMENTATION_PATHS = Object.freeze([
   "lib/i18n/zh-TW.ts",
   "scripts/gqa-1-truthfulness-guard.mjs"
 ]);
+/** The historical path set of the test-only closure commit 8a16644 (provenance, not a current pin). */
 export const GQA1_CLOSURE_PATHS = Object.freeze([
   "scripts/consumer-favorites-phase-2x-e-ui-contract-smoke.mjs",
   "scripts/gqa-1-successor-manifest.mjs",
@@ -44,56 +46,81 @@ export const GQA1_TRUTHFULNESS_GUARD = "scripts/gqa-1-truthfulness-guard.mjs";
 /** The frozen Consumer runtime boundary. Nothing under these roots may move after 03cec4f. */
 export const GQA1_FROZEN_ROOTS = Object.freeze(["apps/mobile", "lib", "packages", "supabase"]);
 
+/**
+ * Current Consumer truthfulness boundaries accepted with 03cec4f, checked directly on product sources
+ * (not by pinning the bytes of any validator). Patterns are fixed here; callers supply only sources.
+ */
+export const GQA1_TRUTHFULNESS_RULES = Object.freeze([
+  Object.freeze({ name: "diary reads canonical persisted records, no seeded source or fixed demo date", file: GQA1_MEAL_LOG,
+    must: [/service\.listCurrentUserMealRecords\(dateWindow\)/, /status: "ready", records: result\.value/, /status: "unavailable", records: null/],
+    mustNot: [/analysisMealRecordStore|getMealRecords\(|getTodayMealRecords\(|2026\/06\/01|baselineMealRecords|dailyCards|monthlyCards/, /\bMealFoodCard\b/] }),
+  Object.freeze({ name: "live runtime composes the canonical meal-record service", file: "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts",
+    must: [/mealRecordsSource === "supabase-live"\s*\? createConsumerMealRecordsService/], mustNot: [] }),
+  Object.freeze({ name: "Today Intake has no fake score or personalized static advice", file: "apps/mobile/app/today-intake.tsx",
+    must: [/intake\.genericGuidanceTitle/], mustNot: [/>82<|intake\.insight|intake\.dinnerAdvice|intake\.balanceNote|scoreRing|scoreText/, /lunchAdvice\[0\]/] }),
+  Object.freeze({ name: "detail report shows generic suggestions only", file: "apps/mobile/components/NutritionDetailReport.tsx",
+    must: [/genericSuggestionsTitle/], mustNot: [] }),
+  Object.freeze({ name: "Group Table route is the deferred compatibility surface", file: "apps/mobile/app/group-tables.tsx",
+    must: [/GroupTableDeferred/], mustNot: [/GroupTablesDemo|GroupTablesContent|groupTableStore|mealBuddySocialStore|calorieSharingMock/] }),
+  Object.freeze({ name: "Meal Buddies has no mock Group Table create/join/invite/chat lifecycle", file: "apps/mobile/app/meal-buddies.tsx",
+    must: [/<GroupTableDeferred/, /invite\.type !== "table"/, /chat\.threadType !== "group" && !chat\.tableId/],
+    mustNot: [/<GroupTablesContent|createOrOpenGroupTableChat|createMealBuddyInvite\([^\n]+"table"/] }),
+  Object.freeze({ name: "Restaurants routes table interest to the deferred surface", file: "apps/mobile/app/restaurants.tsx",
+    must: [/router\.push\("\/group-tables"\)/], mustNot: [/section=tables|setPendingTableRestaurant|openRestaurantTableFlow|四人桌機會|四人桌正在揪團/] })
+]);
+export const GQA1_TRUTHFULNESS_FILES = Object.freeze([...new Set(GQA1_TRUTHFULNESS_RULES.map((rule) => rule.file))]);
+
 const lines = (value) => value ? value.split(/\r?\n/).filter(Boolean) : [];
 const sorted = (paths) => [...paths].sort();
-const samePaths = (actual, expected) => actual.length === expected.length
+const samePaths = (actual, expected) => Array.isArray(actual) && actual.length === expected.length
   && sorted(actual).every((file, index) => file === sorted(expected)[index]);
-const git = (...args) => execFileSync("git", args, {
-  cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024
-}).trim();
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const exactPath = (file) => typeof file === "string" && file.length > 0 && !/[*?]/.test(file) && !file.endsWith("/");
 
-/** Pure, exact-path predicate. Callers cannot supply accepted hashes or path prefixes. */
+/** Names of the truthfulness rules the given product sources violate (empty when all hold). */
+export function gqa1TruthfulnessViolations(sources) {
+  return GQA1_TRUTHFULNESS_RULES.filter((rule) => {
+    const source = sources?.[rule.file];
+    return typeof source !== "string"
+      || !rule.must.every((pattern) => pattern.test(source)) || rule.mustNot.some((pattern) => pattern.test(source));
+  }).map((rule) => rule.name);
+}
+
+/** Pure, exact-path predicate. Callers cannot supply accepted hashes, patterns or path prefixes. */
 export function matchesExactGqa1Successor(evidence) {
+  if (!evidence) return false;
   // 1. The implementation commit is exactly the accepted one, on the exact predecessor.
   if (evidence.implementationInHistory !== true || evidence.implementationParent !== GQA1_PREDECESSOR
     || evidence.implementationSubject !== GQA1_IMPLEMENTATION_SUBJECT) return false;
-  if (!evidence.implementationPaths.every(exactPath)
+  if (!Array.isArray(evidence.implementationPaths) || !evidence.implementationPaths.every(exactPath)
     || !samePaths(evidence.implementationPaths, GQA1_IMPLEMENTATION_PATHS)) return false;
-  // 2. Either HEAD is the implementation itself, or the exact test-only closure is in history.
-  if (evidence.head !== GQA1_IMPLEMENTATION) {
-    if (evidence.closureInHistory !== true || evidence.closureParent !== GQA1_IMPLEMENTATION
-      || evidence.closureSubject !== GQA1_CLOSURE_SUBJECT
-      || !evidence.closurePaths.every(exactPath) || !samePaths(evidence.closurePaths, GQA1_CLOSURE_PATHS)) return false;
-  }
-  // 3. The frozen Consumer runtime boundary has not moved since the implementation, and the
-  //    implementation's own truthfulness guard is byte-identical.
-  if (evidence.frozenBoundaryDelta.length || evidence.truthfulnessGuardDelta.length) return false;
-  // 4. Later edits to the closure's own test files come only from the exact GQA-2 guard-only closure.
-  for (const commit of evidence.closureFileCommits) {
-    if (commit.parent !== GQA2_IMPLEMENTATION || commit.subject !== GQA2_CLOSURE_SUBJECT
-      || !commit.paths.every(exactPath) || !samePaths(commit.paths, GQA2_CLOSURE_PATHS)) return false;
-  }
-  if (evidence.dirtyClosurePaths.length
-    && (evidence.head !== GQA2_IMPLEMENTATION
-      || !evidence.dirtyClosurePaths.every((file) => exactPath(file) && GQA2_CLOSURE_PATHS.includes(file)))) return false;
-  // 5. Exact diary bytes.
+  // 2. The exact test-only closure is in the current ancestry (provenance only).
+  if (evidence.closureInHistory !== true || evidence.closureParent !== GQA1_IMPLEMENTATION
+    || evidence.closureSubject !== GQA1_CLOSURE_SUBJECT || !Array.isArray(evidence.closurePaths)
+    || !evidence.closurePaths.every(exactPath) || !samePaths(evidence.closurePaths, GQA1_CLOSURE_PATHS)) return false;
+  // 3. The frozen Consumer runtime boundary has not moved since the implementation (committed, dirty
+  //    or untracked).
+  if (!Array.isArray(evidence.frozenBoundaryDelta) || evidence.frozenBoundaryDelta.length !== 0) return false;
+  // 4. Exact diary bytes.
   if (evidence.committedMealLogSha256 !== GQA1_MEAL_LOG_SHA256
     || evidence.currentMealLogSha256 !== GQA1_MEAL_LOG_SHA256
     || evidence.committedMealLogBlob !== GQA1_MEAL_LOG_BLOB
     || evidence.currentMealLogBlob !== GQA1_MEAL_LOG_BLOB) return false;
+  // 5. Current Consumer truthfulness boundaries hold on the product sources themselves.
+  if (gqa1TruthfulnessViolations(evidence.truthfulnessSources).length !== 0) return false;
   // 6. The implementation itself added no migration and changed no Favorites authority.
-  if (evidence.migrationDelta.length || evidence.favoritesAuthorityDelta.length) return false;
+  if (!Array.isArray(evidence.migrationDelta) || evidence.migrationDelta.length
+    || !Array.isArray(evidence.favoritesAuthorityDelta) || evidence.favoritesAuthorityDelta.length) return false;
+  // Later commits and validator scripts are not inputs.
   return true;
 }
 
 /** The exact GQA-1 product paths (implementation paths outside scripts/). */
 export const GQA1_PRODUCT_PATHS = Object.freeze(GQA1_IMPLEMENTATION_PATHS.filter((file) => !file.startsWith("scripts/")));
 
-export function isExactGqa1Successor() {
-  try { return matchesExactGqa1Successor(collectGqa1SuccessorEvidence()); }
+export function isExactGqa1Successor(root = process.cwd()) {
+  try { return matchesExactGqa1Successor(collectGqa1SuccessorEvidence(root)); }
   catch { return false; }
 }
 
@@ -123,24 +150,24 @@ export function acceptsFavoritesLocalMealBoundary(source, evidence) {
   return matchesExactGqa1Successor(evidence) && matchesGqa1DiaryContract(source);
 }
 
-export function collectGqa1SuccessorEvidence() {
-  const head = git("rev-parse", "HEAD");
-  const mealLogBytes = readFileSync(GQA1_MEAL_LOG);
+export function collectGqa1SuccessorEvidence(root = process.cwd()) {
+  const git = (...args) => execFileSync("git", args, {
+    cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024
+  }).trim();
   const isAncestor = (ancestor, descendant) => spawnSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
-    cwd: process.cwd(), stdio: "ignore"
+    cwd: root, stdio: "ignore"
   }).status === 0;
+  const head = git("rev-parse", "HEAD");
+  const mealLogBytes = readFileSync(path.join(root, GQA1_MEAL_LOG));
   const historicalAncestry = isAncestor(head, GQA1_PREDECESSOR);
   const implementationInHistory = isAncestor(GQA1_IMPLEMENTATION, head);
   const closureInHistory = isAncestor(GQA1_CLOSURE, head);
   const frozenUntracked = lines(git("ls-files", "--others", "--exclude-standard", "--", ...GQA1_FROZEN_ROOTS));
-  const closureFileCommits = closureInHistory
-    ? lines(git("rev-list", `${GQA1_CLOSURE}..HEAD`, "--", ...GQA1_CLOSURE_PATHS)).map((sha) => ({
-      sha,
-      parent: git("rev-parse", `${sha}^`),
-      subject: git("log", "-1", "--format=%s", sha),
-      paths: lines(git("diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", sha))
-    }))
-    : [];
+  const truthfulnessSources = {};
+  for (const file of GQA1_TRUTHFULNESS_FILES) {
+    const absolute = path.join(root, file);
+    truthfulnessSources[file] = existsSync(absolute) ? readFileSync(absolute, "utf8") : null;
+  }
   return {
     head,
     historicalAncestry,
@@ -149,22 +176,17 @@ export function collectGqa1SuccessorEvidence() {
     implementationParent: git("rev-parse", `${GQA1_IMPLEMENTATION}^`),
     implementationSubject: git("log", "-1", "--format=%s", GQA1_IMPLEMENTATION),
     implementationPaths: lines(git("diff-tree", "--no-commit-id", "--name-only", "-r", GQA1_IMPLEMENTATION)),
-    closureParent: git("rev-parse", `${GQA1_CLOSURE}^`),
-    closureSubject: git("log", "-1", "--format=%s", GQA1_CLOSURE),
-    closurePaths: lines(git("diff-tree", "--no-commit-id", "--name-only", "-r", GQA1_CLOSURE)),
+    closureParent: closureInHistory ? git("rev-parse", `${GQA1_CLOSURE}^`) : null,
+    closureSubject: closureInHistory ? git("log", "-1", "--format=%s", GQA1_CLOSURE) : null,
+    closurePaths: closureInHistory ? lines(git("diff-tree", "--no-commit-id", "--name-only", "-r", GQA1_CLOSURE)) : [],
     frozenBoundaryDelta: implementationInHistory
       ? [...new Set([...lines(git("diff", "--name-only", GQA1_IMPLEMENTATION, "--", ...GQA1_FROZEN_ROOTS)), ...frozenUntracked])]
       : ["<implementation not in history>"],
-    truthfulnessGuardDelta: lines(git("diff", "--name-only", GQA1_IMPLEMENTATION, "--", GQA1_TRUTHFULNESS_GUARD)),
-    closureFileCommits,
-    dirtyClosurePaths: [...new Set([
-      ...lines(git("diff", "--name-only", "HEAD", "--", ...GQA1_CLOSURE_PATHS)),
-      ...lines(git("ls-files", "--others", "--exclude-standard", "--", ...GQA1_CLOSURE_PATHS))
-    ])],
-    committedMealLogSha256: sha256(execFileSync("git", ["show", `${GQA1_IMPLEMENTATION}:${GQA1_MEAL_LOG}`], { stdio: ["ignore", "pipe", "ignore"] })),
+    truthfulnessSources,
+    committedMealLogSha256: sha256(execFileSync("git", ["show", `${GQA1_IMPLEMENTATION}:${GQA1_MEAL_LOG}`], { cwd: root, stdio: ["ignore", "pipe", "ignore"] })),
     currentMealLogSha256: sha256(mealLogBytes),
     committedMealLogBlob: git("rev-parse", `${GQA1_IMPLEMENTATION}:${GQA1_MEAL_LOG}`),
-    currentMealLogBlob: git("hash-object", GQA1_MEAL_LOG),
+    currentMealLogBlob: git("hash-object", "--", GQA1_MEAL_LOG),
     migrationDelta: lines(git("diff", "--name-only", GQA1_PREDECESSOR, GQA1_IMPLEMENTATION, "--", "supabase/migrations")),
     favoritesAuthorityDelta: lines(git("diff", "--name-only", GQA1_PREDECESSOR, GQA1_IMPLEMENTATION, "--", "apps/mobile/features/consumer-favorites"))
   };
