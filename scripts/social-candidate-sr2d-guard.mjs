@@ -18,6 +18,7 @@ import {
 import { BRIDGE_SOURCE_ROOT, collectBridge, renderBridge } from "./build-social-taste-types-bridge.mjs";
 import { proveRepointEquivalence, proveTypeCompatibility, SR2A_FROZEN_BASELINE } from "./social-candidate-sr2d-repoint-equivalence.mjs";
 import { SR2E_SUCCESSOR_PATHS } from "./social-candidate-sr2e-successor-manifest.mjs";
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 import { SR2F_SUCCESSOR_PATHS } from "./social-candidate-sr2f-successor-manifest.mjs";
 import { SR2GA_SUCCESSOR_PATHS } from "./social-candidate-sr2g-a-successor-manifest.mjs";
 import { SR2GB_SUCCESSOR_PATHS } from "./social-candidate-sr2g-b-successor-manifest.mjs";
@@ -238,7 +239,13 @@ try {
     return stripped === baseline;
   })());
   check("15. the handler accepts POST only", /request\.method !== "POST"/.test(handler) && !/"GET"|"PUT"|"PATCH"|"DELETE"|"OPTIONS"/.test(handler));
-  check("16. no CORS or preflight surface is introduced", !/\bcors\b|Access-Control|"OPTIONS"|method === "OPTIONS"/i.test(allExecutable));
+  // GQA-6R C-3 (Planner-approved): the ONLY accepted CORS text is the exact recorded browser wrapper, and only
+  // while the GQA-6R record holds byte-for-byte; the wrapper lives in _shared and never enters the handler.
+  const gqa6rExact = acceptedGqa6rProductPaths(root).length > 0;
+  const corsScanned = gqa6rExact
+    ? allExecutable.replace(/import \{ withConsumerBrowserCors \} from "\.\.\/_shared\/consumer-browser-cors\/index\.ts";/g, "").replace(/Deno\.serve\(withConsumerBrowserCors\(/g, "Deno.serve((")
+    : allExecutable;
+  check("16. no CORS or preflight surface is introduced", !/\bcors\b|Access-Control|"OPTIONS"|method === "OPTIONS"/i.test(corsScanned));
   check("17. actor identity comes only from the verified caller", /authentication\.value\.userId/.test(handler) && !/actorUserId\s*=\s*(body|request|url|headers|params)/i.test(handler));
   check("18. query parameters are rejected", /url\.searchParams\.keys\(\)\]\.length !== 0\) return false/.test(handler));
   check("19. authority-bearing headers are rejected", /AUTHORITY_HEADERS\.some\(\(name\) => request\.headers\.has\(name\)\)/.test(handler));

@@ -10,8 +10,26 @@ import {
 } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackComposition";
 import { mapConsumerRecommendationFeedbackTarget } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackTargetMapper";
 import { ConsumerRecommendationFeedbackUiModel } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackUiModel";
-import { presentU1NextMealResult } from "./nextMealPrototypePresenter";
+import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
+import { preferredCandidateId, presentU1NextMealResult } from "./nextMealPrototypePresenter";
 import type { U1NextMealCandidateViewModel, U1NextMealPrototypeProvider, U1NextMealPrototypeScenario, U1NextMealScreenViewModel } from "./types";
+
+// GQA-6R C-2: live canonical candidates are real restaurant data, so a live composition must not label
+// them as samples/demo ("範例", "示範", "僅供畫面流程確認") or describe a local deterministic mock.
+const LIVE_COMPOSITION = isLiveConsumerComposition(readConsumerPublicRuntimeEnv());
+export const LIVE_NEXT_MEAL_COPY = {
+  badge: "即時餐廳資料",
+  sourceNote: "候選來自目前上架的餐廳菜單",
+  candidateCount: "顯示前 {count} 個候選",
+  bestBadge: "首選",
+  loadingTitle: "正在載入下一餐建議",
+  loadingBody: "正在讀取目前上架的餐廳菜單。",
+  disabledTitle: "下一餐建議暫時無法使用",
+  emptyTitle: "目前沒有可推薦的餐點",
+  errorTitle: "下一餐建議載入失敗",
+  errorBody: "暫時無法載入下一餐建議，請稍後再試。",
+  buddyHint: "會開啟飯友卡表單並帶入這份餐點，由你確認後才建立卡片。"
+} as const;
 
 export function NextMealPrototypeContent({
   entitlement,
@@ -36,7 +54,8 @@ export function NextMealPrototypeContent({
   feedbackCompositionOptions?: MobileConsumerRecommendationFeedbackCompositionOptions;
   currentLocation?: Readonly<{ latitude: number; longitude: number }>;
 }) {
-  const copy = zhTW.mobile.nextMealPrototype;
+  const baseCopy = zhTW.mobile.nextMealPrototype;
+  const copy: Record<keyof typeof baseCopy, string> = LIVE_COMPOSITION ? { ...baseCopy, ...LIVE_NEXT_MEAL_COPY } : baseCopy;
   const [retryCount, setRetryCount] = useState(0);
   const [model, setModel] = useState<U1NextMealScreenViewModel>({ status: "loading" });
   const [intakeStatus, setIntakeStatus] = useState<"idle" | "submitting" | "uncertain" | "failed">("idle");
@@ -81,7 +100,7 @@ export function NextMealPrototypeContent({
     provider
       .getRecommendation({ entitlement, preferredMenuItemId, preferredPrototypeId, scenario, currentLocation })
       .then((result) => {
-        if (active) setModel(presentU1NextMealResult(result));
+        if (active) setModel(presentU1NextMealResult(result, preferredCandidateId(result, preferredMenuItemId)));
       })
       .catch(() => {
         if (active) setModel({ status: "error", message: copy.errorBody, retryable: true });
@@ -133,7 +152,10 @@ export function NextMealPrototypeContent({
 
   const selectedCandidate = model.recommendation.candidates.find((candidate) => candidate.prototypeId === model.selectedCandidateId) ?? null;
   const confirmed = Boolean(selectedCandidate && model.confirmedCandidateId === selectedCandidate.prototypeId);
-  const candidateCountLabel = model.recommendation.entitlement === "premium"
+  const liveData = !model.recommendation.isSampleData;
+  const candidateCountLabel = liveData
+    ? LIVE_NEXT_MEAL_COPY.candidateCount.replace("{count}", String(model.recommendation.visibleCandidateCount))
+    : model.recommendation.entitlement === "premium"
     ? copy.premiumCandidateCount.replace("{count}", String(model.recommendation.visibleCandidateCount))
     : copy.freeCandidateCount.replace("{count}", String(model.recommendation.visibleCandidateCount));
 
@@ -185,10 +207,10 @@ export function NextMealPrototypeContent({
       <View style={styles.badgeRow}>
         <View style={styles.sampleBadge}>
           <Text style={styles.sampleBadgeText}>
-            {model.recommendation.source === "u1_mock" ? copy.sampleBadge : copy.canonicalSampleBadge}
+            {liveData ? LIVE_NEXT_MEAL_COPY.badge : model.recommendation.source === "u1_mock" ? baseCopy.sampleBadge : baseCopy.canonicalSampleBadge}
           </Text>
         </View>
-        <Text style={styles.sourceText}>{copy.presentationOnly}</Text>
+        <Text style={styles.sourceText}>{liveData ? LIVE_NEXT_MEAL_COPY.sourceNote : baseCopy.presentationOnly}</Text>
       </View>
       {model.recommendation.source !== "u1_mock" ? (
         <Text style={styles.canonicalContextNote}>
@@ -217,7 +239,7 @@ export function NextMealPrototypeContent({
                 )}
                 <View style={styles.flex}>
                   <View style={styles.candidateLabelRow}>
-                    <Text style={styles.orderLabel}>{candidate.isBestRecommendation ? copy.bestBadge : copy.alternativeBadge.replace("{index}", String(candidate.ordinal))}</Text>
+                    <Text style={styles.orderLabel}>{candidate.isBestRecommendation ? (liveData ? LIVE_NEXT_MEAL_COPY.bestBadge : baseCopy.bestBadge) : copy.alternativeBadge.replace("{index}", String(candidate.ordinal))}</Text>
                     {selected ? <Text style={styles.selectedBadge}>{copy.selectedBadge}</Text> : null}
                   </View>
                   <Text style={styles.mealName}>{candidate.mealName}</Text>
@@ -309,7 +331,7 @@ function feedbackFlowIdentity(model: Extract<U1NextMealScreenViewModel, { status
   return model.recommendation.candidates.map((candidate) => candidate.prototypeId).join("|");
 }
 
-function feedbackStatusCopy(status: string, copy: typeof zhTW.mobile.nextMealPrototype): string {
+function feedbackStatusCopy(status: string, copy: Record<keyof typeof zhTW.mobile.nextMealPrototype, string>): string {
   if (status === "recorded" || status === "ended") return copy.feedbackRecorded;
   if (status === "failed" || status === "idempotency_conflict" || status === "unauthenticated") return copy.feedbackFailed;
   if (status === "recording" || status === "creating_session" || status === "ending") return copy.feedbackPending;

@@ -12,16 +12,28 @@ const nextMealRecommendationSources = new Set<ConsumerNextMealRecommendationSour
 type RuntimeEnv = Record<string, string | undefined>;
 declare const process: { env: RuntimeEnv };
 
+// GQA-6R C-1: every selector is a literal process.env member so the web export inlines it. Spreading
+// process.env here left every non-inlined selector undefined in the exported web bundle.
 function readEnv(): RuntimeEnv {
-  // Preserve unrelated selectors; statically inline only the shared photo-activation inputs.
-  const unrelatedEnv = typeof process === "undefined" ? {} : process.env;
   return {
-    ...unrelatedEnv,
+    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: process.env.EXPO_PUBLIC_TASTKIND_ENVIRONMENT,
     EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE,
     EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_AUTH_ENABLED,
     EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES_ENABLED,
     EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_SUPABASE_WRITES,
-    EXPO_PUBLIC_TASTKIND_ENVIRONMENT: process.env.EXPO_PUBLIC_TASTKIND_ENVIRONMENT
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORDS_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORDS_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_WRITES_ENABLED,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORD_LIVE_WRITE_OPT_IN,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_LIVE_READ_OPT_IN,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_LIVE_READ_OPT_IN: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_LIVE_READ_OPT_IN,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_CORRECTION_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_CORRECTION_SOURCE,
+    EXPO_PUBLIC_TASTKIND_CONSUMER_NEXT_MEAL_RECOMMENDATION_SOURCE: process.env.EXPO_PUBLIC_TASTKIND_CONSUMER_NEXT_MEAL_RECOMMENDATION_SOURCE,
+    TASTKIND_ENVIRONMENT: typeof process === "undefined" ? undefined : process.env.TASTKIND_ENVIRONMENT
   };
 }
 
@@ -32,15 +44,16 @@ function parseAuthSource(value: string | undefined, issues: string[]): ConsumerM
   return "supabase-disabled";
 }
 
-function parseMealSource(value: string | undefined, issues: string[]): ConsumerMealRecordsSource {
-  if (!value) return "mock";
+function parseMealSource(value: string | undefined, issues: string[], implicitMockAllowed: boolean): ConsumerMealRecordsSource {
+  // A live identity never silently reads mock meal records (GQA-6R C-1B).
+  if (!value) return implicitMockAllowed ? "mock" : "supabase-disabled";
   if (mealSources.has(value as ConsumerMealRecordsSource)) return value as ConsumerMealRecordsSource;
   issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORDS_SOURCE: ${value}`);
   return "supabase-disabled";
 }
 
-function parseDailyNutritionSource(value: string | undefined, issues: string[]): ConsumerDailyNutritionSource {
-  if (!value) return "mock";
+function parseDailyNutritionSource(value: string | undefined, issues: string[], implicitMockAllowed: boolean): ConsumerDailyNutritionSource {
+  if (!value) return implicitMockAllowed ? "mock" : "supabase-disabled";
   if (dailyNutritionSources.has(value as ConsumerDailyNutritionSource)) return value as ConsumerDailyNutritionSource;
   issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE: ${value}`);
   return "supabase-disabled";
@@ -96,11 +109,14 @@ function parseBooleanFlag(name: string, value: string | undefined, issues: strin
 export function getConsumerMealRuntimeFlags(env: RuntimeEnv = readEnv()): ConsumerMealRuntimeFlags {
   const issues: string[] = [];
   const authSource = parseAuthSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE, issues);
+  // GQA-6R C-1B: a live identity (auth source supabase-live) never silently reads mock meal data.
+  const implicitMockAllowed = env.EXPO_PUBLIC_TASTKIND_CONSUMER_AUTH_SOURCE !== "supabase-live";
   const mealRecordsSource = parseMealSource(
     env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_RECORDS_SOURCE ?? env.EXPO_PUBLIC_TASTKIND_CONSUMER_MEAL_SOURCE,
-    issues
+    issues,
+    implicitMockAllowed
   );
-  const dailyNutritionSource = parseDailyNutritionSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE, issues);
+  const dailyNutritionSource = parseDailyNutritionSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_SOURCE, issues, implicitMockAllowed);
   const dailyNutritionWriteSource = parseDailyNutritionWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_DAILY_NUTRITION_WRITE_SOURCE, issues);
   const plannedMealsSource = parsePlannedMealsSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_SOURCE, issues);
   const plannedMealsWriteSource = parsePlannedMealsWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_PLANNED_MEALS_WRITE_SOURCE, issues);

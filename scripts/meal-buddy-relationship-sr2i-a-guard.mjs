@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 import { spawnSync } from "node:child_process";
 import {
   classifySr2iaLifecycle,
@@ -160,7 +161,9 @@ const protectedPaths = [
 const successorMobileContract = lifecycle.phase.startsWith("successor_")
   ? auditSr2ibSources(new Map(SR2IB_SOURCE_PATHS.map((file) => [file, read(file)]))).length === 0
   : true;
-check("54 compact discovery and frozen ranking exposure context candidate-ref authorities remain intact while sanctioned Mobile activation is contract-checked", protectedPaths.every((file) => git(["diff", "--name-only", SR2IA_BASELINE, "--", file]).trim() === "") && successorMobileContract);
+// Exact GQA-6R successor only: its recorded bytes (browser CORS wrapper on the Edge entrypoint) are the sole admitted delta.
+const gqa6rPaths = acceptedGqa6rProductPaths(root);
+check("54 compact discovery and frozen ranking exposure context candidate-ref authorities remain intact while sanctioned Mobile activation is contract-checked", protectedPaths.every((file) => lines(git(["diff", "--name-only", SR2IA_BASELINE, "--", file])).every((p) => gqa6rPaths.includes(p))) && successorMobileContract);
 check("55 no chat message conversation room or notification authority is introduced", !/create (?:table|function)[^;]*(?:chat|message|conversation|room|notification)/i.test(migration));
 check("56 no ranking exposure context interest or premium authority is introduced", !/(ranking_score|exposure_reason|food_context_tag_key|interest_snapshot|entitlement|premium_tier)/i.test(migration + types + service));
 check("57 lifecycle migration inventory is exact", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/migrations/")), lifecycle.phase.startsWith("successor_") ? [] : [SR2IA_MIGRATION]));

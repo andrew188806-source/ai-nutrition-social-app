@@ -12,6 +12,7 @@ import {
   GQA2_RUNTIME_PATHS, GQA2_SUBJECT, collectGqa2SuccessorEvidence, isAcceptedGqa2RuntimePath,
   matchesExactGqa2Successor
 } from "./gqa-2-successor-manifest.mjs";
+import { GQA6R_PRODUCT_PATHS } from "./gqa6r-stable-demo-repair-manifest.mjs";
 
 const evidence = collectGqa2SuccessorEvidence();
 assert.equal(matchesExactGqa2Successor(evidence), true, "the durable GQA-2 successor holds for the current tree");
@@ -90,6 +91,13 @@ reject("GQA-5 repair path with changed bytes", (e) => { e.laterProductDelta = [R
 reject("extra migration beside the exact GQA-5 repair", (e) => { e.laterProductDelta = [REPAIR, "supabase/migrations/20990101000000_extra.sql"]; e.gqa5RepairExact = true; });
 reject("frozen runtime file change beside the exact GQA-5 repair", (e) => { e.laterProductDelta = [REPAIR, "apps/restaurant-web/app/vip/page.tsx"]; e.gqa5RepairExact = true; });
 reject("exact-repair flag cannot admit an unrelated migration", (e) => { e.laterProductDelta = ["supabase/migrations/20990101000000_extra.sql"]; e.gqa5RepairExact = true; });
+// GQA-6R exact successor: only the recorded Stable Demo repair product paths, only with exact bytes.
+assert.equal(matchesExactGqa2Successor({ ...structuredClone(evidence), laterProductDelta: [...GQA6R_PRODUCT_PATHS], gqa5RepairExact: false, gqa6rRepairExact: true }), true, "exact GQA-6R repair paths are accepted");
+recognized.push("exact GQA-6R Stable Demo repair");
+reject("GQA-6R repair paths with changed bytes", (e) => { e.laterProductDelta = [...GQA6R_PRODUCT_PATHS]; e.gqa5RepairExact = false; e.gqa6rRepairExact = false; });
+reject("extra Admin path beside the exact GQA-6R repair", (e) => { e.laterProductDelta = [...GQA6R_PRODUCT_PATHS, "apps/admin-web/app/admin/extra/page.tsx"]; e.gqa5RepairExact = false; e.gqa6rRepairExact = true; });
+reject("extra migration beside the exact GQA-6R repair", (e) => { e.laterProductDelta = [...GQA6R_PRODUCT_PATHS, "supabase/migrations/20990101000000_extra.sql"]; e.gqa5RepairExact = false; e.gqa6rRepairExact = true; });
+reject("GQA-6R flag cannot admit an unrelated product path", (e) => { e.laterProductDelta = ["apps/mobile/app/unrelated.tsx"]; e.gqa5RepairExact = false; e.gqa6rRepairExact = true; });
 
 // ---------------------------------------------------------------- real-history topology proofs
 // A shared clone reads this repository's objects and writes only its own. Commits there are fixtures:

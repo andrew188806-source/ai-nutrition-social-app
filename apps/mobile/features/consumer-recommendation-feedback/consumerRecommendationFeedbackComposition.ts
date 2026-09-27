@@ -1,3 +1,4 @@
+import { readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import { createAsyncStorageConsumerAuthStorage } from "../consumer-auth/asyncStorageConsumerAuthStorage";
 import { createConsumerAuthPort } from "../consumer-auth/factories";
 import { getConsumerRuntimeFlags } from "../consumer-auth/featureFlags";
@@ -96,7 +97,8 @@ function isUuidV4(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return readConsumerPublicRuntimeEnv();
 }

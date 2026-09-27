@@ -12,7 +12,7 @@ export function NutritionDetailReport({ summary }: { summary: TodayNutritionSumm
   return (
     <Card>
       <SectionHeader title={t.reportTitle} subtitle={t.reportSubtitle} />
-      {summary.dataQuality === "estimated" ? <Text style={styles.estimatedNote}>{zhTW.mobile.todayNutritionSummary.estimatedNote}</Text> : null}
+      {summary.mealCount > 0 && summary.dataQuality === "estimated" ? <Text style={styles.estimatedNote}>{zhTW.mobile.todayNutritionSummary.estimatedNote}</Text> : null}
       <View style={styles.grid}>
         {items.map((item) => (
           <View key={item.key} style={[styles.itemCard, item.status !== "good" && styles.itemCardWatch]}>

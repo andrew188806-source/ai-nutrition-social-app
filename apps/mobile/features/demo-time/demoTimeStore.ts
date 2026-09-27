@@ -3,6 +3,7 @@
 // This mock clock lets MVP testers verify daily reset, expiry, and settlement flows without changing device time.
 
 import { storage } from "../../lib/storage";
+import { readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import { mealBuddyTaipeiDateKey } from "../meal-buddy-candidates/taipeiDiningDate";
 
 const dayMs = 24 * 60 * 60 * 1000;
@@ -37,9 +38,11 @@ export function resetDemoTime() {
   return getEffectiveCurrentDate();
 }
 
+// GQA-6R C-1: literal build-inlined configuration (an exported web bundle runs with NODE_ENV=production,
+// so the demo clock stays off in every Stable deployment).
 export function isDemoTestingEnabled() {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: { NODE_ENV?: string; EXPO_PUBLIC_ENABLE_DEMO_TOOLS?: string } } };
-  return maybeProcess.process?.env?.EXPO_PUBLIC_ENABLE_DEMO_TOOLS !== "false" && maybeProcess.process?.env?.NODE_ENV !== "production";
+  const env = readConsumerPublicRuntimeEnv();
+  return env.EXPO_PUBLIC_ENABLE_DEMO_TOOLS !== "false" && env.NODE_ENV !== "production";
 }
 
 function readStoredDate() {

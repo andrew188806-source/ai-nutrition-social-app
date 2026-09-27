@@ -1,6 +1,7 @@
 import { storage } from "../../lib/storage";
 import { consumerUserScopedStorageKey, getConsumerClientStateScope, subscribeConsumerClientStateScope } from "../consumer-auth/clientStateScope";
 import { getEffectiveCurrentDate } from "../demo-time";
+import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import { buildMealBuddyCardFromProfile } from "./mealBuddyCardMock";
 import { getMockChatThreadByName, getMockProfile, mockChatThreads } from "./mealBuddyFlowMock";
 import { getMealBuddyCardId, type CardId, type ChatId, type MatchId, type MealBuddyCard, type RankedMealBuddyCandidate, type TableId, type UserId } from "./types";
@@ -68,7 +69,19 @@ const defaultGroupTableId = "table-balanced-dinner";
 const defaultGroupChatId = "chat-group-table-balanced-dinner";
 const defaultGroupTableName = "均衡晚餐桌";
 
+// GQA-6R C-5: the default chats/invitations below are DEMO_ONLY mock fixtures. A live Consumer identity must
+// never see invented invitations, "matched" buddies or chat previews beside its real relationships, so for a
+// live composition the defaults are empty and any previously persisted default entry is dropped. Non-live
+// demo compositions keep the historical behaviour unchanged.
+function localSocialDemoAllowed() {
+  return !isLiveConsumerComposition(readConsumerPublicRuntimeEnv());
+}
+
 function buildDefaultChats(): MealBuddyChatPreview[] {
+  return localSocialDemoAllowed() ? buildDemoDefaultChats() : [];
+}
+
+function buildDemoDefaultChats(): MealBuddyChatPreview[] {
   return mockChatThreads
     .filter((thread) => thread.buddyId !== "ivy")
     .map((thread, index) => ({
@@ -97,6 +110,10 @@ function buildDefaultChats(): MealBuddyChatPreview[] {
 }
 
 function buildDefaultInvites(): MealBuddyInvitePreview[] {
+  return localSocialDemoAllowed() ? buildDemoDefaultInvites() : [];
+}
+
+function buildDemoDefaultInvites(): MealBuddyInvitePreview[] {
   const myDinnerCard = buildMealBuddyCardFromProfile("current-user", "restaurant-mori-veggie", "dish-mori-1", {
     sourceType: "ai_recommendation",
     intentionType: "chat_first",
@@ -655,6 +672,14 @@ function persistSocialState() {
 }
 
 function mergeMissingDefaultChats(currentChats: MealBuddyChatPreview[]) {
+  if (!localSocialDemoAllowed()) {
+    const demo = buildDemoDefaultChats();
+    const demoIds = new Set(demo.map((chat) => chat.id));
+    const demoBuddies = new Set(demo.map((chat) => chat.buddyId).filter(Boolean));
+    const demoTables = new Set(demo.map((chat) => chat.tableId).filter(Boolean));
+    return currentChats.filter(isUsableStoredChat)
+      .filter((chat) => !demoIds.has(chat.id) && !(chat.buddyId && demoBuddies.has(chat.buddyId)) && !(chat.tableId && demoTables.has(chat.tableId)));
+  }
   const defaultChats = buildDefaultChats();
   const canonicalDirectChats = new Map(defaultChats.filter((chat) => chat.threadType === "direct" && chat.buddyId).map((chat) => [chat.buddyId, chat]));
   const canonicalGroupChats = new Map(defaultChats.filter((chat) => chat.threadType === "group" && chat.tableId).map((chat) => [chat.tableId, chat]));
@@ -682,6 +707,10 @@ function mergeMissingDefaultChats(currentChats: MealBuddyChatPreview[]) {
 }
 
 function mergeMissingDefaultInvites(currentInvites: MealBuddyInvitePreview[]) {
+  if (!localSocialDemoAllowed()) {
+    const demoIds = new Set(buildDemoDefaultInvites().map((invitePreview) => invitePreview.id));
+    return currentInvites.filter(isUsableStoredInvite).filter((invitePreview) => !demoIds.has(invitePreview.id));
+  }
   const mergedById = new Map(currentInvites.filter(isUsableStoredInvite).map((invitePreview) => [invitePreview.id, invitePreview]));
   for (const invitePreview of buildDefaultInvites()) {
     if (!mergedById.has(invitePreview.id)) {

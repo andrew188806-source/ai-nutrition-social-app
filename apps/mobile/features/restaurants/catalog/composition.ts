@@ -1,3 +1,4 @@
+import { readConsumerPublicRuntimeEnv } from "../../consumer-runtime-config/consumerPublicRuntimeEnv";
 import { createAsyncStorageConsumerAuthStorage } from "../../consumer-auth/asyncStorageConsumerAuthStorage";
 import { getConsumerRuntimeFlags } from "../../consumer-auth/featureFlags";
 import { deriveLiveSupabaseClientFlags } from "../../consumer-auth/liveClientCompositionFlags";
@@ -44,7 +45,8 @@ export function createMobileRestaurantCatalogComposition(env: RuntimeEnv = readE
   }
 }
 
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return readConsumerPublicRuntimeEnv();
 }

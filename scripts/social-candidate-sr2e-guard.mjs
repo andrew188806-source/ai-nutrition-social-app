@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 // SR-2E local guard. Read-only and local: no network, database, credentials or deployment.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -270,7 +271,10 @@ try {
   check("59. SR-2E adds no migration", SR2E_SUCCESSOR_MIGRATION === null && !SR2E_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/migrations/")));
   check("60. SR-2E changes no backend path at all", !SR2E_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/")));
   const sr2eFrozenBackend = frozenBackendFiles.filter((file) => !SR2GB_SUCCESSOR_PATHS.includes(file) && !SR2GC_SUCCESSOR_PATHS.includes(file) && !SR2GBR1_SUCCESSOR_PATHS.includes(file) && !SR2GCR1_SUCCESSOR_PATHS.includes(file) && !SR2CR1_SUCCESSOR_PATHS.includes(file) && !SR2GD_SUCCESSOR_PATHS.includes(file) && !SR2GE1_SUCCESSOR_PATHS.includes(file) && !SR2GE2_SUCCESSOR_PATHS.includes(file) && !SR2GF_SUCCESSOR_PATHS.includes(file));
-  check("61. every frozen SR-2D backend blob outside an enumerated successor is byte-unchanged", sr2eFrozenBackend.every((file) => blobSha256(file, SR2E_BASELINE) === sha256(file)), sr2eFrozenBackend.filter((file) => blobSha256(file, SR2E_BASELINE) !== sha256(file)));
+  // GQA-6R: the exact Stable Demo repair paths are an enumerated successor while its record holds.
+  const gqa6rPaths61 = acceptedGqa6rProductPaths(root);
+  const sr2eFrozenOutsideGqa6r = sr2eFrozenBackend.filter((file) => !gqa6rPaths61.includes(file));
+  check("61. every frozen SR-2D backend blob outside an enumerated successor is byte-unchanged", sr2eFrozenOutsideGqa6r.every((file) => blobSha256(file, SR2E_BASELINE) === sha256(file)), sr2eFrozenOutsideGqa6r.filter((file) => blobSha256(file, SR2E_BASELINE) !== sha256(file)));
   check("62. the repository migration set is unchanged from the baseline apart from the enumerated SR-2G-A migration", exact(fs.readdirSync(path.join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).filter((f) => !SR2GA_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GB_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GC_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GBR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GCR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2CR1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GD_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE1_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GE2_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`) && !SR2GF_SUCCESSOR_PATHS.includes(`supabase/migrations/${f}`)).sort(), lines(git(["ls-tree", "-r", "--name-only", SR2E_BASELINE, "--", "supabase/migrations"])).map((f) => path.basename(f))));
   check("63. no Meal Buddy or Nearby demo path is modified", !SR2E_SUCCESSOR_PATHS.some((file) => /meal-buddy|meal-buddies|community-profile|app\/social\.tsx/.test(file)));
 

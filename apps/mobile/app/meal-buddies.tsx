@@ -985,7 +985,10 @@ function InlineMealBuddyCardForm({
     <View style={styles.inlineForm}>
       <SectionTitle
         title={mode === "create" ? "建立飯友卡" : "編輯飯友卡"}
-        subtitle={prefill ? "已帶入下一餐範例；確認並主動儲存前，不會建立飯友卡或使用推薦額度。" : "補上這次想吃的餐點、時間與地區，系統會用同一套飯友卡去推薦。"}
+        subtitle={prefill?.selectedRecommendation
+          // GQA-6R C-2: a canonical selection is a real restaurant menu item, not a sample.
+          ? "已帶入你選擇的下一餐；確認並主動儲存前，不會建立飯友卡或使用推薦額度。"
+          : prefill ? "已帶入下一餐範例；確認並主動儲存前，不會建立飯友卡或使用推薦額度。" :"補上這次想吃的餐點、時間與地區，系統會用同一套飯友卡去推薦。"}
       />
       <View style={styles.formGrid}>
         <LabeledInput label="餐點名稱" value={foodName} onChangeText={setFoodName} placeholder="例如：雞胸便當" />

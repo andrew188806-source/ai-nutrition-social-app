@@ -7,6 +7,7 @@ import {
   MRB_COMMIT, MRB_CLOSURE, MRB_CLOSURE_SUBJECT, MRB_PREDECESSOR, MRB_PRODUCT_PATHS, MRB_PRODUCT_SHA256, MRB_ROUTE
 } from "./admin-mrb-successor-manifest.mjs";
 import { GQA2_RUNTIME } from "./gqa-2-successor-manifest.mjs";
+import { GQA6R_PRODUCT_PATHS } from "./gqa6r-stable-demo-repair-manifest.mjs";
 
 const DETAIL = "apps/admin-web/app/admin/management/staff/[staffAccountId]/page.tsx";
 const pushed = collectMrbSuccessorEvidence();
@@ -99,5 +100,14 @@ assert.equal(matchesExactMrbSuccessor(altered(pushed, withRepair(true))), true, 
 reject("pushed: GQA-5 repair migration with changed bytes", withRepair(false));
 reject("pushed: extra migration beside the exact GQA-5 repair", withRepair(true, ["supabase/migrations/20990101000000_extra.sql"]));
 reject("pushed: Admin server change beside the exact GQA-5 repair", withRepair(true, ["apps/admin-web/server/adminStepUpMutationRuntime.ts"]));
+// GQA-6R exact successor: only the recorded Stable Demo repair product paths, only with exact bytes.
+const withGqa6r = (exact, extra = []) => (e) => {
+  e.later = { ...e.later, gqa6r: exact };
+  for (const p of [...GQA6R_PRODUCT_PATHS, ...extra]) { if (!e.productDelta.includes(p)) e.productDelta.push(p); if (!e.sinceMrbPaths.includes(p)) e.sinceMrbPaths.push(p); }
+};
+assert.equal(matchesExactMrbSuccessor(altered(pushed, withGqa6r(true))), true, "the exact GQA-6R Stable Demo repair is recognized after the chain");
+reject("pushed: GQA-6R repair paths with changed bytes", withGqa6r(false));
+reject("pushed: extra Consumer path beside the exact GQA-6R repair", withGqa6r(true, ["apps/mobile/app/unrelated.tsx"]));
+reject("pushed: Admin server change beside the exact GQA-6R repair", withGqa6r(true, ["apps/admin-web/server/adminStepUpMutationRuntime.ts"]));
 assert.equal(pushed.sourceSha256[DETAIL], GQA2_RUNTIME[DETAIL].sha256, "the staff detail page is exactly the accepted GQA-2 bytes");
 console.log(`ADMIN-MRB exact successor mutation proof PASS (${rejected} mutations rejected; local and pushed shapes recognized)`);

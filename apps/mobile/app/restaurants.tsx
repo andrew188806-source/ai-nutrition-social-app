@@ -26,6 +26,7 @@ import { useRestaurantAbout } from "../features/restaurants/about";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
+import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../features/consumer-runtime-config/consumerPublicRuntimeEnv";
 
 const diningGoals = ["都可以", "均衡餐", "高蛋白", "低熱量", "低碳水", "清爽型", "飽足型", "蔬食", "放縱餐"];
 const cuisineTypes = ["都可以", "日式", "中式", "韓式", "美式", "義式", "泰式", "港式", "火鍋", "燒肉", "咖啡廳", "早午餐"];
@@ -386,18 +387,24 @@ export default function RestaurantsScreen() {
       </View>
 
 
-      <SnowCard tone="primary">
-        <SnowSectionHeader title={zhTW.mobile.restaurants.sponsoredTitle} subtitle={zhTW.mobile.restaurants.sponsoredBody} />
-        <View style={styles.snowChipRow}>
-          <Chip label={zhTW.common.sponsored} />
-        </View>
-      </SnowCard>
+      {/* GQA-6R C-2: the sponsored card and the "3 位飲食相近的人" card are static demo copy with no sponsor and no
+          social data behind them; a live Consumer identity never sees them. */}
+      {LIVE_COMPOSITION ? null : (
+        <>
+          <SnowCard tone="primary">
+            <SnowSectionHeader title={zhTW.mobile.restaurants.sponsoredTitle} subtitle={zhTW.mobile.restaurants.sponsoredBody} />
+            <View style={styles.snowChipRow}>
+              <Chip label={zhTW.common.sponsored} />
+            </View>
+          </SnowCard>
 
-      <SnowCard tone="ai">
-        <SnowSectionHeader title={zhTW.mobile.restaurants.socialMatchTitle} subtitle={zhTW.mobile.restaurants.socialMatchBody} />
-        <Text style={styles.privacyNote}>{zhTW.mobile.restaurants.socialPrivacyNote}</Text>
-        <SecondaryButton icon="buddies" label={zhTW.mobile.restaurants.socialMatchCta} onPress={() => router.push("/social")} />
-      </SnowCard>
+          <SnowCard tone="ai">
+            <SnowSectionHeader title={zhTW.mobile.restaurants.socialMatchTitle} subtitle={zhTW.mobile.restaurants.socialMatchBody} />
+            <Text style={styles.privacyNote}>{zhTW.mobile.restaurants.socialPrivacyNote}</Text>
+            <SecondaryButton icon="buddies" label={zhTW.mobile.restaurants.socialMatchCta} onPress={() => router.push("/social")} />
+          </SnowCard>
+        </>
+      )}
 
       <SnowCard tone="primary">
         <SnowSectionHeader title={zhTW.mobile.groupTables.deferredTitle} subtitle={zhTW.mobile.groupTables.deferredStatus} />
@@ -939,9 +946,12 @@ function getRecommendationReasons(restaurant: Restaurant, filters: RestaurantFil
   if (filters.mode === "custom" && filters.diningGoal !== "都可以") {
     reasons.push(`符合「${filters.diningGoal}」偏好`);
   }
-  reasons.push(getSocialHint(restaurant));
+  // GQA-6R C-2: the social hint is a fixed sentence with no favourites/buddy data behind it; live identities never get it.
+  if (!LIVE_COMPOSITION) reasons.push(getSocialHint(restaurant));
   return reasons.slice(0, 4);
 }
+
+const LIVE_COMPOSITION = isLiveConsumerComposition(readConsumerPublicRuntimeEnv());
 
 function getSocialHint(restaurant: Restaurant) {
   if (restaurant.name === "好初健康碗") return "附近有 3 位飯友可能也想吃";

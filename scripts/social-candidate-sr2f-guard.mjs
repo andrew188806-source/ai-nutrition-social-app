@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 // SR-2F local guard. Read-only and local: no network, database, credentials or deployment.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -230,7 +231,10 @@ try {
   // --- backend and frozen-surface immutability -------------------------------------------------
   check("11. SR-2F adds no migration", SR2F_SUCCESSOR_MIGRATION === null && !SR2F_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/migrations/")));
   check("12. SR-2F changes no backend path at all", !SR2F_SUCCESSOR_PATHS.some((file) => file.startsWith("supabase/")) && !changedPaths.some((file) => file.startsWith("supabase/")), { backend: changedPaths.filter((file) => file.startsWith("supabase/")) });
-  check("13. every frozen SR-2E feature file is byte-identical to the SR-2E freeze commit", SR2F_FROZEN_FEATURE_PATHS.every((file) => sha256(file) === blobSha256(file, SR2F_BASELINE)), { drifted: SR2F_FROZEN_FEATURE_PATHS.filter((file) => sha256(file) !== blobSha256(file, SR2F_BASELINE)) });
+  // GQA-6R: the exact Stable Demo repair (literal build-inlined flag read) is an enumerated successor.
+  const gqa6rPaths13 = acceptedGqa6rProductPaths(root);
+  const sr2fFrozen = SR2F_FROZEN_FEATURE_PATHS.filter((file) => !gqa6rPaths13.includes(file));
+  check("13. every frozen SR-2E feature file is byte-identical to the SR-2E freeze commit", sr2fFrozen.every((file) => sha256(file) === blobSha256(file, SR2F_BASELINE)), { drifted: sr2fFrozen.filter((file) => sha256(file) !== blobSha256(file, SR2F_BASELINE)) });
   check("14. the SR-2E runtime binding seam itself is unmodified", sha256(SR2F_RUNTIME_BINDING) === blobSha256(SR2F_RUNTIME_BINDING, SR2F_BASELINE));
   check("15. the consumer runtime provider is unmodified", sha256(PROVIDER) === blobSha256(PROVIDER, SR2F_BASELINE));
   check("16. exactly one application file differs from the frozen baseline", exact(changedPaths.filter((file) => !file.startsWith("scripts/") && file !== "package.json"), [SR2F_COMPOSITION]), { changedPaths });

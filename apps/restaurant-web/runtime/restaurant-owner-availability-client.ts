@@ -1,3 +1,4 @@
+import { ownerControlReadFetch } from "./restaurant-owner-control-read-limiter";
 import {
   isRecord, parsePreviewResult, isAvailability, isDecimalVersion,
   type Availability, type RestaurantOwnerAvailabilityPreview,
@@ -43,7 +44,7 @@ function endpoint(branchId: string, branchMenuItemId: string): string {
 
 export async function previewAvailability(branchId: string, branchMenuItemId: string): Promise<RestaurantOwnerAvailabilityPreview> {
   try {
-    const response = await fetch(endpoint(branchId, branchMenuItemId), {
+    const response = await ownerControlReadFetch(endpoint(branchId, branchMenuItemId), {
       method: "GET", credentials: "same-origin", cache: "no-store", redirect: "error",
       headers: { Accept: "application/json" }
     });

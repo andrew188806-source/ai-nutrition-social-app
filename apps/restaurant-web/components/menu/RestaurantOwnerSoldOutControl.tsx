@@ -1,4 +1,5 @@
 "use client";
+import { ownerControlReadFetch } from "../../runtime/restaurant-owner-control-read-limiter";
 
 import { useEffect, useState } from "react";
 import type {
@@ -43,7 +44,7 @@ export function RestaurantOwnerSoldOutControl(props: Props) {
 
   async function refresh(): Promise<RestaurantOwnerSoldOutPreview> {
     try {
-      const response = await fetch(endpoint(props.branchId, props.branchMenuItemId), {
+      const response = await ownerControlReadFetch(endpoint(props.branchId, props.branchMenuItemId), {
         method: "GET",
         credentials: "same-origin",
         cache: "no-store",

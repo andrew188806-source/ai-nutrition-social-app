@@ -34,10 +34,11 @@ export function TodayNutritionSummaryCard({
         {t.remainingPrefix} <Text style={styles.remainingValue}>{summary.remainingCalories}</Text> {t.remainingUnit}
       </Text>
       <View style={styles.vegetableRow}>
-        <Icon name="leaf" size={14} color={summary.hasVegetable ? colors.green : colors.amber} />
-        <Text style={styles.vegetableText}>{summary.hasVegetable ? t.vegetableGood : t.vegetableLow}</Text>
+        <Icon name="leaf" size={14} color={summary.mealCount === 0 || summary.hasVegetable ? colors.green : colors.amber} />
+        {/* GQA-6R C-2: with no recorded meal there is no evidence of a vegetable gap or of estimated macros. */}
+        <Text style={styles.vegetableText}>{summary.mealCount === 0 ? "今天還沒有飲食紀錄。" : summary.hasVegetable ? t.vegetableGood : t.vegetableLow}</Text>
       </View>
-      {summary.dataQuality === "estimated" ? <Text style={styles.estimatedNote}>{t.estimatedNote}</Text> : null}
+      {summary.mealCount > 0 && summary.dataQuality === "estimated" ? <Text style={styles.estimatedNote}>{t.estimatedNote}</Text> : null}
       {summary.reminders.length > 0 ? (
         <View style={styles.reminderList}>
           {summary.reminders.map((reminder) => (

@@ -1,0 +1,1901 @@
+{
+  "version": 1,
+  "target_project": "msbgnnoorsoefuiwluye",
+  "target_project_name": "tastkind-development",
+  "created_by_fixture_version": "gqa6r-demo-fixtures-v1",
+  "demo_restaurants": [
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-01",
+      "label": "[DEMO] 好廚測試餐館 01",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-01",
+        "label": "[DEMO] 示範分店 01",
+        "parent_id": "gqa6r-demo-restaurant-01"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-01",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-01"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-01-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-01"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-01-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-01"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-02",
+      "label": "[DEMO] 好廚測試餐館 02",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-02",
+        "label": "[DEMO] 示範分店 02",
+        "parent_id": "gqa6r-demo-restaurant-02"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-02",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-02"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-02-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-02"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-02-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-02"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-03",
+      "label": "[DEMO] 好廚測試餐館 03",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-03",
+        "label": "[DEMO] 示範分店 03",
+        "parent_id": "gqa6r-demo-restaurant-03"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-03",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-03"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-03-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-03"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-03-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-03"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-04",
+      "label": "[DEMO] 好廚測試餐館 04",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-04",
+        "label": "[DEMO] 示範分店 04",
+        "parent_id": "gqa6r-demo-restaurant-04"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-04",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-04"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-04-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-04"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-04-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-04"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-05",
+      "label": "[DEMO] 好廚測試餐館 05",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-05",
+        "label": "[DEMO] 示範分店 05",
+        "parent_id": "gqa6r-demo-restaurant-05"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-05",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-05"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-05-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-05"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-05-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-05"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-06",
+      "label": "[DEMO] 好廚測試餐館 06",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-06",
+        "label": "[DEMO] 示範分店 06",
+        "parent_id": "gqa6r-demo-restaurant-06"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-06",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-06"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-06-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-06"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-06-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-06"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-07",
+      "label": "[DEMO] 好廚測試餐館 07",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-07",
+        "label": "[DEMO] 示範分店 07",
+        "parent_id": "gqa6r-demo-restaurant-07"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-07",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-07"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-07-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-07"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-07-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-07"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-08",
+      "label": "[DEMO] 好廚測試餐館 08",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-08",
+        "label": "[DEMO] 示範分店 08",
+        "parent_id": "gqa6r-demo-restaurant-08"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-08",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-08"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-08-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-08"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-08-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-08"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-09",
+      "label": "[DEMO] 好廚測試餐館 09",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-09",
+        "label": "[DEMO] 示範分店 09",
+        "parent_id": "gqa6r-demo-restaurant-09"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-09",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-09"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-09-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-09"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-09-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-09"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-10",
+      "label": "[DEMO] 好廚測試餐館 10",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-10",
+        "label": "[DEMO] 示範分店 10",
+        "parent_id": "gqa6r-demo-restaurant-10"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-10",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-10"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-10-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-10"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-10-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-10"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-11",
+      "label": "[DEMO] 好廚測試餐館 11",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-11",
+        "label": "[DEMO] 示範分店 11",
+        "parent_id": "gqa6r-demo-restaurant-11"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-11",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-11"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-11-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-11"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-11-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-11"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-12",
+      "label": "[DEMO] 好廚測試餐館 12",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-12",
+        "label": "[DEMO] 示範分店 12",
+        "parent_id": "gqa6r-demo-restaurant-12"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-12",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-12"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-12-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-12"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-12-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-12"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-13",
+      "label": "[DEMO] 好廚測試餐館 13",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-13",
+        "label": "[DEMO] 示範分店 13",
+        "parent_id": "gqa6r-demo-restaurant-13"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-13",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-13"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-13-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-13"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-13-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-13"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-14",
+      "label": "[DEMO] 好廚測試餐館 14",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-14",
+        "label": "[DEMO] 示範分店 14",
+        "parent_id": "gqa6r-demo-restaurant-14"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-14",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-14"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-14-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-14"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-14-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-14"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-15",
+      "label": "[DEMO] 好廚測試餐館 15",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-15",
+        "label": "[DEMO] 示範分店 15",
+        "parent_id": "gqa6r-demo-restaurant-15"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-15",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-15"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-15-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-15"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-15-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-15"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-16",
+      "label": "[DEMO] 好廚測試餐館 16",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-16",
+        "label": "[DEMO] 示範分店 16",
+        "parent_id": "gqa6r-demo-restaurant-16"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-16",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-16"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-16-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-16"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-16-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-16"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-17",
+      "label": "[DEMO] 好廚測試餐館 17",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-17",
+        "label": "[DEMO] 示範分店 17",
+        "parent_id": "gqa6r-demo-restaurant-17"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-17",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-17"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-17-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-17"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-17-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-17"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-18",
+      "label": "[DEMO] 好廚測試餐館 18",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-18",
+        "label": "[DEMO] 示範分店 18",
+        "parent_id": "gqa6r-demo-restaurant-18"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-18",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-18"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-18-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-18"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-18-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-18"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-19",
+      "label": "[DEMO] 好廚測試餐館 19",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-19",
+        "label": "[DEMO] 示範分店 19",
+        "parent_id": "gqa6r-demo-restaurant-19"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-19",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-19"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-19-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-19"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-19-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-19"
+        }
+      ]
+    },
+    {
+      "kind": "DEMO_RESTAURANT",
+      "id": "gqa6r-demo-restaurant-20",
+      "label": "[DEMO] 好廚測試餐館 20",
+      "lifecycle": "persistent",
+      "branch": {
+        "kind": "DEMO_BRANCH",
+        "id": "gqa6r-demo-branch-20",
+        "label": "[DEMO] 示範分店 20",
+        "parent_id": "gqa6r-demo-restaurant-20"
+      },
+      "menu": {
+        "kind": "DEMO_MENU",
+        "id": "gqa6r-demo-menu-20",
+        "label": "[DEMO] 主菜單",
+        "parent_id": "gqa6r-demo-restaurant-20"
+      },
+      "categories": [
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-20-1",
+          "label": "[DEMO] 能量餐",
+          "parent_id": "gqa6r-demo-menu-20"
+        },
+        {
+          "kind": "DEMO_CATEGORY",
+          "id": "gqa6r-demo-category-20-2",
+          "label": "[DEMO] 輕食",
+          "parent_id": "gqa6r-demo-menu-20"
+        }
+      ]
+    }
+  ],
+  "demo_menu_items": [
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-01-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-01",
+      "parent_category_id": "gqa6r-demo-category-01-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-01-1",
+      "branch_id": "gqa6r-demo-branch-01",
+      "nutrition_id": "gqa6r-demo-nutrition-01-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-01-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-01",
+      "parent_category_id": "gqa6r-demo-category-01-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-01-2",
+      "branch_id": "gqa6r-demo-branch-01",
+      "nutrition_id": "gqa6r-demo-nutrition-01-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-01-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-01",
+      "parent_category_id": "gqa6r-demo-category-01-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-01-3",
+      "branch_id": "gqa6r-demo-branch-01",
+      "nutrition_id": "gqa6r-demo-nutrition-01-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-02-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-02",
+      "parent_category_id": "gqa6r-demo-category-02-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-02-1",
+      "branch_id": "gqa6r-demo-branch-02",
+      "nutrition_id": "gqa6r-demo-nutrition-02-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-02-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-02",
+      "parent_category_id": "gqa6r-demo-category-02-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-02-2",
+      "branch_id": "gqa6r-demo-branch-02",
+      "nutrition_id": "gqa6r-demo-nutrition-02-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-02-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-02",
+      "parent_category_id": "gqa6r-demo-category-02-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-02-3",
+      "branch_id": "gqa6r-demo-branch-02",
+      "nutrition_id": "gqa6r-demo-nutrition-02-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-03-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-03",
+      "parent_category_id": "gqa6r-demo-category-03-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-03-1",
+      "branch_id": "gqa6r-demo-branch-03",
+      "nutrition_id": "gqa6r-demo-nutrition-03-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-03-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-03",
+      "parent_category_id": "gqa6r-demo-category-03-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-03-2",
+      "branch_id": "gqa6r-demo-branch-03",
+      "nutrition_id": "gqa6r-demo-nutrition-03-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-03-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-03",
+      "parent_category_id": "gqa6r-demo-category-03-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-03-3",
+      "branch_id": "gqa6r-demo-branch-03",
+      "nutrition_id": "gqa6r-demo-nutrition-03-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-04-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-04",
+      "parent_category_id": "gqa6r-demo-category-04-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-04-1",
+      "branch_id": "gqa6r-demo-branch-04",
+      "nutrition_id": "gqa6r-demo-nutrition-04-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-04-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-04",
+      "parent_category_id": "gqa6r-demo-category-04-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-04-2",
+      "branch_id": "gqa6r-demo-branch-04",
+      "nutrition_id": "gqa6r-demo-nutrition-04-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-04-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-04",
+      "parent_category_id": "gqa6r-demo-category-04-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-04-3",
+      "branch_id": "gqa6r-demo-branch-04",
+      "nutrition_id": "gqa6r-demo-nutrition-04-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-05-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-05",
+      "parent_category_id": "gqa6r-demo-category-05-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-05-1",
+      "branch_id": "gqa6r-demo-branch-05",
+      "nutrition_id": "gqa6r-demo-nutrition-05-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-05-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-05",
+      "parent_category_id": "gqa6r-demo-category-05-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-05-2",
+      "branch_id": "gqa6r-demo-branch-05",
+      "nutrition_id": "gqa6r-demo-nutrition-05-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-05-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-05",
+      "parent_category_id": "gqa6r-demo-category-05-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-05-3",
+      "branch_id": "gqa6r-demo-branch-05",
+      "nutrition_id": "gqa6r-demo-nutrition-05-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-06-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-06",
+      "parent_category_id": "gqa6r-demo-category-06-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-06-1",
+      "branch_id": "gqa6r-demo-branch-06",
+      "nutrition_id": "gqa6r-demo-nutrition-06-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-06-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-06",
+      "parent_category_id": "gqa6r-demo-category-06-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-06-2",
+      "branch_id": "gqa6r-demo-branch-06",
+      "nutrition_id": "gqa6r-demo-nutrition-06-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-06-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-06",
+      "parent_category_id": "gqa6r-demo-category-06-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-06-3",
+      "branch_id": "gqa6r-demo-branch-06",
+      "nutrition_id": "gqa6r-demo-nutrition-06-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-07-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-07",
+      "parent_category_id": "gqa6r-demo-category-07-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-07-1",
+      "branch_id": "gqa6r-demo-branch-07",
+      "nutrition_id": "gqa6r-demo-nutrition-07-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-07-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-07",
+      "parent_category_id": "gqa6r-demo-category-07-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-07-2",
+      "branch_id": "gqa6r-demo-branch-07",
+      "nutrition_id": "gqa6r-demo-nutrition-07-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-07-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-07",
+      "parent_category_id": "gqa6r-demo-category-07-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-07-3",
+      "branch_id": "gqa6r-demo-branch-07",
+      "nutrition_id": "gqa6r-demo-nutrition-07-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-08-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-08",
+      "parent_category_id": "gqa6r-demo-category-08-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-08-1",
+      "branch_id": "gqa6r-demo-branch-08",
+      "nutrition_id": "gqa6r-demo-nutrition-08-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-08-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-08",
+      "parent_category_id": "gqa6r-demo-category-08-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-08-2",
+      "branch_id": "gqa6r-demo-branch-08",
+      "nutrition_id": "gqa6r-demo-nutrition-08-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-08-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-08",
+      "parent_category_id": "gqa6r-demo-category-08-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-08-3",
+      "branch_id": "gqa6r-demo-branch-08",
+      "nutrition_id": "gqa6r-demo-nutrition-08-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-09-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-09",
+      "parent_category_id": "gqa6r-demo-category-09-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-09-1",
+      "branch_id": "gqa6r-demo-branch-09",
+      "nutrition_id": "gqa6r-demo-nutrition-09-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-09-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-09",
+      "parent_category_id": "gqa6r-demo-category-09-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-09-2",
+      "branch_id": "gqa6r-demo-branch-09",
+      "nutrition_id": "gqa6r-demo-nutrition-09-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-09-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-09",
+      "parent_category_id": "gqa6r-demo-category-09-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-09-3",
+      "branch_id": "gqa6r-demo-branch-09",
+      "nutrition_id": "gqa6r-demo-nutrition-09-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-10-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-10",
+      "parent_category_id": "gqa6r-demo-category-10-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-10-1",
+      "branch_id": "gqa6r-demo-branch-10",
+      "nutrition_id": "gqa6r-demo-nutrition-10-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-10-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-10",
+      "parent_category_id": "gqa6r-demo-category-10-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-10-2",
+      "branch_id": "gqa6r-demo-branch-10",
+      "nutrition_id": "gqa6r-demo-nutrition-10-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-10-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-10",
+      "parent_category_id": "gqa6r-demo-category-10-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-10-3",
+      "branch_id": "gqa6r-demo-branch-10",
+      "nutrition_id": "gqa6r-demo-nutrition-10-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-11-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-11",
+      "parent_category_id": "gqa6r-demo-category-11-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-11-1",
+      "branch_id": "gqa6r-demo-branch-11",
+      "nutrition_id": "gqa6r-demo-nutrition-11-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-11-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-11",
+      "parent_category_id": "gqa6r-demo-category-11-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-11-2",
+      "branch_id": "gqa6r-demo-branch-11",
+      "nutrition_id": "gqa6r-demo-nutrition-11-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-11-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-11",
+      "parent_category_id": "gqa6r-demo-category-11-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-11-3",
+      "branch_id": "gqa6r-demo-branch-11",
+      "nutrition_id": "gqa6r-demo-nutrition-11-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-12-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-12",
+      "parent_category_id": "gqa6r-demo-category-12-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-12-1",
+      "branch_id": "gqa6r-demo-branch-12",
+      "nutrition_id": "gqa6r-demo-nutrition-12-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-12-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-12",
+      "parent_category_id": "gqa6r-demo-category-12-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-12-2",
+      "branch_id": "gqa6r-demo-branch-12",
+      "nutrition_id": "gqa6r-demo-nutrition-12-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-12-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-12",
+      "parent_category_id": "gqa6r-demo-category-12-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-12-3",
+      "branch_id": "gqa6r-demo-branch-12",
+      "nutrition_id": "gqa6r-demo-nutrition-12-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-13-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-13",
+      "parent_category_id": "gqa6r-demo-category-13-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-13-1",
+      "branch_id": "gqa6r-demo-branch-13",
+      "nutrition_id": "gqa6r-demo-nutrition-13-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-13-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-13",
+      "parent_category_id": "gqa6r-demo-category-13-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-13-2",
+      "branch_id": "gqa6r-demo-branch-13",
+      "nutrition_id": "gqa6r-demo-nutrition-13-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-13-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-13",
+      "parent_category_id": "gqa6r-demo-category-13-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-13-3",
+      "branch_id": "gqa6r-demo-branch-13",
+      "nutrition_id": "gqa6r-demo-nutrition-13-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-14-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-14",
+      "parent_category_id": "gqa6r-demo-category-14-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-14-1",
+      "branch_id": "gqa6r-demo-branch-14",
+      "nutrition_id": "gqa6r-demo-nutrition-14-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-14-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-14",
+      "parent_category_id": "gqa6r-demo-category-14-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-14-2",
+      "branch_id": "gqa6r-demo-branch-14",
+      "nutrition_id": "gqa6r-demo-nutrition-14-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-14-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-14",
+      "parent_category_id": "gqa6r-demo-category-14-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-14-3",
+      "branch_id": "gqa6r-demo-branch-14",
+      "nutrition_id": "gqa6r-demo-nutrition-14-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-15-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-15",
+      "parent_category_id": "gqa6r-demo-category-15-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-15-1",
+      "branch_id": "gqa6r-demo-branch-15",
+      "nutrition_id": "gqa6r-demo-nutrition-15-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-15-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-15",
+      "parent_category_id": "gqa6r-demo-category-15-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-15-2",
+      "branch_id": "gqa6r-demo-branch-15",
+      "nutrition_id": "gqa6r-demo-nutrition-15-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-15-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-15",
+      "parent_category_id": "gqa6r-demo-category-15-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-15-3",
+      "branch_id": "gqa6r-demo-branch-15",
+      "nutrition_id": "gqa6r-demo-nutrition-15-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-16-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-16",
+      "parent_category_id": "gqa6r-demo-category-16-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-16-1",
+      "branch_id": "gqa6r-demo-branch-16",
+      "nutrition_id": "gqa6r-demo-nutrition-16-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-16-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-16",
+      "parent_category_id": "gqa6r-demo-category-16-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-16-2",
+      "branch_id": "gqa6r-demo-branch-16",
+      "nutrition_id": "gqa6r-demo-nutrition-16-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-16-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-16",
+      "parent_category_id": "gqa6r-demo-category-16-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-16-3",
+      "branch_id": "gqa6r-demo-branch-16",
+      "nutrition_id": "gqa6r-demo-nutrition-16-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-17-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-17",
+      "parent_category_id": "gqa6r-demo-category-17-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-17-1",
+      "branch_id": "gqa6r-demo-branch-17",
+      "nutrition_id": "gqa6r-demo-nutrition-17-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-17-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-17",
+      "parent_category_id": "gqa6r-demo-category-17-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-17-2",
+      "branch_id": "gqa6r-demo-branch-17",
+      "nutrition_id": "gqa6r-demo-nutrition-17-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-17-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-17",
+      "parent_category_id": "gqa6r-demo-category-17-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-17-3",
+      "branch_id": "gqa6r-demo-branch-17",
+      "nutrition_id": "gqa6r-demo-nutrition-17-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-18-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-18",
+      "parent_category_id": "gqa6r-demo-category-18-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-18-1",
+      "branch_id": "gqa6r-demo-branch-18",
+      "nutrition_id": "gqa6r-demo-nutrition-18-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-18-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-18",
+      "parent_category_id": "gqa6r-demo-category-18-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-18-2",
+      "branch_id": "gqa6r-demo-branch-18",
+      "nutrition_id": "gqa6r-demo-nutrition-18-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-18-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-18",
+      "parent_category_id": "gqa6r-demo-category-18-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-18-3",
+      "branch_id": "gqa6r-demo-branch-18",
+      "nutrition_id": "gqa6r-demo-nutrition-18-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-19-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-19",
+      "parent_category_id": "gqa6r-demo-category-19-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-19-1",
+      "branch_id": "gqa6r-demo-branch-19",
+      "nutrition_id": "gqa6r-demo-nutrition-19-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-19-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-19",
+      "parent_category_id": "gqa6r-demo-category-19-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-19-2",
+      "branch_id": "gqa6r-demo-branch-19",
+      "nutrition_id": "gqa6r-demo-nutrition-19-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-19-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-19",
+      "parent_category_id": "gqa6r-demo-category-19-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-19-3",
+      "branch_id": "gqa6r-demo-branch-19",
+      "nutrition_id": "gqa6r-demo-nutrition-19-3",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-20-1",
+      "label": "[DEMO] 香煎雞胸能量碗",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-20",
+      "parent_category_id": "gqa6r-demo-category-20-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-20-1",
+      "branch_id": "gqa6r-demo-branch-20",
+      "nutrition_id": "gqa6r-demo-nutrition-20-1",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-20-2",
+      "label": "[DEMO] 豆腐蔬菜餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-20",
+      "parent_category_id": "gqa6r-demo-category-20-2",
+      "branch_menu_item_id": "gqa6r-demo-bmi-20-2",
+      "branch_id": "gqa6r-demo-branch-20",
+      "nutrition_id": "gqa6r-demo-nutrition-20-2",
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MENU_ITEM",
+      "id": "gqa6r-demo-item-20-3",
+      "label": "[DEMO] 烤魚均衡餐",
+      "parent_restaurant_id": "gqa6r-demo-restaurant-20",
+      "parent_category_id": "gqa6r-demo-category-20-1",
+      "branch_menu_item_id": "gqa6r-demo-bmi-20-3",
+      "branch_id": "gqa6r-demo-branch-20",
+      "nutrition_id": "gqa6r-demo-nutrition-20-3",
+      "lifecycle": "persistent"
+    }
+  ],
+  "demo_meal_buddy_identities": [
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000001",
+      "label": "[DEMO] 飯友 01",
+      "profile_id": "gqa6r_demo_buddy_01",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000002",
+      "label": "[DEMO] 飯友 02",
+      "profile_id": "gqa6r_demo_buddy_02",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000003",
+      "label": "[DEMO] 飯友 03",
+      "profile_id": "gqa6r_demo_buddy_03",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000004",
+      "label": "[DEMO] 飯友 04",
+      "profile_id": "gqa6r_demo_buddy_04",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000005",
+      "label": "[DEMO] 飯友 05",
+      "profile_id": "gqa6r_demo_buddy_05",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000006",
+      "label": "[DEMO] 飯友 06",
+      "profile_id": "gqa6r_demo_buddy_06",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000007",
+      "label": "[DEMO] 飯友 07",
+      "profile_id": "gqa6r_demo_buddy_07",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000008",
+      "label": "[DEMO] 飯友 08",
+      "profile_id": "gqa6r_demo_buddy_08",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000009",
+      "label": "[DEMO] 飯友 09",
+      "profile_id": "gqa6r_demo_buddy_09",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000010",
+      "label": "[DEMO] 飯友 10",
+      "profile_id": "gqa6r_demo_buddy_10",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000011",
+      "label": "[DEMO] 飯友 11",
+      "profile_id": "gqa6r_demo_buddy_11",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000012",
+      "label": "[DEMO] 飯友 12",
+      "profile_id": "gqa6r_demo_buddy_12",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000013",
+      "label": "[DEMO] 飯友 13",
+      "profile_id": "gqa6r_demo_buddy_13",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000014",
+      "label": "[DEMO] 飯友 14",
+      "profile_id": "gqa6r_demo_buddy_14",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000015",
+      "label": "[DEMO] 飯友 15",
+      "profile_id": "gqa6r_demo_buddy_15",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000016",
+      "label": "[DEMO] 飯友 16",
+      "profile_id": "gqa6r_demo_buddy_16",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000017",
+      "label": "[DEMO] 飯友 17",
+      "profile_id": "gqa6r_demo_buddy_17",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000018",
+      "label": "[DEMO] 飯友 18",
+      "profile_id": "gqa6r_demo_buddy_18",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000019",
+      "label": "[DEMO] 飯友 19",
+      "profile_id": "gqa6r_demo_buddy_19",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_IDENTITY",
+      "id": "6a06d0e0-0000-4000-8000-000000000020",
+      "label": "[DEMO] 飯友 20",
+      "profile_id": "gqa6r_demo_buddy_20",
+      "login_capable": false,
+      "lifecycle": "persistent"
+    }
+  ],
+  "demo_meal_buddy_cards": [
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000001",
+      "owner_label": "[DEMO] 飯友 01",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-01",
+        "restaurant_label": "[DEMO] 好廚測試餐館 01",
+        "branch_id": "gqa6r-demo-branch-01",
+        "menu_id": "gqa6r-demo-menu-01",
+        "menu_item_id": "gqa6r-demo-item-01-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-01-1",
+        "expected_food_context_tag_key": "food.taiwanese_chinese.stir_fry"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000002",
+      "owner_label": "[DEMO] 飯友 02",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-02",
+        "restaurant_label": "[DEMO] 好廚測試餐館 02",
+        "branch_id": "gqa6r-demo-branch-02",
+        "menu_id": "gqa6r-demo-menu-02",
+        "menu_item_id": "gqa6r-demo-item-02-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-02-1",
+        "expected_food_context_tag_key": "food.japanese.japanese_cuisine"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000003",
+      "owner_label": "[DEMO] 飯友 03",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-03",
+        "restaurant_label": "[DEMO] 好廚測試餐館 03",
+        "branch_id": "gqa6r-demo-branch-03",
+        "menu_id": "gqa6r-demo-menu-03",
+        "menu_item_id": "gqa6r-demo-item-03-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-03-1",
+        "expected_food_context_tag_key": "food.ingredient_style.vegetarian_food"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000004",
+      "owner_label": "[DEMO] 飯友 04",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-04",
+        "restaurant_label": "[DEMO] 好廚測試餐館 04",
+        "branch_id": "gqa6r-demo-branch-04",
+        "menu_id": "gqa6r-demo-menu-04",
+        "menu_item_id": "gqa6r-demo-item-04-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-04-1",
+        "expected_food_context_tag_key": "food.korean.korean_cuisine"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000005",
+      "owner_label": "[DEMO] 飯友 05",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-05",
+        "restaurant_label": "[DEMO] 好廚測試餐館 05",
+        "branch_id": "gqa6r-demo-branch-05",
+        "menu_id": "gqa6r-demo-menu-05",
+        "menu_item_id": "gqa6r-demo-item-05-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-05-1",
+        "expected_food_context_tag_key": "food.western.italian"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000006",
+      "owner_label": "[DEMO] 飯友 06",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-06",
+        "restaurant_label": "[DEMO] 好廚測試餐館 06",
+        "branch_id": "gqa6r-demo-branch-06",
+        "menu_id": "gqa6r-demo-menu-06",
+        "menu_item_id": "gqa6r-demo-item-06-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-06-1",
+        "expected_food_context_tag_key": "food.international.southeast_asian"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000007",
+      "owner_label": "[DEMO] 飯友 07",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-07",
+        "restaurant_label": "[DEMO] 好廚測試餐館 07",
+        "branch_id": "gqa6r-demo-branch-07",
+        "menu_id": "gqa6r-demo-menu-07",
+        "menu_item_id": "gqa6r-demo-item-07-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-07-1",
+        "expected_food_context_tag_key": "food.ingredient_style.seafood"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000008",
+      "owner_label": "[DEMO] 飯友 08",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-08",
+        "restaurant_label": "[DEMO] 好廚測試餐館 08",
+        "branch_id": "gqa6r-demo-branch-08",
+        "menu_id": "gqa6r-demo-menu-08",
+        "menu_item_id": "gqa6r-demo-item-08-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-08-1",
+        "expected_food_context_tag_key": "food.taiwanese_chinese.taiwanese_snacks"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000009",
+      "owner_label": "[DEMO] 飯友 09",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-09",
+        "restaurant_label": "[DEMO] 好廚測試餐館 09",
+        "branch_id": "gqa6r-demo-branch-09",
+        "menu_id": "gqa6r-demo-menu-09",
+        "menu_item_id": "gqa6r-demo-item-09-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-09-1",
+        "expected_food_context_tag_key": "food.dining_style.brunch"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000010",
+      "owner_label": "[DEMO] 飯友 10",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-10",
+        "restaurant_label": "[DEMO] 好廚測試餐館 10",
+        "branch_id": "gqa6r-demo-branch-10",
+        "menu_id": "gqa6r-demo-menu-10",
+        "menu_item_id": "gqa6r-demo-item-10-1",
+        "menu_item_label": "[DEMO] 香煎雞胸能量碗",
+        "branch_menu_item_id": "gqa6r-demo-bmi-10-1",
+        "expected_food_context_tag_key": "food.japanese.ramen"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000011",
+      "owner_label": "[DEMO] 飯友 11",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-01",
+        "restaurant_label": "[DEMO] 好廚測試餐館 01",
+        "branch_id": "gqa6r-demo-branch-01",
+        "menu_id": "gqa6r-demo-menu-01",
+        "menu_item_id": "gqa6r-demo-item-01-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-01-2",
+        "expected_food_context_tag_key": "food.taiwanese_chinese.stir_fry"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000012",
+      "owner_label": "[DEMO] 飯友 12",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-02",
+        "restaurant_label": "[DEMO] 好廚測試餐館 02",
+        "branch_id": "gqa6r-demo-branch-02",
+        "menu_id": "gqa6r-demo-menu-02",
+        "menu_item_id": "gqa6r-demo-item-02-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-02-2",
+        "expected_food_context_tag_key": "food.japanese.japanese_cuisine"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000013",
+      "owner_label": "[DEMO] 飯友 13",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-03",
+        "restaurant_label": "[DEMO] 好廚測試餐館 03",
+        "branch_id": "gqa6r-demo-branch-03",
+        "menu_id": "gqa6r-demo-menu-03",
+        "menu_item_id": "gqa6r-demo-item-03-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-03-2",
+        "expected_food_context_tag_key": "food.ingredient_style.vegetarian_food"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000014",
+      "owner_label": "[DEMO] 飯友 14",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-04",
+        "restaurant_label": "[DEMO] 好廚測試餐館 04",
+        "branch_id": "gqa6r-demo-branch-04",
+        "menu_id": "gqa6r-demo-menu-04",
+        "menu_item_id": "gqa6r-demo-item-04-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-04-2",
+        "expected_food_context_tag_key": "food.korean.korean_cuisine"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000015",
+      "owner_label": "[DEMO] 飯友 15",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-05",
+        "restaurant_label": "[DEMO] 好廚測試餐館 05",
+        "branch_id": "gqa6r-demo-branch-05",
+        "menu_id": "gqa6r-demo-menu-05",
+        "menu_item_id": "gqa6r-demo-item-05-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-05-2",
+        "expected_food_context_tag_key": "food.western.italian"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000016",
+      "owner_label": "[DEMO] 飯友 16",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-06",
+        "restaurant_label": "[DEMO] 好廚測試餐館 06",
+        "branch_id": "gqa6r-demo-branch-06",
+        "menu_id": "gqa6r-demo-menu-06",
+        "menu_item_id": "gqa6r-demo-item-06-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-06-2",
+        "expected_food_context_tag_key": "food.international.southeast_asian"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000017",
+      "owner_label": "[DEMO] 飯友 17",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-07",
+        "restaurant_label": "[DEMO] 好廚測試餐館 07",
+        "branch_id": "gqa6r-demo-branch-07",
+        "menu_id": "gqa6r-demo-menu-07",
+        "menu_item_id": "gqa6r-demo-item-07-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-07-2",
+        "expected_food_context_tag_key": "food.ingredient_style.seafood"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000018",
+      "owner_label": "[DEMO] 飯友 18",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-08",
+        "restaurant_label": "[DEMO] 好廚測試餐館 08",
+        "branch_id": "gqa6r-demo-branch-08",
+        "menu_id": "gqa6r-demo-menu-08",
+        "menu_item_id": "gqa6r-demo-item-08-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-08-2",
+        "expected_food_context_tag_key": "food.taiwanese_chinese.taiwanese_snacks"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000019",
+      "owner_label": "[DEMO] 飯友 19",
+      "card_type": "restaurant",
+      "intention_type": "chat_first",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-09",
+        "restaurant_label": "[DEMO] 好廚測試餐館 09",
+        "branch_id": "gqa6r-demo-branch-09",
+        "menu_id": "gqa6r-demo-menu-09",
+        "menu_item_id": "gqa6r-demo-item-09-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-09-2",
+        "expected_food_context_tag_key": "food.dining_style.brunch"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    },
+    {
+      "kind": "DEMO_MEAL_BUDDY_CARD",
+      "owner_id": "6a06d0e0-0000-4000-8000-000000000020",
+      "owner_label": "[DEMO] 飯友 20",
+      "card_type": "restaurant",
+      "intention_type": "eat_together",
+      "recommendation": {
+        "restaurant_id": "gqa6r-demo-restaurant-10",
+        "restaurant_label": "[DEMO] 好廚測試餐館 10",
+        "branch_id": "gqa6r-demo-branch-10",
+        "menu_id": "gqa6r-demo-menu-10",
+        "menu_item_id": "gqa6r-demo-item-10-2",
+        "menu_item_label": "[DEMO] 豆腐蔬菜餐",
+        "branch_menu_item_id": "gqa6r-demo-bmi-10-2",
+        "expected_food_context_tag_key": "food.japanese.ramen"
+      },
+      "food_context_derivation": "server: meal_buddy_menu_item_food_context_mapping",
+      "lifecycle": "expiring_replaceable",
+      "id": null,
+      "note": "created per target slot AS the owning identity through the canonical recommendation card path (meal-buddy-card-create with selectedRecommendation); ids are not stable across top-ups"
+    }
+  ],
+  "secondary_interaction_identity": {
+    "kind": "SECONDARY_INTERACTION_TEST_IDENTITY",
+    "id": "6a06d0e0-0000-4000-8000-000000000090",
+    "label": "[DEMO] Secondary Interaction Test",
+    "login_capable": true,
+    "lifecycle": "on_request"
+  }
+}

@@ -20,6 +20,7 @@ import {
   matchesExactGqa1Successor,
   matchesGqa1DiaryContract
 } from "./gqa-1-successor-manifest.mjs";
+import { GQA6R_PRODUCT_PATHS } from "./gqa6r-stable-demo-repair-manifest.mjs";
 
 const evidence = collectGqa1SuccessorEvidence();
 const source = readFileSync(GQA1_MEAL_LOG, "utf8");
@@ -71,7 +72,8 @@ rejects("truthfulness evidence absent", { truthfulnessSources: undefined });
 
 // Frozen Consumer runtime boundary.
 rejects("unrelated Consumer runtime delta after implementation", { frozenBoundaryDelta: ["apps/mobile/app/extra.tsx"] });
-rejects("fake 82 score file changed after implementation", { frozenBoundaryDelta: [INTAKE] });
+// Today Intake is also a GQA-6R recorded path; a change without the exact GQA-6R bytes is still rejected.
+rejects("fake 82 score file changed after implementation", { frozenBoundaryDelta: [INTAKE], gqa6rRepairExact: false });
 rejects("Group Table mock store returns after implementation", { frozenBoundaryDelta: ["apps/mobile/features/group-tables/groupTableStore.ts"] });
 rejects("shared copy change after implementation", { frozenBoundaryDelta: ["lib/i18n/zh-TW.ts"] });
 rejects("shared package runtime change after implementation", { frozenBoundaryDelta: ["packages/shared/src/domain/extra.ts"] });
@@ -104,6 +106,13 @@ rejects("GQA-5 repair path with changed bytes", { frozenBoundaryDelta: [REPAIR],
 rejects("extra migration beside the exact GQA-5 repair", { frozenBoundaryDelta: [REPAIR, "supabase/migrations/20990101000000_extra.sql"], gqa5RepairExact: true });
 rejects("frozen Consumer runtime change beside the exact GQA-5 repair", { frozenBoundaryDelta: [REPAIR, GQA1_MEAL_LOG], gqa5RepairExact: true });
 rejects("exact-repair flag cannot admit an unrelated migration", { frozenBoundaryDelta: ["supabase/migrations/20990101000000_extra.sql"], gqa5RepairExact: true });
+// GQA-6R exact successor: only the recorded Stable Demo repair product paths, only with exact bytes.
+check("exact GQA-6R Stable Demo repair paths are accepted in the frozen boundary",
+  matchesExactGqa1Successor(changed({ frozenBoundaryDelta: [...GQA6R_PRODUCT_PATHS], gqa5RepairExact: false, gqa6rRepairExact: true })));
+rejects("GQA-6R repair paths with changed bytes", { frozenBoundaryDelta: [...GQA6R_PRODUCT_PATHS], gqa5RepairExact: false, gqa6rRepairExact: false });
+rejects("extra Consumer path beside the exact GQA-6R repair", { frozenBoundaryDelta: [...GQA6R_PRODUCT_PATHS, "apps/mobile/app/extra.tsx"], gqa5RepairExact: false, gqa6rRepairExact: true });
+rejects("extra migration beside the exact GQA-6R repair", { frozenBoundaryDelta: [...GQA6R_PRODUCT_PATHS, "supabase/migrations/20990101000000_extra.sql"], gqa5RepairExact: false, gqa6rRepairExact: true });
+rejects("GQA-6R flag cannot admit an unrelated Consumer path", { frozenBoundaryDelta: ["apps/mobile/app/unrelated.tsx"], gqa5RepairExact: false, gqa6rRepairExact: true });
 
 // ---------------------------------------------------------------- real-history topology proofs
 // A shared clone reads this repository's objects and writes only its own. Commits there are fixtures:

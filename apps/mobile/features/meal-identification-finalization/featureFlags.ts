@@ -1,3 +1,4 @@
+import { readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import type {
   ConsumerMealIdentificationFinalizationRuntimeFlags,
   ConsumerMealIdentificationFinalizationSource
@@ -11,9 +12,10 @@ const SUPPORTED_SOURCES = new Set<ConsumerMealIdentificationFinalizationSource>(
 
 type RuntimeEnv = Record<string, string | undefined>;
 
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return readConsumerPublicRuntimeEnv();
 }
 
 export function getConsumerMealIdentificationFinalizationRuntimeFlags(

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 // SR-2G-A local guard. Read-only and local: no network, database, credentials or deployment.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -189,7 +190,10 @@ try {
   check("13. no pre-existing migration changed", migrationDrift.length === 0, { migrationDrift });
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
   const sr2gaFrozenBackend = frozenBackendFiles.filter((file) => !SR2GB_SUCCESSOR_PATHS.includes(file) && !SR2GC_SUCCESSOR_PATHS.includes(file) && !SR2GBR1_SUCCESSOR_PATHS.includes(file) && !SR2GCR1_SUCCESSOR_PATHS.includes(file) && !SR2CR1_SUCCESSOR_PATHS.includes(file) && !SR2GD_SUCCESSOR_PATHS.includes(file) && !SR2GE1_SUCCESSOR_PATHS.includes(file) && !SR2GE2_SUCCESSOR_PATHS.includes(file) && !SR2GF_SUCCESSOR_PATHS.includes(file) && !SR2GG_SUCCESSOR_PATHS.includes(file));
-  check("15. every frozen predecessor backend file outside an enumerated successor is byte-unchanged", sr2gaFrozenBackend.every((file) => sha256(file) === blobSha256(file, SR2GA_BASELINE)), { drifted: sr2gaFrozenBackend.filter((file) => sha256(file) !== blobSha256(file, SR2GA_BASELINE)) });
+  // GQA-6R: the exact Stable Demo repair paths are an enumerated successor while its record holds.
+  const gqa6rPaths15 = acceptedGqa6rProductPaths(root);
+  const sr2gaFrozenOutsideGqa6r = sr2gaFrozenBackend.filter((file) => !gqa6rPaths15.includes(file));
+  check("15. every frozen predecessor backend file outside an enumerated successor is byte-unchanged", sr2gaFrozenOutsideGqa6r.every((file) => sha256(file) === blobSha256(file, SR2GA_BASELINE)), { drifted: sr2gaFrozenOutsideGqa6r.filter((file) => sha256(file) !== blobSha256(file, SR2GA_BASELINE)) });
   check("16. no Edge function directory is added or modified", !SR2GA_SUCCESSOR_PATHS.some((file) => /^supabase\/functions\/(?!_shared\/meal-buddy-card-ref\/)/.test(file)));
   check("17. SR-2G-A itself registers no Edge function", !SR2GA_SUCCESSOR_PATHS.includes("supabase/config.toml") && (SR2GB_SUCCESSOR_PATHS.includes("supabase/config.toml") || sha256("supabase/config.toml") === blobSha256("supabase/config.toml", SR2GA_BASELINE)));
 

@@ -1,3 +1,4 @@
+import { readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import type {
   ConsumerFavoriteReadSource,
   ConsumerFavoriteRuntimeFlags,
@@ -8,9 +9,10 @@ type RuntimeEnv = Record<string, string | undefined>;
 const readSources = new Set<ConsumerFavoriteReadSource>(["disabled", "mock", "supabase"]);
 const writeSources = new Set<ConsumerFavoriteWriteSource>(["disabled", "mock", "supabase"]);
 
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return readConsumerPublicRuntimeEnv();
 }
 
 export function getConsumerFavoriteRuntimeFlags(env: RuntimeEnv = readEnv()): ConsumerFavoriteRuntimeFlags {

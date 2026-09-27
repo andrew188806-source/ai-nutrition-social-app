@@ -1,3 +1,4 @@
+import { readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import type { ConsumerAuthSourceLike } from "../meal-photo-upload/featureFlags";
 
 // Mirrors getSocialCandidateRuntimeFlags exactly. There is deliberately NO "mock" source: the frozen
@@ -13,9 +14,10 @@ export type MealBuddyCandidateRuntimeFlags = {
 
 type RuntimeEnv = Record<string, string | undefined>;
 
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return readConsumerPublicRuntimeEnv();
 }
 
 const candidateSources = new Set<MealBuddyCandidateSource>(["disabled", "supabase-live"]);

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { isExactGqa6rRepair } from './gqa6r-stable-demo-repair-manifest.mjs';
 export const ORIGIN = 'bbe60548ea8e65abce22b4ed330980c4a856d3bb';
 export const P1 = 'f699932897dd8493e4d4f510e4cd0562f22e2955';
 export const SUBJECT = 'Activate Restaurant Owner availability control';
@@ -67,7 +68,10 @@ export function loadApplication(s, {rpc,claims=async()=>({subject:'verified'}),a
     '../auth/supabase-server': {getVerifiedRestaurantClaims:claims},
     '../../auth/supabase-server':{createRestaurantSupabaseServerClient:()=>({rpc})},
     '../config/restaurant-data-source':{getRestaurantDataSourceConfig:()=>({dataSource:mode})},
-    '../runtime/restaurant-access-context':{loadRestaurantAccessContext:access}
+    '../runtime/restaurant-access-context':{loadRestaurantAccessContext:access},
+    // GQA-6R R-1: the exact recorded bounded-read limiter is the one approved new client import; it is
+    // proven separately (gqa6r-restaurant-control-read-limiter-smoke) and here delegates to this harness's fetch.
+    ...(isExactGqa6rRepair() ? {'./restaurant-owner-control-read-limiter':{ownerControlReadFetch:(input,init)=>browserFetch(input,init)}} : {})
   };
   const keys=Object.fromEntries(Object.entries(FILES).map(([k,v])=>[path.resolve(v),k]));
   function load(key) {

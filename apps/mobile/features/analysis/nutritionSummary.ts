@@ -161,6 +161,16 @@ export type NutritionDetailItem = {
 };
 
 export function getNutritionDetailItems(summary: TodayNutritionSummary): NutritionDetailItem[] {
+  const items = buildNutritionDetailItems(summary);
+  // GQA-6R C-2: with no recorded meal there is no evidence for any adequacy or "normal" verdict.
+  if (summary.mealCount > 0) return items;
+  const notRecorded = zhTW.mobile.todayNutritionSummary.detail.notRecorded;
+  return items.map((item) => VERDICT_ITEM_KEYS.has(item.key) ? { ...item, value: notRecorded, status: "watch" as const } : item);
+}
+
+const VERDICT_ITEM_KEYS = new Set(["fiber", "vegetables", "proteinFoods", "sodium", "addedSugar", "saturatedFat"]);
+
+function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDetailItem[] {
   const { totals, targets, hasVegetable, mealCount, proteinProgress, fatProgress } = summary;
   const t = zhTW.mobile.todayNutritionSummary.detail;
   const fiberEstimate = hasVegetable ? mealCount * 4 : mealCount * 1;

@@ -25,12 +25,21 @@ import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/c
 import { ConsumerLocationPermissionCard } from "../features/consumer-location/ConsumerLocationPermissionCard";
 import { useConsumerLocationRuntime } from "../features/consumer-location/ConsumerLocationProvider";
 import { getConsumerMealRuntimeFlags } from "../features/consumer-meals/featureFlags";
+import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../features/consumer-runtime-config/consumerPublicRuntimeEnv";
 
 // Canonical provider: wires Phase 2Q service behind the U1 presentation layer.
 // Fails closed on config error; never falls back to U1 mock on service failure.
 const canonicalProvider = createCanonicalNextMealPrototypeProvider(
   createCanonicalNextMealPrototypeRuntimeDependencies()
 );
+
+// GQA-6R C-2: a live composition shows real canonical candidates and saves real planned meals, so it is
+// never described as fixed samples or as a demo.
+const LIVE_RECOMMENDATION_COPY = {
+  subtitle: "依目前上架的餐廳菜單與你今天已儲存的紀錄，列出下一餐候選。",
+  plannedDinnerTitle: "晚餐預先規劃",
+  plannedDinnerBody: "儲存後會出現在今日攝取的預定餐；預定餐不計入已吃。"
+} as const;
 
 export default function RecommendationScreen() {
   const router = useRouter();
@@ -45,6 +54,9 @@ export default function RecommendationScreen() {
   const [draftPlan, setDraftPlan] = useState<PlannedMeal>(() => withDefaultDate(getDefaultPlannedDinner(), actorTimezone));
   const [rerunCount, setRerunCount] = useState(0);
   const scenario = parsePrototypeScenario(params.previewState);
+  // GQA-6R C-2B: the daily planner ("已吃 620 kcal") and the canned lunch advice are fixed demo values. A
+  // live Consumer identity never sees them next to its real state; they stay for non-live demo compositions.
+  const liveComposition = isLiveConsumerComposition(readConsumerPublicRuntimeEnv());
 
   async function savePlan() {
     const result = await runtime.createPlannedMeal(toCanonicalDraft(draftPlan));
@@ -96,7 +108,7 @@ export default function RecommendationScreen() {
   }
 
   return (
-    <PlaceholderScreen title={zhTW.mobile.nextMealTitle} subtitle={zhTW.mobile.nextMealSubtitle}>
+    <PlaceholderScreen title={zhTW.mobile.nextMealTitle} subtitle={liveComposition ? LIVE_RECOMMENDATION_COPY.subtitle : zhTW.mobile.nextMealSubtitle}>
       {geoRuntimeEnabled ? <ConsumerLocationPermissionCard controller={location} /> : null}
       <NextMealPrototypeContent
         entitlement={demoMode}
@@ -110,7 +122,9 @@ export default function RecommendationScreen() {
       />
 
       <Card tone="sky">
-        <SectionTitle title={zhTW.mobile.nextMealPrototype.plannedDinnerSectionTitle} subtitle={zhTW.mobile.nextMealPrototype.plannedDinnerSectionBody} />
+        {liveComposition
+          ? <SectionTitle title={LIVE_RECOMMENDATION_COPY.plannedDinnerTitle} subtitle={LIVE_RECOMMENDATION_COPY.plannedDinnerBody} />
+          : <SectionTitle title={zhTW.mobile.nextMealPrototype.plannedDinnerSectionTitle} subtitle={zhTW.mobile.nextMealPrototype.plannedDinnerSectionBody} />}
       </Card>
 
       <PlannedDinnerInput
@@ -128,11 +142,11 @@ export default function RecommendationScreen() {
 
       {plannedDinner ? <PlannedMealCard plan={plannedDinner} /> : null}
 
-      <DailyNutritionPlanner plan={plannedDinner} />
+      {liveComposition ? null : <DailyNutritionPlanner plan={plannedDinner} />}
 
-      <NextMealRecommendationWithPlan plan={plannedDinner} onRerun={() => setRerunCount((count) => count + 1)} />
+      {liveComposition ? null : <NextMealRecommendationWithPlan plan={plannedDinner} onRerun={() => setRerunCount((count) => count + 1)} />}
 
-      {rerunCount > 0 ? (
+      {!liveComposition && rerunCount > 0 ? (
         <Card tone="mint">
           <SectionTitle title={zhTW.mobile.plannedDinner.rerunLunchCta} subtitle={zhTW.mobile.plannedDinner.lunchAdvice[1]} />
         </Card>

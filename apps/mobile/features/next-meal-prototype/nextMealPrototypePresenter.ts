@@ -20,3 +20,11 @@ export function presentU1NextMealResult(
     confirmedCandidateId: safeConfirmedCandidateId
   };
 }
+
+// GQA-6R C-4 context handoff: a candidate chosen on the previous screen arrives as its canonical menu item
+// id. It is SELECTED (never reordered — the canonical exposure order stays authoritative) when it is part
+// of the visible candidate set; otherwise nothing is preselected and the user chooses here.
+export function preferredCandidateId(result: U1NextMealProviderResult, preferredMenuItemId?: string): string | null {
+  if (result.status !== "success" || !preferredMenuItemId) return null;
+  return result.recommendation.candidates.find((candidate) => candidate.menuItemId === preferredMenuItemId)?.prototypeId ?? null;
+}

@@ -1,3 +1,4 @@
+import { allowsImplicitMockSource, readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
 import type { ConsumerRatingReadSource, ConsumerRatingRuntimeFlags, ConsumerRatingWriteSource } from "./types";
 
 const readSources = new Set<ConsumerRatingReadSource>(["mock", "disabled", "supabase"]);
@@ -5,22 +6,24 @@ const writeSources = new Set<ConsumerRatingWriteSource>(["mock", "disabled", "su
 
 type RuntimeEnv = Record<string, string | undefined>;
 
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
 function readEnv(): RuntimeEnv {
-  const maybeProcess = globalThis as typeof globalThis & { process?: { env?: RuntimeEnv } };
-  return maybeProcess.process?.env ?? {};
+  return readConsumerPublicRuntimeEnv();
 }
 
 export function getConsumerRatingRuntimeFlags(env: RuntimeEnv = readEnv()): ConsumerRatingRuntimeFlags {
   const issues: string[] = [];
   return {
-    readSource: parseReadSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_RATINGS_READ_SOURCE, issues),
+    readSource: parseReadSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_RATINGS_READ_SOURCE, issues, allowsImplicitMockSource(env)),
     writeSource: parseWriteSource(env.EXPO_PUBLIC_TASTKIND_CONSUMER_RATINGS_WRITE_SOURCE, issues),
     issues
   };
 }
 
-function parseReadSource(value: string | undefined, issues: string[]): ConsumerRatingReadSource {
-  if (!value) return "mock";
+function parseReadSource(value: string | undefined, issues: string[], implicitMockAllowed: boolean): ConsumerRatingReadSource {
+  // GQA-6R C-1B: never a silent mock read under a live Consumer identity.
+  if (!value) return implicitMockAllowed ? "mock" : "disabled";
   if (readSources.has(value as ConsumerRatingReadSource)) return value as ConsumerRatingReadSource;
   issues.push(`Unknown EXPO_PUBLIC_TASTKIND_CONSUMER_RATINGS_READ_SOURCE: ${value}`);
   return "disabled";

@@ -6,6 +6,7 @@ import cp from "node:child_process";
 import { GQA2_BASELINE, ROOT, readGqa2Sources, validateGqa2, behaviourGqa2 } from "./gqa-2-closure-rules.mjs";
 import { GQA2_IMPLEMENTATION, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
 import { acceptedGqa5RepairPaths } from "./gqa5-restaurant-read-repair-manifest.mjs";
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 
 const staticFailures = validateGqa2(readGqa2Sources());
 assert.deepEqual(staticFailures, [], staticFailures.join("; "));
@@ -52,7 +53,8 @@ const frozen = [
   "apps/restaurant-web/middleware.ts", "apps/restaurant-web/data", "apps/restaurant-web/runtime", "apps/restaurant-web/server",
   "scripts/break-glass-control.mjs"
 ];
-const acceptedLater = acceptedGqa5RepairPaths(ROOT);
+// Later exact successors only: the GQA-5 read-repair migration and the GQA-6R Stable Demo repair paths.
+const acceptedLater = [...acceptedGqa5RepairPaths(ROOT), ...acceptedGqa6rProductPaths(ROOT)];
 assert.deepEqual(git("diff", "--name-only", GQA2_BASELINE, "--", ...frozen).split("\n").filter(Boolean).filter((f) => !acceptedLater.includes(f)), [],
   "no migration, RPC, permission, route registry, Step-Up, Break-glass, dependency, Consumer or shared-copy change");
 console.log(`PASS boundary: historical GQA-2 delta is exactly ${historicalDelta.length} accepted path(s); durable successor holds; frozen authority, Consumer, database and dependency paths unchanged`);

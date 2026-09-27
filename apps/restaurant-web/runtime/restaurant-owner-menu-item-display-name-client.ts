@@ -1,3 +1,4 @@
+import { ownerControlReadFetch } from "./restaurant-owner-control-read-limiter";
 import { isRecord, parseMutation, parsePreview, type Failure, type Input, type Preview } from "./restaurant-owner-menu-item-display-name";
 
 const status = { unauthenticated: 401, permission_denied: 403, invalid_request: 400, target_not_found: 404, stale_state: 409, no_change: 422, dependency_unavailable: 503, internal_failure: 500 } as const;
@@ -11,7 +12,7 @@ function failure(value: unknown, responseStatus: number): Readonly<{ state: Fail
 
 export async function previewMenuItemDisplayName(branchId: string, branchMenuItemId: string): Promise<Preview> {
   try {
-    const response = await fetch(endpoint(branchId, branchMenuItemId), { method: "GET", cache: "no-store", credentials: "same-origin", redirect: "error", headers: { Accept: "application/json" } });
+    const response = await ownerControlReadFetch(endpoint(branchId, branchMenuItemId), { method: "GET", cache: "no-store", credentials: "same-origin", redirect: "error", headers: { Accept: "application/json" } });
     const value: unknown = await response.json();
     if (response.status !== 200) return failure(value, response.status);
     const parsed = parsePreview(value);

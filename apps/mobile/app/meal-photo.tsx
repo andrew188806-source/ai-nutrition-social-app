@@ -18,6 +18,7 @@ import { releaseOwnedGalleryMealPhotoAsset } from "../features/analysis/galleryM
 import { decodeAnalysisRestaurantHandoff } from "../features/meal-identification/analysisRestaurantHandoff";
 import { type PlannedMeal } from "../features/planned-meal";
 import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
+import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../features/consumer-runtime-config/consumerPublicRuntimeEnv";
 
 type PlannedDinnerType = (typeof zhTW.mobile.plannedDinnerHelper.mealTypes)[number];
 
@@ -31,6 +32,11 @@ const ANALYSIS_SESSION_OWNER_DEPENDENCIES = Object.freeze({
     void releaseOwnedGalleryMealPhotoAsset();
   }
 });
+
+// GQA-6R C-2: a live composition uploads and analyses the user's real photo, so it never says the demo
+// returns one fixed fake result, and it shows no static mood chips ("附近有人想約飯") that no data backs.
+const LIVE_COMPOSITION = isLiveConsumerComposition(readConsumerPublicRuntimeEnv());
+const LIVE_SOURCE_SHEET_BODY = "選擇一張餐點照片，AI 會分析這張照片；分析結果可在儲存前確認與修正。";
 
 export default function MealPhotoScreen() {
   const router = useRouter();
@@ -304,9 +310,11 @@ export default function MealPhotoScreen() {
           </View>
         </View>
         <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.heroTitle} subtitle={zhTW.mobile.refinedLogic.aiEntry.heroBody} />
-        <View style={styles.tagSpace}>
-          <TagRow tags={zhTW.mobile.refinedLogic.lifestyleWorld.nutritionMoodTags} />
-        </View>
+        {LIVE_COMPOSITION ? null : (
+          <View style={styles.tagSpace}>
+            <TagRow tags={zhTW.mobile.refinedLogic.lifestyleWorld.nutritionMoodTags} />
+          </View>
+        )}
       </Card>
 
       <Card>
@@ -591,7 +599,7 @@ function ImageSourceSheet({
       <View style={styles.sheetBackdrop}>
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
-          <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.sheetTitle} subtitle={zhTW.mobile.refinedLogic.aiEntry.sheetBody} />
+          <SectionTitle title={zhTW.mobile.refinedLogic.aiEntry.sheetTitle} subtitle={LIVE_COMPOSITION ? LIVE_SOURCE_SHEET_BODY : zhTW.mobile.refinedLogic.aiEntry.sheetBody} />
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled }}

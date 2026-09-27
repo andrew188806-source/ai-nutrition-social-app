@@ -7,6 +7,7 @@ import { isExactMrbSuccessor } from "./admin-mrb-successor-manifest.mjs";
 import { GQA1_IMPLEMENTATION, GQA1_PRODUCT_PATHS, isExactGqa1Successor } from "./gqa-1-successor-manifest.mjs";
 import { GQA2_RUNTIME, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
 import { acceptedGqa5RepairPaths } from "./gqa5-restaurant-read-repair-manifest.mjs";
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 import { BASELINE, FILES, ROUTES, baselineFile, readSources, validateAdminE1 } from "./admin-e1-rules.mjs";
 const root = process.cwd();
 const pages = fs.readdirSync("apps/admin-web/app", { withFileTypes: true })
@@ -62,13 +63,17 @@ if (changedProtected.length) {
     // ADMIN-MRB -> GQA-1 -> GQA-2, each proven by its own manifest, and carries that successor's bytes.
     // The staff detail page moves from the MRB pin to the exact GQA-2 pin and to nothing else.
     const gqa2 = isExactGqa2Successor(), gqa1 = isExactGqa1Successor();
+    // GQA-6R: the exact Stable Demo repair owns its recorded paths (its record pins every byte).
+    const gqa6rPaths = acceptedGqa6rProductPaths(root);
     assert.ok(isExactMrbSuccessor(), "the exact ADMIN-MRB chain (MRB, its guard closure, GQA-1, GQA-2) is in history");
-    const owner = (file) => gqa2 && Object.hasOwn(GQA2_RUNTIME,file) ? "gqa2"
+    const owner = (file) => gqa6rPaths.includes(file) ? "gqa6r"
+      : gqa2 && Object.hasOwn(GQA2_RUNTIME,file) ? "gqa2"
       : gqa1 && GQA1_PRODUCT_PATHS.includes(file) ? "gqa1"
         : Object.hasOwn(mrbSources,file) ? "mrb" : null;
     const unowned = changedProtected.filter((file) => owner(file) === null);
     assert.deepEqual(unowned,[],`unexpected E1-protected changes: ${unowned.join(", ")}`);
     for (const file of changedProtected) {
+      if (owner(file) === "gqa6r") continue;
       if (owner(file) === "gqa2") assert.equal(fileSha(file),GQA2_RUNTIME[file].sha256,`GQA-2 source pin: ${file}`);
       else if (owner(file) === "mrb") assert.equal(fileSha(file),mrbSources[file],`ADMIN-MRB source pin: ${file}`);
       else assert.equal(git("hash-object","--",file),git("rev-parse",`${GQA1_IMPLEMENTATION}:${file}`),`GQA-1 source pin: ${file}`);

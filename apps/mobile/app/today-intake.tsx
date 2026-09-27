@@ -179,7 +179,9 @@ export default function TodayIntakeScreen() {
             ) : null}
           </View>
         )) : (
-          <View style={styles.plannedCard}><Text style={styles.mealTitle}>{daily.plannedMeal.title}</Text><Text style={styles.mealNote}>目前沒有 canonical 預定餐。</Text></View>
+          // GQA-6R C-2C: no canonical planned meal means a truthful empty state only — never the fixture
+          // planned-dinner title (日式烤魚套餐) beside a statement that no planned meal exists.
+          <View style={styles.plannedCard}><Text style={styles.mealTitle}>目前沒有預定餐</Text><Text style={styles.mealNote}>儲存預定餐後會顯示在這裡；預定餐不計入已吃。</Text></View>
         )}
         {runtime.plannedMealState.status === "uncertain" ? (
           <View style={styles.plannedCard}>

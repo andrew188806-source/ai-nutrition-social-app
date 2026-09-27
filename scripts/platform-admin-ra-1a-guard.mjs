@@ -5,6 +5,7 @@ import child from "node:child_process";
 import crypto from "node:crypto";
 import { isExactMrbSuccessor, MRB_COMMIT, MRB_PRODUCT_PATHS } from "./admin-mrb-successor-manifest.mjs";
 import { isAcceptedGqa2RuntimePath, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 import {
   RA1A_BASELINE, RA1A_BASELINE_MIGRATION_COUNT, RA1A_BASELINE_SUBJECT, RA1A_COMMIT_SUBJECT,
   RA1A_MIGRATION, RA1A_MIGRATION_SHA256, RA1A_NPM_KEYS, RA1A_PATHS, RA1A_PRODUCT_PATHS,
@@ -98,10 +99,12 @@ const productOutsideRound = scopeManifest.filter((file) =>
   (file.startsWith("apps/") || file.startsWith("packages/") || file.startsWith("supabase/") || file.startsWith("lib/"))
   && !RA1A_PRODUCT_PATHS.includes(file));
 check("RA-1A touches no product path outside its own three", productOutsideRound.length === 0, productOutsideRound);
+// Exact GQA-6R successor only: its recorded bytes (browser CORS wrappers, Consumer truthfulness, read limiter).
+const gqa6rPaths = acceptedGqa6rProductPaths();
 check("RA-1A changes no Edge Function",
-  lifecycle.manifest.every((file) => !file.startsWith("supabase/functions/")));
+  lifecycle.manifest.filter((file) => !gqa6rPaths.includes(file)).every((file) => !file.startsWith("supabase/functions/")));
 check("RA-1A changes no Consumer, Social, GEO or Restaurant runtime",
-  lifecycle.manifest.filter((file) => !isAcceptedGqa2RuntimePath(file, exactGqa2))
+  lifecycle.manifest.filter((file) => !isAcceptedGqa2RuntimePath(file, exactGqa2) && !gqa6rPaths.includes(file))
     .every((file) => !/^apps\/(mobile|restaurant-web)\//.test(file)));
 check("RA-1A adds no Admin page, repository, service or mock",
   scopeManifest.every((file) => !/^apps\/admin-web\/(app|repositories|services|adapters|components|view-models)\//.test(file)));

@@ -1,3 +1,4 @@
+import { readConsumerPublicRuntimeEnv } from "../../consumer-runtime-config/consumerPublicRuntimeEnv";
 import { createAsyncStorageConsumerAuthStorage } from "../../consumer-auth/asyncStorageConsumerAuthStorage";
 import { getConsumerRuntimeFlags } from "../../consumer-auth/featureFlags";
 import { deriveLiveSupabaseClientFlags } from "../../consumer-auth/liveClientCompositionFlags";
@@ -19,4 +20,8 @@ export function createRestaurantAboutComposition(env: Env = readEnv(), dependenc
     return new SupabaseRestaurantAboutRepository(factory.getOrCreateClient().client as unknown as RestaurantAboutClientLike);
   } catch { return new DisabledRestaurantAboutRepository(); }
 }
-function readEnv(): Env { const g = globalThis as typeof globalThis & { process?: { env?: Env } }; return g.process?.env ?? {}; }
+// GQA-6R C-1: the one literal, build-inlined Consumer public configuration (an indirect process.env
+// read resolves to undefined in the exported web bundle).
+function readEnv(): Env {
+  return readConsumerPublicRuntimeEnv();
+}

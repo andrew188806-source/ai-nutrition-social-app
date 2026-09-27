@@ -69,6 +69,8 @@ import {
   type RestaurantCatalogLookupStatus
 } from "../features/restaurants/catalog/restaurantContextPresentation";
 import { mobileMenuItemService } from "../services/mobile-menu-item-service";
+import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../features/consumer-runtime-config/consumerPublicRuntimeEnv";
+import { useLiveNextMealCarousel, type LiveNextMealCarouselState } from "../features/next-meal-prototype/liveNextMealCarousel";
 import { Card as SnowCard, Chip, PrimaryButton, SecondaryButton, SectionHeader as SnowSectionHeader, StatCard } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, hexA, radius, shadows, snowPalette as snow } from "../theme/tokens";
@@ -77,12 +79,13 @@ type NextMealRecommendationCard = {
   menuItemId: string;
   restaurantId: string;
   dishName: string;
-  calories: number;
+  // GQA-6R C-4: a live canonical candidate may carry no calorie value and never a derived match score.
+  calories: number | null;
   restaurantName: string;
   distance: string;
   emoji: string;
   reason: string;
-  matchPercent: number;
+  matchPercent: number | null;
 };
 
 let hasPlayedRecommendationCardCue = false;
@@ -209,9 +212,12 @@ export default function AnalysisScreen() {
   // Recalculated whenever guiltSharingResult changes, so completing Guilt Sharing
   // immediately replaces the recommendation list with one based on the updated calories.
   const referenceCalories = guiltSharingResult?.sharedCaloriesPerPerson ?? analysis.nutritionSummary.calories;
-  const nextMealRecommendations = useMemo(
-    () => buildNextMealRecommendationCards(getNextMealCandidateCount(demoMode), referenceCalories),
-    [demoMode, referenceCalories]
+  // GQA-6R C-4: a live Consumer identity never ranks the local mock restaurant platform; its carousel is
+  // fed below by the canonical next-meal provider. The local ranking stays for non-live compositions only.
+  const liveNextMealComposition = useMemo(() => isLiveConsumerComposition(readConsumerPublicRuntimeEnv()), []);
+  const localNextMealRecommendations = useMemo(
+    () => liveNextMealComposition ? [] : buildNextMealRecommendationCards(getNextMealCandidateCount(demoMode), referenceCalories),
+    [demoMode, liveNextMealComposition, referenceCalories]
   );
   const candidateResolution = useMemo(
     () =>
@@ -283,6 +289,18 @@ export default function AnalysisScreen() {
   const completionSnapshot = analysisSessionOwned ? completionSnapshotState : null;
   const fallbackRevealed = analysisSessionOwned ? fallbackRevealedState : false;
   const correctionRequested = analysisSessionOwned ? correctionRequestedState : false;
+  // GQA-6R C-4: once the meal is confirmed or durably completed, the live carousel reads the canonical
+  // next-meal pipeline (the same provider as /recommendation) and refreshes after completion, when the
+  // just-saved meal becomes part of today's canonical intake.
+  const liveNextMeal = useLiveNextMealCarousel({
+    enabled: liveNextMealComposition && (completionSnapshot !== null || isAnalysisConfirmed),
+    entitlement: demoMode,
+    refreshKey: completionSnapshot ? "completed" : "confirmed"
+  });
+  const nextMealRecommendations: NextMealRecommendationCard[] = liveNextMealComposition
+    ? liveNextMeal.state.status === "success" ? liveNextMeal.state.cards.map((card) => ({ ...card })) : []
+    : localNextMealRecommendations;
+  const nextMealState: LiveNextMealCarouselState | null = liveNextMealComposition ? liveNextMeal.state : null;
   // The captured photo is as actor-sensitive as the completion snapshot, and it lives in a hook
   // that snapshots the session at mount, so it gets the same ownership gate.
   const ownedCapturedImageUri = analysisSessionOwned ? analysis.capturedImageUri : null;
@@ -761,13 +779,24 @@ export default function AnalysisScreen() {
             onAnalyzeAnother={() => router.push("/meal-photo")}
             onGuiltShare={handleGuiltSharingConfirm}
             nextMealRecommendations={nextMealRecommendations}
+            nextMealState={nextMealState}
+            onRetryNextMeal={liveNextMeal.retry}
             isPremium={demoMode === "premium"}
             onSelectMeal={openNextMealRecommendation}
             onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
           />
         </>
       ) : mealSaved ? (
-        <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
+        liveNextMealComposition ? (
+          <LiveSavedMealActions
+            onViewTodayIntake={() => router.push("/today-intake")}
+            onFindBuddy={() => router.push("/meal-buddies")}
+            onNextMeal={() => router.push("/recommendation")}
+            onOpenMealLog={() => router.push("/meal-log")}
+          />
+        ) : (
+          <TodayIntakeSummary onFindBuddy={() => router.push("/meal-buddies")} onNextMeal={() => router.push("/recommendation")} onOpenMealLog={() => router.push("/meal-log")} />
+        )
       ) : (
         <>
           <SnowCard tone="primary">
@@ -995,6 +1024,8 @@ export default function AnalysisScreen() {
               onOpenNutritionRecord={() => router.push("/meal-log")}
               onGuiltShare={handleGuiltSharingConfirm}
               nextMealRecommendations={nextMealRecommendations}
+              nextMealState={nextMealState}
+              onRetryNextMeal={liveNextMeal.retry}
               isPremium={demoMode === "premium"}
               onSelectMeal={openNextMealRecommendation}
               onViewRestaurant={(restaurantId) => router.push({ pathname: "/restaurants", params: { restaurantId } })}
@@ -1707,6 +1738,8 @@ function CompletedAnalysisHero({
   onOpenNutritionRecord,
   onGuiltShare,
   nextMealRecommendations,
+  nextMealState = null,
+  onRetryNextMeal,
   isPremium,
   onSelectMeal,
   onViewRestaurant,
@@ -1722,6 +1755,8 @@ function CompletedAnalysisHero({
   onOpenNutritionRecord: () => void;
   onGuiltShare: (result: { peopleCount: number; sharedCaloriesPerPerson: number }) => void;
   nextMealRecommendations: NextMealRecommendationCard[];
+  nextMealState?: LiveNextMealCarouselState | null;
+  onRetryNextMeal?: () => void;
   isPremium: boolean;
   onSelectMeal: (item: NextMealRecommendationCard) => void;
   onViewRestaurant: (restaurantId: string) => void;
@@ -1746,7 +1781,7 @@ function CompletedAnalysisHero({
         <SnowSectionHeader title={zhTW.mobile.refinedLogic.analysisFlow.bridgeTitle} subtitle={zhTW.mobile.refinedLogic.analysisFlow.bridgeBody} />
       )}
       <MacroChipsRow nutritionSummary={nutritionSummary} />
-      <NextMealRecommendationCarousel recommendations={nextMealRecommendations} isPremium={isPremium} onSelectMeal={onSelectMeal} onViewRestaurant={onViewRestaurant} />
+      <NextMealRecommendationCarousel recommendations={nextMealRecommendations} liveState={nextMealState} onRetry={onRetryNextMeal} isPremium={isPremium} onSelectMeal={onSelectMeal} onViewRestaurant={onViewRestaurant} />
       <SingleMealGuiltShare
         estimatedCalories={nutritionSummary.calories}
         mealName={mealName}
@@ -2039,11 +2074,15 @@ function formatMealOccurrenceDisplay(iso: string | null, timezone: string): stri
 
 function NextMealRecommendationCarousel({
   recommendations,
+  liveState = null,
+  onRetry,
   isPremium,
   onSelectMeal,
   onViewRestaurant
 }: {
   recommendations: NextMealRecommendationCard[];
+  liveState?: LiveNextMealCarouselState | null;
+  onRetry?: () => void;
   isPremium: boolean;
   onSelectMeal: (item: NextMealRecommendationCard) => void;
   onViewRestaurant: (restaurantId: string) => void;
@@ -2064,10 +2103,23 @@ function NextMealRecommendationCarousel({
     ]).start();
   }, [cueScale, recommendations.length]);
 
+  // GQA-6R C-4: a live carousel shows an explicit loading, empty or error state instead of an empty strip
+  // that reads as a dead control; retry re-runs the canonical read.
+  const liveStatus = liveState && liveState.status !== "success" && liveState.status !== "idle" ? liveState : null;
   return (
     <View style={styles.nextMealPanel}>
       <Text style={styles.nextMealEyebrow}>{zhTW.mobile.refinedLogic.lifestyleWorld.todayIntake.nextMealSocialTitle}</Text>
       <Text style={styles.nextMealTitle}>{copy.nextMealCarouselTitle}</Text>
+      {liveStatus ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={styles.recoTapHint}>
+            {liveStatus.status === "loading" ? "正在讀取下一餐候選…" : liveStatus.message}
+          </Text>
+          {liveStatus.status === "error" && liveStatus.retryable && onRetry ? (
+            <SecondaryButton icon="spark" label="重新讀取下一餐候選" onPress={onRetry} />
+          ) : null}
+        </View>
+      ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recoTrack}>
         {recommendations.map((item) => {
           const reasonExpanded = expandedReasonId === item.menuItemId;
@@ -2083,9 +2135,9 @@ function NextMealRecommendationCarousel({
                   <Text style={styles.recoEmoji}>{item.emoji}</Text>
                 </View>
                 <Chip label={copy.aiRecommendedBadge} tone="primary" />
-                <Text style={styles.recoMatchLabel}>{item.matchPercent}% {copy.matchLabelSuffix}</Text>
+                {item.matchPercent !== null ? <Text style={styles.recoMatchLabel}>{item.matchPercent}% {copy.matchLabelSuffix}</Text> : null}
                 <Text style={styles.recoName}>{item.dishName}</Text>
-                <Text style={styles.recoCalories}>{item.calories} kcal</Text>
+                {item.calories !== null ? <Text style={styles.recoCalories}>{item.calories} kcal</Text> : null}
                 <Text style={styles.recoRestaurant}>{item.restaurantName}</Text>
                 <Text style={styles.recoDistance}>{item.distance}</Text>
               </Pressable>
@@ -2104,6 +2156,36 @@ function NextMealRecommendationCarousel({
       </ScrollView>
       {!isPremium ? <Text style={styles.recoPremiumHint}>{copy.premiumMoreHint}</Text> : null}
     </View>
+  );
+}
+
+// GQA-6R C-2: after a live, durable save the screen states only what is true — the meal is stored — and
+// offers the same next actions. TodayIntakeSummary below is the local demo summary (fixed "82" score,
+// canned advice and stat values, fixture planned dinner, local demo records) and is never shown to a
+// live Consumer identity; the real numbers live on /today-intake, read from canonical records.
+function LiveSavedMealActions({ onViewTodayIntake, onFindBuddy, onNextMeal, onOpenMealLog }: {
+  onViewTodayIntake: () => void; onFindBuddy: () => void; onNextMeal: () => void; onOpenMealLog: () => void;
+}) {
+  const intake = zhTW.mobile.analysis.savedIntake;
+  return (
+    <SnowCard tone="primary">
+      <View style={styles.chipRow}>
+        <Chip label={intake.savedMessage} />
+      </View>
+      <SnowSectionHeader title={intake.title} subtitle={intake.body} />
+      <View style={styles.ctaColumn}>
+        <PrimaryButton icon="clock" label={intake.nextMeal} onPress={onNextMeal} />
+        <SecondaryButton icon="chart" label={intake.title} onPress={onViewTodayIntake} />
+        <View style={styles.ctaRow2}>
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="chart" label={intake.viewLog} onPress={onOpenMealLog} />
+          </View>
+          <View style={styles.ctaItem}>
+            <SecondaryButton icon="buddies" label={intake.findBuddy} onPress={onFindBuddy} />
+          </View>
+        </View>
+      </View>
+    </SnowCard>
   );
 }
 

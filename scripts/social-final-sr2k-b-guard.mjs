@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 // SR-2K-B guard — Social MVP final closure. Static/source authority only: no network, no database,
 // no credentials, no Development and no Production access. The REAL PostgreSQL apply proof is a
 // separate, opt-in harness (social-final-sr2k-b-postgres-apply.mjs).
@@ -135,10 +136,13 @@ check("no frozen predecessor migration byte is modified",
     lines(run(["diff", "--name-only", SR2KB_BASELINE, "--", f])).length === 0));
 check("every candidate migration is transactional",
   SR2KB_MIGRATIONS.every((f) => /^begin;/m.test(read(f)) && /^commit;/m.test(read(f))));
+// GQA-6R: exact Stable Demo repair paths (browser CORS wrapper, literal flag read) are a recorded successor.
+const gqa6rPaths = acceptedGqa6rProductPaths();
+const deltaOutsideGqa6r = (f) => lines(run(["diff", "--name-only", SR2KB_BASELINE, "--", f])).filter((p) => !gqa6rPaths.includes(p));
 check("the frozen ref-crypto and chat/relationship Edge entrypoints are untouched",
   ["supabase/functions/_shared/meal-buddy-relationship-ref", "supabase/functions/_shared/meal-buddy-chat-ref",
     "supabase/functions/meal-buddy-relationship", "supabase/functions/meal-buddy-chat"]
-    .every((f) => lines(run(["diff", "--name-only", SR2KB_BASELINE, "--", f])).length === 0));
+    .every((f) => deltaOutsideGqa6r(f).length === 0));
 check("ranking, exposure, context and interest authority bytes are unchanged",
   ["supabase/functions/_shared/social-ranking", "supabase/functions/_shared/social-exposure",
     "supabase/functions/_shared/meal-buddy-context", "apps/mobile/features/social-interest-settings",

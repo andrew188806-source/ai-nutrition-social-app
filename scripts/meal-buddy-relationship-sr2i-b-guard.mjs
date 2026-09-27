@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // SR-2I-B lifecycle-aware local Mobile activation guard. Read-only and offline.
 import crypto from "node:crypto";
+import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -143,7 +144,7 @@ const allowedBackendDelta = [
   "supabase/functions/_shared/meal-buddy-relationship-api/request.ts"
 ];
 const actualBackendDelta = lines(git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/_shared/meal-buddy-relationship-api"]));
-check("39 SR-2I-A lifecycle SQL RPC ref crypto and Edge handler remain frozen while successor authority stays separate", exact(actualBackendDelta, allowedBackendDelta) && git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/meal-buddy-relationship", "supabase/functions/_shared/meal-buddy-relationship-ref", SR2IB_MIGRATION]).trim() === "");
+check("39 SR-2I-A lifecycle SQL RPC ref crypto and Edge handler remain frozen while successor authority stays separate", exact(actualBackendDelta, allowedBackendDelta) && lines(git(["diff", "--name-only", SR2IB_BASELINE, "--", "supabase/functions/meal-buddy-relationship", "supabase/functions/_shared/meal-buddy-relationship-ref", SR2IB_MIGRATION])).every((p) => acceptedGqa6rProductPaths(root).includes(p)));
 check("40 SR-2I-A migration SHA-256 remains exact", crypto.createHash("sha256").update(migrationBytes).digest("hex") === SR2IB_MIGRATION_SHA256);
 check("41 no migration secret deploy or remote operator delta exists", exact(lifecycle.manifest.filter((file) => file.startsWith("supabase/")), allowedBackendDelta) && !lifecycle.manifest.some((file) => file.startsWith("supabase/migrations/") || file.startsWith("supabase/functions/meal-buddy-relationship/")) && !/MEAL_BUDDY_RELATIONSHIP_REF_KEY_V1|supabase\s+(db push|functions deploy)|--project-ref|SUPABASE_SERVICE_ROLE/.test(productionSources));
 check("42 every candidate source is UTF-8 text without NUL", SR2IB_SUCCESSOR_PATHS.every((file) => { const bytes = fs.readFileSync(path.join(root, file)); return !bytes.includes(0) && !read(file).includes("\uFFFD"); }));

@@ -16,6 +16,11 @@ import { Card, CompactRow, PrimaryButton, SecondaryButton, SectionHeader } from 
 import { Icon, type IconName } from "../theme/icons";
 import { fonts, hexA, radius, snowPalette as colors } from "../theme/tokens";
 
+// GQA-6R C-2A: the hero line makes no claim about the user's own eating. The former
+// lifestyleWorld.homeMoodBody ("你本週飲食平衡不錯…") asserted a personal weekly assessment with no data
+// behind it; nothing in this app derives such an assessment, so the truthful line is neutral.
+const HOME_NEUTRAL_STATUS = "記錄每一餐，下一餐建議會依你實際儲存的紀錄產生。";
+
 export default function LandingScreen() {
   const router = useRouter();
   const [demoDateKey, setDemoDateKey] = useState(getEffectiveDateKey());
@@ -76,7 +81,7 @@ export default function LandingScreen() {
           <Text style={styles.subtitle}>{zhTW.mobile.landingSubtitle}</Text>
           <View style={styles.statusRow}>
             <Icon name="spark" size={14} color={colors.ai} />
-            <Text style={styles.statusText}>{lifestyle.homeMoodBody}</Text>
+            <Text style={styles.statusText}>{HOME_NEUTRAL_STATUS}</Text>
           </View>
         </View>
 
