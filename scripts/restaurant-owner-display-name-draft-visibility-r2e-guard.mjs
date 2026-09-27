@@ -4,6 +4,7 @@
 // column grants, RA-2F RPC bodies untouched) and that no historical migration was edited. Later
 // rounds are accepted only through the exact successor sequence below.
 import fs from "node:fs";
+import { GQA5_REPAIR_FILE, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 const ROOT = process.cwd();
 const read = (file) => fs.readFileSync(`${ROOT}/${file}`, "utf8");
 
@@ -27,7 +28,9 @@ if (source === null) {
 }
 
 // --- ordering: this is the final migration in the repo --------------------------------------------
-const migrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
+const allMigrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
+// The exact GQA-5 Restaurant read repair is the single recorded successor after ADMIN-D; only its exact bytes are set aside.
+const migrationFiles = isExactGqa5RestaurantReadRepair(ROOT) ? allMigrationFiles.filter((f) => f !== GQA5_REPAIR_FILE) : allMigrationFiles;
 // Exact successor awareness: R2E is followed by precisely the authorized hardening and Admin migrations through ADMIN-D.
 check(migrationFiles.slice(-7).join("|") === [MIGRATION.split("/").pop(), "20260919020000_staff_management_v2_outer_acl_hardening_h3.sql", "20260919030000_social_interest_lookup_rls_acl_hardening_h4.sql", "20260920010000_admin_operational_read_permissions_ae1.sql", "20260920020000_admin_restaurant_operational_read_foundation_b1.sql", "20260920030000_admin_operational_review_queues_c.sql", "20260921010000_admin_dashboard_social_policy_reads_d.sql"].join("|"), "R2E is followed only by the authorized H3, H4, ADMIN-AE1, ADMIN-B1, ADMIN-C and ADMIN-D migrations", migrationFiles.slice(-7));
 check(migrationFiles.length >= 133, "at least 133 migrations exist (127 historical + 5 R2B + 1 R2E)", migrationFiles.length);

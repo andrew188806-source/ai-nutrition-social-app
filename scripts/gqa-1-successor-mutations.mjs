@@ -97,6 +97,14 @@ rejects("forged closure path set (missing path)", { closurePaths: GQA1_CLOSURE_P
 rejects("wildcard closure path", { closurePaths: ["scripts/*"] });
 rejects("prefix closure path", { closurePaths: ["scripts/", ...GQA1_CLOSURE_PATHS.slice(1)] });
 
+// GQA-5 exact successor: only the recorded Restaurant read-repair migration, only with exact bytes.
+const REPAIR = "supabase/migrations/20260927010000_restaurant_catalog_read_rls_plan_repair.sql";
+check("exact GQA-5 read-repair migration is accepted in the frozen boundary", matchesExactGqa1Successor(changed({ frozenBoundaryDelta: [REPAIR], gqa5RepairExact: true })));
+rejects("GQA-5 repair path with changed bytes", { frozenBoundaryDelta: [REPAIR], gqa5RepairExact: false });
+rejects("extra migration beside the exact GQA-5 repair", { frozenBoundaryDelta: [REPAIR, "supabase/migrations/20990101000000_extra.sql"], gqa5RepairExact: true });
+rejects("frozen Consumer runtime change beside the exact GQA-5 repair", { frozenBoundaryDelta: [REPAIR, GQA1_MEAL_LOG], gqa5RepairExact: true });
+rejects("exact-repair flag cannot admit an unrelated migration", { frozenBoundaryDelta: ["supabase/migrations/20990101000000_extra.sql"], gqa5RepairExact: true });
+
 // ---------------------------------------------------------------- real-history topology proofs
 // A shared clone reads this repository's objects and writes only its own. Commits there are fixtures:
 // none of their identities appear in, or are required by, the manifest.

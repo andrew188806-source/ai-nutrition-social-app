@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { validateAdminD } from "./admin-dashboard-social-policies-d-rules.mjs";
+import { GQA5_REPAIR_FILE, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 
 const ROOT = process.cwd();
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
@@ -23,7 +24,10 @@ function check(name, fn) {
 
 check("shared ADMIN-D security and UI rules all pass", () => assert.deepEqual(validateAdminD(source), []));
 check("the one ADMIN-D migration is additive, sorts after ADMIN-C, and no historical migration is edited by this guard", () => {
-  const files = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
+  // The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
+  const exactRepair = isExactGqa5RestaurantReadRepair(ROOT);
+  const files = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort()
+    .filter((file) => !(exactRepair && file === GQA5_REPAIR_FILE));
   assert.equal(files.length, 139);
   assert.deepEqual(files.slice(-2), ["20260920030000_admin_operational_review_queues_c.sql", path.basename(FILES.migration)]);
 });

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
 import { unexpectedMrbApiOrSupabase } from "./admin-mrb-successor-manifest.mjs";
+import { acceptedGqa5RepairPaths } from "./gqa5-restaurant-read-repair-manifest.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -197,9 +198,12 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
     "apps/admin-web/components/admin-shell/AdminMenuViews.tsx", ...Object.values(B3), "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-menu-canonical-ui-b3-mutations.mjs", "supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "apps/admin-web/server/adminReviewQueueRead.ts", "apps/admin-web/components/admin-shell/AdminQueueViews.tsx", "apps/admin-web/app/admin/restaurants/menu-management/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/pending/page.tsx", "apps/admin-web/app/admin/restaurants/menu-management/data-quality/page.tsx", "apps/admin-web/app/admin/nutrition/certification/pending/page.tsx", "scripts/admin-operational-review-queues-c-guard.mjs", "scripts/admin-operational-review-queues-c-mutations.mjs", "scripts/admin-operational-review-queues-c-postgres-apply.mjs", "scripts/admin-menu-canonical-ui-b3-guard.mjs", "scripts/admin-restaurant-branch-canonical-ui-b2-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-guard.mjs", "scripts/admin-restaurant-operational-read-foundation-b1-postgres-apply.mjs", "scripts/admin-operational-read-permissions-ae1-guard.mjs", "scripts/admin-operational-read-permissions-ae1-postgres-apply.mjs", "scripts/pre-admin-hardening-h3-h4-guard.mjs", "scripts/pre-admin-hardening-h3-h4-postgres-apply.mjs", "scripts/restaurant-catalog-authoring-r2b-guard.mjs", "scripts/restaurant-catalog-authoring-r2b-postgres-apply.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs", "apps/admin-web/server/adminRestaurantRead.ts", "package.json", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/allergens/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/certification/page.tsx", "apps/admin-web/app/admin/restaurants/[restaurantId]/menus/[menuId]/items/[itemId]/page.tsx",
     "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql", "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx", "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   ]);
+  // The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
+  const gqa5Repair = acceptedGqa5RepairPaths(ROOT);
+  for (const p of gqa5Repair) allowed.add(p);
   assert.deepEqual(unexpectedSuccessorPaths(changed, allowed), []);
   assert.ok(!changed.has(VOCAB));
-  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && !["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql"].includes(f)), []); // exact ADMIN-C and ADMIN-D additive successors
+  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && !["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql", ...gqa5Repair].includes(f)), []); // exact ADMIN-C and ADMIN-D additive successors
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
 });
 

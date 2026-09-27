@@ -11,6 +11,7 @@ import fs from "node:fs";
 import child from "node:child_process";
 import { GQA1_PRODUCT_PATHS, isExactGqa1Successor } from "./gqa-1-successor-manifest.mjs";
 import { GQA2_RUNTIME, GQA2_RUNTIME_PATHS, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
+import { GQA5_REPAIR_MIGRATION, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 
 export const MRB_PREDECESSOR = "2fe70443d9292a7fc9cddad0e717266b4996c3f3";
 export const MRB_COMMIT = "7a4a3411b945f6e168cedf91711aa3cb2e0a2faa";
@@ -57,6 +58,7 @@ const exactPath = (file) => typeof file === "string" && file.length > 0 && !/[*?
 function laterSuccessorFor(file, evidence) {
   if (evidence.later?.gqa2 === true && GQA2_RUNTIME_PATHS.includes(file)) return "gqa2";
   if (evidence.later?.gqa1 === true && GQA1_PRODUCT_PATHS.includes(file)) return "gqa1";
+  if (evidence.later?.gqa5 === true && file === GQA5_REPAIR_MIGRATION) return "gqa5";
   return null;
 }
 
@@ -127,7 +129,7 @@ export function collectMrbSuccessorEvidence() {
     closureParent: closureInHistory ? git("rev-parse", `${MRB_CLOSURE}^`) : null,
     closureSubject: closureInHistory ? git("log", "-1", "--format=%s", MRB_CLOSURE) : null,
     closurePaths: closureInHistory ? lines(git("diff-tree", "--no-commit-id", "--name-only", "-r", MRB_CLOSURE)) : [],
-    later: Object.freeze({ gqa1: isExactGqa1Successor(), gqa2: isExactGqa2Successor(root) }),
+    later: Object.freeze({ gqa1: isExactGqa1Successor(), gqa2: isExactGqa2Successor(root), gqa5: isExactGqa5RestaurantReadRepair(root) }),
     mrbParent: git("rev-parse", `${MRB_COMMIT}^`),
     mrbSubject: git("log", "-1", "--format=%s", MRB_COMMIT),
     mrbCommitPaths: lines(git("diff-tree", "--no-commit-id", "--name-only", "-r", MRB_COMMIT)),
@@ -151,8 +153,10 @@ export function isExactMrbSuccessor() {
 
 export function unexpectedMrbApiOrSupabase(changed, authorizedMigrations) {
   const accepted = isExactMrbSuccessor();
+  // The one later Supabase path accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
+  const gqa5 = isExactGqa5RestaurantReadRepair();
   return changed.filter((file) =>
     (/^apps\/admin-web\/app\/api\//.test(file) && !(accepted && file === MRB_ROUTE))
-    || (file.startsWith("supabase/") && !authorizedMigrations.has(file))
+    || (file.startsWith("supabase/") && !authorizedMigrations.has(file) && !(gqa5 && file === GQA5_REPAIR_MIGRATION))
   );
 }

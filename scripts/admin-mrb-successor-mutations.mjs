@@ -89,5 +89,15 @@ reject("pushed: arbitrary later Restaurant path", (e) => {
 reject("pushed: arbitrary later Mobile path", (e) => {
   e.productDelta.push("apps/mobile/app/extra.tsx"); e.sinceMrbPaths.push("apps/mobile/app/extra.tsx");
 });
+// GQA-5 exact successor: only the recorded Restaurant read-repair migration, only with exact bytes.
+const REPAIR = "supabase/migrations/20260927010000_restaurant_catalog_read_rls_plan_repair.sql";
+const withRepair = (exact, extra = []) => (e) => {
+  e.later = { ...e.later, gqa5: exact };
+  for (const p of [REPAIR, ...extra]) { if (!e.productDelta.includes(p)) e.productDelta.push(p); if (!e.sinceMrbPaths.includes(p)) e.sinceMrbPaths.push(p); }
+};
+assert.equal(matchesExactMrbSuccessor(altered(pushed, withRepair(true))), true, "the exact GQA-5 read-repair migration is recognized after the chain");
+reject("pushed: GQA-5 repair migration with changed bytes", withRepair(false));
+reject("pushed: extra migration beside the exact GQA-5 repair", withRepair(true, ["supabase/migrations/20990101000000_extra.sql"]));
+reject("pushed: Admin server change beside the exact GQA-5 repair", withRepair(true, ["apps/admin-web/server/adminStepUpMutationRuntime.ts"]));
 assert.equal(pushed.sourceSha256[DETAIL], GQA2_RUNTIME[DETAIL].sha256, "the staff detail page is exactly the accepted GQA-2 bytes");
 console.log(`ADMIN-MRB exact successor mutation proof PASS (${rejected} mutations rejected; local and pushed shapes recognized)`);

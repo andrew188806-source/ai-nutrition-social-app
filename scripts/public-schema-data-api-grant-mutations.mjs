@@ -6,7 +6,8 @@ import { readManifest } from "./db-migration-baseline-manifest.mjs";
 import { evaluateMigrations, readRepositoryMigrations } from "./public-schema-data-api-grant-guard.mjs";
 
 const manifest = readManifest();
-const historical = readRepositoryMigrations();
+const historicalNames = new Set(manifest.entries.map((e) => e.path.split("/").pop()));
+const historical = readRepositoryMigrations().filter((f) => historicalNames.has(f.name));
 assert.equal(historical.length, manifest.count, "harness runs against the exact historical set");
 const NAME = "20990101000000_gqa3_fixture.sql";
 const run = (sql, { name = NAME, files = historical } = {}) => evaluateMigrations({ manifest, files: [...files, ...(sql === null ? [] : [{ name, text: sql }])] }).failures;

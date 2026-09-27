@@ -4,12 +4,17 @@
 import assert from "node:assert/strict";
 import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
 import { unexpectedMrbApiOrSupabase } from "./admin-mrb-successor-manifest.mjs";
+import { GQA5_REPAIR_FILE, acceptedGqa5RepairPaths } from "./gqa5-restaurant-read-repair-manifest.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
 const ROOT = process.cwd();
+// The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
+const GQA5_REPAIR = acceptedGqa5RepairPaths(ROOT);
+const latestMigration = () => fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort()
+  .filter((f) => !(GQA5_REPAIR.length && f === GQA5_REPAIR_FILE)).at(-1);
 const SUITE = "admin-operational-review-queues-c-guard";
 const BASELINE = "46bfb62457d2e0d86752334481649797ac860db3"; // ADMIN-B3 (pushed) = the ADMIN-C1 baseline
 const C1_COMMIT = "6df4660eec5a59ca9f320dad6be0d5486e807924"; // ADMIN-C1 (local) = the ADMIN-C2 baseline
@@ -236,11 +241,11 @@ check("database changes remain additive and exact: ADMIN-C plus the one ADMIN-D 
   const status = lines(git("diff", "--name-status", BASELINE));
   assert.deepEqual(status.filter((l) => /\tsupabase\//.test(l) && !/^A\t/.test(l)), []);
   const changed = new Set([...lines(git("diff", "--name-only", BASELINE)), ...lines(git("ls-files", "--others", "--exclude-standard"))]);
-  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && ![MIGRATION, D_MIGRATION].includes(f)), []);
+  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && ![MIGRATION, D_MIGRATION, ...GQA5_REPAIR].includes(f)), []);
   assert.deepEqual(unexpectedMrbApiOrSupabase([...changed], new Set([MIGRATION, D_MIGRATION]))
     .filter((f) => /^apps\/admin-web\/app\/api\//.test(f)), []);
   assert.ok(changed.has(MIGRATION));
-  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(D_MIGRATION));
+  assert.equal(latestMigration(), path.basename(D_MIGRATION));
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
 });
 check("changed paths are inside the exact ADMIN-C allow-list", () => {
@@ -255,7 +260,8 @@ check("changed paths are inside the exact ADMIN-C allow-list", () => {
     "scripts/restaurant-owner-display-name-draft-visibility-r2e-guard.mjs", "scripts/restaurant-owner-display-name-draft-visibility-r2e-postgres-apply.mjs",
     "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
     D_MIGRATION, "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx",
-    "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
+    "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs",
+    ...GQA5_REPAIR
   ]);
   assert.deepEqual(unexpectedSuccessorPaths(changed, allowed), []);
 });
@@ -292,8 +298,8 @@ check("ADMIN-C2: both pages REUSE the existing ADMIN-B1 item-detail read boundar
   for (const file of [B_ADAPTER, ADAPTER, "supabase/migrations/20260920020000_admin_restaurant_operational_read_foundation_b1.sql"]) assert.equal(git("diff", "--name-only", C1_COMMIT, "--", file), "", file);
   const lines = (v) => v.split(/\r?\n/).filter(Boolean);
   const successorSupabase = [...lines(git("diff", "--name-only", C1_COMMIT, "--", "supabase")), ...lines(git("ls-files", "--others", "--exclude-standard", "--", "supabase"))];
-  assert.deepEqual(successorSupabase, [D_MIGRATION]);
-  assert.equal(fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort().at(-1), path.basename(D_MIGRATION));
+  assert.deepEqual(successorSupabase.filter((f) => !GQA5_REPAIR.includes(f)), [D_MIGRATION]);
+  assert.equal(latestMigration(), path.basename(D_MIGRATION));
 });
 check("ADMIN-C2 read-only boundary: no form/button/input, no server action, no fetch or table access, no approve/reject/certify/edit/recalculate, no Nutritionist workflow, no mock or static data", () => {
   for (const [id, src] of Object.entries(c2pages)) {

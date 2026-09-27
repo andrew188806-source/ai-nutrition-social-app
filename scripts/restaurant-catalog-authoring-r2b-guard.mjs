@@ -5,6 +5,7 @@
 // was touched. Later rounds are accepted only when named in the exact successor list below; never
 // loosen it to accept arbitrary future migrations.
 import fs from "node:fs";
+import { GQA5_REPAIR_FILE, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 const ROOT = process.cwd();
 const read = (file) => fs.readFileSync(`${ROOT}/${file}`, "utf8");
 
@@ -27,7 +28,9 @@ function check(pass, name, detail) {
 
 // --- Files exist, in the expected R2B-1..R2B-5 order ------------------------------------------
 for (const [key, path] of Object.entries(FILES)) check(source[key] !== null, `migration file exists: ${path}`);
-const migrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
+const allMigrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
+// The exact GQA-5 Restaurant read repair is the single recorded successor after ADMIN-D; only its exact bytes are set aside.
+const migrationFiles = isExactGqa5RestaurantReadRepair(ROOT) ? allMigrationFiles.filter((f) => f !== GQA5_REPAIR_FILE) : allMigrationFiles;
 // Exact successor awareness: the final six migrations are exactly R2B-1..R2B-5 followed by the one
 // authorized R2E successor. Any other migration inserted inside the R2B chain, after R2E, or in
 // place of an R2B file fails. A future round must deliberately update this authorized list.

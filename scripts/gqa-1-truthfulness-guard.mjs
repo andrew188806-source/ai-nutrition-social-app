@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { GQA5_REPAIR_FILE, isExactGqa5RestaurantReadRepair } from './gqa5-restaurant-read-repair-manifest.mjs';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const mealLog = read('apps/mobile/app/meal-log.tsx');
@@ -43,7 +45,9 @@ assert.match(mealBuddies, /createOrOpenMealSessionChat/);
 assert.match(restaurants, /router\.push\("\/group-tables"\)/);
 assert.doesNotMatch(restaurants, /section=tables|setPendingTableRestaurant|openRestaurantTableFlow|四人桌機會|四人桌正在揪團/);
 assert.match(copy, /premiumValues: \["更多配對次數", "查看完整飯友資料", "健康目標模式", "更清楚的配對原因"\]/);
-const migrations = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter((name) => name.endsWith('.sql')).sort();
+const allMigrations = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter((name) => name.endsWith('.sql')).sort();
+// The exact GQA-5 Restaurant read repair is the single recorded later migration; only its exact bytes are set aside.
+const migrations = isExactGqa5RestaurantReadRepair(fileURLToPath(new URL('..', import.meta.url))) ? allMigrations.filter((name) => name !== GQA5_REPAIR_FILE) : allMigrations;
 assert.equal(migrations.length, 139);
 assert.equal(migrations.at(-1), '20260921010000_admin_dashboard_social_policy_reads_d.sql');
 console.log('GQA-1 truthfulness guard PASS');

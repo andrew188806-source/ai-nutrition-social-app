@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { GQA5_REPAIR_MIGRATION, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 
 export const GQA1_PREDECESSOR = "cb287bd33fc6cea858dcc0b2dce77de89506682e";
 export const GQA1_IMPLEMENTATION = "03cec4f3b0baf4303035c983fdb24a8b761e949d";
@@ -100,8 +101,10 @@ export function matchesExactGqa1Successor(evidence) {
     || evidence.closureSubject !== GQA1_CLOSURE_SUBJECT || !Array.isArray(evidence.closurePaths)
     || !evidence.closurePaths.every(exactPath) || !samePaths(evidence.closurePaths, GQA1_CLOSURE_PATHS)) return false;
   // 3. The frozen Consumer runtime boundary has not moved since the implementation (committed, dirty
-  //    or untracked).
-  if (!Array.isArray(evidence.frozenBoundaryDelta) || evidence.frozenBoundaryDelta.length !== 0) return false;
+  //    or untracked). The only later path it accepts is the exact GQA-5 Restaurant read-repair migration,
+  //    and only while that file's bytes are exactly the recorded ones.
+  const acceptedLater = evidence.gqa5RepairExact === true ? [GQA5_REPAIR_MIGRATION] : [];
+  if (!Array.isArray(evidence.frozenBoundaryDelta) || evidence.frozenBoundaryDelta.some((file) => !acceptedLater.includes(file))) return false;
   // 4. Exact diary bytes.
   if (evidence.committedMealLogSha256 !== GQA1_MEAL_LOG_SHA256
     || evidence.currentMealLogSha256 !== GQA1_MEAL_LOG_SHA256
@@ -183,6 +186,7 @@ export function collectGqa1SuccessorEvidence(root = process.cwd()) {
       ? [...new Set([...lines(git("diff", "--name-only", GQA1_IMPLEMENTATION, "--", ...GQA1_FROZEN_ROOTS)), ...frozenUntracked])]
       : ["<implementation not in history>"],
     truthfulnessSources,
+    gqa5RepairExact: isExactGqa5RestaurantReadRepair(root),
     committedMealLogSha256: sha256(execFileSync("git", ["show", `${GQA1_IMPLEMENTATION}:${GQA1_MEAL_LOG}`], { cwd: root, stdio: ["ignore", "pipe", "ignore"] })),
     currentMealLogSha256: sha256(mealLogBytes),
     committedMealLogBlob: git("rev-parse", `${GQA1_IMPLEMENTATION}:${GQA1_MEAL_LOG}`),

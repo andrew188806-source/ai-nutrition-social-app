@@ -10,6 +10,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { GQA5_REPAIR_MIGRATION, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 
 export const GQA2_PREDECESSOR = "8a166442b0ab11abe16559d857eeb1b4b9739407";
 export const GQA2_IMPLEMENTATION = "075a6f7728ac8c85e535493995562b522a273d77";
@@ -109,8 +110,10 @@ export function matchesExactGqa2Successor(evidence) {
   if (evidence.closureInHistory !== true || evidence.closureParent !== GQA2_IMPLEMENTATION
     || evidence.closureSubject !== GQA2_CLOSURE_SUBJECT || !Array.isArray(evidence.closurePaths)
     || !evidence.closurePaths.every(exactPath) || !samePaths(evidence.closurePaths, GQA2_CLOSURE_PATHS)) return false;
-  // Nothing product-side may move after the implementation (committed, dirty or untracked).
-  if (!Array.isArray(evidence.laterProductDelta) || evidence.laterProductDelta.length !== 0) return false;
+  // Nothing product-side may move after the implementation (committed, dirty or untracked), except the exact
+  // GQA-5 Restaurant read-repair migration while its bytes are exactly the recorded ones.
+  const acceptedLater = evidence.gqa5RepairExact === true ? [GQA5_REPAIR_MIGRATION] : [];
+  if (!Array.isArray(evidence.laterProductDelta) || evidence.laterProductDelta.some((file) => !acceptedLater.includes(file))) return false;
   // Exact committed and current bytes for every frozen runtime file.
   for (const [file, pin] of Object.entries(GQA2_RUNTIME)) {
     if (evidence.committedBlob?.[file] !== pin.blob || evidence.currentBlob?.[file] !== pin.blob
@@ -155,7 +158,8 @@ export function collectGqa2SuccessorEvidence(root = process.cwd()) {
     ]),
     committedBlob,
     currentBlob,
-    currentSha256
+    currentSha256,
+    gqa5RepairExact: isExactGqa5RestaurantReadRepair(root)
   };
 }
 

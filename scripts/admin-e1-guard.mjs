@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { isExactMrbSuccessor } from "./admin-mrb-successor-manifest.mjs";
 import { GQA1_IMPLEMENTATION, GQA1_PRODUCT_PATHS, isExactGqa1Successor } from "./gqa-1-successor-manifest.mjs";
 import { GQA2_RUNTIME, isExactGqa2Successor } from "./gqa-2-successor-manifest.mjs";
+import { acceptedGqa5RepairPaths } from "./gqa5-restaurant-read-repair-manifest.mjs";
 import { BASELINE, FILES, ROUTES, baselineFile, readSources, validateAdminE1 } from "./admin-e1-rules.mjs";
 const root = process.cwd();
 const pages = fs.readdirSync("apps/admin-web/app", { withFileTypes: true })
@@ -18,7 +19,8 @@ const failures = validateAdminE1(readSources(),baseline);
 assert.deepEqual(failures, [], failures.join("; "));
 const migrationDiff = cp.spawnSync("git",["diff","--name-only",BASELINE,"--","supabase/migrations"],{cwd:root,encoding:"utf8"});
 assert.equal(migrationDiff.status,0);
-assert.equal(migrationDiff.stdout.trim(),"","historical migrations unchanged");
+// Historical migrations unchanged; the only later file accepted is the exact GQA-5 Restaurant read repair.
+assert.deepEqual(migrationDiff.stdout.trim().split("\n").filter(Boolean).filter((f) => !acceptedGqa5RepairPaths(root).includes(f)),[],"historical migrations unchanged");
 const protectedPaths = ["apps/admin-web/app/admin", "apps/admin-web/components/admin-shell",
   "apps/admin-web/middleware.ts", "apps/admin-web/auth", "apps/admin-web/config",
   "supabase/functions", "apps/mobile", "apps/restaurant-web", "packages/shared"];

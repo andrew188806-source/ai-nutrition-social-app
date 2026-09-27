@@ -82,6 +82,15 @@ reject("GQA-1 frozen-runtime mutation (meal-log)", later("apps/mobile/app/meal-l
 reject("GQA-1 frozen-runtime mutation (Group Table)", later("apps/mobile/app/group-tables.tsx"));
 reject("untracked product file", later("apps/admin-web/app/admin/management/staff/untracked.tsx"));
 
+// GQA-5 exact successor: only the recorded Restaurant read-repair migration, only with exact bytes.
+const REPAIR = "supabase/migrations/20260927010000_restaurant_catalog_read_rls_plan_repair.sql";
+assert.equal(matchesExactGqa2Successor({ ...structuredClone(evidence), laterProductDelta: [REPAIR], gqa5RepairExact: true }), true, "exact GQA-5 read-repair migration is accepted");
+recognized.push("exact GQA-5 read-repair migration");
+reject("GQA-5 repair path with changed bytes", (e) => { e.laterProductDelta = [REPAIR]; e.gqa5RepairExact = false; });
+reject("extra migration beside the exact GQA-5 repair", (e) => { e.laterProductDelta = [REPAIR, "supabase/migrations/20990101000000_extra.sql"]; e.gqa5RepairExact = true; });
+reject("frozen runtime file change beside the exact GQA-5 repair", (e) => { e.laterProductDelta = [REPAIR, "apps/restaurant-web/app/vip/page.tsx"]; e.gqa5RepairExact = true; });
+reject("exact-repair flag cannot admit an unrelated migration", (e) => { e.laterProductDelta = ["supabase/migrations/20990101000000_extra.sql"]; e.gqa5RepairExact = true; });
+
 // ---------------------------------------------------------------- real-history topology proofs
 // A shared clone reads this repository's objects and writes only its own. Commits there are fixtures:
 // none of their identities appear in, or are required by, the manifest.

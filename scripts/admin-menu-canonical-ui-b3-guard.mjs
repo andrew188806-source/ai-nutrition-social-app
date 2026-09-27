@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { isExactAdminE1Successor, matchesE1Source, unexpectedSuccessorPaths } from "./admin-e1-historical-successor.mjs";
 import { unexpectedMrbApiOrSupabase } from "./admin-mrb-successor-manifest.mjs";
+import { acceptedGqa5RepairPaths } from "./gqa5-restaurant-read-repair-manifest.mjs";
 import child from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -247,9 +248,12 @@ check("no database or authority change: no migration, RPC, RLS, permission or vo
     "docs/admin-operational-surface-inventory.md", "docs/engineering-state-registers.md", "docs/engineering-handoff.md",
     "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql", "apps/admin-web/server/adminDashboardSocialRead.ts", "apps/admin-web/app/admin/page.tsx", "apps/admin-web/app/admin/social/policies/page.tsx", "scripts/admin-dashboard-social-policies-d-rules.mjs", "scripts/admin-dashboard-social-policies-d-guard.mjs", "scripts/admin-dashboard-social-policies-d-mutations.mjs", "scripts/admin-dashboard-social-policies-d-postgres-apply.mjs"
   ]);
+  // The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
+  const gqa5Repair = acceptedGqa5RepairPaths(ROOT);
+  for (const p of gqa5Repair) allowed.add(p);
   assert.deepEqual(unexpectedSuccessorPaths(changed, allowed), []);
   assert.ok(!changed.has(VOCAB));
-  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && !["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql"].includes(f)), []); // exact ADMIN-C and ADMIN-D additive successors
+  assert.deepEqual([...changed].filter((f) => f.startsWith("supabase/") && !["supabase/migrations/20260920030000_admin_operational_review_queues_c.sql", "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql", ...gqa5Repair].includes(f)), []); // exact ADMIN-C and ADMIN-D additive successors
   assert.equal(git("cat-file", "-t", BASELINE), "commit");
 });
 
