@@ -34,12 +34,30 @@ const KNOWN_SERVER_ERRORS = new Set<MealBuddyChatErrorCode>([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// PC-1: the one named bound for every chat call. The whole operation (session read + invoke) is
+// raced against it and the SDK's `timeout` aborts the HTTP request with the same value. A timeout is
+// an uncertain transport outcome (`network_error`): a send becomes retryable with the SAME key,
+// never a permanent "sending". `schedule` is injectable so tests never wait in real time.
+export const MEAL_BUDDY_CHAT_REQUEST_TIMEOUT_MS = 15_000;
+export type MealBuddyChatTimeoutPolicy = Readonly<{
+  timeoutMs: number;
+  schedule(callback: () => void, delayMs: number): () => void;
+}>;
+export const DEFAULT_MEAL_BUDDY_CHAT_TIMEOUT_POLICY: MealBuddyChatTimeoutPolicy = Object.freeze({
+  timeoutMs: MEAL_BUDDY_CHAT_REQUEST_TIMEOUT_MS,
+  schedule(callback: () => void, delayMs: number) {
+    const handle = setTimeout(callback, delayMs);
+    return () => clearTimeout(handle);
+  }
+});
+
 export class SupabaseMealBuddyChatRepository implements MealBuddyChatRepository {
   readonly source = "supabase-live" as const;
 
   constructor(
     private readonly authPort: ConsumerAuthPort,
-    private readonly client: SupabaseMealBuddyChatClientLike
+    private readonly client: SupabaseMealBuddyChatClientLike,
+    private readonly timeoutPolicy: MealBuddyChatTimeoutPolicy = DEFAULT_MEAL_BUDDY_CHAT_TIMEOUT_POLICY
   ) {}
 
   open(relationshipRef: string) {
@@ -72,7 +90,24 @@ export class SupabaseMealBuddyChatRepository implements MealBuddyChatRepository 
     );
   }
 
-  private async invoke<TResponse, TValue>(
+  private invoke<TResponse, TValue>(
+    request: MealBuddyChatApiRequest,
+    parse: (value: unknown) => TValue | null
+  ): Promise<MealBuddyChatOutcome<TValue>> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (outcome: MealBuddyChatOutcome<TValue>) => {
+        if (settled) return;
+        settled = true;
+        cancel();
+        resolve(outcome);
+      };
+      const cancel = this.timeoutPolicy.schedule(() => finish(failure("network_error")), this.timeoutPolicy.timeoutMs);
+      this.invokeUnbounded<TResponse, TValue>(request, parse).then(finish, () => finish(failure("network_error")));
+    });
+  }
+
+  private async invokeUnbounded<TResponse, TValue>(
     request: MealBuddyChatApiRequest,
     parse: (value: unknown) => TValue | null
   ): Promise<MealBuddyChatOutcome<TValue>> {
@@ -81,7 +116,10 @@ export class SupabaseMealBuddyChatRepository implements MealBuddyChatRepository 
 
     let response;
     try {
-      response = await this.client.functions.invoke<TResponse>(MEAL_BUDDY_CHAT_FUNCTION_NAME, { body: request });
+      response = await this.client.functions.invoke<TResponse>(
+        MEAL_BUDDY_CHAT_FUNCTION_NAME,
+        { body: request, timeout: this.timeoutPolicy.timeoutMs }
+      );
     } catch {
       return failure("network_error");
     }
@@ -183,6 +221,8 @@ function parseSend(value: unknown): MealBuddyChatSendSnapshot | null {
 }
 
 async function mapInvokeError(error: SupabaseMealBuddyChatInvokeError): Promise<MealBuddyChatErrorCode> {
+  // PC-1: an aborted or failed transport never produced a server answer; it is uncertain.
+  if (error.name === "FunctionsFetchError") return "network_error";
   try {
     const body = await error.context?.json();
     const errorBody = isRecord(body) && isRecord(body.error) ? body.error : null;

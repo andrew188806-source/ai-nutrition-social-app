@@ -20,6 +20,16 @@ type RequestToken = Readonly<{
   relationshipRef: string | null;
 }>;
 
+// PC-1: a send acknowledgement belongs to the SESSION (this actor, generation, relationship and
+// session epoch), not to the global read sequence. Reads (reconcile, refresh, older pages) advance
+// the read sequence freely without orphaning an in-flight send.
+type SessionToken = Readonly<{
+  epoch: number;
+  actorKey: string | null;
+  actorGeneration: number;
+  relationshipRef: string | null;
+}>;
+
 const SIGNED_OUT: MealBuddyChatState = Object.freeze({ phase: "signed_out", errorCode: null } as const);
 
 // A decisive authorization/safety rejection from the frozen server contract. When one of these
@@ -45,6 +55,15 @@ export class MealBuddyChatController {
 
   private realtimeSubscription: MealBuddyChatRealtimeSubscription | null = null;
   private reconciling = false;
+
+  // PC-1 send/reconcile ordering. `sessionEpoch` changes only on teardown (actor change, sign-out,
+  // re-open, fail-closed, dispose). While a send is in flight a realtime-driven reconciliation is
+  // deferred (never dropped) and runs once the send settles — which the repository bounds by its
+  // timeout — so incoming messages are delayed by at most one send, never suppressed.
+  private sessionEpoch = 0;
+  private sendInFlight = false;
+  private reconcileDeferred = false;
+  private reconcileGeneration = 0;
 
   constructor(
     private readonly repository: MealBuddyChatRepository,
@@ -142,17 +161,27 @@ export class MealBuddyChatController {
   // re-reads the newest page, so a missed frame, a reconnect gap and a duplicate frame all heal the
   // same way. Unlike refresh() it shows no spinner, because the user did not ask for it.
   async reconcile(): Promise<boolean> {
-    if (this.disposed || this.state.phase !== "ready" || this.reconciling) return false;
+    if (this.disposed || this.state.phase !== "ready") return false;
+    // PC-1: never let a list refresh race an in-flight send; run it once the send has settled.
+    if (this.sendInFlight) { this.reconcileDeferred = true; return false; }
+    // A request that arrives while one is running is queued, not dropped: the running one may be the
+    // stale pre-send read that is about to be discarded.
+    if (this.reconciling) { this.reconcileDeferred = true; return false; }
     if (!isMealBuddyChatRelationshipRef(this.relationshipRef)) return false;
     this.reconciling = true;
     const request = this.captureRequest();
+    const generation = this.reconcileGeneration;
     try {
       const opened = await this.repository.open(this.relationshipRef);
       if (!this.isCurrent(request)) return false;
       if (!opened.ok) { this.failClosed(opened.errorCode); return false; }
+      // A send started meanwhile: this page may predate its insert. Drop it; the send settles and
+      // then runs a fresh reconciliation.
+      if (generation !== this.reconcileGeneration) return false;
       this.conversationRef = opened.value.conversation.conversationRef;
       const page = await this.repository.listMessages(this.conversationRef, null, MEAL_BUDDY_CHAT_PAGE_SIZE);
       if (!this.isCurrent(request)) return false;
+      if (generation !== this.reconcileGeneration) return false;
       if (!page.ok) { this.failClosed(page.errorCode); return false; }
       // The canonical page replaces local history wholesale, so the server's ordering is what is
       // rendered and a message already shown cannot appear twice.
@@ -163,6 +192,9 @@ export class MealBuddyChatController {
       return true;
     } finally {
       this.reconciling = false;
+      // Run what was queued while this one was in flight — unless a send now owns the ordering, in
+      // which case the send's own completion flushes it.
+      if (!this.sendInFlight) this.flushDeferredReconcile();
     }
   }
 
@@ -258,33 +290,65 @@ export class MealBuddyChatController {
   }
 
   private async dispatchSend(pending: MealBuddyChatPendingSend): Promise<boolean> {
-    if (this.state.phase !== "ready" || !this.conversationRef) return false;
-    const request = this.captureRequest();
+    if (this.state.phase !== "ready" || !this.conversationRef || this.sendInFlight) return false;
+    const session = this.captureSession();
     this.pendingSend = pending;
+    this.sendInFlight = true;
+    // Any list read already in flight may predate this insert; it must not replace history. Its
+    // work is re-queued so a fresh reconciliation still runs after the send settles.
+    this.reconcileGeneration += 1;
+    if (this.reconciling) this.reconcileDeferred = true;
     this.update(Object.freeze({ ...this.state, pendingSend: pending, draftRejected: false, errorCode: null }));
     const result = await this.repository.send(this.conversationRef, pending.clientMessageId, pending.body);
-    if (!this.isCurrent(request)) return false;
+    // A newer session owns the state (teardown already cleared the send and any deferral).
+    if (!this.isSessionCurrent(session)) return false;
+    this.sendInFlight = false;
     if (this.state.phase !== "ready") return false;
 
     if (result.ok) {
       // Canonical truth comes from the server response, never from the fact that Send was tapped.
+      // The acknowledgement replaces the pending row; dedupe by canonical ref keeps exactly one.
       const known = new Set(this.messages.map((m) => m.messageRef));
       this.messages = known.has(result.value.message.messageRef)
         ? this.messages
         : Object.freeze([...this.messages, result.value.message]);
       this.pendingSend = null;
       this.update(this.readyState(result.value.conversation.counterpart, null));
+      this.flushDeferredReconcile();
       return true;
     }
     if (isAuthorizationFailure(result.errorCode)) {
       this.failClosed(result.errorCode);
       return false;
     }
-    // Uncertain transport outcome: keep the body AND the key so a retry can be collapsed server-side.
+    // Uncertain transport outcome (including the bounded timeout): keep the body AND the key so a
+    // retry can be collapsed server-side. Never a permanent "sending".
     const retryable: MealBuddyChatPendingSend = Object.freeze({ ...pending, phase: "retryable" as const });
     this.pendingSend = retryable;
     this.update(Object.freeze({ ...this.state, pendingSend: retryable, errorCode: result.errorCode }));
+    this.flushDeferredReconcile();
     return false;
+  }
+
+  private flushDeferredReconcile() {
+    if (!this.reconcileDeferred) return;
+    this.reconcileDeferred = false;
+    void this.reconcile();
+  }
+
+  private captureSession(): SessionToken {
+    return Object.freeze({
+      epoch: this.sessionEpoch,
+      actorKey: this.actorKey,
+      actorGeneration: this.actorGeneration,
+      relationshipRef: this.relationshipRef
+    });
+  }
+
+  private isSessionCurrent(session: SessionToken) {
+    return !this.disposed && session.epoch === this.sessionEpoch
+      && session.actorKey === this.actorKey && session.actorGeneration === this.actorGeneration
+      && session.relationshipRef === this.relationshipRef;
   }
 
   dispose() {
@@ -309,6 +373,11 @@ export class MealBuddyChatController {
     this.cursor = null;
     this.messages = [];
     this.pendingSend = null;
+    // PC-1: a new session epoch orphans any in-flight send of the old session by construction.
+    this.sessionEpoch += 1;
+    this.sendInFlight = false;
+    this.reconcileDeferred = false;
+    this.reconcileGeneration += 1;
   }
 
   private readyState(

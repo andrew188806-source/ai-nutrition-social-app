@@ -39,6 +39,8 @@ export type MealBuddyChatSendResponse = Readonly<{
 }>;
 
 export type SupabaseMealBuddyChatInvokeError = Readonly<{
+  // PC-1: the SDK names a transport/abort failure `FunctionsFetchError`; nothing else is read from it.
+  name?: string;
   context?: { json(): Promise<unknown> };
 }>;
 
@@ -46,7 +48,8 @@ export type SupabaseMealBuddyChatClientLike = {
   functions: {
     invoke<T = unknown>(
       functionName: typeof MEAL_BUDDY_CHAT_FUNCTION_NAME,
-      options: Readonly<{ body: MealBuddyChatApiRequest }>
+      // PC-1: `timeout` is the installed functions-js option that aborts the HTTP request.
+      options: Readonly<{ body: MealBuddyChatApiRequest; timeout?: number }>
     ): Promise<Readonly<{ data: T | null; error: SupabaseMealBuddyChatInvokeError | null }>>;
   };
 };

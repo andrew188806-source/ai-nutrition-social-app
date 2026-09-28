@@ -21,6 +21,31 @@ export function presentU1NextMealResult(
   };
 }
 
+// PC-1 B2: one human-readable location line. The live `areaLabel` is already "branch · district", so
+// naively prepending `branchName` repeated the branch. Segments are trimmed, blank ones dropped, and a
+// label that repeats an earlier trimmed segment is shown once (first occurrence wins, order kept).
+// Genuinely different restaurant and branch names both stay. Calorie text is never part of this line —
+// a list may append it afterwards. Canonical stored names are never modified; this is presentation only.
+export function formatNextMealLocationLine(input: {
+  restaurantName?: string | null;
+  branchName?: string | null;
+  areaLabel?: string | null;
+}): string {
+  const segments = [
+    input.restaurantName ?? "",
+    input.branchName ?? "",
+    ...(input.areaLabel ?? "").split("·")
+  ].map((segment) => segment.trim()).filter((segment) => segment.length > 0);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const segment of segments) {
+    if (seen.has(segment)) continue;
+    seen.add(segment);
+    unique.push(segment);
+  }
+  return unique.join(" · ");
+}
+
 // GQA-6R C-4 context handoff: a candidate chosen on the previous screen arrives as its canonical menu item
 // id. It is SELECTED (never reordered — the canonical exposure order stays authoritative) when it is part
 // of the visible candidate set; otherwise nothing is preselected and the user chooses here.

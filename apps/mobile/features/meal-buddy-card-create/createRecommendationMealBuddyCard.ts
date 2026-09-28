@@ -1,3 +1,4 @@
+import { parseMealBuddyOwnCardQuotaResponse } from "./ownCardQuota";
 import { MEAL_BUDDY_CARD_CREATE_FUNCTION_NAME } from "./supabaseContracts";
 import { getMealBuddyCardCreateRuntimeDependencies } from "./runtimeBinding";
 import type {
@@ -62,5 +63,9 @@ export async function createRecommendationMealBuddyCard(
     return { ok: false, errorCode: "invalid_server_response" };
   }
   const card = parseCard(result.data);
-  return card ? { ok: true, card } : { ok: false, errorCode: "invalid_server_response" };
+  // PC-1 B1: the create response already carries the server's post-create quota; surfacing it lets
+  // the screen update its counters without a second list request.
+  return card
+    ? { ok: true, card, quota: parseMealBuddyOwnCardQuotaResponse(result.data) }
+    : { ok: false, errorCode: "invalid_server_response" };
 }

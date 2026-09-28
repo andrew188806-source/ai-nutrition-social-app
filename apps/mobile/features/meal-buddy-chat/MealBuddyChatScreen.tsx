@@ -6,7 +6,7 @@ import { zhTW } from "../../../../lib/i18n/zh-TW";
 import { Card, colors } from "../../components/DemoUi";
 import { resolveSocialCandidateMascot } from "../social-candidates/mascotAdapter";
 import { getMascotSource } from "../../theme/components";
-import { MEAL_BUDDY_CHAT_MAX_BODY_LENGTH, type MealBuddyChatMessage } from "./types";
+import { MEAL_BUDDY_CHAT_MAX_BODY_LENGTH, isSubmittableMealBuddyChatBody, type MealBuddyChatMessage } from "./types";
 import type { useMealBuddyChat } from "./useMealBuddyChat";
 
 type Controller = ReturnType<typeof useMealBuddyChat>;
@@ -121,7 +121,14 @@ export function MealBuddyChatScreen({ controller, onBack }: { controller: Contro
                   disabled={state.pendingSend !== null || draft.trim().length === 0}
                   onPress={() => {
                     const body = draft;
-                    void controller.send(body).then((sent) => { if (sent) setDraft(""); });
+                    // PC-1: the controller admits a draft exactly when the chat is ready, nothing is
+                    // pending and the body is submittable. From that moment the pending row owns the
+                    // text, so the composer clears now; a failure is handled on that row (retry /
+                    // discard) and the text is never pushed back over whatever the user types next.
+                    if (state.phase === "ready" && state.pendingSend === null && isSubmittableMealBuddyChatBody(body)) {
+                      setDraft("");
+                    }
+                    void controller.send(body);
                   }}
                 />
               </View>

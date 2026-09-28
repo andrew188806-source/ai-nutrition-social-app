@@ -60,7 +60,10 @@ import { useMealBuddyPushRouting } from "../features/meal-buddy-push/useMealBudd
 import { useMealBuddyRelationships } from "../features/meal-buddy-relationships/useMealBuddyRelationships";
 import {
   buildRecommendationMealBuddyCardCreateRequest,
-  createRecommendationMealBuddyCard
+  createRecommendationMealBuddyCard,
+  useMealBuddyOwnCardQuota,
+  type MealBuddyOwnCardQuota,
+  type MealBuddyOwnCardQuotaState
 } from "../features/meal-buddy-card-create";
 import { resolveCommunityProfileDisplay, type AvatarSource, type CommunityProfileDisplay } from "../features/display-resolvers";
 import { useDemoUserPlan } from "../features/demo-user-plan";
@@ -284,6 +287,13 @@ export default function MealBuddyHomeScreen() {
   useMealBuddyPushRouting(openRelationshipAreaFromNotification);
   const dailyUsage = getDailyVisibleUsage(demoMode);
   const cardUsage = getActiveCardUsage(demoMode);
+  // PC-1 B1: in live mode the card counters and create gating come ONLY from the server quota
+  // (active cards and entitlement caps). Loading/failed map to null, never to a fabricated zero.
+  const ownQuota = useMealBuddyOwnCardQuota(
+    isRealCandidateMode ? consumerRuntime.state.actorKey : null,
+    consumerRuntime.state.actorGeneration
+  );
+  const canonicalCardUsage = ownQuota.state.phase === "ready" ? toCardUsage(ownQuota.state.quota) : null;
   const chats = getMealBuddyChats().filter((chat) => chat.threadType !== "group" && !chat.tableId);
   const invites = getMealBuddyInvites().filter((invite) => invite.type !== "table");
   const matchedFriends = getVisibleMatchedFriends(invites);
@@ -390,7 +400,7 @@ export default function MealBuddyHomeScreen() {
           setDemoMode("premium");
         }}
       />
-      <DemoModeToggle mode={demoMode} onChange={setDemoMode} />
+      {isRealCandidateMode ? null : <DemoModeToggle mode={demoMode} onChange={setDemoMode} />}
 
       {activeSection !== "discover" && activeSection !== "cards" ? (
         <View style={styles.snowChipRow}>
@@ -407,7 +417,9 @@ export default function MealBuddyHomeScreen() {
         <DiscoverSection
           hideRecommendations={activeSection === "cards"}
           activeCards={activeCards}
-          cardUsage={cardUsage}
+          cardUsage={isRealCandidateMode ? canonicalCardUsage : cardUsage}
+          quotaPhase={isRealCandidateMode ? ownQuota.state.phase : "ready"}
+          onCanonicalQuota={ownQuota.applyFromCreate}
           chats={chats}
           dailyUsage={dailyUsage}
           invites={invites}
@@ -595,9 +607,24 @@ function StatusEntry({ icon, label, value, dot = false, onPress }: { icon: IconN
   );
 }
 
+// PC-1 B1 helpers: canonical quota -> the existing counter shape, and truthful non-ready text.
+const QUOTA_LOADING_MESSAGE = "正在確認飯友卡額度，請稍候再建立。";
+const QUOTA_UNAVAILABLE_MESSAGE = "無法取得額度，暫時無法建立飯友卡。";
+function toCardUsage(quota: MealBuddyOwnCardQuota): ReturnType<typeof getActiveCardUsage> {
+  return {
+    general: { count: quota.general.used, limit: quota.general.limit },
+    restaurant: { count: quota.restaurant.used, limit: quota.restaurant.limit }
+  };
+}
+function quotaPlaceholder(phase: MealBuddyOwnCardQuotaState["phase"]) {
+  return phase === "loading" ? "讀取中" : "無法取得額度";
+}
+
 function DiscoverSection({
   activeCards,
   cardUsage,
+  quotaPhase,
+  onCanonicalQuota,
   chats,
   dailyUsage,
   hideRecommendations,
@@ -626,7 +653,10 @@ function DiscoverSection({
   u1Prefill
 }: {
   activeCards: MealBuddyCard[];
-  cardUsage: ReturnType<typeof getActiveCardUsage>;
+  // PC-1 B1: null in live mode while the canonical quota is loading or unavailable (fail closed).
+  cardUsage: ReturnType<typeof getActiveCardUsage> | null;
+  quotaPhase: MealBuddyOwnCardQuotaState["phase"];
+  onCanonicalQuota: (quota: MealBuddyOwnCardQuota | null) => void;
   chats: ReturnType<typeof getMealBuddyChats>;
   dailyUsage: ReturnType<typeof getDailyVisibleUsage>;
   hideRecommendations?: boolean;
@@ -670,6 +700,10 @@ function DiscoverSection({
 
   useEffect(() => {
     if (!u1Prefill) return;
+    if (!cardUsage) {
+      setCardQuotaMessage(quotaPhase === "loading" ? QUOTA_LOADING_MESSAGE : QUOTA_UNAVAILABLE_MESSAGE);
+      return;
+    }
     const targetUsage = u1Prefill.selectedRecommendation ? cardUsage.restaurant : cardUsage.general;
     if (targetUsage.count >= targetUsage.limit) {
       setCardQuotaMessage(isPremium ? "目前飯友卡數量已達上限，請先整理既有卡片。" : "目前飯友卡數量已達上限，請先整理既有卡片再繼續。");
@@ -677,10 +711,14 @@ function DiscoverSection({
     }
     setCardQuotaMessage("");
     setFormTarget({ cardType: u1Prefill.selectedRecommendation ? "restaurant" : "general", mode: "create", prefill: u1Prefill });
-  }, [u1Prefill?.handoffId]);
+  }, [u1Prefill?.handoffId, cardUsage === null]);
 
   function requestCreateCard(cardType: MealBuddyCardType) {
     setCardQuotaMessage("");
+    if (!cardUsage) {
+      setCardQuotaMessage(quotaPhase === "loading" ? QUOTA_LOADING_MESSAGE : QUOTA_UNAVAILABLE_MESSAGE);
+      return;
+    }
     const usage = cardType === "restaurant" ? cardUsage.restaurant : cardUsage.general;
     if (usage.count >= usage.limit) {
       if (isPremium) {
@@ -711,6 +749,7 @@ function DiscoverSection({
       }
       setCardQuotaMessage("");
       setFormTarget(null);
+      onCanonicalQuota(result.quota);
       await realCandidates.loadSourceCards();
       return;
     }
@@ -762,24 +801,27 @@ function DiscoverSection({
           <View style={styles.statGrid}>
             <View style={[styles.miniStat, styles.miniStatCoral]}>
               <Icon name="buddies" size={14} color="#B83030" />
-              <Text style={[styles.miniStatValue, { color: "#B83030" }]}>{cardUsage.general.count}/{cardUsage.general.limit}</Text>
+              <Text style={[styles.miniStatValue, { color: "#B83030" }]}>{cardUsage ? `${cardUsage.general.count}/${cardUsage.general.limit}` : quotaPlaceholder(quotaPhase)}</Text>
               <Text style={styles.miniStatLabel}>一般飯友卡</Text>
             </View>
             <View style={[styles.miniStat, styles.miniStatAmber]}>
               <Icon name="plate" size={14} color="#A05010" />
-              <Text style={[styles.miniStatValue, { color: "#A05010" }]}>{cardUsage.restaurant.count}/{cardUsage.restaurant.limit}</Text>
+              <Text style={[styles.miniStatValue, { color: "#A05010" }]}>{cardUsage ? `${cardUsage.restaurant.count}/${cardUsage.restaurant.limit}` : quotaPlaceholder(quotaPhase)}</Text>
               <Text style={styles.miniStatLabel}>餐廳飯友卡</Text>
             </View>
-            <View style={[styles.miniStat, styles.miniStatBlue]}>
-              <Icon name="spark" size={14} color="#2068B0" />
-              <Text style={[styles.miniStatValue, { color: "#2068B0" }]}>{dailyUsage.used}/{dailyUsage.limit}</Text>
-              <Text style={styles.miniStatLabel}>今日可看飯友</Text>
-            </View>
+            {/* PC-1 B1: a local demo counter; there is no canonical daily-view quota, so live hides it. */}
+            {isRealCandidateMode ? null : (
+              <View style={[styles.miniStat, styles.miniStatBlue]}>
+                <Icon name="spark" size={14} color="#2068B0" />
+                <Text style={[styles.miniStatValue, { color: "#2068B0" }]}>{dailyUsage.used}/{dailyUsage.limit}</Text>
+                <Text style={styles.miniStatLabel}>今日可看飯友</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.cardGroup}>
             <Pressable style={[styles.groupHeaderRow, { marginTop: 0 }]} onPress={() => setExpandedGroups((current) => ({ ...current, all: !current.all }))}>
-              <Text style={styles.groupTitleSnow}>卡片列表（{activeCards.length}）</Text>
+              <Text style={styles.groupTitleSnow}>{isRealCandidateMode ? "建立飯友卡" : `卡片列表（${activeCards.length}）`}</Text>
             </Pressable>
             {expandedGroups.all ? (
               <>
@@ -807,7 +849,7 @@ function DiscoverSection({
                     onSave={(value) => { void saveInlineCard(value); }}
                   />
                 ) : null}
-                {activeCards.length === 0 ? (
+                {isRealCandidateMode ? null : activeCards.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateTitle}>尚未建立飯友卡</Text>
                     <Text style={styles.emptyStateBody}>目前還沒有飯友卡。可以先建立一張，或從 AI 分析、餐廳頁快速產生。</Text>
@@ -834,7 +876,7 @@ function DiscoverSection({
 
       {!hideRecommendations ? (
         <>
-          <SnowSectionHeader title="今日推薦飯友" subtitle={`${isPremium ? "依你選擇的飯友卡推薦" : "免費版推薦"} · 今日已看 ${dailyUsage.used}/${dailyUsage.limit}`} />
+          <SnowSectionHeader title="今日推薦飯友" subtitle={isRealCandidateMode ? "依你選擇的飯友卡推薦" : `${isPremium ? "依你選擇的飯友卡推薦" : "免費版推薦"} · 今日已看 ${dailyUsage.used}/${dailyUsage.limit}`} />
 
           {/* SR-2G-E2 real mode. The user picks one of their OWN real active Meal Buddy cards, and
               that card's opaque reference is what the server is asked about. The mock recommendation

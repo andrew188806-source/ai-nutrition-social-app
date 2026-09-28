@@ -10,7 +10,36 @@ export type MealBuddyRelationshipErrorCode =
   | "network_error"
   | "server_unavailable"
   | "invalid_server_response"
-  | "operation_not_enabled";
+  | "operation_not_enabled"
+  // PC-1: the bounded operation did not settle in time. The server may or may not have committed.
+  | "request_timeout";
+
+// PC-1: the one named bound for every relationship call. The whole operation (session read + invoke)
+// is raced against it, and the SDK's own `timeout` aborts the HTTP request with the same value.
+// `schedule` is injectable so tests never wait in real time.
+export const MEAL_BUDDY_RELATIONSHIP_REQUEST_TIMEOUT_MS = 15_000;
+export type MealBuddyRelationshipTimeoutPolicy = Readonly<{
+  timeoutMs: number;
+  schedule(callback: () => void, delayMs: number): () => void;
+}>;
+export const DEFAULT_MEAL_BUDDY_RELATIONSHIP_TIMEOUT_POLICY: MealBuddyRelationshipTimeoutPolicy = Object.freeze({
+  timeoutMs: MEAL_BUDDY_RELATIONSHIP_REQUEST_TIMEOUT_MS,
+  schedule(callback: () => void, delayMs: number) {
+    const handle = setTimeout(callback, delayMs);
+    return () => clearTimeout(handle);
+  }
+});
+
+// Transport outcomes whose server-side effect is unknown. Anything else is a definite answer.
+export const UNCERTAIN_MEAL_BUDDY_RELATIONSHIP_ERRORS: ReadonlySet<MealBuddyRelationshipErrorCode> = new Set([
+  "network_error", "server_unavailable", "invalid_server_response", "request_timeout"
+]);
+
+// PC-1: whether the rendered relationship is known to be server truth.
+// - stable: canonical, or a definite failure whose previous canonical state still stands
+// - reconciling: a mutation result was uncertain and one bounded canonical re-read is in flight
+// - unknown_server_state: both the mutation and the re-read failed; actions stay disabled until refresh
+export type MealBuddyRelationshipSyncPhase = "stable" | "reconciling" | "unknown_server_state";
 
 export type MealBuddyRelationshipCounterpart = Readonly<{
   displayName: string;
@@ -57,6 +86,7 @@ export type MealBuddyRelationshipProfileState =
       relationship: MealBuddyRelationshipProfileRelationship;
       pendingAction: MealBuddyRelationshipAction | null;
       errorCode: MealBuddyRelationshipErrorCode | null;
+      syncPhase: MealBuddyRelationshipSyncPhase;
     }>;
 
 export type MealBuddyRelationshipInboxState =

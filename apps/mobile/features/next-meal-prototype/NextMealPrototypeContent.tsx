@@ -11,7 +11,7 @@ import {
 import { mapConsumerRecommendationFeedbackTarget } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackTargetMapper";
 import { ConsumerRecommendationFeedbackUiModel } from "../consumer-recommendation-feedback/consumerRecommendationFeedbackUiModel";
 import { isLiveConsumerComposition, readConsumerPublicRuntimeEnv } from "../consumer-runtime-config/consumerPublicRuntimeEnv";
-import { preferredCandidateId, presentU1NextMealResult } from "./nextMealPrototypePresenter";
+import { formatNextMealLocationLine, preferredCandidateId, presentU1NextMealResult } from "./nextMealPrototypePresenter";
 import type { U1NextMealCandidateViewModel, U1NextMealPrototypeProvider, U1NextMealPrototypeScenario, U1NextMealScreenViewModel } from "./types";
 
 // GQA-6R C-2: live canonical candidates are real restaurant data, so a live composition must not label
@@ -243,7 +243,7 @@ export function NextMealPrototypeContent({
                     {selected ? <Text style={styles.selectedBadge}>{copy.selectedBadge}</Text> : null}
                   </View>
                   <Text style={styles.mealName}>{candidate.mealName}</Text>
-                  <Text style={styles.mealMeta}>{[candidate.restaurantName, candidate.areaLabel, candidate.calorieLabel].filter(Boolean).join(" · ")}</Text>
+                  <Text style={styles.mealMeta}>{[formatNextMealLocationLine(candidate), candidate.calorieLabel].filter(Boolean).join(" · ")}</Text>
                   {candidate.reasonSummary ? <Text numberOfLines={1} style={styles.cardReason}>{candidate.reasonSummary}</Text> : null}
                 </View>
                 <Icon name={selected ? "check" : "chevron"} size={18} color={selected ? colors.primaryDeep : colors.faint} />
@@ -260,7 +260,7 @@ export function NextMealPrototypeContent({
           ) : null}
           <View style={styles.detailHeading}>
             <Text style={styles.detailMealName}>{selectedCandidate.mealName}</Text>
-            <Text style={styles.mealMeta}>{[selectedCandidate.restaurantName, selectedCandidate.branchName, selectedCandidate.areaLabel].filter(Boolean).join(" · ")}</Text>
+            <Text style={styles.mealMeta}>{formatNextMealLocationLine(selectedCandidate)}</Text>
             {selectedCandidate.description ? <Text style={styles.detailDescription}>{selectedCandidate.description}</Text> : null}
           </View>
           <View style={styles.nutritionBox}>

@@ -7,6 +7,12 @@ import type { useMealBuddyRelationshipProfile } from "./useMealBuddyRelationship
 
 type Controller = ReturnType<typeof useMealBuddyRelationshipProfile>;
 const copy = zhTW.mobile.mealBuddyRelationships;
+// PC-1: states for an uncertain mutation result. Kept local to this panel.
+const syncCopy = Object.freeze({
+  reconciling: "正在確認最新狀態…",
+  unknown: "無法確認邀請是否已送出，請重新整理狀態後再操作。",
+  refresh: "重新整理狀態"
+});
 
 export function MealBuddyRelationshipPanel({ controller, onOpenChat }: {
   controller: Controller;
@@ -26,6 +32,16 @@ export function MealBuddyRelationshipPanel({ controller, onOpenChat }: {
         <View style={styles.stack}>
           <Text style={styles.muted}>{copy.loadFailed}</Text>
           <ActionButton label={copy.retry} onPress={() => { void controller.retry(); }} />
+        </View>
+      ) : state.syncPhase === "reconciling" ? (
+        // The action spinner is gone; one bounded canonical re-read decides what is shown next.
+        <View style={styles.loading}><ActivityIndicator /><Text style={styles.muted}>{syncCopy.reconciling}</Text></View>
+      ) : state.syncPhase === "unknown_server_state" ? (
+        // Neither the action nor the re-read settled. Resending blindly is disabled; only an
+        // explicit canonical refresh is offered.
+        <View style={styles.stack}>
+          <Text style={styles.error}>{syncCopy.unknown}</Text>
+          <ActionButton label={syncCopy.refresh} onPress={() => { void controller.retry(); }} />
         </View>
       ) : (
         <View style={styles.stack}>

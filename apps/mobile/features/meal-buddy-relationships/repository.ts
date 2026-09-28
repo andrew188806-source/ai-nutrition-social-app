@@ -7,12 +7,14 @@ import {
   type SupabaseMealBuddyRelationshipInvokeError
 } from "./supabaseContracts";
 import {
+  DEFAULT_MEAL_BUDDY_RELATIONSHIP_TIMEOUT_POLICY,
   MEAL_BUDDY_RELATIONSHIP_POLICY_VERSION,
   type MealBuddyRelationshipErrorCode,
   type MealBuddyRelationshipItem,
   type MealBuddyRelationshipOutcome,
   type MealBuddyRelationshipRepository,
-  type MealBuddyRelationshipState
+  type MealBuddyRelationshipState,
+  type MealBuddyRelationshipTimeoutPolicy
 } from "./types";
 
 const STATES = new Set<MealBuddyRelationshipState>([
@@ -27,7 +29,8 @@ export class SupabaseMealBuddyRelationshipRepository implements MealBuddyRelatio
 
   constructor(
     private readonly authPort: ConsumerAuthPort,
-    private readonly client: SupabaseMealBuddyRelationshipClientLike
+    private readonly client: SupabaseMealBuddyRelationshipClientLike,
+    private readonly timeoutPolicy: MealBuddyRelationshipTimeoutPolicy = DEFAULT_MEAL_BUDDY_RELATIONSHIP_TIMEOUT_POLICY
   ) {}
 
   read(candidateRef: string) {
@@ -60,11 +63,30 @@ export class SupabaseMealBuddyRelationshipRepository implements MealBuddyRelatio
     return this.invoke({ operation: "unfriend", relationshipRef }, "unfriend");
   }
 
-  private async invoke(
+  // PC-1: every call settles within the policy bound. The race covers the session read as well as
+  // the invoke, because the SDK timeout only aborts the HTTP request once it has started.
+  private invoke(
     request: MealBuddyRelationshipRequest,
     operation: MealBuddyRelationshipRequest["operation"]
   ): Promise<MealBuddyRelationshipOutcome> {
-    if (!validRequestRef(request)) return failure("invalid_request");
+    if (!validRequestRef(request)) return Promise.resolve(failure("invalid_request"));
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (outcome: MealBuddyRelationshipOutcome) => {
+        if (settled) return;
+        settled = true;
+        cancel();
+        resolve(outcome);
+      };
+      const cancel = this.timeoutPolicy.schedule(() => finish(failure("request_timeout")), this.timeoutPolicy.timeoutMs);
+      this.invokeUnbounded(request, operation).then(finish, () => finish(failure("network_error")));
+    });
+  }
+
+  private async invokeUnbounded(
+    request: MealBuddyRelationshipRequest,
+    operation: MealBuddyRelationshipRequest["operation"]
+  ): Promise<MealBuddyRelationshipOutcome> {
     const session = await this.authPort.getCurrentSession();
     if (!session.ok || !session.value) return failure("authentication_required");
 
@@ -72,7 +94,7 @@ export class SupabaseMealBuddyRelationshipRepository implements MealBuddyRelatio
     try {
       response = await this.client.functions.invoke<MealBuddyRelationshipApiResponse>(
         MEAL_BUDDY_RELATIONSHIP_FUNCTION_NAME,
-        { body: request }
+        { body: request, timeout: this.timeoutPolicy.timeoutMs }
       );
     } catch {
       return failure("network_error");
@@ -150,6 +172,8 @@ function validateResponse(
 }
 
 async function mapInvokeError(error: SupabaseMealBuddyRelationshipInvokeError): Promise<MealBuddyRelationshipErrorCode> {
+  // PC-1: an aborted or failed transport never produced a server answer; it is uncertain, not a 5xx.
+  if (error.name === "FunctionsFetchError") return "network_error";
   try {
     const body = await error.context?.json();
     const errorBody = isRecord(body) && isRecord(body.error) ? body.error : null;

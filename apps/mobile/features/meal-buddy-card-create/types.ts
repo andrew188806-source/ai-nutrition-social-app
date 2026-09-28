@@ -19,8 +19,16 @@ export type CreatedMealBuddyCard = Readonly<{
   foodContextTagKey: string | null;
 }>;
 
+// PC-1 B1: the server's active-card counts and entitlement caps, exactly as the frozen SR-2G-B
+// write contract returns them in its `quota` block.
+export type MealBuddyOwnCardQuota = Readonly<{
+  general: Readonly<{ used: number; limit: number }>;
+  restaurant: Readonly<{ used: number; limit: number }>;
+}>;
+
 export type RecommendationMealBuddyCardCreateResult =
-  | { ok: true; card: CreatedMealBuddyCard }
+  // `quota` is the create response's own post-create quota, or null when the block is absent/invalid.
+  | { ok: true; card: CreatedMealBuddyCard; quota: MealBuddyOwnCardQuota | null }
   | {
       ok: false;
       errorCode:

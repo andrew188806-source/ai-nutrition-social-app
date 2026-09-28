@@ -6,6 +6,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { PC1_PRODUCT_PATHS, collectPc1Evidence, matchesExactPc1 } from "./pc1-consumer-closure-manifest.mjs";
 
 export const GQA6R_PREDECESSOR = "8f9c497d66abf9ca5851eebff004a201ba05cca4";
 export const GQA6R_PRODUCT_ROOTS = Object.freeze(["apps", "lib", "packages", "supabase"]);
@@ -65,22 +66,31 @@ export const GQA6R_PRODUCT_SHA256 = Object.freeze({
 });
 // GQA6R-RECORD-END
 
-export const GQA6R_PRODUCT_PATHS = Object.freeze(Object.keys(GQA6R_PRODUCT_SHA256).sort());
+// The GQA-6R record itself (never changes meaning; all GQA-6R matching uses it).
+const GQA6R_RECORD_PATHS = Object.freeze(Object.keys(GQA6R_PRODUCT_SHA256).sort());
 
 const lines = (value) => (value ? value.split(/\r?\n/).filter(Boolean) : []);
 const lfSha256 = (bytes) => createHash("sha256").update(bytes.toString("utf8").replace(/\r\n/g, "\n"), "utf8").digest("hex");
 const exactPath = (file) => typeof file === "string" && file.length > 0 && !/[*?]/.test(file) && !file.endsWith("/");
 
-/** Pure predicate over collected evidence; callers cannot supply accepted paths or hashes. */
+/**
+ * Pure predicate over collected evidence; callers cannot supply accepted paths or hashes.
+ * Exact GQA-6R directly, or exact GQA-6R underneath the exact PC-1 successor (evidence.pc1).
+ */
 export function matchesExactGqa6rRepair(evidence) {
+  return matchesDirectGqa6rRepair(evidence)
+    || (evidence !== null && typeof evidence === "object" && evidence.pc1 !== undefined && matchesGqa6rUnderExactPc1(evidence, evidence.pc1));
+}
+
+function matchesDirectGqa6rRepair(evidence) {
   if (!evidence || evidence.predecessorInHistory !== true) return false;
-  if (GQA6R_PRODUCT_PATHS.length === 0) return false;
+  if (GQA6R_RECORD_PATHS.length === 0) return false;
   const delta = evidence.productDelta;
   if (!Array.isArray(delta) || !delta.every(exactPath)) return false;
   // The product delta since the predecessor is EXACTLY the recorded set (no extra path, none missing) ...
-  if (delta.length !== GQA6R_PRODUCT_PATHS.length || [...delta].sort().some((file, i) => file !== GQA6R_PRODUCT_PATHS[i])) return false;
+  if (delta.length !== GQA6R_RECORD_PATHS.length || [...delta].sort().some((file, i) => file !== GQA6R_RECORD_PATHS[i])) return false;
   // ... and every recorded path carries exactly the recorded bytes.
-  return GQA6R_PRODUCT_PATHS.every((file) => evidence.sha256?.[file] === GQA6R_PRODUCT_SHA256[file]);
+  return GQA6R_RECORD_PATHS.every((file) => evidence.sha256?.[file] === GQA6R_PRODUCT_SHA256[file]);
 }
 
 export function collectGqa6rRepairEvidence(root = process.cwd()) {
@@ -97,7 +107,25 @@ export function collectGqa6rRepairEvidence(root = process.cwd()) {
     const absolute = path.join(root, file);
     sha256[file] = existsSync(absolute) ? lfSha256(readFileSync(absolute)) : null;
   }
-  return { predecessorInHistory, productDelta, sha256 };
+  // The exact PC-1 successor's own evidence travels with this evidence so the pure predicate can
+  // recognize GQA-6R underneath it without any caller-supplied paths or hashes.
+  return { predecessorInHistory, productDelta, sha256, pc1: collectPc1Evidence(root) };
+}
+
+// PC-1 exact successor route. GQA-6R stays recognized underneath the PC-1 commit ONLY when the whole
+// PC-1 record matches exactly (its own predecessor, product set and bytes) AND the product delta since
+// the GQA-6R predecessor is exactly GQA-6R ∪ PC-1 AND every GQA-6R path that PC-1 did not touch still
+// carries exactly the GQA-6R bytes. Paths PC-1 touched are pinned by the PC-1 record instead. Any other
+// later hash, extra path or dirty tree fails.
+export function matchesGqa6rUnderExactPc1(evidence, pc1Evidence) {
+  if (!evidence || evidence.predecessorInHistory !== true) return false;
+  if (!matchesExactPc1(pc1Evidence)) return false;
+  const pc1 = new Set(PC1_PRODUCT_PATHS);
+  const expected = [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS])].sort();
+  const delta = evidence.productDelta;
+  if (!Array.isArray(delta) || !delta.every(exactPath)) return false;
+  if (delta.length !== expected.length || [...delta].sort().some((file, i) => file !== expected[i])) return false;
+  return GQA6R_RECORD_PATHS.every((file) => pc1.has(file) || evidence.sha256?.[file] === GQA6R_PRODUCT_SHA256[file]);
 }
 
 export function isExactGqa6rRepair(root = process.cwd()) {
@@ -109,3 +137,20 @@ export function isExactGqa6rRepair(root = process.cwd()) {
 export function acceptedGqa6rProductPaths(root = process.cwd()) {
   return isExactGqa6rRepair(root) ? [...GQA6R_PRODUCT_PATHS] : [];
 }
+
+// The GQA-6R LINEAGE product set that later successors (GQA-1, GQA-2, ADMIN-MRB, ...) accept through this
+// seam: the GQA-6R record, plus — only when this checkout is exactly GQA-6R underneath the exact PC-1
+// successor (full PC-1 record, exact product set and bytes) — the recorded PC-1 paths. Evaluated once for
+// the working directory these guards run in; any deviation leaves just the GQA-6R record.
+function gqa6rLineagePaths() {
+  try {
+    if (!matchesGqa6rUnderExactPc1Evidence(collectGqa6rRepairEvidence(process.cwd()))) return [...GQA6R_RECORD_PATHS];
+    return [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS])].sort();
+  } catch {
+    return [...GQA6R_RECORD_PATHS];
+  }
+}
+function matchesGqa6rUnderExactPc1Evidence(evidence) {
+  return evidence !== null && typeof evidence === "object" && evidence.pc1 !== undefined && matchesGqa6rUnderExactPc1(evidence, evidence.pc1);
+}
+export const GQA6R_PRODUCT_PATHS = Object.freeze(gqa6rLineagePaths());

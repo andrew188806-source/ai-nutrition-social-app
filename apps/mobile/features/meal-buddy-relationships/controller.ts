@@ -1,3 +1,4 @@
+import { UNCERTAIN_MEAL_BUDDY_RELATIONSHIP_ERRORS } from "./types";
 import type {
   MealBuddyRelationshipAction,
   MealBuddyRelationshipInboxState,
@@ -81,12 +82,22 @@ export class MealBuddyRelationshipProfileController {
     this.listeners.clear();
   }
 
+  // PC-1 state machine. Every exit clears `pendingAction`; a stale completion (actor, generation or
+  // candidate changed, or disposed) never writes, because the newer context owns the state. Any
+  // failure is followed by exactly one bounded canonical re-read (the frozen SR-2I-B contract):
+  //   sending -> canonical                              (server answered)
+  //   sending -> reconciling -> canonical               (re-read shows the action, or another, landed)
+  //   sending -> reconciling -> stable + errorCode      (re-read shows nothing changed: safe retry)
+  //   uncertain -> reconciling -> unknown_server_state  (re-read failed too: no blind resend)
+  //   definite  -> reconciling -> stable + errorCode    (re-read failed, but the action surely did not happen)
+  // A definite rejection is never represented as success: it keeps its error and returns false.
   private async mutate(action: MealBuddyRelationshipAction, requiredState: MealBuddyRelationshipState) {
     if (this.disposed || !this.actorKey || this.state.phase !== "ready"
-      || this.state.pendingAction !== null || this.state.relationship.state !== requiredState) return false;
+      || this.state.pendingAction !== null || this.state.syncPhase !== "stable"
+      || this.state.relationship.state !== requiredState) return false;
     const request = this.captureRequest();
     const previous = this.state.relationship;
-    this.update(Object.freeze({ ...this.state, pendingAction: action, errorCode: null }));
+    this.update(Object.freeze({ ...this.state, pendingAction: action, errorCode: null, syncPhase: "stable" as const }));
     const result = action === "send"
       ? await this.repository.send(this.candidateRef as string)
       : await this.repository[action](previous.relationshipRef);
@@ -95,22 +106,32 @@ export class MealBuddyRelationshipProfileController {
       this.update(readyProfileState(result.value.relationships[0] as MealBuddyRelationshipItem));
       return true;
     }
+    const errorCode = result.ok ? "invalid_server_response" as const : result.errorCode;
+    const uncertain = UNCERTAIN_MEAL_BUDDY_RELATIONSHIP_ERRORS.has(errorCode);
 
-    // A failed mutation may be an uncertain transport outcome. Re-read server authority before
-    // permitting another action; the candidate ref stays stable and the attempted payload is never
-    // changed or replayed by the controller.
+    // Clear the action spinner, then re-read server authority once (bounded by the repository)
+    // before permitting another action. The attempted payload is never changed or replayed here.
+    this.update(Object.freeze({ phase: "ready", relationship: previous, pendingAction: null, errorCode: null, syncPhase: "reconciling" }));
     const reconciliation = await this.repository.read(this.candidateRef as string);
     if (!this.isCurrent(request)) return false;
-    const relationship = reconciliation.ok
-      ? reconciliation.value.relationships[0] ?? noneRelationship()
-      : previous;
+    if (!reconciliation.ok) {
+      this.update(Object.freeze({
+        phase: "ready", relationship: previous, pendingAction: null, errorCode,
+        // Uncertain: the server may have committed and we could not find out. Definite: it did not.
+        syncPhase: uncertain ? "unknown_server_state" : "stable"
+      }));
+      return false;
+    }
+    const relationship = reconciliation.value.relationships[0] ?? noneRelationship();
+    // Canonical truth wins. If it still equals the pre-action state, the action did not land and a
+    // retry is safe (the server is idempotent per pair); otherwise the action (or another) did land.
+    const unchanged = relationship.state === previous.state;
     this.update(Object.freeze({
-      phase: "ready",
-      relationship,
-      pendingAction: null,
-      errorCode: result.ok ? "invalid_server_response" : result.errorCode
+      phase: "ready", relationship, pendingAction: null,
+      errorCode: unchanged || !uncertain ? errorCode : null,
+      syncPhase: "stable"
     }));
-    return false;
+    return uncertain && !unchanged;
   }
 
   private captureRequest(): RequestToken {
@@ -243,7 +264,7 @@ export class MealBuddyRelationshipInboxController {
 }
 
 function readyProfileState(relationship: MealBuddyRelationshipProfileRelationship): MealBuddyRelationshipProfileState {
-  return Object.freeze({ phase: "ready", relationship, pendingAction: null, errorCode: null });
+  return Object.freeze({ phase: "ready", relationship, pendingAction: null, errorCode: null, syncPhase: "stable" });
 }
 
 function readyInboxState(relationships: readonly MealBuddyRelationshipItem[]): MealBuddyRelationshipInboxState {
