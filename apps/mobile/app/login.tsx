@@ -1,3 +1,5 @@
+import { useConsumerOnboarding } from "../features/consumer-onboarding/ConsumerOnboardingProvider";
+import { pc2Copy as pc2 } from "../features/consumer-onboarding/copy";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -7,22 +9,26 @@ import { fonts, radius, shadows, snowPalette as colors } from "../theme/tokens";
 export default function LoginScreen() {
   const runtime = useConsumerRuntime();
   const copy = zhTW.mobile.consumerAuth;
+  const { controller: onboarding, snapshot } = useConsumerOnboarding();
+  const [createAccount, setCreateAccount] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
-  const busy = runtime.state.operation === "signingIn";
+  const busy = runtime.state.operation !== "idle" || snapshot.pending;
   const emailSignInAvailable = runtime.mode === "supabase";
 
   async function submitEmailSignIn() {
-    if (!email.trim() || !password) {
+    if (busy) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || !password || (createAccount && password.length < 8)) {
       setValidationError(copy.fieldsRequired);
       return;
     }
     setValidationError(null);
-    await runtime.signIn(email, password);
+    if (createAccount) await onboarding?.signUp(email, password);
+    else await runtime.signIn(email, password);
   }
 
-  const runtimeError = runtime.state.errorCode === "operation_not_enabled"
+  const runtimeError = runtime.state.errorCode === "authentication_timeout" ? pc2.uncertain : runtime.state.errorCode === "operation_not_enabled"
     ? copy.operationNotEnabled
     : runtime.state.errorCode === "authentication_failed"
       ? copy.authFailed
@@ -46,6 +52,9 @@ export default function LoginScreen() {
           </View>
         ) : (
           <View style={styles.card}>
+            <Pressable disabled={busy || !onboarding} onPress={() => setCreateAccount(!createAccount)}><Text>{createAccount ? "已有帳號：登入" : "建立新帳號"}</Text></Pressable>
+            {createAccount ? <View style={styles.notice}><Text>{pc2.required}</Text>{!snapshot.bundle ? <Text>{pc2.unavailable}</Text> : null}<Text>密碼至少 8 字元。</Text></View> : null}
+            {snapshot.error === "confirmation_required" ? <Text>{pc2.confirmation}</Text> : snapshot.error && snapshot.error !== "unavailable" ? <Text>{pc2.error}</Text> : null}
             <Text style={styles.inputLabel}>{copy.emailLabel}</Text>
             <TextInput
               autoCapitalize="none"
@@ -80,11 +89,11 @@ export default function LoginScreen() {
             ) : null}
             {validationError || runtimeError ? <Text style={styles.errorText}>{validationError ?? runtimeError}</Text> : null}
             <Pressable
-              disabled={busy || !emailSignInAvailable}
+              disabled={busy || !emailSignInAvailable || (createAccount && !snapshot.bundle)}
               onPress={() => void submitEmailSignIn()}
               style={[styles.primaryButton, (busy || !emailSignInAvailable) && styles.buttonDisabled]}
             >
-              <Text style={styles.primaryButtonText}>{busy ? copy.signingIn : copy.signIn}</Text>
+              <Text style={styles.primaryButtonText}>{busy ? copy.signingIn : createAccount ? "建立新帳號" : copy.signIn}</Text>
             </Pressable>
           </View>
         )}

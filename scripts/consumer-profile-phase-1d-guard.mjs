@@ -5,7 +5,13 @@ import { createRequire } from "node:module";
 import Module from "node:module";
 import ts from "typescript";
 
+// Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
+const { isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const root = process.cwd();
+const exactPc2 = isExactPc2(root);
 const sourceRoot = path.join(root, "apps", "mobile", "features", "consumer-auth");
 const mobileNodeModulesPath = path.join(root, "apps", "mobile", "node_modules");
 const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
@@ -104,7 +110,11 @@ const forbiddenSourcePatterns = [
 ];
 
 for (const [pattern, message] of forbiddenSourcePatterns) {
-  const matches = sourceText.filter((item) => pattern.test(item.text)).map((item) => item.rel);
+  const matches = sourceText.filter((item) => {
+    const text = exactPc2 && item.rel === "apps/mobile/features/consumer-auth/adapters/supabaseConsumerProfileRepository.ts"
+      ? item.text.replace(/\.rpc\("get_authenticated_consumer_participation_state"\)/g, "") : item.text;
+    return pattern.test(text);
+  }).map((item) => item.rel);
   if (matches.length) fail(`forbidden source pattern: ${pattern}`, message, { matches });
   else pass(`forbidden source pattern absent: ${pattern}`);
 }

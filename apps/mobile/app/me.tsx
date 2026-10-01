@@ -41,6 +41,9 @@ export default function MeScreen() {
   ];
 
   const settingsItems: ProfileRowItem[] = [
+    { icon: "shield", title: "帳號授權與撤回", onPress: () => router.push("/onboarding" as never) },
+    { icon: "buddies", title: "飯友參與設定", onPress: () => router.push("/participation-settings" as never) },
+    { icon: "shield", title: "客服與資料權利", onPress: () => router.push("/account-support" as never) },
     { icon: "target", title: profile.healthGoalTitle, subtitle: profile.healthGoalBody, onPress: () => router.push("/health-goal-plan") },
     {
       icon: "shield",

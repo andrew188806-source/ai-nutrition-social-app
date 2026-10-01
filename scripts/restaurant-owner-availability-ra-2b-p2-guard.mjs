@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// PC2-EXACT-PREDECESSOR-BEGIN
+const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+  throw error;
+});
+await runExactPc2PredecessorGuard(process.cwd(), "scripts/restaurant-owner-availability-ra-2b-p2-guard.mjs");
+// PC2-EXACT-PREDECESSOR-END
 import fs from 'node:fs';
 import cp from 'node:child_process';
 import crypto from 'node:crypto';

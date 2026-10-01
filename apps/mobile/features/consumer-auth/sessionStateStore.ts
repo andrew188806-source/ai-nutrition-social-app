@@ -4,6 +4,7 @@ import type { ConsumerAuthState, ConsumerSignInInput, ConsumerSignUpInput } from
 export class ConsumerAuthStateStore {
   private state: ConsumerAuthState = { status: "initializing", session: null };
   private readonly listeners = new Set<ConsumerAuthStateListener>();
+  private generation = 0;
   private unsubscribeFromPort: (() => void) | null = null;
 
   constructor(private readonly authPort: ConsumerAuthPort) {}
@@ -31,7 +32,9 @@ export class ConsumerAuthStateStore {
   }
 
   async restore() {
+    const generation = ++this.generation;
     const result = await this.authPort.restoreSession();
+    if (generation !== this.generation) return result;
     if (result.ok) {
       this.setState(result.value ? { status: "signedIn", session: result.value } : { status: "signedOut", session: null });
     } else {
@@ -41,19 +44,23 @@ export class ConsumerAuthStateStore {
   }
 
   async signIn(input: ConsumerSignInInput = {}) {
+    const generation = ++this.generation;
     const result = await this.authPort.signIn(input);
-    if (!result.ok) this.setState({ status: "error", session: null, error: result.error });
+    if (generation === this.generation && !result.ok) this.setState({ status: "error", session: null, error: result.error });
     return result;
   }
 
   async signUp(input: ConsumerSignUpInput = {}) {
+    const generation = ++this.generation;
     const result = await this.authPort.signUp(input);
-    if (!result.ok) this.setState({ status: "error", session: null, error: result.error });
+    if (generation === this.generation && !result.ok) this.setState({ status: "error", session: null, error: result.error });
     return result;
   }
 
   async refresh() {
+    const generation = ++this.generation;
     const result = await this.authPort.refreshSession();
+    if (generation !== this.generation) return result;
     if (result.ok) {
       this.setState(result.value ? { status: "signedIn", session: result.value } : { status: "signedOut", session: null });
     } else {
@@ -63,12 +70,14 @@ export class ConsumerAuthStateStore {
   }
 
   async signOut() {
+    const generation = ++this.generation;
     const result = await this.authPort.signOut();
-    if (!result.ok) this.setState({ status: "error", session: null, error: result.error });
+    if (generation === this.generation && !result.ok) this.setState({ status: "error", session: null, error: result.error });
     return result;
   }
 
   private setState(state: ConsumerAuthState) {
+    this.generation++;
     this.state = state;
     for (const listener of this.listeners) listener(state);
   }

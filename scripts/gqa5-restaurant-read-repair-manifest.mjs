@@ -7,6 +7,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+// A composed successor may set aside ONLY its exact two migrations; the pure historical matcher stays frozen.
+const { isExactPc2, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 export const GQA5_REPAIR_MIGRATION = "supabase/migrations/20260927010000_restaurant_catalog_read_rls_plan_repair.sql";
 export const GQA5_REPAIR_FILE = path.basename(GQA5_REPAIR_MIGRATION);
 /** SHA-256 of the LF-normalized bytes and the Git blob id of the accepted file. */
@@ -30,11 +35,12 @@ export function matchesExactGqa5RestaurantReadRepair(evidence) {
 export function collectGqa5RepairEvidence(root = process.cwd()) {
   const file = path.join(root, GQA5_REPAIR_MIGRATION);
   const exists = existsSync(file);
+  const pc2MigrationNames = new Set(isExactPc2(root) ? PC2_MIGRATIONS_PATHS.map(file => path.basename(file)) : []);
   return {
     exists,
     sha256: exists ? lfSha256(readFileSync(file)) : null,
     blob: exists ? execFileSync("git", ["hash-object", "--", GQA5_REPAIR_MIGRATION], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() : null,
-    migrationFiles: readdirSync(path.join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort()
+    migrationFiles: readdirSync(path.join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql") && !pc2MigrationNames.has(f)).sort()
   };
 }
 

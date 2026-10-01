@@ -5,7 +5,15 @@
 // rounds are accepted only through the exact successor sequence below.
 import fs from "node:fs";
 import { GQA5_REPAIR_FILE, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
+// The complete exact PC-2 proof permits only its two generated migration filenames.
+const { isExactPc2, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const ROOT = process.cwd();
+const exactPc2 = isExactPc2(ROOT);
+const pc2MigrationNames = exactPc2 ? PC2_MIGRATIONS_PATHS.map(file => file.split("/").pop()) : [];
+
 const read = (file) => fs.readFileSync(`${ROOT}/${file}`, "utf8");
 
 const MIGRATION = "supabase/migrations/20260919010000_restaurant_owner_branch_menu_item_display_name_draft_visibility_r2e.sql";
@@ -28,7 +36,7 @@ if (source === null) {
 }
 
 // --- ordering: this is the final migration in the repo --------------------------------------------
-const allMigrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql")).sort();
+const allMigrationFiles = fs.readdirSync(`${ROOT}/supabase/migrations`).filter((f) => f.endsWith(".sql") && !pc2MigrationNames.includes(f)).sort();
 // The exact GQA-5 Restaurant read repair is the single recorded successor after ADMIN-D; only its exact bytes are set aside.
 const migrationFiles = isExactGqa5RestaurantReadRepair(ROOT) ? allMigrationFiles.filter((f) => f !== GQA5_REPAIR_FILE) : allMigrationFiles;
 // Exact successor awareness: R2E is followed by precisely the authorized hardening and Admin migrations through ADMIN-D.

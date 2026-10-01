@@ -1,3 +1,8 @@
+// Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
+const { pc2PredecessorEvidence, isExactPc2, PC2_PRODUCT_PATHS, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 // GQA-6R exact successor record: the Stable Demo repair (Consumer build-time config + fail-closed
 // sources, truthfulness, live next-meal handoff, Consumer browser CORS, bounded Restaurant control
 // reads) on top of the exact GQA-5 predecessor. Frozen guards accept these product paths ONLY while
@@ -94,6 +99,8 @@ function matchesDirectGqa6rRepair(evidence) {
 }
 
 export function collectGqa6rRepairEvidence(root = process.cwd()) {
+  const prior = pc2PredecessorEvidence(root, GQA6R_PREDECESSOR, GQA6R_PRODUCT_ROOTS);
+  if (prior) return { ...prior, pc1: collectPc1Evidence(root) };
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024 }).trim();
   const predecessorInHistory = spawnSync("git", ["merge-base", "--is-ancestor", GQA6R_PREDECESSOR, "HEAD"], { cwd: root, stdio: "ignore" }).status === 0;
   const productDelta = predecessorInHistory
@@ -145,7 +152,7 @@ export function acceptedGqa6rProductPaths(root = process.cwd()) {
 function gqa6rLineagePaths() {
   try {
     if (!matchesGqa6rUnderExactPc1Evidence(collectGqa6rRepairEvidence(process.cwd()))) return [...GQA6R_RECORD_PATHS];
-    return [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS])].sort();
+    return [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS, ...(isExactPc2(process.cwd()) ? [...PC2_PRODUCT_PATHS, ...PC2_MIGRATIONS_PATHS] : [])])].sort();
   } catch {
     return [...GQA6R_RECORD_PATHS];
   }

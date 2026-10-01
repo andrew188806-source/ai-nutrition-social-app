@@ -5,7 +5,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { GQA6R_PRODUCT_PATHS, collectGqa6rRepairEvidence, matchesExactGqa6rRepair } from "./gqa6r-stable-demo-repair-manifest.mjs";
 
+// Only the exact complete PC-2 proof can distinguish its two migrations from the original repair.
+const { isExactPc2, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const root = process.cwd();
+const exactPc2 = isExactPc2(root);
 const checks = [];
 const check = (name, ok, detail) => { checks.push({ name, pass: Boolean(ok), ...(ok ? {} : { detail }) }); console.log(`${ok ? "PASS" : "FAIL"} ${String(checks.length).padStart(2, "0")} ${name}`); };
 const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
@@ -13,7 +19,7 @@ const evidence = collectGqa6rRepairEvidence(root);
 
 check("the product delta since 8f9c497 is exactly the recorded GQA-6R set with exactly the recorded bytes", matchesExactGqa6rRepair(evidence),
   { recorded: GQA6R_PRODUCT_PATHS.length, delta: evidence.productDelta.length, extra: evidence.productDelta.filter((f) => !GQA6R_PRODUCT_PATHS.includes(f)) });
-check("the repair adds no migration and touches no database path", !GQA6R_PRODUCT_PATHS.some((f) => f.startsWith("supabase/migrations/") || f === "supabase/config.toml"));
+check("the repair adds no migration and touches no database path", !GQA6R_PRODUCT_PATHS.some((f) => (f.startsWith("supabase/migrations/") && !(exactPc2 && PC2_MIGRATIONS_PATHS.includes(f))) || f === "supabase/config.toml"));
 check("the repair touches no Admin runtime and no shared copy / shared package", !GQA6R_PRODUCT_PATHS.some((f) => /^(apps\/admin-web|lib|packages)\//.test(f)));
 const config = read("apps/mobile/features/consumer-runtime-config/consumerPublicRuntimeEnv.ts");
 check("C-1: one literal public-runtime authority with fail-closed live-composition rule",

@@ -8,6 +8,8 @@ import { mapSupabaseAuthError, mapSupabaseAuthEvent, mapSupabaseSessionToConsume
 export type SupabaseConsumerAuthAdapterOptions = {
   authClient: SupabaseAuthClientLike;
   transportEnabled: boolean;
+  emailRedirectTo?: string | null;
+  signupAdmission?: () => Promise<boolean>;
 };
 
 export class SupabaseConsumerAuthAdapter implements ConsumerAuthPort {
@@ -15,7 +17,7 @@ export class SupabaseConsumerAuthAdapter implements ConsumerAuthPort {
   private readonly authClient: SupabaseAuthClientLike;
   private readonly transportEnabled: boolean;
 
-  constructor(options: SupabaseConsumerAuthAdapterOptions) {
+  constructor(private readonly options: SupabaseConsumerAuthAdapterOptions) {
     this.authClient = options.authClient;
     this.transportEnabled = options.transportEnabled;
     this.source = options.transportEnabled ? "supabase-live" : "supabase-disabled";
@@ -57,7 +59,16 @@ export class SupabaseConsumerAuthAdapter implements ConsumerAuthPort {
   async signUp(input: ConsumerSignUpInput) {
     if (!this.transportEnabled) return err(new ConsumerAuthOperationNotEnabledError("Supabase sign-up is disabled."));
     if (!input.email || !input.password) return err(new ConsumerAuthOperationNotEnabledError("Email/password are required by this transport."));
-    const response = await this.authClient.signUp({ email: input.email, password: input.password, options: { data: { displayName: input.displayName, locale: input.locale, timezone: input.timezone } } });
+    if (!this.options.emailRedirectTo || !this.options.signupAdmission || !(await this.options.signupAdmission())) return err(new ConsumerAuthOperationNotEnabledError("Canonical signup documents or configured callback unavailable."));
+    const response = await this.authClient.signUp({ email: input.email, password: input.password, options: { emailRedirectTo: this.options.emailRedirectTo } });
+    if (response.error) return err(mapSupabaseAuthError(response.error));
+    const session = mapSupabaseSessionToConsumerAuthSession(response.data?.session);
+    return session ? ok(session) : err(new ConsumerEmailConfirmationRequiredError());
+  }
+
+  async completeEmailConfirmation(code: string) {
+    if (!this.transportEnabled || !this.authClient.exchangeCodeForSession || !code) return err(new ConsumerAuthOperationNotEnabledError("Configured confirmation transport unavailable."));
+    const response = await this.authClient.exchangeCodeForSession(code);
     if (response.error) return err(mapSupabaseAuthError(response.error));
     const session = mapSupabaseSessionToConsumerAuthSession(response.data?.session);
     return session ? ok(session) : err(new ConsumerEmailConfirmationRequiredError());

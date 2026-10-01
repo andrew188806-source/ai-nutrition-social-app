@@ -10,7 +10,15 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+// The complete exact PC-2 proof permits only its two generated migration filenames.
+const { isExactPc2, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const ROOT = process.cwd();
+const exactPc2 = isExactPc2(ROOT);
+const pc2MigrationNames = exactPc2 ? PC2_MIGRATIONS_PATHS.map(file => file.split("/").pop()) : [];
+
 const SUITE = "admin-operational-read-permissions-ae1-guard";
 const BASELINE = "7b112ac3013873236a28e0b15281feda04a8ac79";
 const MIGRATION = "supabase/migrations/20260920010000_admin_operational_read_permissions_ae1.sql";
@@ -235,7 +243,7 @@ check("migration is the exact additive successor (name, single file, predecessor
   // The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
   const exactRepair = isExactGqa5RestaurantReadRepair(ROOT);
   const all = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort()
-    .filter((f) => !(exactRepair && f === GQA5_REPAIR_FILE));
+    .filter((f) => !(exactRepair && f === GQA5_REPAIR_FILE) && !pc2MigrationNames.includes(f));
   assert.equal(all.at(-4), path.basename(MIGRATION));
   assert.equal(all.at(-3), "20260920020000_admin_restaurant_operational_read_foundation_b1.sql");
   assert.equal(all.at(-2), "20260920030000_admin_operational_review_queues_c.sql");

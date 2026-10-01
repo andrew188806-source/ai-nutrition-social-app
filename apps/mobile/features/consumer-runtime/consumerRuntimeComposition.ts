@@ -1,3 +1,6 @@
+import { ConsumerOnboardingController } from "../consumer-onboarding/controller";
+import { configuredConsumerAuthRedirect } from "../consumer-onboarding/authRedirect";
+import { parseRequiredBundle, type OnboardingRpcClient } from "../consumer-onboarding/types";
 import {
   ConsumerAuthRefreshLifecycle,
   ConsumerAuthStateStore,
@@ -12,7 +15,7 @@ import {
   getConsumerRuntimeFlags,
   getSupabaseConsumerEnvironment,
   withoutObsoleteConsumerWritesIssue,
-  type ConsumerAuthError,
+  ConsumerAuthError,
   type ConsumerAuthPort,
   type ConsumerAuthState,
   type ConsumerProfile,
@@ -98,6 +101,7 @@ export type ConsumerRuntimeMode = "mock" | "disabled" | "supabase";
 export type ConsumerRuntimeOperation = "idle" | "signingIn" | "signingOut";
 export type ConsumerRuntimeErrorCode =
   | "account_disabled"
+  | "authentication_timeout"
   | "authentication_failed"
   | "configuration_error"
   | "operation_not_enabled"
@@ -125,6 +129,7 @@ export type ConsumerRuntimeListener = (state: ConsumerRuntimeState) => void;
 export type ConsumerRuntimeControllerOptions = {
   authPort: ConsumerAuthPort;
   profileService: Pick<ConsumerProfileService, "getCurrentProfile">;
+  authTimeoutMs?: number;
   refreshLifecycle?: Pick<ConsumerAuthRefreshLifecycle, "initialize" | "dispose"> | null;
 };
 
@@ -136,6 +141,7 @@ export class ConsumerAuthProfileRuntime {
   private authStoreUnsubscribe: (() => void) | null = null;
   private restorePromise: Promise<void> | null = null;
   private restoring = true;
+  private profileSequence = 0;
   private started = false;
   private state: ConsumerRuntimeState = {
     authState: { status: "initializing", session: null },
@@ -176,9 +182,15 @@ export class ConsumerAuthProfileRuntime {
     this.refreshLifecycle?.initialize();
 
     if (!this.restorePromise) {
-      this.restorePromise = this.authStore.restore().then(() => undefined).finally(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
+      this.restorePromise = Promise.race([this.authStore.restore(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("AUTH_RESTORE_TIMEOUT")), this.options.authTimeoutMs ?? 12000); })]).then(() => undefined).catch(() => {
+        timedOut = true;
+        if (this.authStore.getState().status === "initializing") this.clearActor({ status: "error", session: null, error: new ConsumerAuthError("authentication_required", "Session status could not be confirmed.") }, "authentication_timeout");
+      }).finally(() => {
+        if (timer !== undefined) clearTimeout(timer);
         this.restoring = false;
-        this.handleAuthState(this.authStore.getState());
+        if (!timedOut) this.handleAuthState(this.authStore.getState());
       });
     } else if (!this.restoring) {
       this.handleAuthState(this.authStore.getState());
@@ -195,17 +207,30 @@ export class ConsumerAuthProfileRuntime {
     this.refreshLifecycle?.dispose();
   }
 
+  invalidateAccess() {
+    const actorGeneration = this.state.actorGeneration + 1;
+    setConsumerClientStateScope(this.state.actorKey, actorGeneration);
+    this.update({ actorGeneration });
+  }
+
   async signIn(email: string, password: string) {
     if (this.state.operation !== "idle") return false;
     this.update({ operation: "signingIn", errorCode: null });
-    const result = await this.authStore.signIn({ email: email.trim(), password });
-    if (result.ok) {
-      this.handleAuthState({ status: "signedIn", session: result.value });
-    } else {
-      this.update({ errorCode: mapAuthError(result.error) });
-    }
-    this.update({ operation: "idle" });
-    return result.ok;
+    const generation = this.state.actorGeneration;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        this.authStore.signIn({ email: email.trim(), password }),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("AUTH_TIMEOUT")), this.options.authTimeoutMs ?? 12000); })
+      ]);
+      if (this.state.actorGeneration !== generation && (!result.ok || this.state.actorKey !== result.value.user.userId)) return false;
+      if (result.ok) this.handleAuthState({ status: "signedIn", session: result.value });
+      else this.update({ errorCode: mapAuthError(result.error) });
+      return result.ok;
+    } catch (error) {
+      if (this.state.actorGeneration === generation) this.update({ errorCode: error instanceof Error && error.message === "AUTH_TIMEOUT" ? "authentication_timeout" : "authentication_failed" });
+      return false;
+    } finally { if (timer !== undefined) clearTimeout(timer); this.update({ operation: "idle" }); }
   }
 
   async signInDemo() {
@@ -224,14 +249,18 @@ export class ConsumerAuthProfileRuntime {
   async signOut() {
     if (this.state.operation !== "idle") return false;
     this.update({ operation: "signingOut", errorCode: null });
-    const result = await this.authStore.signOut();
-    if (result.ok) {
-      this.handleAuthState({ status: "signedOut", session: null });
-    } else {
-      this.update({ errorCode: mapAuthError(result.error) });
-    }
-    this.update({ operation: "idle" });
-    return result.ok;
+    const actor = this.state.actorKey;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([this.authStore.signOut(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("AUTH_TIMEOUT")), this.options.authTimeoutMs ?? 12000); })]);
+      if (this.state.actorKey !== actor && this.state.actorKey !== null) return false;
+      if (result.ok) this.handleAuthState({ status: "signedOut", session: null });
+      else this.update({ errorCode: mapAuthError(result.error) });
+      return result.ok;
+    } catch {
+      if (this.state.actorKey === actor) this.update({ errorCode: "authentication_timeout" });
+      return false;
+    } finally { if (timer !== undefined) clearTimeout(timer); this.update({ operation: "idle" }); }
   }
 
   async retryProfile() {
@@ -247,6 +276,7 @@ export class ConsumerAuthProfileRuntime {
     }
 
     if (next.status === "signedIn" && next.session) {
+      this.restoring = false;
       const actorKey = next.session.user.userId;
       if (actorKey !== this.state.actorKey) {
         const actorGeneration = this.state.actorGeneration + 1;
@@ -305,23 +335,19 @@ export class ConsumerAuthProfileRuntime {
 
   private async loadProfile(actorKey: string, generation: number) {
     if (actorKey !== this.state.actorKey || generation !== this.state.actorGeneration) return;
+    const sequence = ++this.profileSequence;
+    const current = () => actorKey === this.state.actorKey && generation === this.state.actorGeneration && sequence === this.profileSequence;
     this.update({ profileState: loadingProfileState() });
-    const result = await this.profileService.getCurrentProfile();
-    if (actorKey !== this.state.actorKey || generation !== this.state.actorGeneration) return;
-
-    if (result.ok) {
-      this.update({ profileState: { status: "available", profile: result.value, errorCode: null }, errorCode: null });
-      return;
-    }
-    if (result.error.code === "account_disabled") {
-      this.clearActor({ status: "disabled", session: this.state.authState.session, error: result.error }, "account_disabled");
-      return;
-    }
-    if (result.error.code === "profile_not_found") {
-      this.update({ profileState: { status: "notFound", profile: null, errorCode: "profile_not_found" } });
-      return;
-    }
-    this.update({ profileState: { status: "error", profile: null, errorCode: "profile_failed" } });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([this.profileService.getCurrentProfile(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("PROFILE_TIMEOUT")), this.options.authTimeoutMs ?? 12000); })]);
+      if (!current()) return;
+      if (result.ok) { this.update({ profileState: { status: "available", profile: result.value, errorCode: null }, errorCode: null }); return; }
+      if (result.error.code === "account_disabled") { this.clearActor({ status: "disabled", session: this.state.authState.session, error: result.error }, "account_disabled"); return; }
+      if (result.error.code === "profile_not_found") { this.update({ profileState: { status: "notFound", profile: null, errorCode: "profile_not_found" } }); return; }
+      this.update({ profileState: { status: "error", profile: null, errorCode: "profile_failed" } });
+    } catch { if (current()) this.update({ profileState: { status: "error", profile: null, errorCode: "profile_failed" } }); }
+    finally { if (timer !== undefined) clearTimeout(timer); }
   }
 
   private update(patch: Partial<ConsumerRuntimeState>) {
@@ -335,6 +361,7 @@ export class ConsumerAuthProfileRuntime {
 }
 
 export type ConsumerRuntimeComposition = {
+  onboarding?: ConsumerOnboardingController;
   flags: ConsumerRuntimeFlags;
   controller: ConsumerAuthProfileRuntime;
   mealWriteRuntime: ConsumerMealWriteRuntime;
@@ -433,7 +460,11 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         sdkLoader: createOfficialSupabaseConsumerSdkLoader()
       });
       const { client } = clientFactory.getOrCreateClient();
-      const authPort = new SupabaseConsumerAuthAdapter({ authClient: client.auth, transportEnabled: true });
+      const onboardingClient = client as unknown as OnboardingRpcClient;
+      const redirect = configuredConsumerAuthRedirect();
+      const authPort = new SupabaseConsumerAuthAdapter({ authClient: client.auth, transportEnabled: true, emailRedirectTo: redirect,
+        signupAdmission: async () => { const r = await onboardingClient.rpc("get_consumer_required_documents"); return !r.error && parseRequiredBundle(r.data) !== null; }
+      });
       const scaffold = createConsumerAuthScaffold({
         flags: authFlags,
         authPort,
@@ -506,11 +537,13 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
           client: client as unknown as SupabaseConsumerIngredientAvoidanceSettingsClientLike
         });
       }
+      const controller = new ConsumerAuthProfileRuntime({ authPort, profileService: scaffold.profileService, refreshLifecycle });
+      const onboarding = new ConsumerOnboardingController({ authPort, client: onboardingClient, redirect, invalidateAccess: () => controller.invalidateAccess() });
       return {
         ok: true,
         value: {
           flags: capabilityFlags,
-          controller: new ConsumerAuthProfileRuntime({ authPort, profileService: scaffold.profileService, refreshLifecycle }),
+          controller, onboarding,
           ...runtimeParts
         }
       };

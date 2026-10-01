@@ -11,13 +11,20 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+// Set aside only the exact two PC-2 migration names after the COMPLETE local successor proof.
+// Historical Admin assertions and failure identities remain intact.
+const { isExactPc2, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const ROOT = process.cwd();
+const pc2MigrationNames = isExactPc2(ROOT) ? PC2_MIGRATIONS_PATHS.map(file => file.split("/").pop()) : [];
 // The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
 const GQA5_REPAIR = acceptedGqa5RepairPaths(ROOT);
 // GQA-6R: the exact Stable Demo repair's recorded supabase paths (Edge Function CORS only).
 const GQA6R_SUPABASE = acceptedGqa6rProductPaths(ROOT).filter((f) => f.startsWith("supabase/"));
 const latestMigration = () => fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort()
-  .filter((f) => !(GQA5_REPAIR.length && f === GQA5_REPAIR_FILE)).at(-1);
+  .filter((f) => !(GQA5_REPAIR.length && f === GQA5_REPAIR_FILE) && !pc2MigrationNames.includes(f)).at(-1);
 const SUITE = "admin-operational-review-queues-c-guard";
 const BASELINE = "46bfb62457d2e0d86752334481649797ac860db3"; // ADMIN-B3 (pushed) = the ADMIN-C1 baseline
 const C1_COMMIT = "6df4660eec5a59ca9f320dad6be0d5486e807924"; // ADMIN-C1 (local) = the ADMIN-C2 baseline

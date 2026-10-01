@@ -5,7 +5,15 @@ import path from "node:path";
 import { validateAdminD } from "./admin-dashboard-social-policies-d-rules.mjs";
 import { GQA5_REPAIR_FILE, isExactGqa5RestaurantReadRepair } from "./gqa5-restaurant-read-repair-manifest.mjs";
 
+// The complete exact PC-2 proof permits only its two generated migration filenames.
+const { isExactPc2, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const ROOT = process.cwd();
+const exactPc2 = isExactPc2(ROOT);
+const pc2MigrationNames = exactPc2 ? PC2_MIGRATIONS_PATHS.map(file => file.split("/").pop()) : [];
+
 const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8").replace(/\r\n/g, "\n");
 const FILES = Object.freeze({
   migration: "supabase/migrations/20260921010000_admin_dashboard_social_policy_reads_d.sql",
@@ -27,7 +35,7 @@ check("the one ADMIN-D migration is additive, sorts after ADMIN-C, and no histor
   // The only later migration accepted is the exact GQA-5 Restaurant read repair (recorded path and bytes).
   const exactRepair = isExactGqa5RestaurantReadRepair(ROOT);
   const files = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort()
-    .filter((file) => !(exactRepair && file === GQA5_REPAIR_FILE));
+    .filter((file) => !(exactRepair && file === GQA5_REPAIR_FILE) && !pc2MigrationNames.includes(file));
   assert.equal(files.length, 139);
   assert.deepEqual(files.slice(-2), ["20260920030000_admin_operational_review_queues_c.sql", path.basename(FILES.migration)]);
 });

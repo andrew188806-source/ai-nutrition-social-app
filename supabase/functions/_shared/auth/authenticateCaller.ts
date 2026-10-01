@@ -28,5 +28,9 @@ export async function authenticateCaller(
   const { data, error } = await userScopedClient.auth.getUser();
   if (error || !data.user) return { ok: false, errorCode: "authentication_required" };
 
+  // PC-2: verified caller eligibility is checked BEFORE privileged provider/DB work in every
+  // Consumer handler. A database outage, malformed DTO or unavailable canonical state denies.
+  const eligibility = await userScopedClient.rpc("get_authenticated_consumer_participation_state");
+  if (eligibility.error || eligibility.data?.coreEligible !== true) return { ok: false, errorCode: "authentication_required" };
   return { ok: true, value: { userId: data.user.id, userScopedClient } };
 }

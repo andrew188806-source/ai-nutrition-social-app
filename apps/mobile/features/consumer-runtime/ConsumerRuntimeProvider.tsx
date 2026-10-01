@@ -1,3 +1,4 @@
+import { ConsumerOnboardingProvider, useConsumerOnboarding, pc2RouteDestination, PC2_RECOVERY_ROUTES } from "../consumer-onboarding/ConsumerOnboardingProvider";
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSegments } from "expo-router";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
@@ -344,7 +345,7 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
     state
   ]);
 
-  return <ConsumerRuntimeContext.Provider value={value}>{children}</ConsumerRuntimeContext.Provider>;
+  return <ConsumerRuntimeContext.Provider value={value}><ConsumerOnboardingProvider controller={composition.ok ? composition.value.onboarding ?? null : null}>{children}</ConsumerOnboardingProvider></ConsumerRuntimeContext.Provider>;
 }
 
 function mutationFailure(
@@ -378,6 +379,10 @@ export function ConsumerRuntimeNavigationGate({ children }: { children: ReactNod
   const router = useRouter();
   const segments = useSegments();
   const runtime = useConsumerRuntime();
+  const { controller: onboarding, snapshot } = useConsumerOnboarding();
+  const route = String(segments[0] ?? "");
+  const recovery = Boolean(onboarding) && PC2_RECOVERY_ROUTES.includes(route);
+  const destination = onboarding ? pc2RouteDestination(route, runtime.state.authState.status === "signedIn", snapshot) : null;
   const authStatus = runtime.state.authState.status;
   const onLoginRoute = String(segments[0] ?? "") === "login";
   const profileLoading = runtime.state.profileState.status === "loading";
@@ -385,9 +390,10 @@ export function ConsumerRuntimeNavigationGate({ children }: { children: ReactNod
   const signedOutLike = authStatus === "signedOut" || (authStatus === "error" && runtime.state.errorCode !== "configuration_error");
 
   useEffect(() => {
-    if (signedOutLike && !onLoginRoute) router.replace("/login");
-    if (signedInReady && onLoginRoute) router.replace("/");
-  }, [onLoginRoute, router, signedInReady, signedOutLike]);
+    if (destination) router.replace(destination as never);
+    else if (signedOutLike && !onLoginRoute && !recovery) router.replace("/login");
+    if (signedInReady && onLoginRoute) router.replace(onboarding ? "/onboarding" as never : "/");
+  }, [onLoginRoute, router, signedInReady, signedOutLike, recovery, destination, onboarding]);
 
   if (runtime.configurationError || runtime.state.errorCode === "configuration_error") {
     return <RuntimeBoundary errorCode="configuration_error" />;
@@ -398,7 +404,7 @@ export function ConsumerRuntimeNavigationGate({ children }: { children: ReactNod
   if (authStatus === "initializing" || profileLoading) {
     return <RuntimeLoadingBoundary />;
   }
-  if ((signedOutLike && !onLoginRoute) || (signedInReady && onLoginRoute)) {
+  if (destination || (signedOutLike && !onLoginRoute && !recovery) || (signedInReady && onLoginRoute)) {
     return <RuntimeLoadingBoundary />;
   }
   return <>{children}</>;

@@ -27,7 +27,6 @@ export type SupabaseConsumerProfileRowLike = {
   weight_unit?: string | null;
   lifecycle_status?: string | null;
   status?: string | null;
-  onboarding_complete?: boolean | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -53,5 +52,6 @@ export type SupabaseProfileQueryBuilderLike = {
 };
 
 export type SupabaseConsumerProfileClientLike = {
+  rpc?(name: "get_authenticated_consumer_participation_state"): PromiseLike<{ data: unknown; error: unknown }>;
   from(table: typeof SUPABASE_CONSUMER_PROFILE_TABLE): SupabaseProfileQueryBuilderLike;
 };

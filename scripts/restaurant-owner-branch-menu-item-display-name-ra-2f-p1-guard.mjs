@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// PC2-EXACT-PREDECESSOR-BEGIN
+const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+  throw error;
+});
+await runExactPc2PredecessorGuard(process.cwd(), "scripts/restaurant-owner-branch-menu-item-display-name-ra-2f-p1-guard.mjs");
+// PC2-EXACT-PREDECESSOR-END
 // RA-2F-P1 guard. Scope, topology, successor integrity, predecessor freeze and hygiene.
 //
 // Behaviour is asserted by the smoke and mutation runners; what a real cluster does with this

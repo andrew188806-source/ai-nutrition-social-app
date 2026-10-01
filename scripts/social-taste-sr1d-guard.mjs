@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// PC2-EXACT-PREDECESSOR-BEGIN
+const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+  throw error;
+});
+await runExactPc2PredecessorGuard(process.cwd(), "scripts/social-taste-sr1d-guard.mjs");
+// PC2-EXACT-PREDECESSOR-END
 // SR-1D local guard. No network, database, credential, deployment or Production access.
 import crypto from "node:crypto";
 import fs from "node:fs";

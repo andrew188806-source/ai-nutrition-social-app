@@ -1,3 +1,8 @@
+// Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
+const { pc2PredecessorEvidence, isExactPc2, PC2_PRODUCT_PATHS, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 // PC-1 exact successor record: Consumer async reconciliation and truthfulness (A1 invitation, A2 chat,
 // B1 canonical quota, B2 location label) on top of the exact GQA-6 closure commit. Frozen guards accept
 // these product paths ONLY while every one of them carries exactly the recorded bytes and nothing else
@@ -73,6 +78,8 @@ export function matchesExactPc1(evidence) {
 }
 
 export function collectPc1Evidence(root = process.cwd()) {
+  const prior = pc2PredecessorEvidence(root, PC1_PREDECESSOR, PC1_PRODUCT_ROOTS);
+  if (prior) return prior;
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 16 * 1024 * 1024 }).trim();
   const predecessorInHistory = spawnSync("git", ["merge-base", "--is-ancestor", PC1_PREDECESSOR, "HEAD"], { cwd: root, stdio: "ignore" }).status === 0;
   const productDelta = predecessorInHistory

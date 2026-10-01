@@ -42,7 +42,8 @@ export type SupabaseAuthStateChangeResultLike = {
 export type SupabaseAuthClientLike = {
   getSession(): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   signInWithPassword(input: { email: string; password: string }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
-  signUp(input: { email: string; password: string; options?: { data?: Record<string, unknown> } }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
+  signUp(input: { email: string; password: string; options?: { data?: Record<string, unknown>; emailRedirectTo?: string } }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
+  exchangeCodeForSession?(code: string): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   signOut(): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
   refreshSession(): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   resetPasswordForEmail(email: string): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
@@ -63,6 +64,7 @@ export type SupabaseConsumerClientOptions = {
     persistSession: true;
     autoRefreshToken: true;
     detectSessionInUrl: false;
+    flowType?: "pkce";
     storage: unknown;
     lock?: unknown;
   };

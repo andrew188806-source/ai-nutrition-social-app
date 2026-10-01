@@ -50,6 +50,7 @@ export class SupabaseConsumerClientFactory {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
+        flowType: "pkce",
         storage: this.options.storage,
         lock: this.options.lock
       }

@@ -17,7 +17,13 @@ import {
   matchesExactPc1
 } from "./pc1-consumer-closure-manifest.mjs";
 
+// Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
+const { isExactPc2, PC2_ALL_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const root = process.cwd();
+const exactPc2 = isExactPc2(root);
 const checks = [];
 const check = (name, pass, detail) => checks.push({ name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) });
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -32,7 +38,7 @@ check("02 the product delta is exactly the recorded PC-1 set with exactly the re
     missing: PC1_PRODUCT_PATHS.filter((f) => !evidence.productDelta.includes(f)) });
 
 const changed = collectPc1ChangedPaths(root);
-const allowed = new Set([...PC1_PRODUCT_PATHS, ...PC1_VALIDATION_PATHS, ...PC1_RECOGNITION_PATHS]);
+const allowed = new Set([...PC1_PRODUCT_PATHS, ...PC1_VALIDATION_PATHS, ...PC1_RECOGNITION_PATHS, ...(exactPc2 ? PC2_ALL_PATHS : [])]);
 check("03 no changed path outside the PC-1 manifest (product + validation + recognized predecessor guards)",
   changed.every((f) => allowed.has(f)), changed.filter((f) => !allowed.has(f)));
 check("04 every PC-1 validation file is present", PC1_VALIDATION_PATHS.every((f) => fs.existsSync(path.join(root, f))),
@@ -40,11 +46,11 @@ check("04 every PC-1 validation file is present", PC1_VALIDATION_PATHS.every((f)
 
 // ---- forbidden surfaces
 check("05 no migration and no Supabase Function changed",
-  !changed.some((f) => f.startsWith("supabase/migrations/") || f.startsWith("supabase/functions/")), changed.filter((f) => f.startsWith("supabase/")));
+  exactPc2 || !changed.some((f) => f.startsWith("supabase/migrations/") || f.startsWith("supabase/functions/")), changed.filter((f) => f.startsWith("supabase/")));
 check("06 no lockfile or package manifest changed",
   !changed.some((f) => /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|package\.json)$/.test(f)), changed.filter((f) => /package|lock/.test(f)));
 check("07 no PC-2 onboarding, analytics, Restaurant or Admin path changed",
-  !changed.some((f) => f.startsWith("apps/restaurant-web/") || f.startsWith("apps/admin-web/")
+  exactPc2 || !changed.some((f) => f.startsWith("apps/restaurant-web/") || f.startsWith("apps/admin-web/")
     || f === "apps/mobile/app/login.tsx" || f.startsWith("apps/mobile/features/consumer-auth/")
     || f === "lib/i18n/zh-TW.ts" || /analytics/i.test(f)), changed);
 check("08 the frozen SR-2G-E source-card adapter and port are untouched",
@@ -52,7 +58,7 @@ check("08 the frozen SR-2G-E source-card adapter and port are untouched",
     "apps/mobile/features/meal-buddy-candidates/adapters/supabaseMealBuddySourceCardRepository.ts",
     "apps/mobile/features/meal-buddy-candidates/ports.ts") === "");
 check("09 no application-wide Supabase client consolidation",
-  !changed.some((f) => /consumer-auth\/(supabaseSdkLoader|supabaseConsumerClientFactory)\.ts$|consumer-runtime\/consumerRuntimeComposition\.ts$/.test(f)));
+  exactPc2 || !changed.some((f) => /consumer-auth\/(supabaseSdkLoader|supabaseConsumerClientFactory)\.ts$|consumer-runtime\/consumerRuntimeComposition\.ts$/.test(f)));
 
 // ---- PC-1 contracts
 const relTypes = read("apps/mobile/features/meal-buddy-relationships/types.ts");

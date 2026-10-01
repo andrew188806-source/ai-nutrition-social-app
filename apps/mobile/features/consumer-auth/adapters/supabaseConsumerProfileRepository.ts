@@ -53,7 +53,12 @@ export class SupabaseConsumerProfileRepository implements ConsumerProfileReposit
         .maybeSingle();
       if (response.error) return err(mapProfileTransportError(response.error));
       if (!response.data) return err(new ConsumerProfileNotFoundError("Authenticated consumer profile was not found."));
-      return ok(mapSupabaseProfileRowToConsumerProfile(response.data, userId));
+      const canonical = this.options.profileClient.rpc ? await this.options.profileClient.rpc("get_authenticated_consumer_participation_state") : null;
+      if (canonical?.error) return err(new ConsumerProfileTransportFailedError("Canonical onboarding read failed."));
+      const state = canonical?.data as { onboardingComplete?: unknown } | null;
+      const after = await this.options.authPort.getCurrentSession();
+      if (!after.ok || after.value?.user.userId !== userId) return err(new ConsumerProfileSessionMissingError());
+      return ok(mapSupabaseProfileRowToConsumerProfile(response.data, userId, state?.onboardingComplete === true));
     } catch (error) {
       if (error instanceof ConsumerProfileMappingFailedError) return err(error);
       return err(new ConsumerProfileTransportFailedError("Consumer live profile transport threw before a row could be mapped."));

@@ -4,7 +4,7 @@ import type { SupabaseConsumerProfileRowLike } from "./supabaseProfileContracts"
 
 const lifecycleStatuses = new Set<ConsumerAccountLifecycleStatus>(["active", "disabled", "deletion_requested", "anonymizing", "anonymized", "deleted"]);
 
-export function mapSupabaseProfileRowToConsumerProfile(row: SupabaseConsumerProfileRowLike | null | undefined, expectedUserId: string): ConsumerProfile {
+export function mapSupabaseProfileRowToConsumerProfile(row: SupabaseConsumerProfileRowLike | null | undefined, expectedUserId: string, canonicalOnboardingComplete = false): ConsumerProfile {
   if (!row) throw new ConsumerProfileMappingFailedError("Supabase profile row is empty.");
   const rowUserId = requiredString(row.user_id ?? row.id, "user_id");
   if (rowUserId !== expectedUserId) throw new ConsumerProfileMappingFailedError("Supabase profile row does not belong to the authenticated user.");
@@ -20,7 +20,7 @@ export function mapSupabaseProfileRowToConsumerProfile(row: SupabaseConsumerProf
     energyUnit: normalizeEnergyUnit(row.energy_unit),
     weightUnit: normalizeWeightUnit(row.weight_unit),
     lifecycleStatus: status,
-    onboardingComplete: Boolean(row.onboarding_complete),
+    onboardingComplete: canonicalOnboardingComplete,
     createdAt: normalizeIsoTimestamp(row.created_at, "created_at"),
     updatedAt: normalizeIsoTimestamp(row.updated_at, "updated_at")
   };

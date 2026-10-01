@@ -5,7 +5,13 @@ import { createRequire } from "node:module";
 import Module from "node:module";
 import ts from "typescript";
 
+// Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
+const { isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+  throw error;
+});
 const root = process.cwd();
+const exactPc2 = isExactPc2(root);
 const sourceRoot = path.join(root, "apps", "mobile", "features", "consumer-auth");
 const mobileNodeModulesPath = path.join(root, "apps", "mobile", "node_modules");
 const approvedSdkImportFiles = new Set(["apps/mobile/features/consumer-auth/supabaseSdkLoader.ts"]);
@@ -91,7 +97,11 @@ const forbiddenSourcePatterns = [
 ];
 
 for (const [pattern, message] of forbiddenSourcePatterns) {
-  const matches = sourceText.filter((item) => pattern.test(item.text)).map((item) => item.rel);
+  const matches = sourceText.filter((item) => {
+    const text = exactPc2 && item.rel === "apps/mobile/features/consumer-auth/adapters/supabaseConsumerProfileRepository.ts"
+      ? item.text.replace(/\.rpc\("get_authenticated_consumer_participation_state"\)/g, "") : item.text;
+    return pattern.test(text);
+  }).map((item) => item.rel);
   if (matches.length) fail(`forbidden source pattern: ${pattern}`, message, { matches });
   else pass(`forbidden source pattern absent: ${pattern}`);
 }
@@ -229,7 +239,10 @@ async function fakeLiveAuthTests() {
   if (!restored.ok || restored.value?.user.userId !== fakeUser.id) throw new Error("restore/get session mapping failed");
   const signedIn = await authPort.signIn({ email: "demo@example.test", password: "password" });
   if (!signedIn.ok || signedIn.value.user.userId !== fakeUser.id) throw new Error("sign-in mapping failed");
-  const signedUp = await authPort.signUp({ email: "new@example.test", password: "password", displayName: "New Demo" });
+  const signupAuthPort = exactPc2 ? new phase1c.SupabaseConsumerAuthAdapter({ authClient: fakeAuthClient, transportEnabled: true,
+    emailRedirectTo: "haocu://auth-callback", signupAdmission: async () => true // Synthetic admitted transport, not legal publication.
+  }) : authPort;
+  const signedUp = await signupAuthPort.signUp({ email: "new@example.test", password: "password", displayName: "New Demo" });
   if (!signedUp.ok || signedUp.value.user.userId !== fakeUser.id) throw new Error("sign-up session mapping failed");
   const refreshed = await authPort.refreshSession();
   if (!refreshed.ok || refreshed.value?.user.userId !== fakeUser.id) throw new Error("refresh mapping failed");
@@ -244,12 +257,13 @@ async function fakeLiveAuthTests() {
 
   const noSessionAuth = new phase1c.SupabaseConsumerAuthAdapter({
     authClient: { ...fakeAuthClient, signUp: async () => ({ data: { session: null }, error: null }) },
-    transportEnabled: true
+    transportEnabled: true,
+    ...(exactPc2 ? { emailRedirectTo: "haocu://auth-callback", signupAdmission: async () => true } : {})
   });
   const confirmation = await noSessionAuth.signUp({ email: "confirm@example.test", password: "password" });
   if (confirmation.ok || confirmation.error.code !== "email_confirmation_required") throw new Error("sign-up without session should require email confirmation");
 
-  const stateStore = new phase1c.ConsumerAuthStateStore(authPort);
+  const stateStore = new phase1c.ConsumerAuthStateStore(exactPc2 ? signupAuthPort : authPort);
   await stateStore.restore();
   if (stateStore.getState().status !== "signedIn") throw new Error("state store restore failed");
   await stateStore.refresh();
