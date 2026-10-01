@@ -49,7 +49,8 @@ export function isExactGqa5RestaurantReadRepair(root = process.cwd()) {
   catch { return false; }
 }
 
-/** The single later supabase/ path a frozen-root guard may accept, and only while it is exact. */
+/** Historical repair retains one path. A fully exact PC-2 composition additionally exposes only its two pinned migrations. */
 export function acceptedGqa5RepairPaths(root = process.cwd()) {
-  return isExactGqa5RestaurantReadRepair(root) ? [GQA5_REPAIR_MIGRATION] : [];
+  if (!isExactGqa5RestaurantReadRepair(root)) return [];
+  return [GQA5_REPAIR_MIGRATION, ...(isExactPc2(root) ? PC2_MIGRATIONS_PATHS : [])];
 }

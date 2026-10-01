@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-a-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-a-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -51,13 +51,13 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
 
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
   check("HEAD remains the Frozen Phase 2W-E baseline", git(["rev-parse", "HEAD"]).stdout.trim() === expectedHead);
   check("candidate changes stay inside the approved Phase 2X-A boundary", outOfScope.length === 0, { changedFiles, outOfScope });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
 
   for (const file of requiredDocs) {
     check(`required document exists: ${file}`, fs.existsSync(path.join(root, docsRoot, file)));
@@ -95,8 +95,8 @@ try {
   check("Production and N4 remain untouched", /Production remains untouched/i.test(docs) && /N4 and Phase 2V-F remain BLOCKED \/ NOT EXECUTED/i.test(docs));
   check("no Phase 2Y implementation is authorized", /Recommendation Feedback remains Phase 2Y NOT STARTED/i.test(docs) && /Phase 2Y implementation/i.test(docs));
 
-  check("Mobile production UI is unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile"]).stdout.trim() === "");
-  check("Frozen Phase 2W implementation is unchanged", git(["diff", "--name-only", "HEAD", "--", "docs/consumer-runtime-phase-2w", "scripts/consumer-ratings-phase-2w-a-guard.mjs", "scripts/consumer-ratings-phase-2w-a-contract-smoke.mjs", "apps/mobile/features/consumer-ratings"]).stdout.trim() === "");
+  check("Mobile production UI is unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile"]).stdout).length === 0);
+  check("Frozen Phase 2W implementation is unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "docs/consumer-runtime-phase-2w", "scripts/consumer-ratings-phase-2w-a-guard.mjs", "scripts/consumer-ratings-phase-2w-a-contract-smoke.mjs", "apps/mobile/features/consumer-ratings"]).stdout).length === 0);
   check("no Favorites runtime implementation exists", !fs.existsSync(path.join(root, "apps", "mobile", "features", "consumer-favorites")));
 
   const migrationDiff = git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout.trim();
@@ -104,7 +104,7 @@ try {
   const latestMigration = migrations.at(-1);
   const latestHash = createHash("sha256").update(read(`supabase/migrations/${latestMigration}`)).digest("hex");
   check("migration inventory remains unchanged at 34", migrationDiff === "" && migrations.length === 34 && latestMigration === "20260717010000_consumer_ratings_authenticated_read_and_atomic_write.sql", { migrationDiff, migrationCount: migrations.length, latestMigration, latestHash });
-  check("package-lock and dependencies remain unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "" && git(["diff", "--unified=0", "HEAD", "--", "package.json"]).stdout.split(/\r?\n/).filter((line) => /^[+-](?![+-])/.test(line)).every((line) => /test:consumer-phase2x-a/.test(line)));
+  check("package-lock and dependencies remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0 && git(["diff", "--unified=0", "HEAD", "--", "package.json"]).stdout.split(/\r?\n/).filter((line) => /^[+-](?![+-])/.test(line)).every((line) => /test:consumer-phase2x-a/.test(line)));
 
   const packageJson = JSON.parse(read("package.json"));
   check("package exposes only the Phase 2X-A local guard script", packageJson.scripts?.["test:consumer-phase2x-a"] === "node scripts/consumer-favorites-phase-2x-a-guard.mjs");

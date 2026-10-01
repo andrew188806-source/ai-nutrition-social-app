@@ -3,6 +3,12 @@
 // Verifies candidate scope, frozen baselines, migration SQL patterns, adapter patterns,
 // and frozen Phase 2Y-B smoke expected phase-transition disposition.
 
+// Preserve historical behavior when this fixture predates PC-2; exempt only a fully exact current successor.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { pc2RetainedPaths: text => text.split(/\r?\n/).filter(Boolean) };
+  throw error;
+});
+
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -113,18 +119,18 @@ const FROZEN_2YB_FILES = [
 
 for (const f of FROZEN_2YA_FILES) {
   const base = path.basename(f);
-  const cd = run(`git diff --quiet ${PHASE_2YA_COMMIT} HEAD -- "${f}"`);
-  check(`Phase 2Y-A frozen: no commit delta (${base})`, cd.ok);
-  const wd = run(`git diff --quiet HEAD -- "${f}"`);
-  check(`Phase 2Y-A frozen: working tree clean (${base})`, wd.ok);
+  const cd = run(`git diff --name-only ${PHASE_2YA_COMMIT} HEAD -- "${f}"`);
+  check(`Phase 2Y-A frozen: no commit delta (${base})`, cd.ok && pc2RetainedPaths(cd.stdout, root).length === 0);
+  const wd = run(`git diff --name-only HEAD -- "${f}"`);
+  check(`Phase 2Y-A frozen: working tree clean (${base})`, wd.ok && pc2RetainedPaths(wd.stdout, root).length === 0);
 }
 
 for (const f of FROZEN_2YB_FILES) {
   const base = path.basename(f);
-  const cd = run(`git diff --quiet ${PHASE_2YB_COMMIT} HEAD -- "${f}"`);
-  check(`Phase 2Y-B frozen: no commit delta (${base})`, cd.ok);
-  const wd = run(`git diff --quiet HEAD -- "${f}"`);
-  check(`Phase 2Y-B frozen: working tree clean (${base})`, wd.ok);
+  const cd = run(`git diff --name-only ${PHASE_2YB_COMMIT} HEAD -- "${f}"`);
+  check(`Phase 2Y-B frozen: no commit delta (${base})`, cd.ok && pc2RetainedPaths(cd.stdout, root).length === 0);
+  const wd = run(`git diff --name-only HEAD -- "${f}"`);
+  check(`Phase 2Y-B frozen: working tree clean (${base})`, wd.ok && pc2RetainedPaths(wd.stdout, root).length === 0);
 }
 
 // =====================================================================

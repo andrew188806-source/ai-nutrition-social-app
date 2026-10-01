@@ -1,5 +1,7 @@
 # PC-2-P0R 營運者審閱表（Owner Review Sheet）
 
+> CURRENT VALIDATION STATUS: independent PC-2 acceptance was BLOCKED; executor validation-only remediation is complete; independent reacceptance remains pending. Earlier preparation-stage statements below retain their historical phase scope. See section 6 and 08_VALIDATION_INTEGRITY_REMEDIATION.md for engineering and validation updates. Legal drafts remain DRAFT / NOT ACTIVE.
+
 狀態：**OWNER APPROVED PRODUCT DECISIONS 已同步；剩餘事項待審閱；三份法律草稿 DRAFT — NOT ACTIVE**。
 基準：`main` @ `30268ee4de59a8d8855c1dcaa01795d2f1ce33b1`
 
@@ -127,3 +129,11 @@ DRAFT HASH 包含草稿 metadata、本文與附錄，只供審閱一致性，不
 The preceding statements that canonical age/server enforcement/migrations remain executor freeze items describe the earlier P0R phase. The exact engineering inventory and authority matrix are now frozen in 06 §7; migrations, private bundle binding, locks, client flows and narrow predecessor recognition have been implemented locally. Local synthetic validation is recorded in `scripts/pc2-consumer-onboarding-validation.json`. This is an executor implementation record, not independent Planner acceptance.
 
 The three legal drafts remain the exact D-01 hashes above and DRAFT / NOT ACTIVE. All owner/operator/legal blanks and unresolved policy rows remain unresolved. No legal approval, clean publication, effective time, notification/member reconsent, Production inference or real-member activation is created by this engineering update. OF-01–05, non-Social minors/required-training qualified legal review, clean approved publication binding, existing-member rollout acceptance, Development acceptance and OD-15/TD-10/AU19/P-7 remain activation blockers. Remote duplicate-profile inventory/remediation needs separate authorization before any migration apply; local duplicate tests never inventory a remote database.
+
+## Validation integrity remediation — acceptance BLOCKED
+
+Independent PC-2 acceptance was BLOCKED: 30 predecessor guards replayed baseline and exited before candidate assertions; GQA-6R missing-delta/deleted-file controls gained two failures; 33 differential failure groups had only UNREPORTED_FAILURE, so parity was unproven. Validation-only corrective gates are complete in the supplemental evidence; independent reacceptance remains pending. Original implementation evidence is historical and is not remediation acceptance. See 08_VALIDATION_INTEGRITY_REMEDIATION.md for the supplemental evidence. Legal drafts remain DRAFT / NOT ACTIVE. OD-15, TD-10/AU19 and P-7 remain open.
+
+## Supplemental executor validation closure
+
+Independent acceptance was BLOCKED for the three stated integrity defects. The exact 61-path correction restores actual candidate validation, GQA record/file-existence controls, and concrete failure-vector evidence. The verified complete inventory is 478 local / 24 excluded live or Development suites; the original 39 predecessor commands are a subset. NEW_REGRESSION = 0 with all failure vectors verified; inherited failures remain failures. Earlier 482 is unsupported and superseded. See 08 and its supplemental JSON/raw-output ZIP for full provenance, source bindings and reproducible evidence. This is READY_FOR_PC_2_REACCEPTANCE, not independent acceptance or legal activation. Legal drafts remain DRAFT / NOT ACTIVE; OD-15, TD-10/AU19 and P-7 remain open.

@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean), isExactPc2: () => false };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-b-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-b-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -61,17 +61,17 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
 
   check("branch remains main", git(["branch", "--show-current"]).trim() === "main");
   check("HEAD remains the Frozen Phase 2X-A commit", git(["rev-parse", "HEAD"]).trim() === expectedHead);
   check("candidate changes stay inside the Phase 2X-B allowlist", outOfScope.length === 0, { changedFiles, outOfScope });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).trim() === "");
-  check("package-lock remains unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).trim() === "");
-  check("Mobile production UI and navigation remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app"]).trim() === "");
-  check("Frozen Phase 2W files remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-ratings", "docs/consumer-runtime-phase-2w", "scripts/consumer-ratings-phase-2w-a-guard.mjs"]).trim() === "");
-  check("Frozen Phase 2X-A files remain unchanged", git(["diff", "--name-only", "HEAD", "--", `${docsRoot}/phase-2x-a-discovery-report.md`, `${docsRoot}/phase-2x-a-runtime-contract.md`, `${docsRoot}/phase-2x-a-security-and-target-identity.md`, `${docsRoot}/phase-2x-implementation-plan.md`, `${docsRoot}/phase-2x-known-issues-and-deferrals.md`, `${docsRoot}/phase-2x-validation-plan.md`, "scripts/consumer-favorites-phase-2x-a-guard.mjs"]).trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"])).length === 0);
+  check("package-lock remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"])).length === 0);
+  check("Mobile production UI and navigation remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app"])).length === 0);
+  check("Frozen Phase 2W files remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-ratings", "docs/consumer-runtime-phase-2w", "scripts/consumer-ratings-phase-2w-a-guard.mjs"])).length === 0);
+  check("Frozen Phase 2X-A files remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", `${docsRoot}/phase-2x-a-discovery-report.md`, `${docsRoot}/phase-2x-a-runtime-contract.md`, `${docsRoot}/phase-2x-a-security-and-target-identity.md`, `${docsRoot}/phase-2x-implementation-plan.md`, `${docsRoot}/phase-2x-known-issues-and-deferrals.md`, `${docsRoot}/phase-2x-validation-plan.md`, "scripts/consumer-favorites-phase-2x-a-guard.mjs"])).length === 0);
 
   // Phase 2X-A historical anchor invariants — carried into all later Phase 2X subphase guards
   const frozenPhase2xaInventory = [
@@ -90,7 +90,7 @@ try {
   const frozenFileDiff = spawnSync("git", ["diff", "--name-only", expectedHead, "HEAD", "--", ...frozenPhase2xaInventory], { cwd: root, encoding: "utf8", windowsHide: true });
   check(
     "Phase 2X-A frozen files are byte-for-byte identical between the Phase 2X-A Frozen Commit and HEAD",
-    frozenFileDiff.stdout.trim() === "",
+    pc2RetainedPaths(frozenFileDiff.stdout).length === 0,
     { drift: frozenFileDiff.stdout.trim() || "(none)" }
   );
 
@@ -146,13 +146,13 @@ try {
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   const latestMigration = migrations.at(-1);
   const latestMigrationHash = createHash("sha256").update(read(`supabase/migrations/${latestMigration}`)).digest("hex");
-  check("migration inventory remains 34 at the Frozen Phase 2W-B migration", git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).trim() === "" && migrations.length === 34 && latestMigration === "20260717010000_consumer_ratings_authenticated_read_and_atomic_write.sql", { migrationCount: migrations.length, latestMigration, latestMigrationHash });
+  check("migration inventory remains 34 at the Frozen Phase 2W-B migration", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"])).length === 0 && migrations.length === 34 && latestMigration === "20260717010000_consumer_ratings_authenticated_read_and_atomic_write.sql", { migrationCount: migrations.length, latestMigration, latestMigrationHash });
 
   const packageJson = JSON.parse(read("package.json"));
   check("package exposes the Phase 2X-B guard", packageJson.scripts?.["test:consumer-phase2x-b"] === "node scripts/consumer-favorites-phase-2x-b-guard.mjs");
   check("package exposes the Phase 2X-B smoke", packageJson.scripts?.["test:consumer-phase2x-b-smoke"] === "node scripts/consumer-favorites-phase-2x-b-contract-smoke.mjs");
   check("package changes add scripts only", git(["diff", "--unified=0", "HEAD", "--", "package.json"]).split(/\r?\n/).filter((line) => /^[+-](?![+-])/.test(line)).every((line) => /test:consumer-phase2x-b/.test(line)));
-  check("package-lock and dependency declarations remain unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).trim() === "" && git(["diff", "--unified=0", "HEAD", "--", "package.json"]).split(/\r?\n/).filter((line) => /^[+-](?![+-])/.test(line)).every((line) => !/dependencies|devDependencies/.test(line)));
+  check("package-lock and dependency declarations remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"])).length === 0 && git(["diff", "--unified=0", "HEAD", "--", "package.json"]).split(/\r?\n/).filter((line) => /^[+-](?![+-])/.test(line)).every((line) => !/dependencies|devDependencies/.test(line)));
   check(
     "Phase 2X-A guard package script key and command are preserved unchanged",
     packageJson.scripts?.["test:consumer-phase2x-a"] === "node scripts/consumer-favorites-phase-2x-a-guard.mjs"

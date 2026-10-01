@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-d-a-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-d-a-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -103,7 +103,7 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
   const missingCandidate = [...allowedChanges].filter((file) => !changedFiles.includes(file));
 
@@ -118,10 +118,10 @@ try {
     check(`${name} Frozen Commit is an ancestor`, git(["merge-base", "--is-ancestor", commit, "HEAD"], true).status === 0);
   }
   check("candidate is exactly the approved Phase 2X-D-A boundary", outOfScope.length === 0 && missingCandidate.length === 0 && changedFiles.length === allowedChanges.size, { changedFiles, outOfScope, missingCandidate });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
-  check("package-lock remains unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "");
-  check("Mobile UI and routes remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app"]).stdout.trim() === "");
-  check("unrelated runtimes remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-ratings", "apps/mobile/features/consumer-auth", "apps/admin-web", "apps/restaurant-web", "packages"]).stdout.trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
+  check("package-lock remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0);
+  check("Mobile UI and routes remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app"]).stdout).length === 0);
+  check("unrelated runtimes remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-ratings", "apps/mobile/features/consumer-auth", "apps/admin-web", "apps/restaurant-web", "packages"]).stdout).length === 0);
 
   const immutableFavoriteFiles = [
     `${featureRoot}/errors.ts`,
@@ -133,15 +133,15 @@ try {
     `${featureRoot}/adapters/supabaseConsumerFavoriteReadRepository.ts`
   ];
   const immutablePhase2XArtifacts = git(["ls-tree", "-r", "--name-only", phase2xCBFrozenCommit, "--", docsRoot, "scripts/consumer-favorites-phase-2x-a-guard.mjs", "scripts/consumer-favorites-phase-2x-b-guard.mjs", "scripts/consumer-favorites-phase-2x-b-contract-smoke.mjs", "scripts/consumer-favorites-phase-2x-c-a-guard.mjs", "scripts/consumer-favorites-phase-2x-c-a-contract-smoke.mjs", "scripts/consumer-favorites-phase-2x-c-b-guard.mjs", "scripts/consumer-favorites-phase-2x-c-b-development-live-smoke.mjs"]).stdout.split(/\r?\n/).filter(Boolean);
-  check("Frozen non-extension Favorites runtime remains byte-unchanged", git(["diff", "--name-only", "HEAD", "--", ...immutableFavoriteFiles]).stdout.trim() === "");
-  check("Frozen Phase 2X documents and guards remain byte-unchanged", git(["diff", "--name-only", "HEAD", "--", ...immutablePhase2XArtifacts]).stdout.trim() === "");
+  check("Frozen non-extension Favorites runtime remains byte-unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", ...immutableFavoriteFiles]).stdout).length === 0);
+  check("Frozen Phase 2X documents and guards remain byte-unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", ...immutablePhase2XArtifacts]).stdout).length === 0);
   check("Frozen Phase 2X-B and 2X-C-A smoke files remain byte-equivalent", Object.entries(frozenSmokeShas).every(([file, expectedSha]) => sha256(file) === expectedSha), {
     hashes: Object.fromEntries(Object.keys(frozenSmokeShas).map((file) => [file, sha256(file)]))
   });
   check("regression correction preserves approved production runtime and migration bytes", Object.entries(approvedProductionShas).every(([file, expectedSha]) => sha256(file) === expectedSha), {
     hashes: Object.fromEntries(Object.keys(approvedProductionShas).map((file) => [file, sha256(file)]))
   });
-  check("all prior migrations remain byte-unchanged", git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout.trim() === "");
+  check("all prior migrations remain byte-unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout).length === 0);
 
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   const previousSha = createHash("sha256").update(fs.readFileSync(path.join(root, previousMigration))).digest("hex");
@@ -303,7 +303,7 @@ try {
     privilegedCredentialUsed: false,
     n4Executed: false,
     phase2YStarted: false,
-    stagedDiffEmpty: git(["diff", "--cached", "--name-only"]).stdout.trim() === ""
+    stagedDiffEmpty: pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0
   }, null, 2));
   if (issues.length) process.exitCode = 1;
 } catch (error) {

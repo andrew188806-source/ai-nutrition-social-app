@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-runtime-mi-e-c5-r1-capability-flags-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-runtime-mi-e-c5-r1-capability-flags-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";

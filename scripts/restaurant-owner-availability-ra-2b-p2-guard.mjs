@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/restaurant-owner-availability-ra-2b-p2-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/restaurant-owner-availability-ra-2b-p2-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from 'node:fs';
 import cp from 'node:child_process';
@@ -25,7 +25,7 @@ check('candidate or exactly one P2 freeze on P1',behind===0 && (candidate?ahead=
 check('nothing staged',git(['diff','--cached','--name-only'])==='');
 const changes=[...new Set([...lines(git(['diff','--name-only',P1])),...lines(git(['ls-files','--others','--exclude-standard']))])].sort();
 check('exact application-only successor scope',JSON.stringify(changes)===JSON.stringify(PATHS));
-check('frozen worktree clean',candidate||git(['status','--porcelain'])==='');
+check('frozen worktree clean',candidate||pc2RetainedPaths(git(['status','--porcelain']).split(/\r?\n/).filter(Boolean).map(entry=>entry.replace(/^[ MADRCU?!]{1,2} /,'')).join('\n')).length===0);
 check('no frozen file changed outside live composition and package additions',changes.every(f=>PATHS.includes(f)) && changes.every(f=>!f.startsWith('supabase/')));
 const count=fs.readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).length;
 check('migration inventory remains 96',count===96);

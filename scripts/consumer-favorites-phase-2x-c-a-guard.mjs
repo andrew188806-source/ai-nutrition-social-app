@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-c-a-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-c-a-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -92,7 +92,7 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
 
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
@@ -100,11 +100,11 @@ try {
   check("Phase 2X-A Frozen Commit is an ancestor", git(["merge-base", "--is-ancestor", phase2xAFrozenCommit, "HEAD"], true).status === 0);
   check("Phase 2X-B Frozen Commit is HEAD or an ancestor", git(["merge-base", "--is-ancestor", phase2xBFrozenCommit, "HEAD"], true).status === 0);
   check("candidate changes stay inside the Phase 2X-C-A allowlist", outOfScope.length === 0, { changedFiles, outOfScope });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
-  check("Frozen Phase 2X-A/B artifacts remain byte-unchanged", git(["diff", "--name-only", "HEAD", "--", ...immutablePhase2XFiles]).stdout.trim() === "");
-  check("Frozen Phase 2W implementation remains unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-ratings", "docs/consumer-runtime-phase-2w"]).stdout.trim() === "");
-  check("Mobile production UI and routes remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app"]).stdout.trim() === "");
-  check("package-lock remains unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
+  check("Frozen Phase 2X-A/B artifacts remain byte-unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", ...immutablePhase2XFiles]).stdout).length === 0);
+  check("Frozen Phase 2W implementation remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-ratings", "docs/consumer-runtime-phase-2w"]).stdout).length === 0);
+  check("Mobile production UI and routes remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app"]).stdout).length === 0);
+  check("package-lock remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0);
 
   for (const file of [...newSourceFiles, ...docFiles, ...scriptFiles, migrationPath]) {
     check(`required Phase 2X-C-A file exists: ${file}`, fs.existsSync(path.join(root, file)));

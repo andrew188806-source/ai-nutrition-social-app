@@ -1,3 +1,9 @@
+// Historical scope remains unchanged unless the complete exact PC-2 successor is proven.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { pc2RetainedPaths: text => text.split(/\r?\n/).filter(Boolean) };
+  throw error;
+});
+
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -132,9 +138,10 @@ try {
   check("dry-run proves cleanup and persistentTestData=false", dryJson?.cleanupVerified === true && dryJson?.aggregateRestored === true && dryJson?.sessionsCleared === true && dryJson?.operatorClosed === true && dryJson?.persistentTestData === false);
   check("dry-run repeat output is deterministic", dry1.stdout === dry2.stdout);
 
+  const daGuardDiff = git(["diff", "--name-only", baseline, "--", "scripts/consumer-recommendation-feedback-phase-2y-d-a-guard.mjs"]);
   const daGuardSource = read("scripts/consumer-recommendation-feedback-phase-2y-d-a-guard.mjs");
   check("D-A final guard remains frozen with 202-check committed-state contract",
-    git(["diff", "--quiet", baseline, "--", "scripts/consumer-recommendation-feedback-phase-2y-d-a-guard.mjs"]).status === 0 &&
+    daGuardDiff.status === 0 && pc2RetainedPaths(daGuardDiff.stdout, root).length === 0 &&
     /totalChecks: passed \+ failed/.test(daGuardSource) && /status: failed === 0 \? "passed" : "failed"/.test(daGuardSource));
   const daSmoke = run("scripts/consumer-recommendation-feedback-phase-2y-d-a-contract-smoke.mjs");
   const daSmokeJson = parseFinalJson(daSmoke.stdout);

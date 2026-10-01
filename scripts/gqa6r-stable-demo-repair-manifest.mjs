@@ -1,6 +1,6 @@
 // Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
-const { pc2PredecessorEvidence, isExactPc2, PC2_PRODUCT_PATHS, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+const { pc2PredecessorEvidence, matchesPc2ProductSuccessor, isExactPc2, PC2_PRODUCT_PATHS, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, matchesPc2ProductSuccessor: () => false, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
   throw error;
 });
 // GQA-6R exact successor record: the Stable Demo repair (Consumer build-time config + fail-closed
@@ -11,7 +11,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { PC1_PRODUCT_PATHS, collectPc1Evidence, matchesExactPc1 } from "./pc1-consumer-closure-manifest.mjs";
+import { PC1_PRODUCT_PATHS, PC1_PRODUCT_SHA256, collectPc1Evidence, matchesExactPc1 } from "./pc1-consumer-closure-manifest.mjs";
 
 export const GQA6R_PREDECESSOR = "8f9c497d66abf9ca5851eebff004a201ba05cca4";
 export const GQA6R_PRODUCT_ROOTS = Object.freeze(["apps", "lib", "packages", "supabase"]);
@@ -83,7 +83,8 @@ const exactPath = (file) => typeof file === "string" && file.length > 0 && !/[*?
  * Exact GQA-6R directly, or exact GQA-6R underneath the exact PC-1 successor (evidence.pc1).
  */
 export function matchesExactGqa6rRepair(evidence) {
-  return matchesDirectGqa6rRepair(evidence)
+  return matchesPc2ProductSuccessor(evidence, {...GQA6R_PRODUCT_SHA256, ...PC1_PRODUCT_SHA256})
+    || matchesDirectGqa6rRepair(evidence)
     || (evidence !== null && typeof evidence === "object" && evidence.pc1 !== undefined && matchesGqa6rUnderExactPc1(evidence, evidence.pc1));
 }
 
@@ -151,8 +152,13 @@ export function acceptedGqa6rProductPaths(root = process.cwd()) {
 // the working directory these guards run in; any deviation leaves just the GQA-6R record.
 function gqa6rLineagePaths() {
   try {
-    if (!matchesGqa6rUnderExactPc1Evidence(collectGqa6rRepairEvidence(process.cwd()))) return [...GQA6R_RECORD_PATHS];
-    return [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS, ...(isExactPc2(process.cwd()) ? [...PC2_PRODUCT_PATHS, ...PC2_MIGRATIONS_PATHS] : [])])].sort();
+    const evidence = collectGqa6rRepairEvidence(process.cwd());
+    if (matchesPc2ProductSuccessor(evidence, {...GQA6R_PRODUCT_SHA256, ...PC1_PRODUCT_SHA256})) {
+      return [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS, ...PC2_PRODUCT_PATHS, ...PC2_MIGRATIONS_PATHS])].sort();
+    }
+    // Preserve the original direct repair branch: PC-1 paths require the original exact PC-1 proof.
+    if (!matchesGqa6rUnderExactPc1Evidence(evidence)) return [...GQA6R_RECORD_PATHS];
+    return [...new Set([...GQA6R_RECORD_PATHS, ...PC1_PRODUCT_PATHS])].sort();
   } catch {
     return [...GQA6R_RECORD_PATHS];
   }

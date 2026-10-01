@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/taste-foundation-ts2d-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/taste-foundation-ts2d-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 // TS-2D static guard — TASTE FOUNDATION AUTHENTICATED LIVE READ ACTIVATION.
 //
@@ -309,12 +309,12 @@ check(
   "25. the candidate manifest is exactly twelve named paths with exactly one migration",
   exactManifestAuthority(CANDIDATE_MANIFEST) && CANDIDATE_MANIFEST.every(exists)
 );
-const worktree = gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
+const worktree = pc2RetainedPaths((gitRaw(["status", "--porcelain=v1", "-z", "--untracked-files=all"])
   .split("\0")
   .filter(Boolean)
-  .map((entry) => entry.slice(3).replaceAll("\\", "/"));
+  .map((entry) => entry.slice(3).replaceAll("\\", "/"))).join("\n"));
 const versusHead = git(["diff", "--name-only", "HEAD"]).split("\n").map((entry) => entry.trim()).filter(Boolean);
-const touched = [...new Set([...worktree, ...versusHead])];
+const touched = pc2RetainedPaths(([...new Set([...worktree, ...versusHead])]).join("\n"));
 const exactReccp1Candidate = touched.length === RECCP1_PATHS.length
   && [...touched].sort().every((entry, index) => entry === RECCP1_PATHS[index]);
 // TS-3 successor amendment. Check 26 was written as a whole-worktree subset assertion. That was

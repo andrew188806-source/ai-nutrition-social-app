@@ -1,3 +1,7 @@
+// Exact PC-2 successor inventory only; original predecessor checks continue on current source.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+ if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean)};throw error;
+});
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
@@ -16,12 +20,12 @@ function sha256(filePath) {
 
 function trackedModifiedPaths() {
   const diff = git(["diff", "--name-only", "HEAD"]).trim();
-  return diff.length === 0 ? [] : diff.split("\n");
+  return pc2RetainedPaths(diff, repoRoot);
 }
 
 function untrackedPaths() {
   const out = git(["ls-files", "--others", "--exclude-standard"]).trim();
-  return out.length === 0 ? [] : out.split("\n");
+  return pc2RetainedPaths(out, repoRoot);
 }
 
 const results = [];

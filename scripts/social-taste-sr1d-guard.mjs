@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean), isExactPc2: () => false };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/social-taste-sr1d-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/social-taste-sr1d-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 // SR-1D local guard. No network, database, credential, deployment or Production access.
 import crypto from "node:crypto";
@@ -210,7 +210,7 @@ try {
   check("3. lifecycle is exactly an authorized successor state rooted at the frozen SR-1D authority", effectiveLifecycle.valid, { phase: effectiveLifecycle.phase, head: lifecycleState.head, originHead: lifecycleState.originHead, ahead: lifecycleState.ahead, behind: lifecycleState.behind, headParent: lifecycleState.headParent });
   check("4. candidate and frozen lifecycle both prohibit staged bytes", lifecycleState.stagedPaths.length === 0, { stagedPaths: lifecycleState.stagedPaths });
   check("5. package exposes the three exact SR-1D local suites", ["test:social-taste-sr1d", "test:social-taste-sr1d-smoke", "test:social-taste-sr1d-mutations"].every((key) => typeof packageJson.scripts[key] === "string" && packageJson.scripts[key].includes("social-taste-sr1d-")));
-  check("6. frozen SR-1D successor migration remains tracked at its exact immutable path", frozenMigrationTracked && fs.existsSync(path.join(root, SR1D_SUCCESSOR_MIGRATION)) && git(["diff", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION]).trim() === "");
+  check("6. frozen SR-1D successor migration remains tracked at its exact immutable path", frozenMigrationTracked && fs.existsSync(path.join(root, SR1D_SUCCESSOR_MIGRATION)) && pc2RetainedPaths(git(["diff", "--name-only", SR2A_BASELINE, "--", SR1D_SUCCESSOR_MIGRATION])).length === 0);
   check("6a. successor migration retains the Development-accepted SHA-256", sha256(SR1D_SUCCESSOR_MIGRATION) === successorMigrationSha256);
   check("7. all six predecessor migrations retain their frozen SHA-256", [...frozenMigrations].every(([file, hash]) => sha256(file) === hash));
   check("8. all predecessor guards use the exact SR-1D successor manifest", predecessorGuards.every((file) => read(file).includes("social-taste-sr1d-successor-manifest.mjs") && read(file).includes("SR1D_SUCCESSOR_PATHS")));
@@ -218,7 +218,7 @@ try {
     "supabase/migrations/20260811010000_social_canonical_candidate_pool.sql",
     "supabase/functions/social-candidate-provenance",
     "supabase/functions/_shared/auth/authenticateCaller.ts"
-  ].every((file) => git(["diff", "--name-only", SR1D_BASELINE, "--", file]).trim() === ""));
+  ].every((file) => pc2RetainedPaths(git(["diff", "--name-only", SR1D_BASELINE, "--", file])).length === 0));
 
   check("10. successor creates exactly one internal uuid-only function", /create function social_internal\.canonical_candidate_taste_sources\(p_actor_user_id uuid\)/i.test(sql) && (sql.match(/create function/gi) ?? []).length === 1 && !/p_candidate|p_meal|p_favorites|p_limit|p_date/i.test(sql));
   check("11. function returns jsonb and is SQL STABLE SECURITY DEFINER", /returns jsonb\s+language sql\s+stable\s+security definer/i.test(sql));

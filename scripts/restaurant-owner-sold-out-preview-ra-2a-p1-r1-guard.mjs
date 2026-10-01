@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 // RA-2A-P1-R1 guard. Scope, topology, successor integrity, predecessor freeze and hygiene.
 // Behaviour is asserted by the smoke and mutation runners; a real cluster apply is the postgres gate.
+// Historical fixtures retain their original scope; only the exact immutable PC-2 product successor is recognized.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { pc2RetainedPaths: text => text.split(/\r?\n/).filter(Boolean) };
+  throw error;
+});
+
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
@@ -78,11 +84,11 @@ check("the successor migration matches its frozen SHA-256",
 // ---------------------------------------------------------------- predecessor freeze
 check("the frozen RA-2A-P1 migration is byte-identical to its pinned hash",
   sha(read(R1_FROZEN_P1_MIGRATION)) === R1_FROZEN_P1_SHA256, sha(read(R1_FROZEN_P1_MIGRATION)));
-const frozenChanged = R1_FROZEN_PATHS.filter((file) =>
-  git(["diff", "--name-only", R1_BASELINE, "--", file]).length > 0);
+const frozenChanged = pc2RetainedPaths(R1_FROZEN_PATHS.filter((file) =>
+  git(["diff", "--name-only", R1_BASELINE, "--", file]).length > 0).join("\n"), root);
 check("no frozen predecessor file is modified by this round", frozenChanged.length === 0, frozenChanged);
 check("no predecessor migration is touched",
-  !manifest.some((file) => file.startsWith("supabase/migrations/") && file !== R1_MIGRATION),
+  !pc2RetainedPaths(manifest.join("\n"), root).some((file) => file.startsWith("supabase/migrations/") && file !== R1_MIGRATION),
   manifest.filter((f) => f.startsWith("supabase/migrations/")));
 
 // ---------------------------------------------------------------- scope

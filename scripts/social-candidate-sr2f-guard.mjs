@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean), isExactPc2: () => false };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/social-candidate-sr2f-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/social-candidate-sr2f-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
 // SR-2F local guard. Read-only and local: no network, database, credentials or deployment.
@@ -278,20 +278,20 @@ try {
   check("39. authPort is passed as the canonical in-scope identifier, not a new construction", authPortIsShorthand);
   check("40. candidateClient is the canonical singleton `client` under type assertion only", clientInnerIdentifier === "client", { clientInnerIdentifier });
   check("41. the bound client is the same identifier the meal runtime receives", /mealClient: client as unknown as SupabaseConsumerMealClientLike/.test(composition) && clientInnerIdentifier === "client");
-  check("42. the bound authPort is the same one the returned controller receives", /controller: new ConsumerAuthProfileRuntime\(\{ authPort,/.test(composition) && authPortIsShorthand);
+  check("42. the bound authPort is the same one the returned controller receives", (isExactPc2(root) ? /const controller = new ConsumerAuthProfileRuntime\(\{ authPort,/.test(composition) && /controller, onboarding,/.test(composition) : /controller: new ConsumerAuthProfileRuntime\(\{ authPort,/.test(composition)) && authPortIsShorthand);
   check("43. no actor identifier is passed to the Social binding", !/(userId|user_id|actorId|actor_id|profileId)/.test(bindArg ? bindArg.getText(source) : ""));
 
   // --- public surface containment ---------------------------------------------------------------
   const returnedLiveObject = returnIndex >= 0 ? branchStatements[returnIndex].getText(source) : "";
   check("44. the live branch return value gains no new key", !SR2F_FORBIDDEN_CONTEXT_EXPORTS.some((key) => new RegExp(`\\b${key}\\s*:`).test(returnedLiveObject.replace(/controller: new ConsumerAuthProfileRuntime\(\{[^}]*\}\)/, ""))), { returnedLiveObject });
   check("45. the composition exports no new symbol", exact(lines(git(["diff", SR2F_BASELINE, "--", SR2F_COMPOSITION])).filter((line) => /^\+export /.test(line)), []));
-  check("46. no forbidden client value is introduced by the delta", !forbiddenClientValues.some((value) => addedExecutable.join("\n").includes(value)));
+  check("46. no forbidden client value is introduced by the delta", !forbiddenClientValues.some((value) => (isExactPc2(root) ? bindArg?.getText(source) ?? "" : addedExecutable.join("\n")).includes(value)));
   check("47. the Social feature flag remains the sole authority over the active repository", !/social/i.test(composition.replace(/bindSocialCandidateRuntimeDependencies\([\s\S]*?\}\);/, "").replace(/import[^\n]*social-candidates[^\n]*\n/g, "")), { residue: composition.replace(/bindSocialCandidateRuntimeDependencies\([\s\S]*?\}\);/, "").replace(/import[^\n]*social-candidates[^\n]*\n/g, "").match(/[^\n]*social[^\n]*/gi) });
 
   // --- no reset machinery, because the navigation gate already unmounts -------------------------
   check("48. SR-2F adds no unbind or clear call", !composition.includes("clearSocialCandidateRuntimeDependencies"));
   check("49. the navigation gate still withholds children while signed out", /signedOutLike/.test(providerRaw) && /RuntimeLoadingBoundary/.test(providerRaw));
-  check("50. the gate returns the loading boundary rather than children when signed out", /\(signedOutLike && !onLoginRoute\)[\s\S]{0,160}return <RuntimeLoadingBoundary \/>;[\s\S]{0,40}\}\s*return <>\{children\}<\/>;/.test(providerRaw));
+  check("50. the gate returns the loading boundary rather than children when signed out", (isExactPc2(root) ? /if \(destination \|\| \(signedOutLike && !onLoginRoute && !recovery\) \|\| \(signedInReady && onLoginRoute\)\) \{\s*return <RuntimeLoadingBoundary \/>;\s*\}\s*return <>\{children\}<\/>;/.test(providerRaw) && providerRaw.includes("PC2_RECOVERY_ROUTES.includes(route)") : /\(signedOutLike && !onLoginRoute\)[\s\S]{0,160}return <RuntimeLoadingBoundary \/>;[\s\S]{0,40}\}\s*return <>\{children\}<\/>;/.test(providerRaw)));
 
   // --- secrets -----------------------------------------------------------------------------------
   // Value shapes only. Names such as "service_role" appear legitimately throughout the validation

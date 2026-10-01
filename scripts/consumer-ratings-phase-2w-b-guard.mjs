@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-ratings-phase-2w-b-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-ratings-phase-2w-b-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -57,10 +57,10 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map((entry) => entry.file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map((entry) => entry.file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
   check("all changes stay inside the Phase 2W-B local boundary", outOfScope.length === 0, { changedFiles, outOfScope });
-  check("staged diff is empty", git(["diff", "--cached", "--name-only"]).trim() === "");
+  check("staged diff is empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"])).length === 0);
   check("package-lock and dependency manifests are unchanged", !changedFiles.some((file) => file === "package-lock.json" || file.startsWith("apps/") && file.endsWith("package.json")));
   check("Mobile UI and navigation are unchanged", !changedFiles.some((file) => file.startsWith("apps/mobile/app/")));
   check("fixtures are unchanged", !changedFiles.some((file) => /fixture/i.test(file)));
@@ -69,7 +69,7 @@ try {
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   check("local migration count is 34", migrations.length === 34, { count: migrations.length });
   check("latest migration is the Phase 2W-B draft", migrations.at(-1) === migrationName, { latest: migrations.at(-1) });
-  check("all 33 frozen migrations remain unchanged", git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).trim() === "");
+  check("all 33 frozen migrations remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"])).length === 0);
 
   const sql = fs.readFileSync(path.join(root, migrationPath), "utf8");
   const migrationSha256 = createHash("sha256").update(sql).digest("hex");

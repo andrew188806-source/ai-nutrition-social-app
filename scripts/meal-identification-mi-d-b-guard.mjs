@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Exact PC-2 successor inventory only; original predecessor checks continue on current source.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+ if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean)};throw error;
+});
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -65,9 +69,9 @@ const productionDiff = git("diff", "--", ...productionPaths);
 check("branch remains main", git("branch", "--show-current") === "main");
 check("HEAD remains MI-D-A frozen authority", git("rev-parse", "HEAD") === baseline);
 check("staged diff is empty", git("diff", "--cached", "--name-only") === "");
-check("candidate contains only MI-D-B manifest paths", [...changed].every((item) => allowed.has(item)));
+check("candidate contains only MI-D-B manifest paths", pc2RetainedPaths([...changed].join("\n")).every((item) => allowed.has(item)));
 check("protected migration is the only unrelated untracked path",
-  [...changed].filter((item) => !allowed.has(item) || item === protectedPath).every((item) => item === protectedPath));
+  pc2RetainedPaths([...changed].join("\n")).filter((item) => !allowed.has(item) || item === protectedPath).every((item) => item === protectedPath));
 check("MI-D-A and all MI-C frozen paths remain byte-identical",
   frozenPaths.every((item) => git("diff", "--quiet", baseline, "--", item) === ""));
 check("no migration is added or modified",

@@ -1,3 +1,7 @@
+// Exact PC-2 successor inventory only; original predecessor checks continue on current source.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+ if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean)};throw error;
+});
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -63,7 +67,7 @@ try {
 
   // --- 2. Phase 2X frozen artifact byte-equivalence ---
   check("Phase 2X-E guard is unchanged since Phase 2X-E freeze",
-    git(["diff", "--name-only", phase2xEFrozenHead, "--", phase2xEGuardPath]).stdout.trim() === "");
+    pc2RetainedPaths(git(["diff", "--name-only", phase2xEFrozenHead, "--", phase2xEGuardPath]).stdout).length === 0);
 
   check("Phase 2X-D-B runner is unchanged since Phase 2X-D-B freeze",
     git(["diff", "--name-only", phase2xDBFrozenHead, "--", phase2xDBRunnerPath]).stdout.trim() === "");

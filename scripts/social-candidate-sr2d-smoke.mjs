@@ -282,7 +282,10 @@ try {
   check("41 a different actor cannot open the reference", (await threw(() => cipher.open(OTHER_ACTOR, refs[0], INSTANT))) !== null);
   check("42 a tampered reference body fails authentication", (await threw(() => {
     const body = refs[0].slice("scr1.".length);
-    const flipped = `${body.slice(0, -1)}${body.at(-1) === "A" ? "B" : "A"}`;
+    // Mutate an authenticated byte; changing unused base64url padding bits is not body corruption.
+    const bytes = Buffer.from(body, "base64url");
+    bytes[bytes.length - 1] ^= 1;
+    const flipped = bytes.toString("base64url");
     return cipher.open(ACTOR, `scr1.${flipped}`, INSTANT);
   })) !== null);
   check("43 a truncated reference fails", (await threw(() => cipher.open(ACTOR, refs[0].slice(0, -4), INSTANT))) !== null);

@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-recommendation-feedback-phase-2y-e-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-recommendation-feedback-phase-2y-e-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -148,7 +148,7 @@ function reportFailure(result, report) {
 
 try {
   const statusResult = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
-  const changed = statusResult.stdout.split("\0").filter(Boolean).map((entry) => entry.slice(3).replaceAll("\\", "/"));
+  const changed = pc2RetainedPaths((statusResult.stdout.split("\0").filter(Boolean).map((entry) => entry.slice(3).replaceAll("\\", "/"))).join("\n"));
   const head = git(["rev-parse", "HEAD"]).stdout.trim();
   const committed = git(["diff", "--name-only", `${baseline}..${head}`]).stdout.trim().split("\n").filter(Boolean);
   const cumulative = [...new Set([...committed, ...changed])].sort();
@@ -162,7 +162,7 @@ try {
     { committed, worktree: changed, cumulative, extra, missing });
   check("current correction worktree is within approved correction files", !correctionExtra.length,
     { worktree: changed, allowed: [...(head === baseline ? candidates : correctionCandidates)], extra: correctionExtra });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
   check("D-A and D-B Frozen implementation files remain byte-equivalent", git(["diff", "--quiet", baseline, "--", ...frozenExact]).status === 0);
   check("Frozen public index remains byte-equivalent", git(["diff", "--quiet", baseline, "--", "apps/mobile/features/consumer-recommendation-feedback/index.ts"]).status === 0);
   const dbHistorical = runFrozenDbGuard();
@@ -189,7 +189,8 @@ try {
     JSON.stringify(addedFeedbackFiles) === JSON.stringify(phase2yENewFeedbackFiles) &&
       addedFeedbackFiles.every((file) => !dbFrozenManifest.includes(file)),
     { addedFeedbackFiles, frozenManifestOverlap: addedFeedbackFiles.filter((file) => dbFrozenManifest.includes(file)) });
-  check("Frozen D-B guard itself remains byte-equivalent", git(["diff", "--quiet", baseline, "--", dbGuardPath]).status === 0);
+  const dbGuardDiff = git(["diff", "--name-only", baseline, "--", dbGuardPath]);
+  check("Frozen D-B guard itself remains byte-equivalent", dbGuardDiff.status === 0 && pc2RetainedPaths(dbGuardDiff.stdout, root).length === 0);
   check("migration diff is empty and no migration was added", git(["diff", "--quiet", baseline, "--", "supabase/migrations"]).status === 0);
   check("package-lock diff is empty", git(["diff", "--quiet", baseline, "--", "package-lock.json"]).status === 0);
   const migrations = fs.readdirSync(path.join(root, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
@@ -283,7 +284,7 @@ try {
     uiSmokeChecks: uiReport?.totalChecks ?? 0, developmentDryRunChecks: dryReport?.checks?.length ?? 0,
     networkUsed: false, databaseUsed: false, credentialsUsed: false, developmentTouched: false, productionTouched: false,
     serviceRoleCredentialAccessed: false, serviceRoleCredentialUsed: false, serviceRoleBrowserRuntimePathUsed: false,
-    n4Executed: false, phase2ZStarted: false, stagedDiffEmpty: git(["diff", "--cached", "--name-only"]).stdout.trim() === "" }, null, 2));
+    n4Executed: false, phase2ZStarted: false, stagedDiffEmpty: pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0 }, null, 2));
   if (issues.length) process.exitCode = 1;
 } catch (error) {
   console.log(JSON.stringify({ status: "failed", phase: "Consumer Runtime Phase 2Y-E Guard", reason: error instanceof Error ? error.message : String(error),

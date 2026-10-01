@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/canonical-restaurant-menu-phase-2w-e0-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/canonical-restaurant-menu-phase-2w-e0-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -56,15 +56,15 @@ try {
   const statusEntries = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]).stdout
     .split("\0").filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
 
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
   check("starting HEAD remains the frozen Phase 2W-C commit", git(["rev-parse", "HEAD"]).stdout.trim() === "5dd693a57c34220f4d0cb7f4dab40f3a5c38eca5");
   check("all changes stay inside the E0 local boundary", outOfScope.length === 0, { changedFiles, outOfScope });
-  check("staged diff is empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
-  check("package-lock is unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "");
-  check("migrations are unchanged", git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout.trim() === "");
+  check("staged diff is empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
+  check("package-lock is unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0);
+  check("migrations are unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout).length === 0);
   check("Mobile, Restaurant, and Admin UI are unchanged", !changedFiles.some((file) => /^apps\/(mobile|restaurant-web|admin-web)\//.test(file)));
   check("no runtime adapter is changed", !changedFiles.some((file) => /adapter|repository|service/i.test(file)));
   check(".env.local is ignored", git(["check-ignore", "-q", "--", ".env.local"], true).status === 0);

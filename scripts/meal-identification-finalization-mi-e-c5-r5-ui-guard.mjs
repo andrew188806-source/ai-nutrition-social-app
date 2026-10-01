@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/meal-identification-finalization-mi-e-c5-r5-ui-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -306,17 +306,17 @@ check(
   "22. R3-A canonical secure UUID authority is untouched",
   ["consumerMealIdentificationFinalizationRuntime.ts", "consumerMealWriteRuntime.ts", "consumerPlannedMealRuntime.ts"].every((file) =>
     /generateSecureUuidV4\(\)/.test(read(`apps/mobile/features/consumer-runtime/${file}`))
-  ) && git(["diff", "--name-only", "--", "apps/mobile/features/consumer-runtime/secureUuidProvider.ts"]).stdout.trim() === ""
+  ) && pc2RetainedPaths(git(["diff", "--name-only", "--", "apps/mobile/features/consumer-runtime/secureUuidProvider.ts"]).stdout).length === 0
 );
 check(
   "23. R4 gallery cleanup authority is preserved and still fires on durable success",
   /void releaseOwnedGalleryMealPhotoAsset\(\)/.test(completeCallback) &&
-    git(["diff", "--name-only", "--", "apps/mobile/features/analysis/galleryMealPhotoAssetNormalization.ts"]).stdout.trim() === ""
+    pc2RetainedPaths(git(["diff", "--name-only", "--", "apps/mobile/features/analysis/galleryMealPhotoAssetNormalization.ts"]).stdout).length === 0
 );
 check(
   "24. R2 compact ceiling authority is unchanged",
   /MEAL_PHOTO_FINALIZATION_MAX_VISIBLE_CANDIDATES = 5/.test(readiness) &&
-    git(["diff", "--name-only", "--", "apps/mobile/features/analysis/mealPhotoFinalizationReadiness.ts"]).stdout.trim() === ""
+    pc2RetainedPaths(git(["diff", "--name-only", "--", "apps/mobile/features/analysis/mealPhotoFinalizationReadiness.ts"]).stdout).length === 0
 );
 
 // --- Scope ---
@@ -326,7 +326,7 @@ const routeFiles = git(["ls-files", "--others", "--exclude-standard", "--", "app
 check("26. no new route was added", routeFiles.status === 0 && routeFiles.stdout.trim() === "");
 check(
   "27. no new dependency was added",
-  git(["diff", "--name-only", "--", "apps/mobile/package.json", "package-lock.json"]).stdout.trim() === "" &&
+  pc2RetainedPaths(git(["diff", "--name-only", "--", "apps/mobile/package.json", "package-lock.json"]).stdout).length === 0 &&
     !mobilePackage.dependencies?.["react-native-image-resizer"]
 );
 check(
@@ -736,7 +736,7 @@ check(
   "75. no route, dependency or backend surface was added for ownership",
   !/router\.push\("\/[a-z-]*owner/.test(screen) &&
     Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
-    git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === ""
+    pc2RetainedPaths(git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout).length === 0
 );
 
 
@@ -909,7 +909,7 @@ check(
 );
 check(
   "101. no backend/shared diff, no new dependency and no physical-device claim for R5-R3",
-  git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+  pc2RetainedPaths(git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout).length === 0 &&
     Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
     !/physical[^\n]{0,40}PASS/i.test(screen) &&
     !/physical[^\n]{0,40}PASS/i.test(mealPhotoScreen) &&
@@ -1043,7 +1043,7 @@ check(
 check(
   "121. the frozen in-flight late-response guard is still intact after the R4 changes",
   /!mountedRef\.current \|\|\s*\r?\n?\s*expectedIdentity !== identityRef\.current \|\|\s*\r?\n?\s*getAnalysisSession\(\)\.analysisRequestId !== frozen\.state\.analysisRequestId \|\|\s*\r?\n?\s*frozenSubmissionRef\.current !== frozen \|\|\s*\r?\n?\s*!current \|\|\s*\r?\n?\s*getMealPhotoFinalizationPayloadFingerprint\(current\) !== frozen\.fingerprint/.test(finalizationHook) &&
-    git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+    pc2RetainedPaths(git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout).length === 0 &&
     !/physical[^\n]{0,40}PASS/i.test(analysisHook) &&
     !/physical[^\n]{0,40}PASS/i.test(finalizationHook)
 );
@@ -1195,7 +1195,7 @@ check(
 );
 check(
   "139. R5-R5 added no backend/shared diff, no dependency and no physical-device claim",
-  git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+  pc2RetainedPaths(git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout).length === 0 &&
     Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
     !/physical[^\n]{0,40}PASS/i.test(correctionStateHook)
 );
@@ -1297,7 +1297,7 @@ check(
   "155. R6 the provider exposes the binding and fails closed when signed out, with no backend/shared diff and no physical PASS claim",
   /beginMealIdentificationFinalizationOperation\(operationId: string\): boolean;/.test(runtimeProvider) &&
     /if \(!mealIdentificationFinalizationRuntime \|\| !state\.actorKey \|\| state\.authState\.status !== "signedIn"\) \{\s*\r?\n?\s*return false;/.test(runtimeProvider) &&
-    git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+    pc2RetainedPaths(git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout).length === 0 &&
     Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
     !/physical[^\n]{0,40}PASS/i.test(finalizationRuntime) &&
     !/physical[^\n]{0,40}PASS/i.test(finalizationHook)
@@ -1374,7 +1374,7 @@ check(
 );
 check(
   "168. R6-A adds no backend/shared diff, no dependency and no physical-device PASS claim",
-  git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout.trim() === "" &&
+  pc2RetainedPaths(git(["diff", "--name-only", "--", "supabase", "packages/shared"]).stdout).length === 0 &&
     Object.keys(mobilePackage.dependencies ?? {}).length === MI_E_C5_R5_EXPECTED_MOBILE_DEPENDENCY_COUNT &&
     !/physical[^\n]{0,40}PASS/i.test(finalizationDraft) &&
     !/physical[^\n]{0,40}PASS/i.test(runtimeProvider)

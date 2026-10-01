@@ -2,6 +2,12 @@
 // Phase 2Y-B Guard — static integrity checks for the Local Disabled/Mock architecture.
 // Verifies candidate scope, Phase 2Y-A frozen baseline, static source patterns, and smoke.
 
+// Preserve historical behavior when this fixture predates PC-2; exempt only a fully exact current successor.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { pc2RetainedPaths: text => text.split(/\r?\n/).filter(Boolean) };
+  throw error;
+});
+
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -89,16 +95,16 @@ const FROZEN_FILES = [
 
 for (const frozenFile of FROZEN_FILES) {
   const basename = path.basename(frozenFile);
-  const commitDiff = run(`git diff --quiet ${PHASE_2YA_COMMIT} HEAD -- "${frozenFile}"`);
+  const commitDiff = run(`git diff --name-only ${PHASE_2YA_COMMIT} HEAD -- "${frozenFile}"`);
   check(
     `No commit delta between Phase 2Y-A commit and HEAD: ${basename}`,
-    commitDiff.ok,
+    commitDiff.ok && pc2RetainedPaths(commitDiff.stdout, root).length === 0,
     "file content differs between Phase 2Y-A commit and HEAD"
   );
-  const wtDiff = run(`git diff --quiet HEAD -- "${frozenFile}"`);
+  const wtDiff = run(`git diff --name-only HEAD -- "${frozenFile}"`);
   check(
     `Working tree clean vs HEAD for frozen file: ${basename}`,
-    wtDiff.ok,
+    wtDiff.ok && pc2RetainedPaths(wtDiff.stdout, root).length === 0,
     "working tree has uncommitted changes to this frozen file"
   );
 }

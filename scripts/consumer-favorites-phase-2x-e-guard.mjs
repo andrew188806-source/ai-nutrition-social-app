@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean), isExactPc2: () => false };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-e-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-e-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -84,18 +84,18 @@ try {
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
   const isAncestor = spawnSync("git", ["merge-base", "--is-ancestor", frozenDBHead, "HEAD"], { cwd: root, windowsHide: true });
   check("Phase 2X-D-B Frozen commit is ancestor of current HEAD", isAncestor.status === 0);
-  check("Phase 2X-D-B guard is unchanged", git(["diff", "--name-only", frozenDBHead, "--", dbGuardPath]).stdout.trim() === "");
-  check("Phase 2X-D-B runner is unchanged", git(["diff", "--name-only", frozenDBHead, "--", dbRunnerPath]).stdout.trim() === "");
+  check("Phase 2X-D-B guard is unchanged", pc2RetainedPaths(git(["diff", "--name-only", frozenDBHead, "--", dbGuardPath]).stdout).length === 0);
+  check("Phase 2X-D-B runner is unchanged", pc2RetainedPaths(git(["diff", "--name-only", frozenDBHead, "--", dbRunnerPath]).stdout).length === 0);
 
   // --- Frozen D-A/D-B paths integrity ---
   check("Frozen D-B migration SHA remains exact", sha256(migrationPath) === migrationSha, { migrationSha256: sha256(migrationPath) });
-  check("all Phase 2X-D Frozen paths are byte-for-byte unchanged since D-B freeze", git(["diff", "--name-only", frozenDBHead, "--", ...frozenDBPaths]).stdout.trim() === "");
+  check("all Phase 2X-D Frozen paths are byte-for-byte unchanged since D-B freeze", pc2RetainedPaths(git(["diff", "--name-only", frozenDBHead, "--", ...frozenDBPaths]).stdout).length === 0);
 
   // --- Migration inventory ---
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   check("local migration count is still 36", migrations.length === 36, { count: migrations.length });
   check("latest migration is still 20260718020000", migrations.at(-1) === path.basename(migrationPath), { latest: migrations.at(-1) });
-  check("no new migration was added in Phase 2X-E", git(["diff", "--name-only", frozenDBHead, "--", "supabase/migrations"]).stdout.trim() === "");
+  check("no new migration was added in Phase 2X-E", pc2RetainedPaths(git(["diff", "--name-only", frozenDBHead, "--", "supabase/migrations"]).stdout).length === 0);
 
   // --- New Phase 2X-E files exist ---
   for (const file of [...newEFiles, guardPath, uiSmokePath, devSmokePath, planPath]) {
@@ -216,7 +216,7 @@ try {
     serviceRoleUsed: false,
     n4Executed: false,
     phase2YStarted: false,
-    stagedDiffEmpty: git(["diff", "--cached", "--name-only"]).stdout.trim() === ""
+    stagedDiffEmpty: pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0
   }, null, 2));
   if (issues.length) process.exitCode = 1;
 } catch (error) {

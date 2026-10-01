@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-ratings-phase-2w-a-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-ratings-phase-2w-a-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -71,10 +71,10 @@ const allowedExact = new Set([
   "scripts/consumer-ratings-phase-2w-a-contract-smoke.mjs"
 ]);
 const allowedPrefixes = ["apps/mobile/features/consumer-ratings/", "docs/consumer-runtime-phase-2w/"];
-const changedFiles = [...new Set([
+const changedFiles = pc2RetainedPaths(([...new Set([
   ...git(["diff", "--name-only"]).split(/\r?\n/),
   ...git(["ls-files", "--others", "--exclude-standard"]).split(/\r?\n/)
-].filter(Boolean).map((file) => file.replaceAll("\\", "/")))];
+].filter(Boolean).map((file) => file.replaceAll("\\", "/")))]).join("\n"));
 const outOfScope = changedFiles.filter((file) => !allowedExact.has(file) && !allowedPrefixes.some((prefix) => file.startsWith(prefix)));
 if (!outOfScope.length) pass("all changed files stay inside the approved Phase 2W-A boundary", { changedFiles });
 else fail("all changed files stay inside the approved Phase 2W-A boundary", "Out-of-scope files changed.", { outOfScope });

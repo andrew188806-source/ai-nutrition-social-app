@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 // RA-2B-P1 guard. Scope, topology, successor integrity, RA-2A freeze and hygiene.
 // Behaviour is asserted by the smoke and mutation runners; a real cluster apply is the postgres gate.
+// Historical fixtures retain their original scope; only the exact immutable PC-2 product successor is recognized.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { pc2RetainedPaths: text => text.split(/\r?\n/).filter(Boolean) };
+  throw error;
+});
+
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
@@ -73,7 +79,7 @@ const migrationSql = readMigrationSource(root);
 check("the successor migration matches its frozen SHA-256",
   sha(migrationSql) === B1_MIGRATION_SHA256, sha(migrationSql));
 check("no predecessor migration is touched by this round",
-  !manifest.some((file) => file.startsWith("supabase/migrations/") && file !== B1_MIGRATION),
+  !pc2RetainedPaths(manifest.join("\n"), root).some((file) => file.startsWith("supabase/migrations/") && file !== B1_MIGRATION),
   manifest.filter((f) => f.startsWith("supabase/migrations/")));
 
 // ---------------------------------------------------------------- RA-2A freeze
@@ -83,8 +89,8 @@ for (const frozen of B1_FROZEN_MIGRATIONS) {
 }
 const ra2aPaths = lines(git(["ls-files", "scripts/restaurant-owner-sold-out-ra-2a-p1-*",
   "scripts/restaurant-owner-sold-out-preview-ra-2a-p1-r1-*"]));
-const ra2aChanged = ra2aPaths.filter((file) =>
-  git(["diff", "--name-only", B1_BASELINE, "--", file]).length > 0);
+const ra2aChanged = pc2RetainedPaths(ra2aPaths.filter((file) =>
+  git(["diff", "--name-only", B1_BASELINE, "--", file]).length > 0).join("\n"), root);
 check("no RA-2A file is modified by this round", ra2aChanged.length === 0, ra2aChanged);
 check("the frozen RA-2A writer receives no new grant in this migration",
   !new RegExp(`grant [^;]*to ${B1_FROZEN_ROLE}`).test(migrationSql));

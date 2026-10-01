@@ -1,6 +1,6 @@
 // Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
-const { pc2PredecessorEvidence, isExactPc2, PC2_PRODUCT_PATHS, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
+const { pc2PredecessorEvidence, matchesPc2ProductSuccessor, isExactPc2, PC2_PRODUCT_PATHS, PC2_MIGRATIONS_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, matchesPc2ProductSuccessor: () => false, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
   throw error;
 });
 // PC-1 exact successor record: Consumer async reconciliation and truthfulness (A1 invitation, A2 chat,
@@ -67,6 +67,7 @@ export function lfSha256(bytes) {
 }
 
 export function matchesExactPc1(evidence) {
+  if (matchesPc2ProductSuccessor(evidence, PC1_PRODUCT_SHA256)) return true;
   if (!evidence || evidence.predecessorInHistory !== true) return false;
   if (PC1_PRODUCT_PATHS.length === 0) return false;
   const delta = evidence.productDelta;

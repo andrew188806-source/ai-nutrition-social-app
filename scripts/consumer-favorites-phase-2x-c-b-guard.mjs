@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-c-b-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-c-b-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -49,7 +49,7 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
   const missingCandidate = [...allowedChanges].filter((file) => !changedFiles.includes(file));
 
@@ -59,10 +59,10 @@ try {
   check("Phase 2X-B Frozen Commit is an ancestor", git(["merge-base", "--is-ancestor", phase2xBFrozenCommit, "HEAD"], true).status === 0);
   check("Phase 2X-C-A Frozen Commit is HEAD or an ancestor", git(["merge-base", "--is-ancestor", phase2xCAFrozenCommit, "HEAD"], true).status === 0);
   check("candidate is exactly the four-file Phase 2X-C-B0 boundary", outOfScope.length === 0 && missingCandidate.length === 0 && changedFiles.length === allowedChanges.size, { changedFiles, outOfScope, missingCandidate });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
-  check("package-lock remains unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "");
-  check("no migration is modified or added in Phase 2X-C-B0", git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout.trim() === "");
-  check("Mobile production runtime and UI remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile"]).stdout.trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
+  check("package-lock remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0);
+  check("no migration is modified or added in Phase 2X-C-B0", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout).length === 0);
+  check("Mobile production runtime and UI remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile"]).stdout).length === 0);
 
   const immutableFrozenFiles = trackedAtCommit(phase2xCAFrozenCommit, [
     "apps/mobile/features/consumer-favorites",
@@ -74,7 +74,7 @@ try {
     "scripts/consumer-favorites-phase-2x-c-a-contract-smoke.mjs",
     migrationPath
   ]);
-  check("Frozen Phase 2X-A/B/C-A contracts runtime guards and migration are byte-unchanged", git(["diff", "--name-only", "HEAD", "--", ...immutableFrozenFiles]).stdout.trim() === "", { immutableFileCount: immutableFrozenFiles.length });
+  check("Frozen Phase 2X-A/B/C-A contracts runtime guards and migration are byte-unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", ...immutableFrozenFiles]).stdout).length === 0, { immutableFileCount: immutableFrozenFiles.length });
 
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   const migrationSha = createHash("sha256").update(fs.readFileSync(path.join(root, migrationPath))).digest("hex");
@@ -149,7 +149,7 @@ try {
     productionTouched: false,
     privilegedCredentialUsed: false,
     n4Executed: false,
-    stagedDiffEmpty: git(["diff", "--cached", "--name-only"]).stdout.trim() === ""
+    stagedDiffEmpty: pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0
   }, null, 2));
   if (issues.length) process.exitCode = 1;
 } catch (error) {

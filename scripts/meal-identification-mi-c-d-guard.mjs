@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Exact PC-2 successor inventory only; original predecessor checks continue on current source.
+const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+ if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean)};throw error;
+});
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -95,8 +99,8 @@ try {
   for (const frozenPath of frozenMiCAAndMiCBPaths) {
     record(
       `frozen MI-C-A/MI-C-B unchanged: ${frozenPath}`,
-      git(["diff", "--quiet", "--", frozenPath]).status === 0 &&
-        git(["diff", "--cached", "--quiet", "--", frozenPath]).status === 0
+      pc2RetainedPaths(git(["diff", "--name-only", "--", frozenPath]).stdout).length === 0 &&
+        pc2RetainedPaths(git(["diff", "--cached", "--name-only", "--", frozenPath]).stdout).length === 0
     );
   }
 

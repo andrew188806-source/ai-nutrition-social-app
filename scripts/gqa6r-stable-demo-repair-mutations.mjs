@@ -31,6 +31,8 @@ try {
   g("-c", "core.longpaths=true", "checkout", "--quiet", "--detach", head);
   const dirty = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: ROOT, encoding: "utf8" })
     .split("\n").filter(Boolean).map((l) => l.slice(3)).filter((f) => !f.startsWith(".gqa6r-"));
+  const supplementArtifact = "docs/planning/pc2-onboarding-preparation/pc2-remediation-raw-output.zip";
+  if (fs.existsSync(path.join(ROOT, supplementArtifact))) dirty.push(supplementArtifact);
   const overlay = () => { for (const f of dirty) { fs.mkdirSync(path.dirname(path.join(cloneDir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(cloneDir, f)); } };
   const reset = () => { g("reset", "--quiet", "--hard"); g("clean", "-fdq", "--", "apps", "supabase", "lib", "packages", "scripts"); overlay(); };
   const run = (guard) => spawnSync(process.execPath, [`scripts/${guard}.mjs`], { cwd: cloneDir, encoding: "utf8", env: { ...process.env, SUPABASE_ACCESS_TOKEN: "" } }).status;

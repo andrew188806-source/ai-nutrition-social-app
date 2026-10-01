@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/restaurant-owner-branch-temporal-ra-2h-p1-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/restaurant-owner-branch-temporal-ra-2h-p1-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 // RA-2H-P1 guard. Scope, topology, successor integrity, predecessor freeze and hygiene.
 //
@@ -46,10 +46,10 @@ const originMain = git(["rev-parse", "origin/main"]);
 const [behind, ahead] = git(["rev-list", "--left-right", "--count", "origin/main...HEAD"])
   .split(/\s+/).map(Number);
 const staged = lines(git(["diff", "--cached", "--name-only"]));
-const worktree = [...new Set([
+const worktree = pc2RetainedPaths(([...new Set([
   ...lines(git(["diff", "--name-only"])),
   ...lines(git(["ls-files", "--others", "--exclude-standard"]))
-])].sort();
+])].sort()).join("\n"));
 const committed = head === H1_BASELINE
   ? [] : lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "HEAD"]));
 const phase = head === H1_BASELINE ? "candidate" : "frozen";

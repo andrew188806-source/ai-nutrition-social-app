@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-d-b-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-favorites-phase-2x-d-b-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -75,18 +75,18 @@ try {
     .split("\0")
     .filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
   const missingCandidate = [...allowedChanges].filter((file) => !changedFiles.includes(file));
 
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
   check("HEAD remains the Phase 2X-D-A Frozen Commit", git(["rev-parse", "HEAD"]).stdout.trim() === frozenHead);
   check("candidate scope is exactly four Phase 2X-D-B0 files", changedFiles.length === 4 && outOfScope.length === 0 && missingCandidate.length === 0, { changedFiles, outOfScope, missingCandidate });
-  check("staged diff remains empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
-  check("package-lock remains unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "");
-  check("all Phase 2X-D-A Frozen files remain byte-for-byte unchanged", git(["diff", "--name-only", "HEAD", "--", ...frozenDAPaths]).stdout.trim() === "");
-  check("Favorites production TypeScript remains unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-favorites", "apps/mobile/features/consumer-auth"]).stdout.trim() === "");
-  check("Mobile UI routes and unrelated runtimes remain unchanged", git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app", "apps/admin-web", "apps/restaurant-web", "packages"]).stdout.trim() === "");
+  check("staged diff remains empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
+  check("package-lock remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0);
+  check("all Phase 2X-D-A Frozen files remain byte-for-byte unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", ...frozenDAPaths]).stdout).length === 0);
+  check("Favorites production TypeScript remains unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/features/consumer-favorites", "apps/mobile/features/consumer-auth"]).stdout).length === 0);
+  check("Mobile UI routes and unrelated runtimes remain unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "apps/mobile/app", "apps/admin-web", "apps/restaurant-web", "packages"]).stdout).length === 0);
 
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   check("local migration inventory remains 36", migrations.length === 36, { count: migrations.length });
@@ -176,7 +176,7 @@ try {
     productionTouched: false,
     serviceRoleUsed: false,
     n4Executed: false,
-    stagedDiffEmpty: git(["diff", "--cached", "--name-only"]).stdout.trim() === ""
+    stagedDiffEmpty: pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0
   }, null, 2));
   if (issues.length) process.exitCode = 1;
 } catch (error) {

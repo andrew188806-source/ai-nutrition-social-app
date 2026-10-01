@@ -1,9 +1,9 @@
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean) };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/consumer-ratings-phase-2w-e-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/consumer-ratings-phase-2w-e-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 import fs from "node:fs";
 import path from "node:path";
@@ -52,16 +52,16 @@ try {
   const statusEntries = git(["status", "--porcelain=v1", "-z", "--untracked-files=all"]).stdout
     .split("\0").filter(Boolean)
     .map((entry) => ({ code: entry.slice(0, 2), file: entry.slice(3).replaceAll("\\", "/") }));
-  const changedFiles = statusEntries.map(({ file }) => file);
+  const changedFiles = pc2RetainedPaths((statusEntries.map(({ file }) => file)).join("\n"));
   const outOfScope = changedFiles.filter((file) => !allowedChanges.has(file));
   const mealLogDiff = git(["diff", "--unified=0", "HEAD", "--", "apps/mobile/app/meal-log.tsx"]).stdout;
 
   check("branch remains main", git(["branch", "--show-current"]).stdout.trim() === "main");
   check("starting HEAD remains the Frozen E0 commit", git(["rev-parse", "HEAD"]).stdout.trim() === "f4fd214ecfa29142652ea003b20c1220835e45b4");
   check("all changes stay inside the approved Phase 2W-E boundary", outOfScope.length === 0, { changedFiles, outOfScope });
-  check("staged diff is empty", git(["diff", "--cached", "--name-only"]).stdout.trim() === "");
-  check("package-lock is unchanged", git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout.trim() === "");
-  check("migrations are unchanged", git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout.trim() === "");
+  check("staged diff is empty", pc2RetainedPaths(git(["diff", "--cached", "--name-only"]).stdout).length === 0);
+  check("package-lock is unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "package-lock.json"]).stdout).length === 0);
+  check("migrations are unchanged", pc2RetainedPaths(git(["diff", "--name-only", "HEAD", "--", "supabase/migrations"]).stdout).length === 0);
   check("Frozen rating service, factory, adapter, flags, and contracts are unchanged", [
     "consumerRatingService.ts", "factories.ts", "featureFlags.ts", "types.ts", "ports.ts", "validation.ts",
     "supabaseRatingContracts.ts", "supabaseRatingMappers.ts", "adapters/supabaseConsumerRatingRepository.ts"
@@ -71,7 +71,7 @@ try {
   check("Admin and Restaurant Web UI are unchanged", !changedFiles.some((file) => file.startsWith("apps/admin-web/") || file.startsWith("apps/restaurant-web/")));
 
   check(".env.local is ignored without reading contents", git(["check-ignore", "-q", "--", ".env.local"], true).status === 0);
-  check(".env.local is not tracked or staged", git(["ls-files", "--", ".env.local"]).stdout.trim() === "" && git(["diff", "--cached", "--name-only", "--", ".env.local"]).stdout.trim() === "");
+  check(".env.local is not tracked or staged", git(["ls-files", "--", ".env.local"]).stdout.trim() === "" && pc2RetainedPaths(git(["diff", "--cached", "--name-only", "--", ".env.local"]).stdout).length === 0);
 
   const migrations = fs.readdirSync(path.join(root, "supabase", "migrations")).filter((file) => file.endsWith(".sql")).sort();
   const migrationHash = createHash("sha256").update(read(`supabase/migrations/${migrationName}`)).digest("hex");

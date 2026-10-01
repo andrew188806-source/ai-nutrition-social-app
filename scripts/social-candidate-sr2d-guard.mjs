@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // PC2-EXACT-PREDECESSOR-BEGIN
-const { runExactPc2PredecessorGuard } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
-  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { runExactPc2PredecessorGuard: () => false };
+const { verifyExactPc2CandidateGuard, pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+  if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { verifyExactPc2CandidateGuard: () => false, pc2RetainedPaths: text => text.trim().split(/\r?\n/).filter(Boolean), isExactPc2: () => false };
   throw error;
 });
-await runExactPc2PredecessorGuard(process.cwd(), "scripts/social-candidate-sr2d-guard.mjs");
+await verifyExactPc2CandidateGuard(process.cwd(), "scripts/social-candidate-sr2d-guard.mjs");
 // PC2-EXACT-PREDECESSOR-END
 // SR-2D local guard. Read-only and local: no network, database, credentials or deployment.
 import crypto from "node:crypto";
@@ -337,7 +337,7 @@ try {
   // implementation bytes. Every other frozen path must still be worktree-identical.
   check("78. no frozen runtime path outside the authorized repoint has a worktree delta",
     [...frozenFiles.keys()].filter((file) => file !== SR2D_REPOINTED_FROZEN_FILE)
-      .every((file) => git(["diff", "--name-only", SR2D_BASELINE, "--", file]).trim() === ""));
+      .every((file) => pc2RetainedPaths(git(["diff", "--name-only", SR2D_BASELINE, "--", file])).length === 0));
   check("79. frozen SR-2C authority commit remains the exact baseline", git(["show", "-s", "--format=%H", SR2D_BASELINE]).trim() === SR2D_BASELINE);
   check("80. SR-2D imports only frozen shared authorities", exact(moduleSpecifiers(parsed.get(`${apiRoot}/composeCandidateList.ts`)), ["../social-candidate-ref/types.ts", "../social-exposure/index.ts", "../social-pair/index.ts", "../social-profile/index.ts", "../social-ranking/index.ts", "../social-ranking/types.ts", "../social-runtime-transport/executorTransactionTransport.ts", "./policy.ts", "./readCandidateTasteSources.ts", "./toCandidateDto.ts", "./types.ts"].sort()), moduleSpecifiers(parsed.get(`${apiRoot}/composeCandidateList.ts`)));
 

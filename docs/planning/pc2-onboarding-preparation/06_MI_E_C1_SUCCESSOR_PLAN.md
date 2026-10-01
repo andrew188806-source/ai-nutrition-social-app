@@ -1,5 +1,7 @@
 # PC-2-P0R — Publication, Successor and Readiness Plan
 
+> CURRENT VALIDATION STATUS: executor remediation gates complete; independent reacceptance pending. The preparation status below is historical. See the supplemental closure and document 08.
+
 Status: **OWNER DECISION SYNC — PLAN ONLY — no guard, registry or product file edited**
 Baseline: `main` @ `30268ee4de59a8d8855c1dcaa01795d2f1ce33b1`
 Labels: **[FACT]** · **[PROPOSED]** · **[UNRESOLVED]**
@@ -247,6 +249,9 @@ OD-15, TD-10/AU19 and P-7 remain open. Existing Development acceptance cannot se
 
 
 ## 7. PC-2 local implementation freeze — 2026-10-01 [EXECUTOR FREEZE]
+
+> HISTORICAL IMPLEMENTATION EVIDENCE — the implementation inventory below is preserved from the original PC-2 run. Its differential parity/PASS claims relied on substituted guard execution and incomplete failure vectors; independent acceptance was BLOCKED. Those claims are superseded for current validation by 08_VALIDATION_INTEGRITY_REMEDIATION.md and the supplemental differential/raw outputs. They are not current acceptance evidence. The product implementation and original validation JSON remain frozen.
+
 
 The preceding proposed ledgers remain historical preparation evidence. This exact local implementation inventory replaces their unresolved implementation names. Legal publication and activation paths remain excluded. This freeze is an implementation record, not an owner legal approval receipt or independent Planner acceptance. Baseline is `30268ee4de59a8d8855c1dcaa01795d2f1ce33b1`; CLI 2.109.1 generated both migration names. No dependency upgrade. PostgreSQL 17.6 baseline fresh apply passed all 140 migrations.
 
@@ -743,3 +748,11 @@ Final inventory: 83 paths (23 product / 2 additive migrations / 7 DRAFT preparat
 Final stable candidate differential: 478 local suites; baseline failures 235; candidate failures 235; exact failed-CHECK identity parity 235; NEW_REGRESSION = 0. The 24 live/Development suites are excluded by authorization, not counted as passes. Full named commands, failure identities and isolated fixture results are embedded in scripts/pc2-consumer-onboarding-validation.json. Baseline evidence is reused only from the unchanged clean required snapshot; earlier changing-candidate/compilation-residue sweeps are diagnostic.
 
 This is local executor evidence, not independent Planner acceptance, legal publication approval or live signup closure. The three original DRAFT hashes remain unchanged; registry rollout is inactive and no approval/bundle/document content is seeded. Future activation blockers in 07 remain unresolved. The mandatory full exact guard/record are checked after final evidence sealing and again after the single authorized commit without rewriting bytes. No push, deployment, remote database action, PC-3, GQA-7 or Group Table work occurred.
+
+## Validation integrity remediation — acceptance BLOCKED
+
+Independent PC-2 acceptance was BLOCKED: 30 predecessor guards replayed baseline and exited before candidate assertions; GQA-6R missing-delta/deleted-file controls gained two failures; 33 differential failure groups had only UNREPORTED_FAILURE, so parity was unproven. Validation-only corrective gates are complete in the supplemental evidence; independent reacceptance remains pending. Original implementation evidence is historical and is not remediation acceptance. See 08_VALIDATION_INTEGRITY_REMEDIATION.md for the supplemental evidence. Legal drafts remain DRAFT / NOT ACTIVE. OD-15, TD-10/AU19 and P-7 remain open.
+
+## Supplemental executor validation closure
+
+Independent acceptance was BLOCKED for the three stated integrity defects. The exact 61-path correction restores actual candidate validation, GQA record/file-existence controls, and concrete failure-vector evidence. The verified complete inventory is 478 local / 24 excluded live or Development suites; the original 39 predecessor commands are a subset. NEW_REGRESSION = 0 with all failure vectors verified; inherited failures remain failures. Earlier 482 is unsupported and superseded. See 08 and its supplemental JSON/raw-output ZIP for full provenance, source bindings and reproducible evidence. This is READY_FOR_PC_2_REACCEPTANCE, not independent acceptance or legal activation. Legal drafts remain DRAFT / NOT ACTIVE; OD-15, TD-10/AU19 and P-7 remain open.

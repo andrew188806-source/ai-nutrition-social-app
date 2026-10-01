@@ -18,7 +18,7 @@ import {
 } from "./pc1-consumer-closure-manifest.mjs";
 
 // Historical isolated fixtures may omit PC-2. Missing module preserves only the original branch.
-const { isExactPc2, PC2_ALL_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+const { isExactPc2, pc2AuthorizedPaths, PC2_ALL_PATHS } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
   if (error.code === "ERR_MODULE_NOT_FOUND" && error.message.includes("pc2-consumer-onboarding-manifest.mjs")) return { isExactPc2: () => false, pc2PredecessorEvidence: () => null, PC2_ALL_PATHS: [], PC2_PRODUCT_PATHS: [], PC2_MIGRATIONS_PATHS: [] };
   throw error;
 });
@@ -38,7 +38,7 @@ check("02 the product delta is exactly the recorded PC-1 set with exactly the re
     missing: PC1_PRODUCT_PATHS.filter((f) => !evidence.productDelta.includes(f)) });
 
 const changed = collectPc1ChangedPaths(root);
-const allowed = new Set([...PC1_PRODUCT_PATHS, ...PC1_VALIDATION_PATHS, ...PC1_RECOGNITION_PATHS, ...(exactPc2 ? PC2_ALL_PATHS : [])]);
+const allowed = new Set([...PC1_PRODUCT_PATHS, ...PC1_VALIDATION_PATHS, ...PC1_RECOGNITION_PATHS, ...(exactPc2 ? pc2AuthorizedPaths() : [])]);
 check("03 no changed path outside the PC-1 manifest (product + validation + recognized predecessor guards)",
   changed.every((f) => allowed.has(f)), changed.filter((f) => !allowed.has(f)));
 check("04 every PC-1 validation file is present", PC1_VALIDATION_PATHS.every((f) => fs.existsSync(path.join(root, f))),
