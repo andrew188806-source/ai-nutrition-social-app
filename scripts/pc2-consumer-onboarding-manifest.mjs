@@ -103,7 +103,7 @@ export const lfSha=bytes=>rawSha(Buffer.from(bytes.toString("utf8").replace(/\r\
 const git=(root,...args)=>execFileSync("git",args,{cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],maxBuffer:32*1024*1024}).trim();
 const lines=s=>s.split(/\r?\n/).filter(Boolean);
 const pc2RawArtifact="docs/planning/pc2-onboarding-preparation/pc2-remediation-raw-output.zip";
-const supplementalIgnoredEvidence=root=>fs.existsSync(path.join(root,pc2RawArtifact))?[pc2RawArtifact]:[];
+const supplementalIgnoredEvidence=root=>[pc2RawArtifact,"docs/planning/pc2-onboarding-preparation/pc2-second-remediation-raw-output.zip"].filter(p=>fs.existsSync(path.join(root,p)));
 export function pc2ChangedPaths(root=process.cwd()){return [...new Set([...supplementalIgnoredEvidence(root),...lines(git(root,"diff","--name-only",PC2_BASELINE)),...lines(git(root,"ls-files","--others","--exclude-standard"))])].sort();}
 export function pc2Record(root=process.cwd()){const s=fs.readFileSync(path.join(root,"scripts/pc2-consumer-onboarding-record.mjs"),"utf8");return JSON.parse(s.match(/\/\/ PC2-SEAL-BEGIN\nconst seal = ([\s\S]*?);\n\/\/ PC2-SEAL-END/)[1]);}
 function matchesOriginalPc2(root=process.cwd()){
@@ -180,8 +180,8 @@ export const PC2_REMEDIATION_PATHS=Object.freeze([
   "scripts/social-taste-sr1d-guard.mjs",
   "scripts/taste-foundation-ts2d-guard.mjs"
 ]);
-export const pc2AuthorizedPaths=()=>[...new Set([...PC2_ALL_PATHS,...PC2_REMEDIATION_PATHS])].sort();
-export function isExactPc2(root=process.cwd()){
+const firstAuthorizedPaths=()=>[...new Set([...PC2_ALL_PATHS,...PC2_REMEDIATION_PATHS])].sort();
+function matchesFirstPc2Remediation(root=process.cwd()){
  if(matchesOriginalPc2(root))return true;
  try{
   if(spawnSync("git",["merge-base","--is-ancestor",PC2_IMPLEMENTATION,"HEAD"],{cwd:root,stdio:"ignore"}).status!==0)return false;
@@ -189,7 +189,7 @@ export function isExactPc2(root=process.cwd()){
   const inventory=JSON.parse(fs.readFileSync(path.join(root,"scripts/pc2-remediation-inventory.json"),"utf8"));
   if(supplement.implementation!==PC2_IMPLEMENTATION||supplement.kind!=="EXECUTOR_REMEDIATION_NOT_ACCEPTANCE"||JSON.stringify(inventory.paths)!==JSON.stringify(PC2_REMEDIATION_PATHS))return false;
   const delta=[...new Set([...supplementalIgnoredEvidence(root),...lines(git(root,"diff","--name-only",PC2_IMPLEMENTATION)),...lines(git(root,"ls-files","--others","--exclude-standard"))])].sort();
-  if(JSON.stringify(delta)!==JSON.stringify(PC2_REMEDIATION_PATHS)||JSON.stringify(pc2ChangedPaths(root))!==JSON.stringify(pc2AuthorizedPaths()))return false;
+  if(JSON.stringify(delta)!==JSON.stringify(PC2_REMEDIATION_PATHS)||JSON.stringify(pc2ChangedPaths(root))!==JSON.stringify(firstAuthorizedPaths()))return false;
   const payload=PC2_REMEDIATION_PATHS.filter(p=>p!=="scripts/pc2-remediation-record.json");
   if(JSON.stringify(Object.keys(supplement.sha256).sort())!==JSON.stringify(payload))return false;
   if(!payload.every(p=>fs.existsSync(path.join(root,p))&&rawSha(fs.readFileSync(path.join(root,p)))===supplement.sha256[p]))return false;
@@ -230,3 +230,76 @@ export function pc2RetainedPaths(text,root=process.cwd()){
  const values=lines(text);if(!isExactPc2(root))return values;
  const allowed=new Set(pc2AuthorizedPaths());return values.filter(p=>!allowed.has(p));
 }
+
+
+// Second validation addendum: old executor evidence is immutable, never opportunistically resealed.
+export const PC2_FIRST_REMEDIATION="f27d70aed74df05112fc0ada5c7887caa93d8103";
+export const PC2_SECOND_PATHS=Object.freeze([
+  "docs/planning/pc2-onboarding-preparation/06_MI_E_C1_SUCCESSOR_PLAN.md",
+  "docs/planning/pc2-onboarding-preparation/07_OWNER_REVIEW_SHEET.md",
+  "docs/planning/pc2-onboarding-preparation/09_SECOND_VALIDATION_REMEDIATION.md",
+  "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-differential.json",
+  "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-raw-output.zip",
+  "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstructed.patch",
+  "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstruction.json",
+  "scripts/meal-identification-mi-d-b-guard.mjs",
+  "scripts/pc2-consumer-onboarding-manifest.mjs",
+  "scripts/pc2-remediation-failure-evidence.mjs",
+  "scripts/pc2-second-remediation-controls.mjs",
+  "scripts/pc2-second-remediation-evaluate.mjs",
+  "scripts/pc2-second-remediation-inventory.json",
+  "scripts/pc2-second-remediation-record.json",
+  "scripts/pc2-second-remediation-record.mjs"
+]);
+export const pc2AuthorizedPaths=()=>[...new Set([...firstAuthorizedPaths(),...PC2_SECOND_PATHS])].sort();
+const secondArtifact="docs/planning/pc2-onboarding-preparation/pc2-second-remediation-raw-output.zip";
+// These are the exact first-round additions, not an extensible ownership exception.
+export const PC2_FIRST_ADDED_RETAINED=Object.freeze([
+ "docs/planning/pc2-onboarding-preparation/08_VALIDATION_INTEGRITY_REMEDIATION.md",
+ "docs/planning/pc2-onboarding-preparation/pc2-remediation-differential.json",
+ "docs/planning/pc2-onboarding-preparation/pc2-remediation-raw-output.zip",
+ "scripts/pc2-remediation-inventory.json",
+ "scripts/pc2-remediation-recognition-mutations.mjs",
+ "scripts/pc2-remediation-record.json",
+ "scripts/pc2-remediation-record.mjs",
+ "scripts/pc2-remediation-workspace.cjs"
+]);
+const retainedMetadata=new Map();
+function retainedFirstFile(root,file){
+ try{
+  if(!PC2_FIRST_ADDED_RETAINED.includes(file))return false;
+  if(!retainedMetadata.has(root)){const added=lines(git(root,"diff","--diff-filter=A","--name-only",PC2_IMPLEMENTATION,PC2_FIRST_REMEDIATION)).filter(p=>!PC2_SECOND_PATHS.includes(p)).sort(),modes=Object.fromEntries(PC2_FIRST_ADDED_RETAINED.map(p=>[p,git(root,"ls-tree",PC2_FIRST_REMEDIATION,"--",p).split(/\s+/)]));retainedMetadata.set(root,{added,modes});}
+  const actualAdded=retainedMetadata.get(root).added;
+  if(JSON.stringify(actualAdded)!==JSON.stringify(PC2_FIRST_ADDED_RETAINED))return false;
+  const meta=retainedMetadata.get(root).modes[file];
+  // Git's immutable entry must be a regular blob; lstat rejects symlinks/directories.
+  // Fixture core.filemode=false makes host executable-bit differences immaterial.
+  if(!["100644","100755"].includes(meta[0])||meta[1]!=="blob"||!fs.lstatSync(path.join(root,file)).isFile())return false;
+  return rawSha(fs.readFileSync(path.join(root,file)))===rawSha(immutableFile(root,PC2_FIRST_REMEDIATION,file));
+ }catch{return false;}
+}
+export function pc2SecondChangedPaths(root=process.cwd()){
+ const changed=new Set([...(fs.existsSync(path.join(root,secondArtifact))?[secondArtifact]:[]),...lines(git(root,"diff","--name-only",PC2_FIRST_REMEDIATION)),...lines(git(root,"ls-files","--others","--exclude-standard"))]);
+ // Include invalid historical entries even when the old ZIP is ignored by Git.
+ for(const file of PC2_FIRST_ADDED_RETAINED){if(retainedFirstFile(root,file))changed.delete(file);else changed.add(file);}
+ return [...changed].sort();
+}
+const immutableFiles=new Map();
+function immutableFile(root,commit,file){const key=root+":"+commit+":"+file;if(!immutableFiles.has(key))immutableFiles.set(key,execFileSync("git",["show",commit+":"+file],{cwd:root,maxBuffer:32*1024*1024}));return immutableFiles.get(key);}
+function matchesSecondPc2Remediation(root){
+ try{
+  // The existing first-round negative harness uses exact d38 lifecycle metadata with current source overlay.
+  // Accept that one metadata identity only after the full f27-pinned inventory and byte seal below.
+  if(spawnSync("git",["merge-base","--is-ancestor",PC2_FIRST_REMEDIATION,"HEAD"],{cwd:root,stdio:"ignore"}).status!==0&&git(root,"rev-parse","HEAD")!==PC2_IMPLEMENTATION)return false;
+  const own="scripts/pc2-second-remediation-record.json",record=JSON.parse(fs.readFileSync(path.join(root,own))),inventory=JSON.parse(fs.readFileSync(path.join(root,"scripts/pc2-second-remediation-inventory.json")));
+  if(record.baseline!==PC2_FIRST_REMEDIATION||record.kind!=="EXECUTOR_SECOND_REMEDIATION_NOT_ACCEPTANCE"||record.independentAcceptance!==false||record.legalActive!==false||inventory.baseline!==PC2_FIRST_REMEDIATION||JSON.stringify(inventory.paths)!==JSON.stringify(PC2_SECOND_PATHS))return false;
+  if(JSON.stringify(pc2SecondChangedPaths(root))!==JSON.stringify(PC2_SECOND_PATHS)||JSON.stringify(pc2ChangedPaths(root))!==JSON.stringify(pc2AuthorizedPaths()))return false;
+  const payload=PC2_SECOND_PATHS.filter(p=>p!==own);
+  if(JSON.stringify(Object.keys(record.sha256).sort())!==JSON.stringify(payload)||!payload.every(p=>fs.existsSync(path.join(root,p))&&rawSha(fs.readFileSync(path.join(root,p)))===record.sha256[p]))return false;
+  const firstOwn="scripts/pc2-remediation-record.json",firstBytes=immutableFile(root,PC2_FIRST_REMEDIATION,firstOwn),firstSeal=JSON.parse(firstBytes);
+  if(!PC2_REMEDIATION_PATHS.filter(p=>!PC2_SECOND_PATHS.includes(p)).every(p=>fs.existsSync(path.join(root,p))&&rawSha(fs.readFileSync(path.join(root,p)))===(p===firstOwn?rawSha(firstBytes):firstSeal.sha256[p])))return false;
+  const originalOwn="scripts/pc2-consumer-onboarding-record.mjs",originalBytes=immutableFile(root,PC2_IMPLEMENTATION,originalOwn),originalSeal=JSON.parse(originalBytes.toString().match(/\/\/ PC2-SEAL-BEGIN\nconst seal = ([\s\S]*?);\n\/\/ PC2-SEAL-END/)[1]);
+  return PC2_ALL_PATHS.filter(p=>!PC2_REMEDIATION_PATHS.includes(p)&&!PC2_SECOND_PATHS.includes(p)).every(p=>fs.existsSync(path.join(root,p))&&rawSha(fs.readFileSync(path.join(root,p)))===(p===originalOwn?rawSha(originalBytes):originalSeal.sha256[p]));
+ }catch{return false;}
+}
+export function isExactPc2(root=process.cwd()){return matchesSecondPc2Remediation(root)||matchesFirstPc2Remediation(root);}

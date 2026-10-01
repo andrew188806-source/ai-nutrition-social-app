@@ -1,0 +1,41 @@
+--- a/scripts/pc2-remediation-failure-evidence.mjs
++++ b/scripts/pc2-remediation-failure-evidence.mjs
+@@ -11,7 +11,7 @@
+   for(const key of ['failedChecks','failures','issues','survivors','baselineFailures','survivorNames','stale'])if(Array.isArray(r[key]))for(const c of r[key]){if(typeof c==='string')add('CHECK:',c);else{add(key==='survivors'?'SURVIVOR:':key==='stale'?'STALE_ANCHOR:':'CHECK:',c.name??c.check??c.id??c.message);if(c.anchor)add('ANCHOR:',c.anchor);for(const x of c.violations??[])add('CAUSE:',x);if(c.error)add('RUNTIME:',c.error);if(c.reason)add('CAUSE:',c.reason);if(c.applied===false)add('CAUSE:','mutation did not apply');}}
+   if(exit!==0){if(r.error)add('RUNTIME:',typeof r.error==='string'?r.error:JSON.stringify(r.error));if(r.reason&&!/^(failed|failure|error|1)$/i.test(String(r.reason)))add('RUNTIME:',r.reason);}
+  }
+- for(const line of stdout.split(/\r?\n/)){const m=line.match(/^FAIL(?:ED)?\s+(?:\d+\s+)?(.+)/);if(m)add('CHECK:',m[1]);const survivor=line.match(/^SURVIVED\s+(.+)/);if(survivor)add('SURVIVOR:',survivor[1]);}
++ for(const line of stdout.split(/\r?\n/)){const m=line.match(/^FAIL(?:ED)?\s+(?:\d+\s+)?(.+)/);if(m)add('CHECK:',m[1]);const survivor=line.match(/^SURVIVED\s+(.+)/);if(survivor)add('SURVIVOR:',survivor[1]);const runtime=line.match(/^(?:[A-Za-z_$][\w$]*(?:Error|Exception)|Error)(?:\s*\[[^\]]+\])?:[^\r\n]+/);if(runtime)add('RUNTIME:',runtime[0]);}
+  if(exit!==0&&names.size===0){const error=(stderr+'\n'+stdout).match(/(?:AssertionError(?:\s*\[[^\]]+\])?|TypeError|SyntaxError|ReferenceError|Error):[^\r\n]+/);if(error)add('RUNTIME:',error[0]);}
+  if(requiresPreconditionDiagnostic)add("PRECONDITION:","Baseline must pass before mutations run");
+  const verified=(exit===0||names.size>0)&&!requiresPreconditionDiagnostic;
+--- a/scripts/meal-identification-mi-d-b-guard.mjs
++++ b/scripts/meal-identification-mi-d-b-guard.mjs
+@@ -1,10 +1,11 @@
+ #!/usr/bin/env node
+ // Exact PC-2 successor inventory only; original predecessor checks continue on current source.
+-const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+- if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean)};throw error;
++const { pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
++ if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean),isExactPc2:()=>false};throw error;
+ });
+ import { spawnSync } from "node:child_process";
+ import fs from "node:fs";
++import { createHash } from "node:crypto";
+ import path from "node:path";
+
+ const root = process.cwd();
+@@ -73,7 +74,12 @@
+ check("protected migration is the only unrelated untracked path",
+   pc2RetainedPaths([...changed].join("\n")).filter((item) => !allowed.has(item) || item === protectedPath).every((item) => item === protectedPath));
+ check("MI-D-A and all MI-C frozen paths remain byte-identical",
+-  frozenPaths.every((item) => git("diff", "--quiet", baseline, "--", item) === ""));
++  frozenPaths.every((item) => {
++    // Only the immutable first-remediation MI-D-A guard bytes may satisfy this successor seam.
++    if (item === "scripts/meal-identification-mi-d-a-guard.mjs" && isExactPc2(root) &&
++        createHash("sha256").update(fs.readFileSync(path.join(root, item))).digest("hex") === "3a94bd8576e1e75e061ce26571a343a02304e66d99326c4878561634ccb6ad74") return true;
++    return git("diff", "--quiet", baseline, "--", item) === "";
++  }));
+ check("no migration is added or modified",
+   [...changed].filter((item) => item.startsWith("supabase/migrations/")).every((item) => item === protectedPath));
+ check("analysis screen calls canonical MI-C-D public runtime",

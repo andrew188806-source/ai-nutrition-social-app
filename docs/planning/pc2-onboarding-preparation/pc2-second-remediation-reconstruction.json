@@ -1,0 +1,56 @@
+{
+  "provenance": "RECONSTRUCTED_FROM_COMMITTED_SOURCE_AND_FRESH_EXECUTION",
+  "sourceCommit": "f27d70aed74df05112fc0ada5c7887caa93d8103",
+  "canonicalBaseline": "30268ee4de59a8d8855c1dcaa01795d2f1ce33b1",
+  "originalImplementation": "d38e66ad8c8e10d69977873cd815f71aec374cdc",
+  "oldReasoningReviewFiles": {
+    "reasoning-review-proposed-fix.patch": "UNAVAILABLE",
+    "reasoning-review-result.json": "UNAVAILABLE",
+    "reasoning-review-compare.json": "UNAVAILABLE"
+  },
+  "beforeParser": {
+    "provenance": "RECONSTRUCTED_FROM_COMMITTED_SOURCE_AND_FRESH_EXECUTION",
+    "sourceCommit": "f27d70aed74df05112fc0ada5c7887caa93d8103",
+    "sourceSha256": "b49d51646bf1e76777cf1168d9cb5c70ab90073f63dccdcf1cca8cb3557d3d47",
+    "command": [
+      "node",
+      "--input-type=module",
+      "-e",
+      "import {failureEvidence} from \"./scripts/pc2-remediation-failure-evidence.mjs\";console.log(JSON.stringify({mixed:failureEvidence(\"FAIL stable assertion\",\"Error: fresh setup failure\",1),runtimeOnly:failureEvidence(\"\",\"Error: fresh setup failure\",1),checkOnly:failureEvidence(\"FAIL stable assertion\",\"\",1),success:failureEvidence(\"\",\"\",0)}));"
+    ],
+    "exit": 0,
+    "stdout": "{\"mixed\":{\"verified\":true,\"requiresPreconditionDiagnostic\":false,\"failedChecks\":[\"CHECK:stable assertion\"]},\"runtimeOnly\":{\"verified\":true,\"requiresPreconditionDiagnostic\":false,\"failedChecks\":[\"RUNTIME:Error: fresh setup failure\"]},\"checkOnly\":{\"verified\":true,\"requiresPreconditionDiagnostic\":false,\"failedChecks\":[\"CHECK:stable assertion\"]},\"success\":{\"verified\":true,\"failedChecks\":[]}}\n",
+    "stderr": ""
+  },
+  "beforeGuard": {
+    "provenance": "RECONSTRUCTED_FROM_COMMITTED_SOURCE_AND_FRESH_EXECUTION",
+    "sourceCommit": "f27d70aed74df05112fc0ada5c7887caa93d8103",
+    "sourceSha256": "81b9967444485eba891b913b2a6b2f656a01c53c83172cfb3abd6094763cef40",
+    "command": "node scripts/meal-identification-mi-d-b-guard.mjs",
+    "exit": 1,
+    "stdout": "PASS branch remains main\nFAIL HEAD remains MI-D-A frozen authority\nPASS staged diff is empty\nPASS candidate contains only MI-D-B manifest paths\nPASS protected migration is the only unrelated untracked path\n",
+    "stderr": "file:///mnt/d/haocu%20app/ai-nutrition-social-mvp/scripts/meal-identification-mi-d-b-guard.mjs:46\n    throw new Error(result.stderr || `git ${args.join(\" \")} failed`);\n          ^\n\nError: git diff --quiet ddcc83721b21faa3ea01c233b35ae118c1bf7f20 -- scripts/meal-identification-mi-d-a-guard.mjs failed\n    at git (file:///mnt/d/haocu%20app/ai-nutrition-social-mvp/scripts/meal-identification-mi-d-b-guard.mjs:46:11)\n    at file:///mnt/d/haocu%20app/ai-nutrition-social-mvp/scripts/meal-identification-mi-d-b-guard.mjs:76:31\n    at Array.every (<anonymous>)\n    at file:///mnt/d/haocu%20app/ai-nutrition-social-mvp/scripts/meal-identification-mi-d-b-guard.mjs:76:15\n\nNode.js v22.23.1\n"
+  },
+  "immutableMiDaGuardSha256": "3a94bd8576e1e75e061ce26571a343a02304e66d99326c4878561634ccb6ad74",
+  "patchSha256": "345edda76770dc9b0098596cefc3c3e65355d2d39d95e6c0a582e8bcc8c33944",
+  "applyCheckPassed": true,
+  "exactPaths": [
+    "docs/planning/pc2-onboarding-preparation/06_MI_E_C1_SUCCESSOR_PLAN.md",
+    "docs/planning/pc2-onboarding-preparation/07_OWNER_REVIEW_SHEET.md",
+    "docs/planning/pc2-onboarding-preparation/09_SECOND_VALIDATION_REMEDIATION.md",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-differential.json",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-raw-output.zip",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstructed.patch",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstruction.json",
+    "scripts/meal-identification-mi-d-b-guard.mjs",
+    "scripts/pc2-consumer-onboarding-manifest.mjs",
+    "scripts/pc2-remediation-failure-evidence.mjs",
+    "scripts/pc2-second-remediation-controls.mjs",
+    "scripts/pc2-second-remediation-evaluate.mjs",
+    "scripts/pc2-second-remediation-inventory.json",
+    "scripts/pc2-second-remediation-record.json",
+    "scripts/pc2-second-remediation-record.mjs"
+  ],
+  "independentAcceptance": false,
+  "legalActive": false
+}

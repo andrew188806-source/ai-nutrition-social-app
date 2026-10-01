@@ -1,0 +1,23 @@
+{
+  "baseline": "f27d70aed74df05112fc0ada5c7887caa93d8103",
+  "kind": "EXECUTOR_SECOND_REMEDIATION_NOT_ACCEPTANCE",
+  "provenance": "RECONSTRUCTED_FROM_COMMITTED_SOURCE_AND_FRESH_EXECUTION",
+  "independentAcceptance": false,
+  "legalActive": false,
+  "sha256": {
+    "docs/planning/pc2-onboarding-preparation/06_MI_E_C1_SUCCESSOR_PLAN.md": "8a6036a915082e852ce801c231428e4450d47dcc14c46190b482dbfc157d26b3",
+    "docs/planning/pc2-onboarding-preparation/07_OWNER_REVIEW_SHEET.md": "eb2e40196a0262253ef3edf810ab1059d052876dc8006f42c64e6319a592fa68",
+    "docs/planning/pc2-onboarding-preparation/09_SECOND_VALIDATION_REMEDIATION.md": "0796669dd2e197b5ae22d11764708f228915f0e16f713354b255ecdb9ca86564",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-differential.json": "495c34913daf934081f4e72c0d3c2c81eb50b1409f4d37cdaf55eceabbe3a747",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-raw-output.zip": "bc5e1ef97ffcae2c94c3519492ee28cbd98a9de767992302ca19e3cc5b1f811c",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstructed.patch": "345edda76770dc9b0098596cefc3c3e65355d2d39d95e6c0a582e8bcc8c33944",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstruction.json": "7cfebe151418902d8f3c0e6e1cc46fc12cc7003afa748ef9d1eefd842d3519f3",
+    "scripts/meal-identification-mi-d-b-guard.mjs": "a75af3dcd1ba834981347fe6ba7002c99726b99e824f96f95c745569606f6ef5",
+    "scripts/pc2-consumer-onboarding-manifest.mjs": "28e33c69a8dc4adc2ea7a1965cf5a8ecd430eaa06459b83ab6bbb0e0612de933",
+    "scripts/pc2-remediation-failure-evidence.mjs": "bc92e89bb3fc050589188889992177b7bd96d7f558a3cb16e0bac6f41f0c40f0",
+    "scripts/pc2-second-remediation-controls.mjs": "2bedb287887bc15cc0964f13781cb0d59c95d66200ecefd22f9331eb17f5732a",
+    "scripts/pc2-second-remediation-evaluate.mjs": "2a8fbe7af17aedccbe760ef40eec987c37b73d62976b73ad7c436c2ad9fdc629",
+    "scripts/pc2-second-remediation-inventory.json": "fff9edd617c5fbd729ea0f381197990c86858803aa55145108083ec5cc9abd35",
+    "scripts/pc2-second-remediation-record.mjs": "a4622530ee81846a6fba755542f483dbd11d65a4a482637ec6de31de6d887433"
+  }
+}

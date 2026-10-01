@@ -1,0 +1,22 @@
+{
+  "baseline": "f27d70aed74df05112fc0ada5c7887caa93d8103",
+  "kind": "SECOND_VALIDATION_ONLY_REMEDIATION",
+  "provenance": "RECONSTRUCTED_FROM_COMMITTED_SOURCE_AND_FRESH_EXECUTION",
+  "paths": [
+    "docs/planning/pc2-onboarding-preparation/06_MI_E_C1_SUCCESSOR_PLAN.md",
+    "docs/planning/pc2-onboarding-preparation/07_OWNER_REVIEW_SHEET.md",
+    "docs/planning/pc2-onboarding-preparation/09_SECOND_VALIDATION_REMEDIATION.md",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-differential.json",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-raw-output.zip",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstructed.patch",
+    "docs/planning/pc2-onboarding-preparation/pc2-second-remediation-reconstruction.json",
+    "scripts/meal-identification-mi-d-b-guard.mjs",
+    "scripts/pc2-consumer-onboarding-manifest.mjs",
+    "scripts/pc2-remediation-failure-evidence.mjs",
+    "scripts/pc2-second-remediation-controls.mjs",
+    "scripts/pc2-second-remediation-evaluate.mjs",
+    "scripts/pc2-second-remediation-inventory.json",
+    "scripts/pc2-second-remediation-record.json",
+    "scripts/pc2-second-remediation-record.mjs"
+  ]
+}

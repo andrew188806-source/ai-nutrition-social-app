@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Exact PC-2 successor inventory only; original predecessor checks continue on current source.
-const { pc2RetainedPaths } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
- if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean)};throw error;
+const { pc2RetainedPaths, isExactPc2 } = await import("./pc2-consumer-onboarding-manifest.mjs").catch(error => {
+ if(error.code==="ERR_MODULE_NOT_FOUND"&&error.message.includes("pc2-consumer-onboarding-manifest.mjs"))return {pc2RetainedPaths:text=>text.trim().split(/\r?\n/).filter(Boolean),isExactPc2:()=>false};throw error;
 });
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 const root = process.cwd();
@@ -73,7 +74,12 @@ check("candidate contains only MI-D-B manifest paths", pc2RetainedPaths([...chan
 check("protected migration is the only unrelated untracked path",
   pc2RetainedPaths([...changed].join("\n")).filter((item) => !allowed.has(item) || item === protectedPath).every((item) => item === protectedPath));
 check("MI-D-A and all MI-C frozen paths remain byte-identical",
-  frozenPaths.every((item) => git("diff", "--quiet", baseline, "--", item) === ""));
+  frozenPaths.every((item) => {
+    // Only the immutable first-remediation MI-D-A guard bytes may satisfy this successor seam.
+    if (item === "scripts/meal-identification-mi-d-a-guard.mjs" && isExactPc2(root) &&
+        createHash("sha256").update(fs.readFileSync(path.join(root, item))).digest("hex") === "3a94bd8576e1e75e061ce26571a343a02304e66d99326c4878561634ccb6ad74") return true;
+    return git("diff", "--quiet", baseline, "--", item) === "";
+  }));
 check("no migration is added or modified",
   [...changed].filter((item) => item.startsWith("supabase/migrations/")).every((item) => item === protectedPath));
 check("analysis screen calls canonical MI-C-D public runtime",
