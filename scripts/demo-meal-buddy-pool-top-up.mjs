@@ -2,12 +2,16 @@
 // Development-only Demo pool maintenance: the single canonical entrypoint for unattended automation.
 //
 //   node scripts/demo-meal-buddy-pool-top-up.mjs                                     # read-only plan
-//   node scripts/demo-meal-buddy-pool-top-up.mjs --apply --confirm-development [--next-slot]
+//   node scripts/demo-meal-buddy-pool-top-up.mjs --apply --confirm-development [--next-slot] [--ci]
+//
+// Scheduled by .github/workflows/development-demo-pool-maintenance.yml (Development only). `--ci` prints
+// aggregate-only KEY=VALUE lines (and a stable BLOCKER code on refusal) instead of the JSON report.
 //
 // Exit codes (for schedulers): 0 = pool and catalogue satisfied (including the zero-write no-op);
-// 1 = refused or failed (wrong/unverified target, canonical authority unavailable, executor membership
-// not in its canonical state, any card action failed or was rolled back); 2 = Meal Buddy shortfall could
-// not be filled from eligible Demo identities; 3 = Demo catalogue below target (read-only; never repaired here).
+// 1 = refused or failed (missing secret, wrong/unverified target, canonical authority unavailable, executor
+// membership not canonical or not restored, any card action failed or was rolled back); 3 = Demo catalogue
+// below target (read-only; never repaired here); 2 = Meal Buddy shortfall remains (in plan mode: a shortfall
+// the apply step will fill; in apply mode: not fillable from eligible Demo identities).
 //
 // Invariants (each proven offline by scripts/demo-meal-buddy-pool-top-up-guard.mjs):
 // - Target: the Management API's own answer must be ref msbgnnoorsoefuiwluye AND name tastkind-development,
@@ -331,27 +335,99 @@ export async function runTopUp({ api, apply = false, slot, instant = new Date(),
   };
 }
 
-/** Pure: scheduler exit code for a report. */
+/** Pure: scheduler exit code for a report. A catalogue blocker outranks a (fillable) Meal Buddy shortfall. */
 export function exitCodeFor(report) {
   if (!report.executorAuthorityRestored || report.outcomes.some((o) => o.status !== "created" && o.status !== "skipped_already_present")) return 1;
-  if (report.mealBuddy.shortfallAfter > 0) return 2;
   if (!report.catalogue.meetsTarget) return 3;
+  if (report.mealBuddy.shortfallAfter > 0) return 2;
   return 0;
+}
+
+/**
+ * Pure: the scheduler's UTC cron entries, derived from the canonical slot boundaries above. One run
+ * MAINTENANCE_RUN_OFFSET_MINUTES after each slot starts (00:00 breakfast, then each SLOT_HOUR_BOUNDARIES
+ * hour) plus one after the late_night expiry (02:00 next day). Asia/Taipei is UTC+8 with no DST.
+ * The guard fails if .github/workflows/development-demo-pool-maintenance.yml drifts from this list.
+ */
+export const MAINTENANCE_RUN_OFFSET_MINUTES = 7;
+export function maintenanceCronSchedule() {
+  const b = SLOT_HOUR_BOUNDARIES;
+  const taipeiHours = [0, b.breakfastBefore, b.lunchBefore, b.dinnerBefore, PERIOD_END.late_night[1]];
+  return [...new Set(taipeiHours)].sort((x, y) => x - y)
+    .map((h) => ({ taipei: `${pad(h)}:${pad(MAINTENANCE_RUN_OFFSET_MINUTES)}`, cron: `${MAINTENANCE_RUN_OFFSET_MINUTES} ${(h + 16) % 24} * * *` }));
+}
+
+/** Pure: a stable blocker code for a thrown refusal; never the raw message (it may echo API text). */
+export function blockerCodeFor(error) {
+  const m = String(error?.message ?? error);
+  if (/SUPABASE_ACCESS_TOKEN is not set/.test(m)) return "MISSING_SECRET_SUPABASE_ACCESS_TOKEN";
+  if (/not the Development project|not tastkind-development|Development target not verified|target changed/.test(m)) return "WRONG_OR_UNVERIFIED_TARGET";
+  if (/Management API (401|403|404)/.test(m)) return "TARGET_UNVERIFIABLE";
+  if (/canonical authority unavailable/.test(m)) return "CANONICAL_AUTHORITY_UNAVAILABLE";
+  if (/executor membership/.test(m)) return "EXECUTOR_MEMBERSHIP_NOT_CANONICAL";
+  if (/target slot/.test(m)) return "INVALID_TARGET_SLOT";
+  if (/--confirm-development/.test(m)) return "APPLY_NOT_CONFIRMED";
+  return "UNEXPECTED_FAILURE";
+}
+
+/** Pure: aggregate-only KEY=VALUE lines for CI logs (no ids, emails, tokens or payloads). */
+export function ciSummaryLines(report, mode) {
+  const failed = report.outcomes.filter((o) => o.status !== "created" && o.status !== "skipped_already_present").length;
+  const code = exitCodeFor(report);
+  const blocker = code === 1 ? (report.executorAuthorityRestored ? "CARD_ACTION_FAILED" : "EXECUTOR_RESTORATION_FAILED")
+    : code === 3 ? "CATALOGUE_BELOW_TARGET_NO_CANONICAL_AUTHORITY" : code === 2 ? (mode === "plan" ? "NONE" : "MEAL_BUDDY_SHORTFALL_UNFILLABLE") : "NONE";
+  const lines = [
+    `MODE=${mode}`,
+    `TARGET_VERIFIED=${report.target.verified}`, `TARGET_PROJECT=${report.target.project}`, `TARGET_REF=${report.target.ref}`,
+    `SLOT=${report.slot.diningDate} ${report.slot.mealPeriod}`, `SLOT_EXPIRES_AT=${report.slotExpiresAt}`,
+    `CATALOGUE_RESTAURANTS=${report.catalogue.restaurants}`, `CATALOGUE_ELIGIBLE_ITEMS=${report.catalogue.eligible_items}`,
+    `CATALOGUE_MIN_PER_RESTAURANT=${report.catalogue.min_per_restaurant}`, `CATALOGUE_MEETS_TARGET=${report.catalogue.meetsTarget}`, `CATALOGUE_MODE=read-only`,
+    `DEMO_ELIGIBLE_IDENTITIES=${report.mealBuddy.eligibleIdentities}`,
+    `ACTIVE_CARDS_BEFORE=${report.mealBuddy.validCardsBefore}`, `SHORTFALL_BEFORE=${report.mealBuddy.shortfallBefore}`,
+    `WRITES=${report.writeCalls}`, `CREATED=${report.cardsCreated}`, `FAILED_ACTIONS=${failed}`,
+    `ACTIVE_CARDS_AFTER=${report.mealBuddy.validCardsAfter}`, `SHORTFALL_AFTER=${report.mealBuddy.shortfallAfter}`,
+    `EXECUTOR_AUTHORITY_RESTORED=${report.executorAuthorityRestored}`,
+    `RESULT=${mode === "plan" ? "PLAN_ONLY" : report.writeCalls === 0 ? "ZERO_WRITE" : "TOP_UP"}`,
+    `BLOCKER=${blocker}`
+  ];
+  // First real slot rollover handled by the scheduler: previous cards expired -> shortfall -> canonical refill.
+  if (mode === "apply" && code === 0 && report.mealBuddy.shortfallBefore > 0 && report.cardsCreated > 0
+    && report.mealBuddy.shortfallAfter === 0 && report.mealBuddy.validCardsAfter >= MEAL_BUDDY_TARGET.eligibleCards) {
+    lines.push("LIVE_ROLLOVER_ACCEPTANCE=PASS");
+  }
+  return lines;
 }
 
 async function main() {
   const apply = process.argv.includes("--apply");
-  if (apply && !process.argv.includes("--confirm-development")) throw new Error("refusing: --apply requires --confirm-development");
-  const api = await import("./gqa6r-development-api.mjs");
-  const instant = new Date();
-  const base = currentSlot(instant);
-  const slot = process.argv.includes("--next-slot") ? nextSlot(base) : base;
-  const report = await runTopUp({ api, apply, slot, instant });
-  // Aggregates only: ordinals of synthetic [DEMO] identities, never auth ids, emails or tokens.
-  console.log(JSON.stringify({ mode: apply ? "apply" : "plan", ...report }, null, 1));
-  process.exitCode = exitCodeFor(report);
+  const ci = process.argv.includes("--ci");
+  const mode = apply ? "apply" : "plan";
+  try {
+    if (apply && !process.argv.includes("--confirm-development")) throw new Error("refusing: --apply requires --confirm-development");
+    const api = await import("./gqa6r-development-api.mjs");
+    const instant = new Date();
+    const base = currentSlot(instant);
+    const slot = process.argv.includes("--next-slot") ? nextSlot(base) : base;
+    const report = await runTopUp({ api, apply, slot, instant });
+    if (ci) {
+      const lines = ciSummaryLines(report, mode);
+      console.log(lines.join("\n"));
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        const fs = await import("node:fs");
+        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Demo pool ${mode}\n\n\`\`\`\n${lines.join("\n")}\n\`\`\`\n`);
+      }
+    } else {
+      // Aggregates only: ordinals of synthetic [DEMO] identities, never auth ids, emails or tokens.
+      console.log(JSON.stringify({ mode, ...report }, null, 1));
+    }
+    process.exitCode = exitCodeFor(report);
+  } catch (error) {
+    if (ci) console.log([`MODE=${mode}`, "TARGET_VERIFIED=false_or_not_reached", "WRITES=0", `BLOCKER=${blockerCodeFor(error)}`].join("\n"));
+    else console.error(error.message);
+    process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+  main();
 }

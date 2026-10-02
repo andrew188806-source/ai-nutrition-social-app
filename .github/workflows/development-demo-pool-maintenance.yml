@@ -1,0 +1,82 @@
+# TastKind Development Demo Pool maintenance — Development ONLY (tastkind-development / msbgnnoorsoefuiwluye).
+#
+# Keeps the Development Meal Buddy Demo pool at >= 20 active, candidate-eligible [DEMO] cards by running the
+# single canonical maintenance entrypoint, scripts/demo-meal-buddy-pool-top-up.mjs. It never targets
+# Production: the script itself verifies the project ref AND name through the Management API before any
+# read or write and fails closed otherwise, independently of this workflow's environment.
+#
+# Schedule: derived from the canonical Asia/Taipei slot boundaries in that script (SLOT_HOUR_BOUNDARIES,
+# mirrored from the app's create-card defaults) — 7 minutes after each slot starts, plus once after the
+# late_night expiry. Asia/Taipei = UTC+8, no DST. scripts/demo-meal-buddy-pool-top-up-guard.mjs fails if
+# these entries drift from maintenanceCronSchedule(); change the script, then copy its output here.
+#
+# Required secret (GitHub Environment "development"): SUPABASE_ACCESS_TOKEN — the only credential the
+# script reads. It is injected only as an environment variable and is never echoed.
+name: development-demo-pool-maintenance
+
+on:
+  schedule:
+    - cron: "7 1 * * *"   # 09:07 Asia/Taipei — lunch slot starts 09:00
+    - cron: "7 6 * * *"   # 14:07 Asia/Taipei — dinner slot starts 14:00
+    - cron: "7 13 * * *"  # 21:07 Asia/Taipei — late_night slot starts 21:00
+    - cron: "7 16 * * *"  # 00:07 Asia/Taipei — breakfast slot starts 00:00 (new local day)
+    - cron: "7 18 * * *"  # 02:07 Asia/Taipei — previous late_night cards expire 02:00
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: development-demo-pool-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    name: Development Demo Pool maintenance
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (maintenance files only)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            apps/mobile/features/meal-buddy-card-create
+            .github/workflows
+
+      # No dependency install: both scripts use Node built-ins and repository-relative modules only.
+      - name: Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Offline regression guard
+        run: node scripts/demo-meal-buddy-pool-top-up-guard.mjs
+
+      - name: Require Development secret
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ]; then
+            echo "BLOCKER=MISSING_SECRET_SUPABASE_ACCESS_TOKEN"
+            exit 1
+          fi
+          echo "SECRET_PRESENT=SUPABASE_ACCESS_TOKEN"
+
+      - name: Read-only plan
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set +e
+          node scripts/demo-meal-buddy-pool-top-up.mjs --ci
+          code=$?
+          # 0 = pool already full; 2 = shortfall the apply step will fill. Anything else stops the run.
+          if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then exit "$code"; fi
+          exit 0
+
+      - name: Apply (canonical writer only)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/demo-meal-buddy-pool-top-up.mjs --apply --confirm-development --ci

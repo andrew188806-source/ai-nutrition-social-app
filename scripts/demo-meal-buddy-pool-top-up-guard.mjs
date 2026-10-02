@@ -5,8 +5,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  buildActionSql, currentSlot, demoOrdinal, exitCodeFor, isValidSlotCard, nextSlot, planTopUp, resolveEntitlementClass,
-  runTopUp, SLOT_HOUR_BOUNDARIES, slotExpiresAt
+  blockerCodeFor, buildActionSql, ciSummaryLines, currentSlot, demoOrdinal, exitCodeFor, isValidSlotCard, maintenanceCronSchedule, nextSlot,
+  planTopUp, resolveEntitlementClass, runTopUp, SLOT_HOUR_BOUNDARIES, slotExpiresAt
 } from "./demo-meal-buddy-pool-top-up.mjs";
 
 const results = [];
@@ -236,6 +236,54 @@ const actorsOf = (writes) => writes.map((sql) => /with_branch_context\('([0-9a-f
     (code.match(/social_internal\.[a-z_]+\(/g) ?? []).every((f) => ["social_internal.cancel_meal_buddy_card(", "social_internal.create_meal_buddy_card_from_recommendation_with_branch_context(", "social_internal.meal_buddy_card_expires_at(", "social_internal.create_meal_buddy_card_from_recommendation_with_branch_context(uuid,"].some((ok) => f.startsWith(ok.replace(/\(.*/, "(")))));
   check("--apply requires --confirm-development (no interactive prompt)", /if \(apply && !process\.argv\.includes\("--confirm-development"\)\) throw/.test(code) && !/readline|prompt\(/.test(code));
   check("no secret or credential literal", !/(eyJ[A-Za-z0-9_-]{15,}\.|sb_secret_|sbp_[A-Za-z0-9]{20,}|service_role_key|postgres(ql)?:\/\/)/i.test(src));
+}
+
+// 16. CI output: aggregates only, rollover acceptance derivation, stable blocker codes, exit priority.
+{
+  const api = fakeDevelopment(twenty(), { now: T("2026-10-02T14:30:00Z") });
+  const filled = await run(api);
+  const full = await run(api);
+  api.state.now = T("2026-10-03T01:30:00Z");
+  const rolled = await run(api);
+  const all = [...ciSummaryLines(filled, "apply"), ...ciSummaryLines(full, "apply"), ...ciSummaryLines(rolled, "apply"), ...ciSummaryLines(full, "plan")];
+  check("CI lines are KEY=VALUE aggregates with no ids, emails, tokens or recommendation payloads",
+    all.every((l) => /^[A-Z_]+=/.test(l)) && !all.some((l) => /[0-9a-f]{8}-[0-9a-f]{4}-|@|eyJ|gqa6r-demo-(bmi|item)-/.test(l)));
+  check("rollover refill prints LIVE_ROLLOVER_ACCEPTANCE=PASS; a zero-write run does not",
+    ciSummaryLines(rolled, "apply").includes("LIVE_ROLLOVER_ACCEPTANCE=PASS") && !ciSummaryLines(full, "apply").some((l) => l.startsWith("LIVE_ROLLOVER")));
+  check("zero-write run reports WRITES=0 CREATED=0 RESULT=ZERO_WRITE BLOCKER=NONE",
+    ["WRITES=0", "CREATED=0", "RESULT=ZERO_WRITE", "BLOCKER=NONE"].every((l) => ciSummaryLines(full, "apply").includes(l)));
+  check("blocker codes never carry raw messages",
+    blockerCodeFor(new Error("SUPABASE_ACCESS_TOKEN is not set")) === "MISSING_SECRET_SUPABASE_ACCESS_TOKEN"
+    && blockerCodeFor(new Error("refusing: target project ref is not the Development project (abcd…)")) === "WRONG_OR_UNVERIFIED_TARGET"
+    && blockerCodeFor(new Error("refusing: target project name is not tastkind-development")) === "WRONG_OR_UNVERIFIED_TARGET"
+    && blockerCodeFor(new Error("Management API 403: secret detail")) === "TARGET_UNVERIFIABLE"
+    && blockerCodeFor(new Error("refusing: canonical authority unavailable (writer)")) === "CANONICAL_AUTHORITY_UNAVAILABLE");
+  const cat = await run(fakeDevelopment(twenty(), { catalogue: { restaurants: 19, eligible_items: 57, min_per_restaurant: 3 } }), { apply: false });
+  check("plan with a catalogue blocker exits 3 even when a shortfall is pending (fails closed before apply)", cat.mealBuddy.shortfallAfter > 0 && exitCodeFor(cat) === 3);
+}
+// 17. The scheduled workflow: Development only, derived schedule, least privilege, single-flight, fail-closed order.
+{
+  const wfPath = path.join(ROOT, ".github/workflows/development-demo-pool-maintenance.yml");
+  const wf = fs.existsSync(wfPath) ? fs.readFileSync(wfPath, "utf8") : "";
+  const body = wf.split("\n").filter((l) => !/^\s*#/.test(l)).map((l) => l.replace(/\s+#.*$/, "")).join("\n");
+  const crons = [...body.matchAll(/-\s*cron:\s*"([^"]+)"/g)].map((m) => m[1]).sort();
+  check("cron entries equal maintenanceCronSchedule() (canonical slot boundaries + late_night expiry, UTC)",
+    crons.length > 0 && JSON.stringify(crons) === JSON.stringify(maintenanceCronSchedule().map((e) => e.cron).sort()));
+  check("each cron line documents its Asia/Taipei time",
+    maintenanceCronSchedule().every((e) => new RegExp(`cron: "${e.cron.replace(/[*]/g, "\\*")}"\\s+# ${e.taipei} Asia/Taipei`).test(wf)));
+  check("schedule and workflow_dispatch triggers only", /\non:\n\s+schedule:/.test(body) && /\n\s+workflow_dispatch:/.test(body) && !/\n\s+(push|pull_request|pull_request_target|workflow_run):/.test(body));
+  check("job runs in GitHub Environment development, never production", /\n\s+environment:\s*development\s*\n/.test(body) && !/production/i.test(body));
+  check("least privilege: contents read only", /\npermissions:\n\s+contents:\s*read\s*\n/.test(body) && !/:\s*write\b/.test(body) && !/id-token/.test(body));
+  check("single-flight concurrency, never cancelling a run mid-write", /\nconcurrency:\n\s+group:\s*development-demo-pool-maintenance\s*\n\s+cancel-in-progress:\s*false/.test(body));
+  const steps = ["node scripts/demo-meal-buddy-pool-top-up-guard.mjs", "MISSING_SECRET_SUPABASE_ACCESS_TOKEN", "node scripts/demo-meal-buddy-pool-top-up.mjs --ci",
+    "node scripts/demo-meal-buddy-pool-top-up.mjs --apply --confirm-development --ci"].map((s) => body.indexOf(s));
+  check("order: offline guard -> secret presence -> read-only plan -> apply", steps.every((i) => i >= 0) && steps.every((i, k) => k === 0 || i > steps[k - 1]));
+  check("secrets only via ${{ secrets.SUPABASE_ACCESS_TOKEN }}, never echoed",
+    (body.match(/\$\{\{\s*secrets\.([A-Z0-9_]+)\s*\}\}/g) ?? []).every((s) => /secrets\.SUPABASE_ACCESS_TOKEN\b/.test(s))
+    && !/echo[^\n]*\$\{?SUPABASE_ACCESS_TOKEN/.test(body) && !/set -x/.test(body));
+  check("no install, no direct-table catalogue filler, no other entrypoint", !/npm (ci|install)|yarn|pnpm/.test(body) && !/gqa6r-ensure-demo-catalogue-pool|--next-slot/.test(body)
+    && (body.match(/node scripts\/[a-z0-9-]+\.mjs/g) ?? []).every((s) => /demo-meal-buddy-pool-top-up(-guard)?\.mjs$/.test(s)));
+  check("checkout keeps no credentials", /persist-credentials:\s*false/.test(body));
 }
 
 const failed = results.filter((r) => !r.pass);
