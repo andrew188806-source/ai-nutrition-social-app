@@ -55,6 +55,16 @@ export function evaluateConsumerRetention(input: RetentionInput): RetentionEvalu
     requireFact(input.policyVersion === VERSION, "POLICY_VERSION", "policyVersion");
     requireFact(text(input.actorId) && text(input.resourceId), "IDENTITY_MISSING", "identity");
     const now = time(input.evaluationInstant, "evaluationInstant");
+    // Per-evaluation evidence only; this is not an authority or a persisted registry.
+    const zoneByVersion = new Map<string, string>();
+    function bindTimezone(value: ReportPeriod, field: string): void {
+      // Called only after the existing explicit-zone validation. Intl resolves
+      // supported aliases; equal current offsets alone do not imply equal zones.
+      const canonical = new Intl.DateTimeFormat("en-US", { timeZone: value.timezone }).resolvedOptions().timeZone;
+      const previous = zoneByVersion.get(value.timezoneVersion);
+      requireFact(previous === undefined || previous === canonical, "TIMEZONE_VERSION_CONFLICT", field);
+      zoneByVersion.set(value.timezoneVersion, canonical);
+    }
     function fact<T>(value: Fact<T> | undefined, field: string, current = false): T {
       requireFact(object(value) && object(value.binding), "FACT_MISSING", field);
       const b = value.binding;
@@ -87,8 +97,10 @@ export function evaluateConsumerRetention(input: RetentionInput): RetentionEvalu
     } else {
       binding = fact(input.monthBinding, "monthBinding");
       requireFact(object(binding) && binding.reportId === input.resourceId && text(binding.monthBindingVersion) && text(binding.timezoneVersion) && binding.collision === false && monthOrdinal(binding.monthKey) !== null && reportMonthAt(now, binding.timezone), "MONTH_BINDING", "monthBinding");
+      bindTimezone(binding, "monthBinding");
       active = fact(input.activeReportPeriod, "activeReportPeriod", true);
       period(active, now, "activeReportPeriod");
+      bindTimezone(active, "activeReportPeriod");
       requireFact(monthOrdinal(binding.monthKey)! <= monthOrdinal(active.monthKey)!, "FUTURE_MONTH", "monthBinding");
     }
     const inWindow = (p: ReportPeriod): boolean => !!binding && !!freeReviewWindow(p.monthKey)?.includes(binding.monthKey);
@@ -109,12 +121,14 @@ export function evaluateConsumerRetention(input: RetentionInput): RetentionEvalu
       } else {
         requireFact(binding && ["reportId", "monthKey", "timezone", "timezoneVersion", "monthBindingVersion"].every(key => g[key as keyof MonthlyGrant] === binding![key as keyof MonthBinding]), "MONTH_GRANT_MISMATCH", "acquiredGrant");
         period(g.acquisitionPeriod, acquired, "grant.acquisitionPeriod");
+        bindTimezone(g.acquisitionPeriod, "grant.acquisitionPeriod");
         requireFact(inWindow(g.acquisitionPeriod), "ACQUISITION_WINDOW", "acquiredGrant");
         let permanent = g.acquisition.tier === "paid";
         if (g.promotion !== undefined) {
           const u = upgrade(g.promotion, acquired, grantAsOf, "grant.promotion");
           requireFact(g.acquisition.tier === "free" && g.promotion.eventId !== g.acquisition.eventId && g.promotion.reportPeriod, "INVALID_PROMOTION", "acquiredGrant");
           period(g.promotion.reportPeriod, u, "grant.promotion.reportPeriod");
+          bindTimezone(g.promotion.reportPeriod, "grant.promotion.reportPeriod");
           requireFact(inWindow(g.promotion.reportPeriod), "PROMOTION_WINDOW", "acquiredGrant"); permanent = true;
         }
         requireFact(g.permanent === permanent, "PERMANENT_MISMATCH", "acquiredGrant");
@@ -137,6 +151,7 @@ export function evaluateConsumerRetention(input: RetentionInput): RetentionEvalu
       } else {
         requireFact(binding && input.action.reportPeriod, "REPORT_PERIOD_MISSING", "action.create");
         period(input.action.reportPeriod, at, "action.reportPeriod");
+        bindTimezone(input.action.reportPeriod, "action.reportPeriod");
         requireFact(inWindow(input.action.reportPeriod), "ACQUISITION_WINDOW", "action.create");
         grant = { kind: "monthly", policyVersion: VERSION, reportId: binding.reportId, monthKey: binding.monthKey, timezone: binding.timezone, timezoneVersion: binding.timezoneVersion, monthBindingVersion: binding.monthBindingVersion, acquisition: { ...a }, acquisitionPeriod: { ...input.action.reportPeriod }, permanent: a.tier === "paid" };
       }
@@ -154,7 +169,7 @@ export function evaluateConsumerRetention(input: RetentionInput): RetentionEvalu
           const u = fact<Upgrade>(event, "action.events");
           const at = upgrade(u, time(acquired.acquisition.at, "grant.acquisition.at"), now, "action.events");
           requireFact(at <= time(event.binding.factAsOf, "event.factAsOf") && u.eventId !== acquired.acquisition.eventId, "EVENT_AFTER_FACT", "action.events");
-          if (planned.kind === "monthly") { requireFact(u.reportPeriod, "REPORT_PERIOD_MISSING", "action.events"); period(u.reportPeriod, at, "event.reportPeriod"); }
+          if (planned.kind === "monthly") { requireFact(u.reportPeriod, "REPORT_PERIOD_MISSING", "action.events"); period(u.reportPeriod, at, "event.reportPeriod"); bindTimezone(u.reportPeriod, "event.reportPeriod"); }
           const signature = upgradeSignature(u);
           if (seen.has(u.eventId)) { requireFact(seen.get(u.eventId) === signature, "EVENT_CONFLICT", "action.events"); continue; }
           requireFact(at >= previousAt, "EVENT_ORDER", "action.events"); previousAt = at; seen.set(u.eventId, signature);

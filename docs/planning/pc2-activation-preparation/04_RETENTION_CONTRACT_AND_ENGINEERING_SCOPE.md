@@ -1,8 +1,8 @@
 # PC-2 Activation Preparation — Retention Contract and Minimum Engineering Scope
 
-初次 review：2026-10-02；Owner 決策同步及 R0-A 本機實作：2026-10-03（Asia/Taipei）。目前狀態：**READY_FOR_R0_A_LOCAL_ACCEPTANCE**（須完成本輪單一本機 freeze 及 post-commit gates；結果與 commit identity 由最終報告提供）；獨立 R0-A acceptance 尚待完成，非法律批准或 runtime activation authorization。
+初次 review：2026-10-02；Owner 決策同步及 R0-A 本機實作：2026-10-03（Asia/Taipei）。目前 R0-A 狀態：**BLOCKED — independent reacceptance pending**。原 f28867a 本機實作／獨立 BLOCKED 驗收歷史保留；本次 timezone consistency corrective remediation 的實際結果見§12，單一 corrective commit及post-commit結果由最終報告提供。非法律批准或 runtime activation authorization。
 
-§1–10 保留先前文件 review／scope freeze 的歷史 snapshot；其中「本輪」、PROPOSED／PLANNED／未執行指該文件同步階段。最新 R0-A 授權、實際六檔純模組／測試與本機驗證在§11，不回寫歷史時點為已完成。本次完整 commit inventory 為六個新增 source/test paths 加本文件，恰七檔。
+§1–10 保留先前文件 review／scope freeze 的歷史 snapshot；其中「本輪」、PROPOSED／PLANNED／未執行指該文件同步階段。原 R0-A 授權、實際六檔純模組／測試與本機驗證在§11，不回寫歷史時點為已完成；§11 的 hashes及counts是原 f28867a 歷史 snapshot。原完整 commit inventory 為六個新增 source/test paths 加本文件，恰七檔；本次 correction僅修改§12所列四個既有 paths，最新source/test bindings亦見§12。
 
 **PC-2 local acceptance 維持通過；法律 DRAFT / NOT ACTIVE；activation pending。OD-15、TD-10/AU19、P-7 維持 OPEN。** 本輪沒有重新開啟已接受的 validation remediation。R0-A 純政策本機實作見§11；R0-B／R0-C、R1–R5、產品接線與遠端工程均未執行。
 
@@ -489,3 +489,155 @@ M01/M02改14→13/180→179；M03把offset UTC還原改localinstant；M04從upgr
 Reused evidence：已接受PC-2 local acceptance、Owner A–F規則、先前資料流review／CT差異／原source ledger；本輪不把它們宣稱fresh產品PASS，不重跑478 suites/DBfreshapply/build/Development。Fresh evidence：本節實際candidate/loader/typecheck/smoke/mutations、encoding/purity/inventory/54hash/frozenproof。沒有push/fetch/deploy、remoteDB/Auth/Storage/ManagementAPI、legal/registryactivation；不執行DemoPool、PC-3/GQA-7/GroupTable。
 
 Return：**READY_FOR_R0_A_LOCAL_ACCEPTANCE**（單一本機freeze及postcommit成功後由最終報告確認）。PC-2 local acceptance維持通過；R0-A independent acceptance尚待完成，法律DRAFT / NOT ACTIVE，activationpending。停止於報告，等待獨立acceptance。
+
+
+## 12. Timezone version consistency corrective remediation（2026-10-03 Asia/Taipei）
+
+### 12.1 授權、起點與保留的 BLOCKED 歷史
+
+Owner 本輪授權僅修正相同 timezoneVersion 指向矛盾 timezone 的已確認缺口及其直接相關 controls／bindings。精確四個既有 paths：
+
+- `packages/shared/src/domain/consumer-retention/evaluate.ts`
+- `scripts/consumer-retention-policy-smoke.mjs`
+- `scripts/consumer-retention-policy-mutations.mjs`
+- `docs/planning/pc2-activation-preparation/04_RETENTION_CONTRACT_AND_ENGINEERING_SCOPE.md`
+
+Blocked candidate `f28867a189c778eab493c69e686462b239335803`，parent `f5b9ae0a982b7a2401c7d48e0c7b9387f4955bd7`。本次 corrective parent 為 `308f2171164e719aff43d729bb19637cd3334538`；main、本機origin/main `b70884a013ac67486242fe5d11b9bfad1360032a`、ahead/behind 3/0、worktree clean／staged empty。七個R0-A檔案起點仍逐byte等於f28867a。308f217屬另一聊天室Demo Pool successor，完整chain保留，不修改或重新驗收該工作。
+
+已保存起點3,341個tracked paths的raw SHA-256／blob／mode及index entries；本次恰四個M paths，沒有第五檔。142 migrations、dependencies／lockfiles、法律／registry、其他聊天室source及workflow均在scope外凍結。
+
+原獨立驗收不是PASS：16 smoke／525 assertions及20mutations曾通過，但59個獨立probes只有56 PASS／3 FAIL。三項問題均是candidate實際執行，沒有setup/runtime error。`period()`僅逐個驗合法timezone／month／timestamp及非空version，沒有跨facts檢查同版本identity；resolved／collision=false不消除此顯式矛盾。原§11結果與BLOCKED報告不改寫為當時已通過。
+
+| 原獨立probe | f28867a fresh reproduction | 修正後完整probe執行 |
+|---|---|---|
+| D_same_zone_version_conflict | historical UTC/v1；active Asia/Tokyo/v1 → within_acquired_term／visible／noop，reasons=[] | unknown／unknown／pending，grant=null；TIMEZONE_VERSION_CONFLICT，field=activeReportPeriod |
+| D_acquisition_zone_version_conflict | historical UTC/v1；acquisitionPeriod Asia/Tokyo/v1 → within_acquired_term／visible／noop，reasons=[] | unknown／unknown／pending，grant=null；TIMEZONE_VERSION_CONFLICT，field=grant.acquisitionPeriod |
+| D_promotion_zone_version_conflict | historical/acquisition UTC/v1；incoming promotion Asia/Tokyo/v1 → visible／promote，proposal.permanent=true | unknown／unknown／pending，grant=null；TIMEZONE_VERSION_CONFLICT，field=event.reportPeriod |
+
+全部purgeAllowed=false；修正前promotion也只是persisted=false提案，沒有寫入授權。Fresh pre-fix命令exit1是上述三個預期契約失敗，非setup rejection。
+
+### 12.2 修正契約與純度
+
+在每次evaluate函式內建立獨立Map，以timezoneVersion綁定Intl已驗證的canonical timezone identity；不持久化、不認證authority、無global可變registry或跨呼叫隱藏狀態。檢查historical MonthBinding、active ReportPeriod、grant acquisitionPeriod、已保存promotion.reportPeriod、create reportPeriod與每個incoming upgrade.reportPeriod。每一個period仍先通過原有合法timezone／month／時間驗證，再登記／比較identity；只一項矛盾也回structured unknown/pending，沒有visible或有效permanent proposal。
+
+`Intl.DateTimeFormat("en-US", { timeZone }).resolvedOptions().timeZone`處理目前runtime支持的等價名稱；Etc/UTC、Etc/GMT、GMT與UTC可等價。不同zone在某瞬間恰有相同UTC offset不等於identity（UTC vs Africa/Abidjan仍拒絕）；不使用wildcard、任意alias表或blanket exemption。未知zone仍走原INVALID_REPORT_PERIOD／MONTH_BINDING拒絕。比較不重寫原input／MonthBinding raw snapshot；既有grant top-level與historical binding的raw equality契約保留。
+
+不同timezoneVersion可綁不同合法zone：歷史UTC/v1、active／新promotion Tokyo/v2可成立，舊monthKey/timezone/version不重排；create／acquisition／已保存promotion同樣接受合法新版本。舊manual-zone-change backwards-month邊界仍保留原FUTURE_MONTH／unknown觀察，不在本輪裁決Q6/R0-B生效規則。
+
+Free14／Paid180、UTC24h／原T0、保存grant與顯示分離、升級不重算anchor、六月份／永久grant、core/rights及不復活契約均未修改。所有outputs purgeAllowed=false／proposal.persisted=false，deep-frozen inputs未變、相同明確inputs可重現；AST加runtime I/O traps與cross-call registry mutation證明本包純度。未增加server authority／grant persistence／registry／產品接線。
+
+### 12.3 Actual-source gates、counts與完整59-probe comparison
+
+持久raw evidence目錄 E：
+`/mnt/c/Users/Mufan/.codex/visualizations/2026/09/10/01a08bb5-886f-7e61-bfd3-a34b57cc6a2c/r0-a-timezone-corrective-20261003`
+
+Provenance：**RECONSTRUCTED_FROM_COMMITTED_SOURCE_AND_FRESH_EXECUTION**。沒有舊patch作前置，從完整現有source／可核對individual failure evidence與fresh三項reproduction構建本次patch，經scope review及git apply --check再套用。歷史59-probe inputs/expected與每份raw output/hash/probe-version來源已讀取；不猜失敗fixtures、不把本次修正execution稱independent reacceptance。
+
+Actual tooling Node v22.23.1、TypeScript 5.9.3；compiler身份與raw hash沿原可核對身份，fresh harness provenance再次記錄實際版本／source hashes。沒有安裝依賴。Strict gate保持原ts.createProgram strict/noEmit／ES2022/ESNext/Bundler／types=[]／ES2022+Intl／skipLibCheck=false，執行actualcandidateexports。
+
+| 命令（repo root；E如上） | Exit／實際結果 | 持久raw output |
+|---|---|---|
+| `R0A_MODULE_ROOT=E/before/packages/shared/src/domain/consumer-retention R0A_OUTPUT_ROOT=E/before-probes node E/independent-probes.mjs '^(D_same_zone_version_conflict|D_acquisition_zone_version_conflict|D_promotion_zone_version_conflict)$'` | 1；三項original failures fresh確認，inputs/actual/hashes全部保存 | before-probes.stdout/.stderr、before-probes/independent/*.json |
+| `R0A_MODULE_ROOT=packages/shared/src/domain/consumer-retention R0A_OUTPUT_ROOT=E/after-probes node E/independent-probes.mjs` | 0；完整59/59 PASS，385 assertions；與歷史59項inputs/expected逐項相同，原56項output完全相同，原3項修復 | after-probes.stdout/.stderr、59-probe-comparison.json、after-probes/independent/*.json |
+| `node scripts/consumer-retention-policy-smoke.mjs packages/shared/src/domain/consumer-retention E/smoke` | 0；strict diagnostics=[]；23/23 cases、644 assertions；原AC01–AC16的525 assertions完整保留，加AC17–AC23的119 assertions | smoke.stdout/.stderr、smoke/ACxx.json/provenance.json/typecheck.json |
+| `node scripts/consumer-retention-policy-mutations.mjs packages/shared/src/domain/consumer-retention E/mutations-exact-identities` | 0；27/27 controls，正常23-case setup先PASS；每份mutant實際執行exit1及指定CHECK，非setupfail | mutations-exact-identities.stdout/.stderr、每control raw.json/control.json |
+| `node E/purity-audit.mjs` | 0；TS AST import／clock／explicit zone／call-local Map與59個immutable/deterministic outputs／purgefalse核對 | purity.stdout/.stderr、purity-audit.json |
+
+第一個mutations run同樣27/27通過；new M25原descriptor只寫failure prefix，實際先觸發TZ_CREATE_CONFLICT_NO_PROMOTION。只將新增descriptor改成exact CHECK名稱，未改或弱化assertion，受影響mutation group完整重跑如上。旧20個controls未移除或改寫。所有命令、exit、tooling/source hashes與fresh/reused來源在E/command-ledger.json。後續diff／encoding／secret／frozen/stage/commit與postcommit proof由最終報告提供，不以未執行gate預填PASS。
+
+下表是完整59項comparison；歷史是原independent驗收individual outputs，修正前另fresh重現三項失敗，修正後全部fresh執行。**本59-probe集合new failed=0**，不擴稱478-suite或全平台differential。主結論／identity／scope已寫入本文件，不只指向/tmp。
+
+| Probe ID | Historical acceptance | Fresh corrective execution |
+|---|---|---|
+| A_DST_travel_America_New_York | PASS（output維持相同） | PASS |
+| A_DST_travel_Asia_Tokyo | PASS（output維持相同） | PASS |
+| A_boundary_free_after | PASS（output維持相同） | PASS |
+| A_boundary_free_before | PASS（output維持相同） | PASS |
+| A_boundary_free_exact | PASS（output維持相同） | PASS |
+| A_boundary_paid_after | PASS（output維持相同） | PASS |
+| A_boundary_paid_before | PASS（output維持相同） | PASS |
+| A_boundary_paid_exact | PASS（output維持相同） | PASS |
+| A_cross_year | PASS（output維持相同） | PASS |
+| A_edit_does_not_reset | PASS（output維持相同） | PASS |
+| A_offset_minus05 | PASS（output維持相同） | PASS |
+| A_offset_plus08 | PASS（output維持相同） | PASS |
+| A_repeat_upgrade | PASS（output維持相同） | PASS |
+| A_upgrade_after | PASS（output維持相同） | PASS |
+| A_upgrade_before | PASS（output維持相同） | PASS |
+| A_upgrade_exact | PASS（output維持相同） | PASS |
+| B_downgrade | PASS（output維持相同） | PASS |
+| B_expired_paid | PASS（output維持相同） | PASS |
+| B_no_resurrection_collapsed | PASS（output維持相同） | PASS |
+| B_no_resurrection_deleted | PASS（output維持相同） | PASS |
+| B_paid_no_history | PASS（output維持相同） | PASS |
+| B_resubscribe | PASS（output維持相同） | PASS |
+| C_month_boundary_2026-01 | PASS（output維持相同） | PASS |
+| C_month_boundary_2026-02 | PASS（output維持相同） | PASS |
+| C_month_promote | PASS（output維持相同） | PASS |
+| C_month_promote_persisted | PASS（output維持相同） | PASS |
+| C_pending_backward_month_boundary | PASS（output維持相同） | PASS |
+| C_permanent_free | PASS（output維持相同） | PASS |
+| C_permanent_paid | PASS（output維持相同） | PASS |
+| C_six_months_2025-07 | PASS（output維持相同） | PASS |
+| C_six_months_2025-08 | PASS（output維持相同） | PASS |
+| C_six_months_2026-01 | PASS（output維持相同） | PASS |
+| C_zone_new_version_preserves_history | PASS（output維持相同） | PASS |
+| D_acquisition_zone_version_conflict | FAIL（timezone矛盾） | PASS |
+| D_binding_collision | PASS（output維持相同） | PASS |
+| D_core_denied | PASS（output維持相同） | PASS |
+| D_event_conflict | PASS（output維持相同） | PASS |
+| D_expired_entitlement | PASS（output維持相同） | PASS |
+| D_future_anchor | PASS（output維持相同） | PASS |
+| D_future_event | PASS（output維持相同） | PASS |
+| D_future_grant | PASS（output維持相同） | PASS |
+| D_grant_deadline_conflict | PASS（output維持相同） | PASS |
+| D_grant_month_mismatch | PASS（output維持相同） | PASS |
+| D_illegal_month | PASS（output維持相同） | PASS |
+| D_illegal_zone | PASS（output維持相同） | PASS |
+| D_invalid_time | PASS（output維持相同） | PASS |
+| D_missing_T0 | PASS（output維持相同） | PASS |
+| D_missing_source_revision | PASS（output維持相同） | PASS |
+| D_missing_zone_version | PASS（output維持相同） | PASS |
+| D_policy_version | PASS（output維持相同） | PASS |
+| D_promotion_zone_version_conflict | FAIL（timezone矛盾） | PASS |
+| D_rights_delete | PASS（output維持相同） | PASS |
+| D_same_zone_version_conflict | FAIL（timezone矛盾） | PASS |
+| D_saved_meal_pending | PASS（output維持相同） | PASS |
+| D_stale_current | PASS（output維持相同） | PASS |
+| D_unknown_material | PASS（output維持相同） | PASS |
+| D_unknown_provenance | PASS（output維持相同） | PASS |
+| D_unordered_events | PASS（output維持相同） | PASS |
+| D_wrong_actor | PASS（output維持相同） | PASS |
+
+### 12.4 新增direct controls與mutation failure identities
+
+| New case | 必須保持的behavioral contract | New mutation／指定CHECK |
+|---|---|---|
+| AC17 | 同version同zone visible；historical/active Tokyo或不同identity但同offset的Abidjan矛盾unknown | M21_TZ_CONSISTENCY_BYPASS / TZ_ACTIVE_CONFLICT |
+| AC18 | acquisitionPeriod只一項矛盾仍unknown | M22_TZ_ACQUISITION_BYPASS / TZ_ACQUISITION_CONFLICT |
+| AC19 | incoming promotion矛盾unknown；先有合法v2 promotion後第二fact矛盾也拒絕 | M24_TZ_PROMOTION_BYPASS / TZ_PROMOTION_CONFLICT |
+| AC20 | 已保存promotion矛盾拒絕；acquisition/promotion共享v2彼此矛盾仍拒絕 | M23_TZ_STORED_PROMOTION_BYPASS / TZ_STORED_PROMOTION_CONFLICT |
+| AC21 | Free/Paid create period矛盾不可產生create／永久proposal | M25_TZ_CREATE_BYPASS / TZ_CREATE_CONFLICT_NO_PROMOTION |
+| AC22 | Intl合法aliases通過；不同version變更／create/acquisition/stored promotion通過，不重寫historical binding | M26_TZ_RAW_ALIAS / TZ_EQUIVALENT_ZONE_ALLOWED |
+| AC23 | Tokyo/v1與UTC/v1分屬兩次evaluation可各自通過，重跑deterministic；wildcard拒絕 | M27_TZ_CROSS_CALL_REGISTRY / TZ_CALL_ISOLATED |
+
+每個evaluate wrapper依舊deep-freeze／核對input bytes與purgefalse；negative control先正常setup PASS，確有一個target被改，before/after hashes與raw executed source對應，phase=CANDIDATE_EXECUTED／exit1及實際failed CHECK保存。新count 644／27，不使用歷史525／20冒稱本輪結果。
+
+### 12.5 Current source/test hash bindings（非§11歷史bindings）
+
+| Current exact source/test path | Raw SHA-256 |
+|---|---|
+| `packages/shared/src/domain/consumer-retention/types.ts` | `410b69792efe8a9464162968059bb7e57c21e7130e7a5b31673715d440dea93d` |
+| `packages/shared/src/domain/consumer-retention/policy.ts` | `cd12e822dfa255952a08fa306ff72395966f07cc9830d51bfa1fef3f0b1675b3` |
+| `packages/shared/src/domain/consumer-retention/evaluate.ts` | `ba77da78b21f5ebb1c9d1bd1f1292f72401eb9feffd3424dfc52c22262f97112` |
+| `packages/shared/src/domain/consumer-retention/index.ts` | `d7bca68c68d56b77b0c3aa154b2fe524c5cc5ecffea75ef8a75912886a6de121` |
+| `scripts/consumer-retention-policy-smoke.mjs` | `13ff0d696d61b79eb1dd73a50ef62c2812d4680cf475f47922141e66d4b371be` |
+| `scripts/consumer-retention-policy-mutations.mjs` | `e4f9c226160249785bf157c489a7204f58246c5ac5369891fc06f27fba9715ea` |
+
+本文件不包含自己raw hash或尚未產生的corrective SHA，避免self-hash／循環binding；document hash及成功commit／parent／committed-source核對放最終外部報告。原source ledger及§11历史bindings保留，不將舊f28867a改寫為當時已通過。
+
+### 12.6 Commit／reacceptance及未生效邊界
+
+所有precommit gates通過後，依本輪授權stage exact四檔，核對staged bytes／inventory與scope外frozen entries，再只建立一個local corrective commit：`Fix retention timezone version consistency`。不得amend或第二commit；postcommit必重跑focused三項probes／23-case smoke及必要27 mutations、committed hashes／diffcheck／frozen proof，結果由最終報告記錄，不修改committed bytes補結果。
+
+這是corrective execution，不是獨立reacceptance。**R0-A維持BLOCKED，independent reacceptance PENDING**；完成本機commit與postgates後才可回READY_FOR_R0_A_REACCEPTANCE，不表示local acceptance PASS。PC-2 local acceptance維持通過；法律DRAFT / NOT ACTIVE，activation pending。R0-B/R0-C、R1–R5、quota、照片及其他副本期限、OD-15／TD-10/AU19／P-7與qualifiedreview保持原pending/OPEN。沒有push/fetch/deploy／remoteDB/Auth/Storage／外部設定或法律啟用。

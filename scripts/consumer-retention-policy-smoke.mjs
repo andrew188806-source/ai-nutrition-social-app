@@ -192,6 +192,82 @@ export async function runSmoke(moduleRoot = defaultModuleRoot, outputDirectory, 
     }
     const legacy = fixture(T0, "paid"); delete legacy.input.acquiredGrant; unknown(legacy.input, "HISTORICAL_GRANT_MISSING");
   });
+  function timezoneConflict(input, field, identity) {
+    const r = evaluate(input);
+    eq(r.retentionStatus, "unknown", identity);
+    eq(r.visibilityStatus, "unknown", `${identity}_NOT_VISIBLE`);
+    eq(r.grantTransitionProposal.kind, "pending", `${identity}_NO_PROMOTION`);
+    eq(r.grantTransitionProposal.grant, null, `${identity}_NO_GRANT`);
+    eq(r.reasons[0]?.code, "TIMEZONE_VERSION_CONFLICT", `${identity}_REASON`);
+    eq(r.reasons[0]?.field, field, `${identity}_FIELD`);
+  }
+  register("AC17", () => {
+    const normal = fixture(day(10), "free", "monthly");
+    eq(evaluate(normal.input).visibilityStatus, "visible", "TZ_SAME_VERSION_SAME_ZONE");
+    for (const zone of ["Asia/Tokyo", "Africa/Abidjan"]) {
+      const f = fixture(day(10), "free", "monthly"); f.input.activeReportPeriod.value.timezone = zone;
+      // Africa/Abidjan and UTC share this instant's offset, but are not aliases.
+      timezoneConflict(f.input, "activeReportPeriod", "TZ_ACTIVE_CONFLICT");
+    }
+  });
+  register("AC18", () => {
+    const f = fixture(day(10), "free", "monthly"); f.input.acquiredGrant.value.acquisitionPeriod.timezone = "Asia/Tokyo";
+    timezoneConflict(f.input, "grant.acquisitionPeriod", "TZ_ACQUISITION_CONFLICT");
+  });
+  register("AC19", () => {
+    const f = fixture(day(10), "free", "monthly");
+    f.input.action = { kind: "upgrade", events: [event(f, day(1), "tz-promotion", { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v1" })] };
+    timezoneConflict(f.input, "event.reportPeriod", "TZ_PROMOTION_CONFLICT");
+    const multiple = fixture(day(10), "free", "monthly");
+    multiple.input.action = { kind: "upgrade", events: [
+      event(multiple, day(1), "tz-first", { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v2" }),
+      event(multiple, day(2), "tz-second", { monthKey: "2026-10", timezone: "UTC", timezoneVersion: "zone-v2" })
+    ] };
+    timezoneConflict(multiple.input, "event.reportPeriod", "TZ_LATER_FACT_CONFLICT");
+  });
+  register("AC20", () => {
+    for (const otherVersion of [false, true]) {
+      const f = fixture(day(10), "free", "monthly"); const g = f.input.acquiredGrant.value; g.permanent = true;
+      if (otherVersion) g.acquisitionPeriod = { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v2" };
+      g.promotion = { eventId: "tz-stored", at: day(1), tier: "paid", reportPeriod: { monthKey: "2026-10", timezone: otherVersion ? "UTC" : "Asia/Tokyo", timezoneVersion: otherVersion ? "zone-v2" : "zone-v1" } };
+      timezoneConflict(f.input, "grant.promotion.reportPeriod", "TZ_STORED_PROMOTION_CONFLICT");
+    }
+  });
+  register("AC21", () => {
+    for (const tier of ["free", "paid"]) {
+      const f = fixture(day(10), tier, "monthly"); delete f.input.acquiredGrant;
+      f.input.action = { kind: "create", newResource: true, acquisition: f.fact({ eventId: "tz-created", at: T0, tier }), reportPeriod: { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v1" } };
+      timezoneConflict(f.input, "action.reportPeriod", "TZ_CREATE_CONFLICT");
+    }
+  });
+  register("AC22", () => {
+    for (const alias of ["Etc/UTC", "Etc/GMT", "GMT"]) {
+      const f = fixture(day(10), "free", "monthly"); f.input.activeReportPeriod.value.timezone = alias; f.input.acquiredGrant.value.acquisitionPeriod.timezone = alias;
+      f.input.action = { kind: "upgrade", events: [event(f, day(1), "tz-alias", { monthKey: "2026-10", timezone: alias, timezoneVersion: "zone-v1" })] };
+      const r = evaluate(f.input); eq(r.retentionStatus, "within_acquired_term", "TZ_EQUIVALENT_ZONE_ALLOWED");
+      eq(r.grantTransitionProposal.kind, "promote", "TZ_ALIAS_PROMOTION"); eq(r.monthBinding, f.input.monthBinding.value, "TZ_ALIAS_NO_REWRITE");
+    }
+    const changed = fixture(day(10), "free", "monthly"); changed.input.activeReportPeriod.value = { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v2" };
+    changed.input.action = { kind: "upgrade", events: [event(changed, day(1), "tz-changed", { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v2" })] };
+    const result = evaluate(changed.input); eq(result.visibilityStatus, "visible", "TZ_DIFFERENT_VERSION_ALLOWED"); eq(result.grantTransitionProposal.kind, "promote", "TZ_CHANGED_VERSION_PROMOTION"); eq(result.monthBinding, changed.input.monthBinding.value, "TZ_CHANGED_NO_REWRITE");
+    const persisted = fixture(day(10), "free", "monthly"); persisted.input.acquiredGrant.value = structuredClone(result.grantTransitionProposal.grant);
+    eq(evaluate(persisted.input).retentionStatus, "permanent", "TZ_CHANGED_STORED_PROMOTION");
+    const created = fixture(day(10), "paid", "monthly"); delete created.input.acquiredGrant;
+    created.input.action = { kind: "create", newResource: true, acquisition: created.fact({ eventId: "tz-create-v2", at: T0, tier: "paid" }), reportPeriod: { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v2" } };
+    eq(evaluate(created.input).grantTransitionProposal.kind, "create", "TZ_CHANGED_CREATE");
+    const acquired = fixture(day(10), "paid", "monthly"); acquired.input.acquiredGrant.value.acquisitionPeriod = { monthKey: "2026-10", timezone: "Asia/Tokyo", timezoneVersion: "zone-v2" };
+    eq(evaluate(acquired.input).retentionStatus, "permanent", "TZ_CHANGED_ACQUISITION");
+  });
+  register("AC23", () => {
+    const tokyo = fixture(day(10), "free", "monthly");
+    tokyo.input.monthBinding.value.timezone = "Asia/Tokyo"; tokyo.input.acquiredGrant.value.timezone = "Asia/Tokyo";
+    tokyo.input.acquiredGrant.value.acquisitionPeriod.timezone = "Asia/Tokyo"; tokyo.input.activeReportPeriod.value.timezone = "Asia/Tokyo";
+    const first = evaluate(tokyo.input); eq(first.visibilityStatus, "visible", "TZ_CALL_ISOLATED");
+    const utc = fixture(day(10), "free", "monthly"); eq(evaluate(utc.input).visibilityStatus, "visible", "TZ_CALL_ISOLATED");
+    eq(evaluate(tokyo.input), first, "TZ_DETERMINISTIC_AFTER_OTHER_CALL");
+    const invalid = fixture(day(10), "free", "monthly"); invalid.input.activeReportPeriod.value.timezone = "*";
+    unknown(invalid.input, "INVALID_REPORT_PERIOD");
+  });
   for (const [id, test] of cases) {
     observations = []; let message = null, stack = null;
     try { await test(); } catch (error) { message = String(error); stack = error.stack ?? null; }

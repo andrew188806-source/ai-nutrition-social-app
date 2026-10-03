@@ -36,6 +36,13 @@ if (setup.exitCode !== 0 || setup.phase !== "CANDIDATE_EXECUTED") {
     ["M17_REMAP_HISTORY", "evaluate.ts", "monthBinding: binding ? { ...binding } : null", "monthBinding: binding ? { ...binding, timezone: active!.timezone, timezoneVersion: active!.timezoneVersion } : null", "AC13", "CHECK_FAILED:HISTORICAL_ZONE_IMMUTABLE"]
     ,["M19_RAW_EVENT_IDENTITY", "evaluate.ts", 'return JSON.stringify([value.eventId, iso(time(value.at, "event.at")), value.tier, value.reportPeriod?.monthKey ?? null, value.reportPeriod?.timezone ?? null, value.reportPeriod?.timezoneVersion ?? null]);', "return JSON.stringify(value);", "AC07", "CHECK_FAILED:EQUIVALENT_UPGRADE_REPLAY"]
     ,["M20_RAW_DEADLINE", "evaluate.ts", 'retainedUntil: acquired?.kind === "detail" ? iso(time(acquired.retainedUntil, "grant.retainedUntil")) : null', 'retainedUntil: acquired?.kind === "detail" ? acquired.retainedUntil : null', "AC02", "CHECK_FAILED:DEADLINE_OFFSET_CANONICAL"]
+    ,["M21_TZ_CONSISTENCY_BYPASS", "evaluate.ts", "requireFact(previous === undefined || previous === canonical, \"TIMEZONE_VERSION_CONFLICT\", field);", "requireFact(true, \"TIMEZONE_VERSION_CONFLICT\", field);", "AC17", "CHECK_FAILED:TZ_ACTIVE_CONFLICT"]
+    ,["M22_TZ_ACQUISITION_BYPASS", "evaluate.ts", "bindTimezone(g.acquisitionPeriod, \"grant.acquisitionPeriod\");", "", "AC18", "CHECK_FAILED:TZ_ACQUISITION_CONFLICT"]
+    ,["M23_TZ_STORED_PROMOTION_BYPASS", "evaluate.ts", "bindTimezone(g.promotion.reportPeriod, \"grant.promotion.reportPeriod\");", "", "AC20", "CHECK_FAILED:TZ_STORED_PROMOTION_CONFLICT"]
+    ,["M24_TZ_PROMOTION_BYPASS", "evaluate.ts", "bindTimezone(u.reportPeriod, \"event.reportPeriod\");", "", "AC19", "CHECK_FAILED:TZ_PROMOTION_CONFLICT"]
+    ,["M25_TZ_CREATE_BYPASS", "evaluate.ts", "bindTimezone(input.action.reportPeriod, \"action.reportPeriod\");", "", "AC21", "CHECK_FAILED:TZ_CREATE_CONFLICT_NO_PROMOTION"]
+    ,["M26_TZ_RAW_ALIAS", "evaluate.ts", "const canonical = new Intl.DateTimeFormat(\"en-US\", { timeZone: value.timezone }).resolvedOptions().timeZone;", "const canonical = value.timezone;", "AC22", "CHECK_FAILED:TZ_EQUIVALENT_ZONE_ALLOWED"]
+    ,["M27_TZ_CROSS_CALL_REGISTRY", "evaluate.ts", "const zoneByVersion = new Map<string, string>();", "const zoneByVersion = ((evaluateConsumerRetention as unknown as { zones?: Map<string, string> }).zones ??= new Map<string, string>());", "AC23", "CHECK_FAILED:TZ_CALL_ISOLATED"]
   ];
   const results = [];
   for (const [id, file, before, after, caseId, failure] of controls) {
