@@ -1,14 +1,40 @@
 -- R0-B inactive storage only. No runtime producer, capture, backfill or effective grant.
 BEGIN;
--- PG17 non-superuser CREATEROLE creates an irrevocable-by-creator ADMIN membership.
--- Require a trusted DDL administrator; never leave that membership or widen runtime rights.
+-- Native authenticated database owner + CREATEROLE, or native superuser.
+-- Role names and caller settings do not confer deployment authority.
 DO $$ BEGIN
- IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = current_user AND rolsuper) THEN
-  RAISE EXCEPTION 'RETENTION_SEALED_OWNER_REQUIRES_DDL_ADMIN' USING ERRCODE='42501';
+ IF current_user <> session_user OR NOT EXISTS (
+  SELECT 1 FROM pg_catalog.pg_roles r
+  JOIN pg_catalog.pg_database d ON d.datname = pg_catalog.current_database()
+  WHERE r.rolname = current_user AND r.rolcanlogin
+    AND (r.rolsuper OR (r.oid = d.datdba AND r.rolcreaterole))
+ ) THEN
+  RAISE EXCEPTION 'RETENTION_DDL_ACTOR_NOT_AUTHORIZED' USING ERRCODE='42501';
  END IF;
 END $$;
+-- Built-in data rights are implicit and cannot be revoked as ordinary ACL entries.
+-- Treat every non-superuser principal's membership as an execution prerequisite.
+DO $$ BEGIN
+ IF EXISTS (
+  SELECT 1 FROM pg_catalog.pg_roles r
+  WHERE NOT r.rolsuper AND r.rolname NOT IN ('pg_read_all_data','pg_write_all_data')
+    AND (pg_catalog.pg_has_role(r.oid,'pg_read_all_data','MEMBER')
+      OR pg_catalog.pg_has_role(r.oid,'pg_write_all_data','MEMBER'))
+ ) THEN
+  RAISE EXCEPTION 'RETENTION_PREDEFINED_DATA_MEMBERSHIP_UNSAFE' USING ERRCODE='42501';
+ END IF;
+END $$;
+-- Disposable builder owns no SQL objects. Its bootstrap ADMIN edge dies on DROP ROLE.
+CREATE ROLE consumer_retention_ddl_builder NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB CREATEROLE NOBYPASSRLS;
+DO $$ BEGIN
+ EXECUTE pg_catalog.format('GRANT consumer_retention_ddl_builder TO %I WITH INHERIT FALSE, SET TRUE',session_user);
+END $$;
+SET LOCAL ROLE consumer_retention_ddl_builder;
 CREATE ROLE consumer_retention_foundation_owner NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-GRANT consumer_retention_foundation_owner TO postgres WITH INHERIT TRUE, SET TRUE;
+DO $$ BEGIN
+ EXECUTE pg_catalog.format('GRANT consumer_retention_foundation_owner TO %I WITH INHERIT TRUE, SET TRUE',session_user);
+END $$;
+RESET ROLE;
 CREATE SCHEMA retention_internal AUTHORIZATION consumer_retention_foundation_owner;
 ALTER DEFAULT PRIVILEGES FOR ROLE consumer_retention_foundation_owner IN SCHEMA retention_internal REVOKE ALL ON TABLES FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES FOR ROLE consumer_retention_foundation_owner IN SCHEMA retention_internal REVOKE ALL ON SEQUENCES FROM PUBLIC;
@@ -176,5 +202,28 @@ BEGIN
   EXECUTE pg_catalog.format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA retention_internal FROM %I',r.rolname);
  END LOOP;
 END $$;
-REVOKE consumer_retention_foundation_owner FROM postgres;
+SET LOCAL ROLE consumer_retention_ddl_builder;
+DO $$ BEGIN
+ EXECUTE pg_catalog.format('REVOKE consumer_retention_foundation_owner FROM %I',session_user);
+END $$;
+RESET ROLE;
+DROP ROLE consumer_retention_ddl_builder;
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles r
+   ON r.oid IN (m.roleid,m.member,m.grantor) WHERE r.rolname = 'consumer_retention_foundation_owner') THEN
+  RAISE EXCEPTION 'RETENTION_SEALED_OWNER_MEMBERSHIP_RESIDUE' USING ERRCODE='42501';
+ END IF;
+END $$;
+-- Built-in data rights are implicit and cannot be revoked as ordinary ACL entries.
+-- Treat every non-superuser principal's membership as an execution prerequisite.
+DO $$ BEGIN
+ IF EXISTS (
+  SELECT 1 FROM pg_catalog.pg_roles r
+  WHERE NOT r.rolsuper AND r.rolname NOT IN ('pg_read_all_data','pg_write_all_data')
+    AND (pg_catalog.pg_has_role(r.oid,'pg_read_all_data','MEMBER')
+      OR pg_catalog.pg_has_role(r.oid,'pg_write_all_data','MEMBER'))
+ ) THEN
+  RAISE EXCEPTION 'RETENTION_PREDEFINED_DATA_MEMBERSHIP_UNSAFE' USING ERRCODE='42501';
+ END IF;
+END $$;
 COMMIT;

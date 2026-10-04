@@ -103,11 +103,134 @@ export async function structure(c,rec){
   const acl=(await rec.query(c,`select r.rolname,has_schema_privilege(r.oid,'retention_internal','USAGE') usage,has_schema_privilege(r.oid,'retention_internal','CREATE') "create",
  exists(select 1 from pg_class c where c.relnamespace='retention_internal'::regnamespace and (has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))) tables,
  exists(select 1 from pg_proc p where p.pronamespace='retention_internal'::regnamespace and has_function_privilege(r.oid,p.oid,'EXECUTE')) functions
- from pg_roles r where not r.rolsuper and r.rolname not like 'pg_%' and r.rolname<>$1 order by 1`,[OWNER])).rows;
+ from pg_roles r where not r.rolsuper and r.rolname not in ('pg_read_all_data','pg_write_all_data') and r.rolname<>$1 order by 1`,[OWNER])).rows;
   const schema=(await rec.query(c,"select pg_get_userbyid(nspowner) owner,nspacl from pg_namespace where nspname='retention_internal'")).rows;
   const sequences=(await rec.query(c,"select relname from pg_class where relnamespace='retention_internal'::regnamespace and relkind='S'")).rows;
   const constraints=(await rec.query(c,"select c.conrelid::regclass::text relation,c.conname,pg_get_constraintdef(c.oid) definition from pg_constraint c where c.connamespace='retention_internal'::regnamespace order by 1,2")).rows;const columns=(await rec.query(c,"select c.relname,a.attname,format_type(a.atttypid,a.atttypmod) type,a.attnotnull,a.attgenerated,pg_get_expr(d.adbin,d.adrelid) expression from pg_attribute a join pg_class c on c.oid=a.attrelid left join pg_attrdef d on d.adrelid=c.oid and d.adnum=a.attnum where c.relnamespace='retention_internal'::regnamespace and c.relkind='r' and a.attnum>0 and not a.attisdropped order by 1,a.attnum")).rows;const triggers=(await rec.query(c,"select c.relname,t.tgname,pg_get_triggerdef(t.oid) definition from pg_trigger t join pg_class c on c.oid=t.tgrelid where c.relnamespace='retention_internal'::regnamespace and not t.tgisinternal order by 1,2")).rows;return {tables,functions,role,memberships,policies,acl,schema,sequences,constraints,columns,triggers};
 }
+
+export const BUILDER = 'consumer_retention_ddl_builder';
+export const ACCEPTED = '26f9a136da4dc484e60a97828803f8c942452c62';
+export async function rolePaths(c,rec){
+  const matrix=(await rec.query(c,`select r.rolname,r.rolsuper,r.rolinherit,r.rolcanlogin,r.rolbypassrls,
+ pg_has_role(r.oid,'pg_read_all_data','MEMBER') read_member,pg_has_role(r.oid,'pg_read_all_data','USAGE') read_inherit,pg_has_role(r.oid,'pg_read_all_data','SET') read_set,
+ pg_has_role(r.oid,'pg_write_all_data','MEMBER') write_member,pg_has_role(r.oid,'pg_write_all_data','USAGE') write_inherit,pg_has_role(r.oid,'pg_write_all_data','SET') write_set
+ from pg_roles r order by r.rolname`)).rows;
+  const edges=(await rec.query(c,'select pg_get_userbyid(roleid) role,pg_get_userbyid(member) member,pg_get_userbyid(grantor) grantor,admin_option,inherit_option,set_option from pg_auth_members order by 1,2,3')).rows;
+  const switchBypass=(await rec.query(c,`select a.rolname actor,b.rolname execution_role,
+ pg_has_role(a.oid,b.oid,'USAGE') inherited,pg_has_role(a.oid,b.oid,'SET') switchable,
+ pg_has_role(b.oid,'pg_read_all_data','USAGE') read_inherit,pg_has_role(b.oid,'pg_write_all_data','USAGE') write_inherit
+ from pg_roles a cross join pg_roles b where not a.rolsuper and b.rolbypassrls and pg_has_role(a.oid,b.oid,'SET') order by 1,2`)).rows;
+  return {matrix,edges,switchBypass};
+}
+export const unsafeDataMembers = rows => rows.filter(r=>!r.rolsuper&&!['pg_read_all_data','pg_write_all_data'].includes(r.rolname)&&(r.read_member||r.write_member));
+export async function dataRoleBehavior(c,rec){
+  const paths=await rolePaths(c,rec),access=[];
+  // Catalog membership is a conservative prerequisite, not proof of immediate access.
+  // Probe both the native BYPASS actor and each distinct switchable data-bearing BYPASS identity.
+  const targets=[{actor:'service_role',execution_role:'service_role'},...paths.switchBypass.filter(r=>r.actor==='authenticated'&&(r.read_inherit||r.write_inherit))];
+  for(const target of targets){
+    const observation=await isolated(c,rec,async()=>{
+      await rec.query(c,`set local session authorization "${target.actor}"`);
+      if(target.actor!==target.execution_role)await rec.query(c,`set local role "${target.execution_role}"`);
+      const q=async(sql,values=[])=>{await rec.query(c,'SAVEPOINT access_probe');let result;try{const r=await rec.query(c,sql,values);result={rowCount:r.rowCount,rows:r.rows};}catch(e){result={sqlstate:e.code,error:e.message};}await rec.query(c,'ROLLBACK TO SAVEPOINT access_probe');await rec.query(c,'RELEASE SAVEPOINT access_probe');return result;};
+      return {target,read:await q('select * from retention_internal.owner_authority_state'),write:await q("insert into retention_internal.owner_authority_state values($1,0,'inactive','unknown',null)",[uuid(999)])};
+    });access.push(observation);
+  }
+  return {pass:unsafeDataMembers(paths.matrix).length===0,observed:paths.matrix,edges:paths.edges,switchBypass:paths.switchBypass,access};
+}
+export async function predefinedControls(c,rec){
+  const before=await privateRows(c,rec),paths=await rolePaths(c,rec);
+  rec.check('F1_NORMAL_MEMBERSHIP_SAFE',TABLES.every(t=>before[t].length>0)&&unsafeDataMembers(paths.matrix).length===0,{fixtures:before,paths});
+  const capabilities=(await rec.query(c,`select r.rolname,has_schema_privilege(r.oid,'retention_internal','USAGE') usage,has_schema_privilege(r.oid,'retention_internal','CREATE') "create",
+ bool_and(has_table_privilege(r.oid,t.oid,'SELECT')) read_all,bool_and(has_table_privilege(r.oid,t.oid,'INSERT,UPDATE,DELETE')) write_all,
+ bool_or(has_table_privilege(r.oid,t.oid,'TRUNCATE')) truncate_any,
+ exists(select 1 from pg_proc p where p.pronamespace='retention_internal'::regnamespace and has_function_privilege(r.oid,p.oid,'EXECUTE')) functions
+ from pg_roles r cross join pg_class t where r.rolname in ('pg_read_all_data','pg_write_all_data') and t.relnamespace='retention_internal'::regnamespace and t.relkind='r' group by r.oid,r.rolname order by 1`)).rows;
+  rec.check('F1_BUILTIN_NATURAL_PRIVILEGES',capabilities.length===2&&capabilities.every(v=>v.usage&&!v.create&&!v.truncate_any&&!v.functions&&(v.rolname==='pg_read_all_data'?v.read_all&&!v.write_all:v.write_all&&!v.read_all)),capabilities);
+  const results=[];
+  for(const role of ['pg_read_all_data','pg_write_all_data',OWNER])for(const table of TABLES){
+    const row=before[table][0].row,keys=Object.keys(row).filter(k=>k!=='creation_resource_id');
+    const result=await isolated(c,rec,async()=>{
+      await rec.query(c,`set local role ${role}`);
+      const attempt=async(sql,values=[])=>{await rec.query(c,'SAVEPOINT builtin_probe');let v;try{const a=await rec.query(c,sql,values);v={rowCount:a.rowCount,rows:a.rows};}catch(e){v={sqlstate:e.code,error:e.message};}await rec.query(c,'ROLLBACK TO SAVEPOINT builtin_probe');await rec.query(c,'RELEASE SAVEPOINT builtin_probe');return v;};
+      return {role,table,select:await attempt(`select * from retention_internal.${table}`),insert:await attempt(`insert into retention_internal.${table} (${keys}) values(${keys.map((_,i)=>'$'+(i+1))})`,keys.map(k=>row[k])),update:await attempt(`update retention_internal.${table} set ${keys[0]}=${keys[0]}`),delete:await attempt(`delete from retention_internal.${table}`),truncate:role===OWNER?null:await attempt(`truncate retention_internal.${table}`)};
+    });results.push(result);
+  }
+  const invisible=v=>v.sqlstate==='42501'||v.rowCount===0;
+  rec.check('F1_NONEMPTY_FORCE_RLS',results.every(v=>invisible(v.select)&&v.insert.sqlstate==='42501'&&invisible(v.update)&&invisible(v.delete)&&(v.truncate===null||v.truncate.sqlstate==='42501')),results);
+  rec.check('F1_BUILTIN_ROLLBACK_PARITY',JSON.stringify(before)===JSON.stringify(await privateRows(c,rec)),before);
+  const b=await dataRoleBehavior(c,rec);rec.check('F1_DATA_MEMBERSHIP_SAFE',b.pass,b);
+}
+export async function authorityControls(bin,rec){
+  // All clone mutations below live only in this disposable cluster. No target DSN is accepted.
+  const cl=await cluster(bin,rec);const opened=[];
+  try{
+    const base=await baseline(cl,rec);await base.end();cl.clients.delete(base);await cl.admin.end();cl.clients.delete(cl.admin);cl.admin=await cl.connect('template1');
+    const sql=fs.readFileSync(path.join(ROOT,'supabase/migrations',MIGRATION),'utf8');
+    const previous=child.spawnSync('git',['show',`${ACCEPTED}:supabase/migrations/${MIGRATION}`],{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(previous.status!==0)throw Error('ACCEPTED_SOURCE_UNAVAILABLE');
+    const old=previous.stdout;if(sha(old)!=='2eb6cc69865de7b01b98556de710a72ef0d8e0347755dec9725fb2c5d1d512ea')throw Error('ACCEPTED_SOURCE_HASH');
+    const storage=v=>v.slice(v.indexOf('CREATE SCHEMA retention_internal'),v.indexOf('\n',v.indexOf('END $$;',v.indexOf('-- Revoke even grants')))+1);
+    rec.check('F2_STORAGE_BODY_IDENTICAL',storage(old)===storage(sql),{acceptedSha256:sha(old),candidateSha256:sha(sql),storageSha256:sha(storage(sql))});
+    let ordinal=0,oldStructure,oldRows;
+    async function clone(label,fn){
+      const name=`retention_authority_${ordinal++}`;await rec.query(cl.admin,`create database ${name} template postgres owner postgres`);
+      const admin=await cl.connect(name),native=await cl.connect(name,'postgres');opened.push(admin,native);
+      try{return await fn({admin,native,name});}
+      finally{
+        for(const c of [admin,native]){await c.end();cl.clients.delete(c);}
+        await rec.query(cl.admin,`drop database ${name}`);
+        for(const role of [OWNER,BUILDER,'retention_ordinary_creator','retention_ddl_manager'])if((await rec.query(cl.admin,'select exists(select 1 from pg_roles where rolname=$1) present',[role])).rows[0].present)await rec.query(cl.admin,`drop role ${role}`);
+      }
+    }
+    const errorOf=async(c,source)=>{try{await apply(c,rec,source);return null;}catch(e){return {code:e.code,message:e.message};}};
+    await clone('original',async({admin,native})=>{
+      const denied=await errorOf(native,old);rec.check('F2_ORIGINAL_NATIVE_REFUSAL',denied?.code==='42501'&&denied.message==='RETENTION_SEALED_OWNER_REQUIRES_DDL_ADMIN',denied);
+      await apply(admin,rec,old);oldStructure=await structure(admin,rec);await graph(admin,rec);oldRows=await privateRows(admin,rec);rec.write('accepted-storage.json',{structure:oldStructure,rows:oldRows});
+    });
+    await clone('native',async({admin,native})=>{
+      const before=await snapshot(admin,rec);await apply(native,rec,sql);const after=await snapshot(admin,rec),st=await structure(admin,rec);
+      const absent=(await rec.query(admin,'select not exists(select 1 from pg_roles where rolname=$1) absent',[BUILDER])).rows[0].absent;
+      await graph(admin,rec);const rows=await privateRows(admin,rec);
+      rec.check('F2_NATIVE_NONSUPER_SUCCESS',absent&&st.memberships.length===0&&JSON.stringify(before)===JSON.stringify(after),{actor:(await rec.query(native,'select current_user,session_user')).rows,structure:st,scopeParity:JSON.stringify(before)===JSON.stringify(after),builderAbsent:absent});
+      await predefinedControls(admin,rec);
+      rec.check('F2_STORAGE_DIFFERENTIAL',JSON.stringify(oldStructure)===JSON.stringify(st)&&JSON.stringify(oldRows)===JSON.stringify(rows),{oldStructure,st,oldRows,rows});
+      const denied=[];for(const text of [`grant ${OWNER} to postgres`,`alter role ${OWNER} login`,'select * from retention_internal.owner_authority_state','drop schema retention_internal cascade']){try{await rec.query(native,text);denied.push({text,accepted:true});}catch(e){denied.push({text,code:e.code,message:e.message});}}
+      rec.check('F2_POSTSEAL_ACTOR_DENIED',denied.every(v=>v.code==='42501'),denied);
+      const beforeRetry=await snapshot(admin,rec),retry=await errorOf(native,sql),afterRetry=await snapshot(admin,rec);
+      rec.check('F2_REENTRY_NO_ADOPTION',retry?.code==='42710'&&JSON.stringify(beforeRetry)===JSON.stringify(afterRetry)&&JSON.stringify(rows)===JSON.stringify(await privateRows(admin,rec))&&!(await rec.query(admin,'select exists(select 1 from pg_roles where rolname=$1) present',[BUILDER])).rows[0].present,{retry,beforeRetry,afterRetry});
+    });
+    await clone('super',async({admin})=>{await apply(admin,rec,sql);const st=await structure(admin,rec);rec.check('F2_NATIVE_SUPER_COMPATIBLE',st.memberships.length===0&&JSON.stringify(st)===JSON.stringify(oldStructure),st);});
+    await clone('different-name',async({admin,name})=>{
+      await rec.query(cl.admin,'create role retention_ddl_manager login nosuperuser createrole nocreatedb nobypassrls');await rec.query(cl.admin,`alter database ${name} owner to retention_ddl_manager`);
+      const actor=await cl.connect(name,'retention_ddl_manager');try{await apply(actor,rec,sql);}finally{await actor.end();cl.clients.delete(actor);}const st=await structure(admin,rec);rec.check('F2_NATIVE_OTHER_NAME',st.memberships.length===0&&st.role.every(r=>Object.values(r).every(v=>v===false)),st);
+    });
+    await clone('unauthorized',async({admin,name})=>{
+      await rec.query(cl.admin,'create role retention_ordinary_creator login nosuperuser createrole nocreatedb nobypassrls');
+      const actor=await cl.connect(name,'retention_ordinary_creator');try{const error=await errorOf(actor,sql);rec.check('F2_ORDINARY_CREATEROLE_DENIED',error?.code==='42501'&&error.message==='RETENTION_DDL_ACTOR_NOT_AUTHORIZED',error);}finally{await actor.end();cl.clients.delete(actor);}
+      for(const [id,setup] of [['F2_SERVICE_CREATEROLE_DENIED','set local session authorization service_role'],['F2_SET_ROLE_SPOOF_DENIED','set local role postgres'],['F2_CALLER_SETTING_DENIED',"set local session authorization authenticated;set local app.ddl_admin='true'"]]){
+        const result=await isolated(admin,rec,async()=>{if(id==='F2_SERVICE_CREATEROLE_DENIED')await rec.query(admin,'alter role service_role createrole');await rec.query(admin,setup);return rec.reject(admin,sql,[],['42501'],'RETENTION_DDL_ACTOR_NOT_AUTHORIZED');});rec.check(id,result.pass,result);
+      }
+    });
+    const anchors=[['builder-created',`CREATE ROLE ${BUILDER} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB CREATEROLE NOBYPASSRLS;`],['owner-granted',`GRANT ${OWNER} TO %I WITH INHERIT TRUE, SET TRUE',session_user);\nEND $$;`],['storage-built','CREATE TRIGGER immutable_detail BEFORE UPDATE ON retention_internal.detail_grants\n FOR EACH ROW EXECUTE FUNCTION retention_internal.guard_detail_update();'],['builder-dropped',`DROP ROLE ${BUILDER};`]];
+    for(const [label,anchor] of anchors)await clone(label,async({admin,native})=>{
+      if(!sql.includes(anchor))throw Error('FAULT_ANCHOR_MISSING '+label);const before=await snapshot(admin,rec),mutant=sql.replace(anchor,()=>anchor+'\nSELECT 1/0;'),error=await errorOf(native,mutant),after=await snapshot(admin,rec);
+      const roles=(await rec.query(admin,'select rolname from pg_roles where rolname in ($1,$2)',[OWNER,BUILDER])).rows;const schema=(await rec.query(admin,"select to_regnamespace('retention_internal') is null absent")).rows[0].absent;
+      rec.check('F2_ROLLBACK_'+label.toUpperCase().replaceAll('-','_'),error?.code==='22012'&&schema&&roles.length===0&&JSON.stringify(before)===JSON.stringify(after),{error,roles,schema,before,after,normalSha256:sha(sql),mutantSha256:sha(mutant)});
+    });
+    for(const role of [BUILDER,OWNER])await clone('collision',async({admin,native})=>{
+      await rec.query(admin,`create role ${role} nologin`);const existing=(await rec.query(admin,'select oid,rolname,rolcanlogin,rolcreaterole from pg_roles where rolname=$1',[role])).rows;
+      const before=await snapshot(admin,rec),error=await errorOf(native,sql),after=await snapshot(admin,rec),present=(await rec.query(admin,'select oid,rolname,rolcanlogin,rolcreaterole from pg_roles where rolname=$1',[role])).rows;
+      rec.check('F2_COLLISION_'+(role===BUILDER?'BUILDER':'OWNER'),error?.code==='42710'&&JSON.stringify(existing)===JSON.stringify(present)&&JSON.stringify(before)===JSON.stringify(after)&&(await rec.query(admin,"select to_regnamespace('retention_internal') is null absent")).rows[0].absent,{error,existing,present,before,after});
+    });
+    await clone('unsafe-prerequisite',async({admin,native})=>{
+      await rec.query(admin,'grant pg_read_all_data to service_role with inherit true,set true');const before=await snapshot(admin,rec),error=await errorOf(native,sql),after=await snapshot(admin,rec);const result={error,before,after};await rec.query(admin,'revoke pg_read_all_data from service_role');
+      rec.check('F1_PREAPPLY_UNSAFE_DENIED',result.error?.code==='42501'&&result.error.message==='RETENTION_PREDEFINED_DATA_MEMBERSHIP_UNSAFE'&&JSON.stringify(result.before)===JSON.stringify(result.after),result);
+    });
+    rec.write('result.json',{status:'PASS',exitCode:0,checks:rec.checks.map(c=>({id:c.id,pass:c.pass}))});
+  }finally{await cl.stop();}
+}
+
 export async function event(c,rec,n,{owner=1,resource=100,kind='detail_create',tier='free',at=T0,upstream=String(n),...changes}={}){
   const row={event_id:uuid(n),owner_user_id:uuid(owner),source_namespace:'synthetic-local',upstream_event_id:upstream,event_schema_version:'retention-event-v1',policy_version:VERSION,kind,resource_id:resource===null?null:uuid(resource),effective_at:at,received_at:at,tier,validity:'unknown',semantic_digest:'a'.repeat(64),provenance:'unknown',...changes};
   return insert(c,rec,'authority_events',row);
@@ -125,6 +248,7 @@ export async function graph(c,rec){
 export async function isolated(c,rec,fn){await rec.query(c,'BEGIN');try{return await fn();}finally{await rec.query(c,'ROLLBACK');}}
 export async function rejectInsert(c,rec,table,row,codes=['23514'],message){return isolated(c,rec,async()=>{const keys=Object.keys(row);return rec.reject(c,`insert into retention_internal.${table} (${keys.join(',')}) values (${keys.map((_,i)=>'$'+(i+1)).join(',')})`,Object.values(row),codes,message);});}
 export async function behavior(c,rec,id){
+  if(id==='F1_DATA_MEMBERSHIP_SAFE')return dataRoleBehavior(c,rec);
   if(id==='NO_ROLE_MEMBERSHIP'){const s=await structure(c,rec);const denial=await isolated(c,rec,async()=>{await rec.query(c,'set local session authorization authenticated');return rec.reject(c,`set local role ${OWNER}`,[],['42501']);});return {pass:s.memberships.length===0&&denial.pass,observed:s.memberships,denial};}
   if(id==='RUNTIME_DENY'){const s=await structure(c,rec);return {pass:s.acl.every(r=>!r.usage&&!r.create&&!r.tables&&!r.functions),observed:s.acl};}
   if(id==='RLS_ROWS_HIDDEN')return isolated(c,rec,async()=>{await rec.query(c,'grant usage on schema retention_internal to authenticated;grant select on retention_internal.owner_authority_state to authenticated;set local role authenticated');const rows=(await rec.query(c,'select * from retention_internal.owner_authority_state')).rows;return {pass:rows.length===0,observed:rows};});
@@ -235,10 +359,10 @@ export async function concurrency(cl,c,rec){
 export async function runSmoke({bin,out}){
   const rec=recorder(out);let cl;
   try{
-    cl=await cluster(bin,rec);const db=await baseline(cl,rec);await apply(cl.admin,rec);rec.check('IF01',true,{migrations:143});
-    let deniedDdl;try{await apply(db,rec);}catch(e){deniedDdl=e;}rec.check('NONADMIN_DDL_DENIED',deniedDdl?.code==='42501'&&deniedDdl.message==='RETENTION_SEALED_OWNER_REQUIRES_DDL_ADMIN',{sqlstate:deniedDdl?.code,error:deniedDdl?.message});const normalStructure=await structure(cl.admin,rec);const beforeRows=await privateRows(cl.admin,rec);rec.check('IF03',Object.values(beforeRows).every(v=>!v.length),beforeRows);
+    cl=await cluster(bin,rec);const db=await baseline(cl,rec);await apply(db,rec);rec.check('IF01',true,{migrations:143,actor:'native postgres NOSUPERUSER / database owner / CREATEROLE'});
+    const deniedDdl=await isolated(cl.admin,rec,async()=>{await rec.query(cl.admin,'set local session authorization service_role');return rec.reject(cl.admin,fs.readFileSync(path.join(ROOT,'supabase/migrations',MIGRATION),'utf8'),[],['42501'],'RETENTION_DDL_ACTOR_NOT_AUTHORIZED');});rec.check('NONADMIN_DDL_DENIED',deniedDdl.pass,deniedDdl);const normalStructure=await structure(cl.admin,rec);const beforeRows=await privateRows(cl.admin,rec);rec.check('IF03',Object.values(beforeRows).every(v=>!v.length),beforeRows);
     rec.check('IF04',normalStructure.tables.length===4&&normalStructure.tables.every(t=>t.owner===OWNER&&t.relrowsecurity&&t.relforcerowsecurity)&&normalStructure.functions.length===2&&normalStructure.functions.every(f=>f.owner===OWNER&&!f.prosecdef&&f.proconfig.includes('search_path=""'))&&normalStructure.role.length===1&&Object.values(normalStructure.role[0]).every(v=>v===false)&&normalStructure.memberships.length===0&&normalStructure.policies.length===0&&normalStructure.acl.every(r=>!r.usage&&!r.create&&!r.tables&&!r.functions)&&normalStructure.schema[0].owner===OWNER&&!normalStructure.sequences.length,normalStructure);
-    await graph(cl.admin,rec);await prepareBehavior(cl.admin,rec);
+    await graph(cl.admin,rec);await prepareBehavior(cl.admin,rec);await predefinedControls(cl.admin,rec);
     const rows=await privateRows(cl.admin,rec);rec.check('IF05',rows.detail_grants.length===3&&rows.detail_grants.every(r=>r.row.provenance==='unknown'&&!r.row.authority_effective)&&rows.operation_receipts.every(r=>!r.row.applied),rows);
     // A normal valid resource must be insertable before its corruption probes.
     await isolated(cl.admin,rec,()=>insert(cl.admin,rec,'detail_grants',grantRow({resource:103,eventId:15})));rec.check('IF06',true,{validUnusedResource:103,rows});
@@ -247,13 +371,13 @@ export async function runSmoke({bin,out}){
     for(const id of ['RUNTIME_DENY','RLS_ROWS_HIDDEN','OWNER_FORCE_DENY','NO_ROLE_MEMBERSHIP','INACTIVE_CANNOT_ACTIVATE','NO_UNVERIFIED_TO_RESOLVED','CROSS_OWNER_REJECT','DEADLINE_EXACT','TERM_NEVER_SHRINKS','T0_NEVER_REBINDS','EVENT_CONTENT_IMMUTABLE']){const result=await behavior(cl.admin,rec,id);rec.check(id,result.pass,result);}
     await negatives(cl.admin,rec);await concurrency(cl,cl.admin,rec);await unknownBoundary(rec);await cl.stop();cl=null;
     const upgrade=recorder(path.join(out,'upgrade'));cl=await cluster(bin,upgrade);const upgradeDb=await baseline(cl,upgrade,{legacy:true});const compatibilityBefore=await compatibility(cl.admin,upgrade),before=await snapshot(cl.admin,upgrade);upgrade.write('before.json',before);
-    await apply(cl.admin,upgrade);const after=await snapshot(cl.admin,upgrade),compatibilityAfter=await compatibility(cl.admin,upgrade);upgrade.write('after.json',after);
+    await apply(upgradeDb,upgrade);const after=await snapshot(cl.admin,upgrade),compatibilityAfter=await compatibility(cl.admin,upgrade);upgrade.write('after.json',after);
     const upgradeStructure=await structure(cl.admin,upgrade);rec.check('IF02',JSON.stringify(before)===JSON.stringify(after)&&JSON.stringify(normalStructure)===JSON.stringify(upgradeStructure),{catalogDataParity:JSON.stringify(before)===JSON.stringify(after),newStructureParity:JSON.stringify(normalStructure)===JSON.stringify(upgradeStructure)});
     const empty=await privateRows(cl.admin,upgrade);rec.check('IF11',JSON.stringify(compatibilityBefore)===JSON.stringify(compatibilityAfter)&&Object.values(compatibilityAfter).every(Boolean)&&Object.values(empty).every(v=>!v.length),{compatibilityBefore,compatibilityAfter,empty});
     await cl.stop();cl=null;
-    const failed=recorder(path.join(out,'ddl-rollback'));cl=await cluster(bin,failed);const failedDb=await baseline(cl,failed);const sql=fs.readFileSync(path.join(ROOT,'supabase/migrations',MIGRATION),'utf8').replace('COMMIT;','SELECT 1/0;\nCOMMIT;');let error;try{await apply(cl.admin,failed,sql);}catch(e){error=e;}
+    const failed=recorder(path.join(out,'ddl-rollback'));cl=await cluster(bin,failed);const failedDb=await baseline(cl,failed);const sql=fs.readFileSync(path.join(ROOT,'supabase/migrations',MIGRATION),'utf8').replace('COMMIT;','SELECT 1/0;\nCOMMIT;');let error;try{await apply(failedDb,failed,sql);}catch(e){error=e;}
     const absence=(await failed.query(cl.admin,"select to_regnamespace('retention_internal') is null schema_absent,not exists(select 1 from pg_roles where rolname=$1) role_absent",[OWNER])).rows[0];rec.check('IF13',error?.code==='22012'&&absence.schema_absent&&absence.role_absent,{sqlstate:error?.code,absence});await cl.stop();cl=null;
-    frozen(rec);const successes=rec.checks.filter(c=>/^IF[0-9]{2}$/.test(c.id)),negativeChecks=rec.checks.filter(c=>/^N[0-9]{2}$/.test(c.id));if(successes.length!==14||negativeChecks.length!==16||[...successes,...negativeChecks].some(c=>!c.pass))throw Error('REQUIRED_GATE_INVENTORY');rec.write('result.json',{status:'PASS',exitCode:0,successes:successes.length,negatives:negativeChecks.length,checks:rec.checks.map(c=>({id:c.id,pass:c.pass}))});return 0;
+    await authorityControls(bin,recorder(path.join(out,'authority-controls')));frozen(rec);const successes=rec.checks.filter(c=>/^IF[0-9]{2}$/.test(c.id)),negativeChecks=rec.checks.filter(c=>/^N[0-9]{2}$/.test(c.id));if(successes.length!==14||negativeChecks.length!==16||[...successes,...negativeChecks].some(c=>!c.pass))throw Error('REQUIRED_GATE_INVENTORY');rec.write('result.json',{status:'PASS',exitCode:0,successes:successes.length,negatives:negativeChecks.length,checks:rec.checks.map(c=>({id:c.id,pass:c.pass}))});return 0;
   }catch(e){const exitCode=classify(e);rec.write('result.json',{status:'BLOCKED',exitCode,error:e.message,stack:e.stack});console.error(e.stack);return exitCode;}finally{if(cl)await cl.stop();}
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){let code;try{code=await runSmoke(options());}catch(e){console.error(e.stack);code=2;}process.exitCode=code;}

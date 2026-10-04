@@ -1,3 +1,5 @@
+> **Current corrective snapshot — 2026-10-04**：本輪僅修正 F2 native DDL authority／temporary builder 與 F1 predefined-role checks。原 R0-B acceptance 保留於 `26f9a136da4dc484e60a97828803f8c942452c62`；本輪 pre-commit gates 的有效逐項證據已齊備，新的 local candidate 尚待 Claude 獨立 reacceptance。§1–13 與下一個 2026-10-03 banner 均是原時點歷史，包含當時 superuser-only 限制；目前契約與 bindings 以 §14 為準。Hosted capabilities／套用歷史仍 pending；沒有 product writer、producer、部署或法律啟用。法律 **DRAFT / NOT ACTIVE**；activation pending。
+
 > **Current implementation snapshot — 2026-10-03**：Owner 已批准 §13.1 的 server 首次成功保存 T0；本輪獲授權實作精確四檔 inactive foundation。Pre-commit local gates 為14成功／16負向／12 mutations PASS；尚不是獨立 acceptance，沒有 runtime capture／entitlement producer、產品顯示、回填或刪除接線。新增 migration 明確要求可信 DDL administrator；非 superuser apply 會 atomic fail closed，不以放寬 runtime 權限處理。§1–12 原 scope review、待批准敘述及 source ledger **逐 bytes 保留為歷史 snapshot**，本輪現況以 §13 為準。Local freeze 與 post-commit 結果另綁外部最終報告，不回寫本文件的歷史執行時點。法律 DRAFT / NOT ACTIVE；activation pending。
 
 # R0-B — Authoritative Retention Persistence Scope Review
@@ -689,3 +691,90 @@ Reused：§10.1 R0-A accepted reacceptance與PC-2 local acceptance、既有Owner
 尚未存在／未證明：canonical capture及entitlement event producers、authenticated真实owner/resource binding、歷史coverage／Free baseline完整性、verified rights/protection sources、monthly grant與timezone registry、grant persistence至正式產品、R0-C顯示／查詢、R1–R5。T0語意已批准；producer／status／rights／後續TZ/月份/quota/照片及copies期限仍各自pending。不能只改mode／provenance constants啟用，需另forward integration migration／受限writers與獨立批准。
 
 NO push/fetch/deploy／remoteDB/Auth/Storage／legal activation；無正式會員fixtures。原roadmap ordering與photo governance/Development evidence兩項歷史conflicts保留；OD-15、TD-10/AU19、P-7仍OPEN。R0-A／PC-2 local acceptance維持通過；法律DRAFT / NOT ACTIVE；activation pending。R0-B僅交**獨立本機驗收**，不是activation readiness。
+
+
+## 14. F2 / F1 — authorized local deployment-authority corrective record（2026-10-04）
+
+### 14.1 Authorization, exact scope and retained history
+
+Owner 的 **R0-B — LOCAL DEPLOYMENT-AUTHORITY CORRECTIVE REMEDIATION** 批准精確四個既有 paths 的修正及一個新的 local corrective commit，不 amend 原 accepted commit。起點 main / HEAD `26f9a136da4dc484e60a97828803f8c942452c62`，parent `3b1957e8dc459db6fdaa06bec873c1acc632ae9a`；本機 origin/main `b70884a013ac67486242fe5d11b9bfad1360032a`，5/0，worktree clean / staged empty。這不是 Hosted rewrite／repair-history／deployment 授權。
+
+| Exact existing path | Current raw SHA-256 / purpose |
+|---|---|
+| `supabase/migrations/20261003062157_consumer_retention_inactive_persistence_foundation.sql` | `8d315af1ee9854dc27e3f374280866636971d68c04633f29a01a44f3b56af956`；F2 native gate／transaction-local builder及F1 pre/postconditions。 |
+| `scripts/consumer-retention-persistence-smoke.mjs` | `b3a238c416920b357a5cdb37d51eb85e9dcd5ce8161a4e83ab1ad05febc18924`；保留原契約，新增實際F1/F2 controls與raw bindings。 |
+| `scripts/consumer-retention-persistence-mutations.mjs` | `9068c2caafe9e250b67fa40aea3fb1a44e49a33b387d285593719d5dca4da742`；保留原契約，新增實際F1/F2 controls與raw bindings。 |
+| `docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md` | 本文件 hash 僅記外部報告；保留原 bytes，prepend current status 與 append §14，無 self-hash。 |
+
+四個變更都是 **M**；無第五個 path、無新 migration。143 個 migrations 中只有本輪第143檔改變，原142檔 immutable；scope 外 **3,341** tracked paths 的 raw bytes／blobs／modes 不變，包含兩個 Demo Pool commits、R0-A、PC-2、產品、dependencies、法律及 registry。Index 原 entries 在 stage 前保持不變；正常 stage / commit 只改這四份 entries，不能要求 index raw hash 提交後仍等於施工前。
+
+原 acceptance `C:\Users\Mufan\acceptance-evidence\r0-b-independent-20261004\ACCEPTANCE_REPORT.md` 為 **R0_B_LOCAL_ACCEPTANCE_PASS at 26f9a13**。12個 key artifact raw hashes已核對；final 18 probes有效，probes-run1 / probes-run2作廢，不計入結果。§13.2–13.5 當時 hashes／SUPER gate／pending acceptance 逐 bytes保留，不把新結果寫回原時點。
+
+Diagnosis `r0-b-deployment-authority-diagnosis-20261004/` 的完整 report、inventory、unapplied patch、632項artifact index與37項有效 observations已核對。37項是 **reused diagnosis evidence**（27 F2 /10 F1），不是本輪新candidate驗證數。SQL patch先在目前source `git apply --check` exit0，再apply；僅將 PROPOSED 註解更新為實際契約。Original storage body從CREATE SCHEMA至object ACL revoke block **exact bytes相同**，實際storage structure／fixtures亦相同。
+
+### 14.2 F2 native authority and transaction-local builder（IMPLEMENTED_AND_EVIDENCED；local only）
+
+Migration 在任何DDL前核對 **current_user=session_user**，catalog中的 native actor 必須 LOGIN，且為 SUPER，或 **當前database owner OID＋CREATEROLE**。這是已批准的 local administrator profile；不依postgres名稱／caller GUC／任意Paid／Client值放行。一般 CREATEROLE、service_role（即使測試賦CREATEROLE）、switched SET ROLE及偽造setting全部 `42501 / RETENTION_DDL_ACTOR_NOT_AUTHORIZED`。
+
+同一 BEGIN / COMMIT：actor建立 NOLOGIN / NOINHERIT / NOSUPERUSER / NOCREATEDB / CREATEROLE / NOBYPASSRLS `consumer_retention_ddl_builder`，僅暫時授SET給native actor。Builder建立原sealed owner，暫時授owner INHERIT / SET給actor；原 storage body由actor完成。Builder撤銷自己授出的owner membership，actor DROP builder，消除PG17 bootstrap ADMIN edge；最後檢查owner作role、member或grantor均零membership。Builder不擁有SQL objects，沒有廣泛 DROP OWNED / REASSIGN OWNED。Quoted role identity取自session catalog，不由caller指定。
+
+成功後builder不存在；owner所有flags false、零memberships、四表 ENABLE / FORCE RLS、零policies、schema/table/function ACL封閉，原 INVOKER guards／empty search_path unchanged。Native actor在seal後不能自grant owner、改owner LOGIN、讀private表或DROP schema（四項42501）。既有同名builder或owner以42710拒絕；OID／attributes保留，不接管或清除。重入不採用既有objects，rollback無builder residue。四個真實22012 fault points（builder建立、owner grant、storage建好、builder drop後）全部scope外catalog/data/roles/default ACL／membership parity，無partial schema/owner/builder。
+
+另一個名稱的 native database owner＋CREATEROLE 與 native SUPER 亦成功；因此不是 role-name allowlist。授權的administrator仍屬database信任邊界，不能把此封閉runtime ACL誤稱可阻止malicious SUPER／未來另案DDL actor改安全設定。
+
+### 14.3 F1 predefined capabilities / membership / INHERIT / SET / BYPASSRLS
+
+不再以 `rolname NOT LIKE 'pg_%'` 略過整批內建角色。一般non-SUPER principals及其 ACL仍必須零runtime private權限；兩個有天然data權限的 `pg_read_all_data` / `pg_write_all_data` 單獨分類，不要求其自然 schema USAGE與data privileges為零。全角色matrix記錄flags及 MEMBER / USAGE(INHERIT) / SET，catalog edges記錄grantor / ADMIN / INHERIT / SET；另列所有可SET到BYPASSRLS identity的path。
+
+Migration前／後兩次保守preflight：除兩個predefined data principals外，任何 non-SUPER principal直接或間接 MEMBER於任一data role，均 `42501 / RETENTION_PREDEFINED_DATA_MEMBERSHIP_UNSAFE`。這包括latent non-inherited path；不宣稱每個MEMBER已洩漏，不自動REVOKE目標grants。未滿足此deployment prerequisite時拒絕，不設provider wildcard exemption。
+
+Operator先證明四表均有coherent synthetic fixtures（2 owner、5 events、3 grants、1 receipt）；再各對read/write builtin及sealed owner，實際 SELECT / INSERT / UPDATE / DELETE，兩data角色另實際TRUNCATE。SELECT / UPDATE / DELETE為0或42501，INSERT為42501，builtin TRUNCATE為42501；owner自然TRUNCATE不受RLS，所以不拿它作FORCE-RLS row判據。Natural read/write privileges存在，private EXECUTE / CREATE / TRUNCATE不由data rights取得。試驗rollback後fixtures exact equality。
+
+| New actual mutation | Expected failure identity / concrete effect |
+|---|---|
+| M13_DIRECT_BYPASS_READ | F1_DATA_MEMBERSHIP_SAFE；service_role直接INHERIT data read，實際讀2 rows。 |
+| M14_DIRECT_BYPASS_WRITE | 同CHECK；直接INHERIT data write，實際INSERT 1 row。 |
+| M15_INDIRECT_BYPASS_READ | 同CHECK；data→bridge→service_role，實際讀2 rows，edges明確存在。 |
+| M16_SET_ONLY_LATENT | 同CHECK；MEMBER=true / INHERIT=false / SET=true，native讀42501，仍拒latent prerequisite，不冒稱已洩漏。 |
+| M17_RUNTIME_SET_BYPASS | 同CHECK；authenticated實際SET到BYPASS data-bearing role，讀2 rows；BYPASS旗標不被誤當可INHERIT。 |
+
+每個normal與mutant實際apply當前SQL到独立clone，填入非空graph，再保存DB observations；獨立child evaluator直接核對catalog／SQLSTATE／behavior，而不是saved pass flag。Normal exit0、mutant exit1、stderr empty；setup/runtime/evaluator異常為BLOCKED，從不算detection。Normal/mutant hashes不同，完整SQL／behavior／evaluator命令保存。所有global role mutations只在disposable cluster；每clone drop自身DB、移除自身測試roles與兩個明確fixture memberships，再比較完整membership catalog（含OIDs／grantor/options）與正常起點相等。
+
+### 14.4 Precise CHECK mapping and valid local gate evidence
+
+| Original CHECK / expectation | Current contract and reason |
+|---|---|
+| NONADMIN_DDL_DENIED：拒絕non-SUPER postgres | Identity保留，但probe改為真正未授權service_role；錯誤42501 RETENTION_DDL_ACTOR_NOT_AUTHORIZED。授權native database-owner＋CREATEROLE則成功；沒有blanket non-SUPER exemption。 |
+| IF01 / IF02 / IF13：candidate原用SUPER apply | 正常fresh143與upgrade142＋candidate改native non-SUPER postgres；DDL rollback亦native。Trusted SUPER相容另外實測。 |
+| IF04 / RUNTIME_DENY / N01 / N02 | 原app ACL／實際denials不弱化，角色掃描擴至非data builtin；predefined naturalrights另分類，全membership／SET paths另測。原runtime roles是新版受測集合的subset。 |
+| M04_MEMBERSHIP_LEAK | 原REVOKE-from-postgres字串anchor消失；改為成功COMMIT後在自身clone由privileged fixture授owner給authenticated，NO_ROLE_MEMBERSHIP仍actual CHECK FAIL。不是postflight setup拒絕冒充detection。 |
+| M01–M03 / M05–M12 | 原 corruption／behavior CHECK／normal0-mutant1 契約保留。 |
+| New F1 / F2 controls | 18個F2＋6個F1 focused checks；另外IF14/N16 frozen proof。 |
+
+**有效逐項 gates 已齊備：14 success /16 negative；原12 mutations＋5 new role-path mutations（17 unique controls）**。不是把中途失敗whole run改標PASS。`precommit-smoke-1` exit1：在IF01–IF13、N01–N15及有效behavior完成後，fault injector的JS replace把 `$$`解成`$`，owner-granted故障SQL以42601 setup失敗。`precommit-mutations-1` exit2：原12及M13有效後，global membership fixture未恢復導致下一normal setup被preflight正確拒絕。兩份raw/result保持原exit；不算那兩個setup失敗為安全detection。
+
+授權scripts內的修正：literal replacement callback保持SQL `$$`，每clone精確membership restoration／parity。`precommit-authority-final` **exit0，26 checks**（18F2 /6F1 /IF14 /N16）；`precommit-mutations-affected` **exit0，6 affected controls**（M04、M13–M17），每clone restoration通過。已有效且邏輯未受後續修改的fresh／upgrade／原12mutation evidence沿用，不重跑整輪。Intermediate執行source從確切保存editor operations重建，raw SHA與tooling/execution hash完全相等，明確標RECONSTRUCTED，而非冒充當時capture的副本；最新focused sources完整bind當前三份bytes。
+
+Full CLI仍可由兩個committed scripts重現14/16與完整17 mutations；programmatic `authorityControls(bin,rec)`與 `runMutations({bin,out,only:[known IDs]})`可重現本輪focused subset。`only`只能選既有control IDs，不開放DSN／remote host；預設ALL_17。Exact CLI沿用§13.4，外部focused runner僅import這些exports，無另外repository harness。
+
+### 14.5 Meaningful differential and frozen evidence
+
+與26f9a13：**22項完整observations exact相等**（IF02、IF03、IF05–IF12；N03–N14），包含constraints／times／unknown outputs／RPC compatibility及data rollback，不是只比PASS數。N01原runtime role集合仍完整涵蓋，原denials及新增denials均42501；N02 escalation亦42501。New native apply與original SUPER apply各在完整142 predecessor clone中實際執行，scope外catalog/data/roles/memberships/default ACL相等，new storage structure與coherent graph exact相等。Original storage body exact bytes相同。Fresh / upgrade authority compatibility保持不變。
+
+**NEW_UNAUTHORIZED_REGRESSION = 0**，範圍限本次F1/F2與targeted authority集合；不宣称478-suite sweep或完整平台acceptance。F3 receipt future-writer binding／F4合法刪除边界不變，未擴成runtime writer或額外immutability承諾。
+
+Tooling：既有 Windows PostgreSQL17.6、Node v24.15.0、pg8.23.0；未安裝／變更dependencies。每次bootstrap／binaries／actual SQL／scripts hash、完整commands/exits/raw SQL observations與mutation artifacts皆在persistent外部目錄。Original37 observations／Claude final18 probes／官方PG17與Supabase docs標REUSED；本轮actual candidate apply／controls／differential／hash/scope checks標FRESH。歷史2026-10-02 Hosted rolsuper=false報告仍僅historical reported observation，不是本輪remote read。
+
+Persistent evidence root：
+
+`/mnt/c/Users/Mufan/.codex/visualizations/2026/09/10/01a08bb5-886f-7e61-bfd3-a34b57cc6a2c/r0-b-deployment-authority-corrective-20261004/`
+
+重要records：`before.json`、`sql-patch-apply-check.json`、`reused-acceptance-bindings.json`、`INTERMEDIATE_SOURCE_PROVENANCE.json`、`PRECOMMIT_GATE_AGGREGATE.json`、`BASELINE_CANDIDATE_DIFFERENTIAL.json`、`precommit-smoke-1/`、`precommit-mutations-1/`、`precommit-authority-final/`、`precommit-mutations-affected/`。提交及post-commit results僅追加外部 `FINAL_CORRECTIVE_REPORT.md` / `EVIDENCE_INDEX.json`，不再改寫本文件bytes或宣稱此pre-commit時點已完成post-commit。
+
+### 14.6 Pending Hosted prerequisites and independent reacceptance
+
+本機模型證明stock PG17.6下的已批准administrator／builder契約，不等同Hosted專案。未核對目標native connection actor、database-owner OID／CREATEROLE／LOGIN、CREATE/DROP ROLE／GRANT/REVOKE／SET能力、管理服務DDL hooks／reserved-role限制、全角色membership prerequisite、目標migration history／partial apply狀態。不能假設能取得Supabase SUPER。後續需另行授權目標facts／部署方案；不能以後置migration解決先行migration失敗，亦不能對已套用目標默默rewritesource或repair-history。現有可得證據未證明原migration已目標apply；本輪授權僅local candidate。
+
+新candidate等待 **Claude independent reacceptance**，至少獨立重跑native fresh/upgrade、未授權actors／builder lifecycle／collision／rollback、全role paths與非空fixture F1 controls、actual17 mutations／failure identities、原14/16 contracts、targeted compatibility／source bindings／scope外 frozen bytes。不把implementer results当独立PASS。
+
+原R0-B acceptance維持26f9a13；R0-A／PC-2 local acceptance維持通過。無runtime capture／entitlement producer、產品顯示接線、回填、monthly grants、R0-C／R1–R5、purge／刪除／training copies／legal activation。OD-15、TD-10/AU19、P-7 OPEN；原roadmap ordering與photo governance conflicts保留。法律 **DRAFT / NOT ACTIVE**；activation pending。NO fetch / push / deploy / remote DB / Auth / Storage。
