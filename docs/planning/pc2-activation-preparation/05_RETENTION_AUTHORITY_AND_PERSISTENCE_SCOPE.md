@@ -778,3 +778,234 @@ Persistent evidence root：
 新candidate等待 **Claude independent reacceptance**，至少獨立重跑native fresh/upgrade、未授權actors／builder lifecycle／collision／rollback、全role paths與非空fixture F1 controls、actual17 mutations／failure identities、原14/16 contracts、targeted compatibility／source bindings／scope外 frozen bytes。不把implementer results当独立PASS。
 
 原R0-B acceptance維持26f9a13；R0-A／PC-2 local acceptance維持通過。無runtime capture／entitlement producer、產品顯示接線、回填、monthly grants、R0-C／R1–R5、purge／刪除／training copies／legal activation。OD-15、TD-10/AU19、P-7 OPEN；原roadmap ordering與photo governance conflicts保留。法律 **DRAFT / NOT ACTIVE**；activation pending。NO fetch / push / deploy / remote DB / Auth / Storage。
+
+## 15. R0-B-C1 same-transaction identity binding、atomic history 與 canonical entry — authorized local corrective record（2026-10-05）
+
+### 15.1 Authorization、exact scope 與保留邊界
+
+TastKind Owner 已批准 `FINAL_FOUR_PATH_PROPOSAL.md` 的交易內 identity binding、原子 migration history 設計與四檔本機 corrective scope，並附加驗收澄清。本輪只授權本機施工、可拋棄 PG17 驗證，以及全部 pre-commit gates 通過後的一個 corrective commit。不授權 Hosted 寫入、rehearsal、部署、history repair、ETL／匯出、CI／token 修改或法律啟用。
+
+Parent / accepted candidate 為 `fc39891b88c16a1c0224234bd79839b71c0f73d5`。修改限於下列既有四檔（全部 M）：
+
+- `supabase/migrations/20261003062157_consumer_retention_inactive_persistence_foundation.sql`
+- `scripts/consumer-retention-persistence-smoke.mjs`
+- `scripts/consumer-retention-persistence-mutations.mjs`
+- 本文件（只追加本節；§1–§14 bytes 保留）
+
+沒有第五檔、新 migration 或 dependency 變更。原 142 migrations、產品、法律、registry、Demo Pool 與其他 scope 外 bytes／modes 保持不變。
+
+以下內容逐字保留：
+
+- F2 原文（首 14 行）；
+- migration 原 DDL 本體（原 27–216 行；`CREATE SCHEMA` 至 sealed-owner residue check）；
+- FORCE RLS、ACL、sealed owner、builder lifecycle、T0／provenance、inactive／unknown 邊界。
+
+Foundation 維持 inactive：無 producer、真實 grant、回填或刪除。
+
+### 15.2 G1：DDL 前、同一交易內的模式與綁定（IMPLEMENTED；local only）
+
+**執行順序：** `BEGIN;` 之後依序執行：
+
+1. F2（原文）；
+2. F1（批准管理邊界，§15.5）；
+3. G1；
+4. 送出 `R0B_DDL_BOUNDARY` notice；
+5. 才開始第一個 DDL。
+
+**模式判定：** G1 以明確 Supabase 平台 marker 判定模式，不以 OID 10 名稱判定（本機 harness 的 OID 10 也是 `supabase_admin`）。Marker 為：
+
+- roles `pgbouncer`、`supabase_auth_admin`、`dashboard_user`、`supabase_read_only_user`、`supabase_etl_admin`；
+- schema `supabase_migrations`；
+- `supautils.reserved_roles` setting。
+
+| 模式 | 適用條件（全部須成立） | 綁定內容 |
+|---|---|---|
+| `plain-local`（相容路徑） | 無 selector、無 manifest／nonce、上述 marker 一個都不存在 | logical F1 + 原 F2 + scope digest + G2 精確後狀態；不寫 history |
+| `local-fixture` | selector=`local-fixture`；無 `pgbouncer`／`supabase_auth_admin`／`dashboard_user`／`supautils` marker；`tastkind_r0b_fixture.attestation` 由 OID 10 superuser 擁有且恰一列，nonce 與 manifest sha256 相符 | 完整 binding（含本機 OID）+ 原子 history |
+| `hosted-development` | selector=`hosted-development`；manifest UTF-8 sha256 = migration 內嵌常數 `2630322532a4b2a2864dc3cdb8f01c8e6838ebe9ead85bc5719b3f4ef746e59c` | 完整 Hosted binding + 原子 history |
+
+**Fail-closed 規則：** 下列情況全部在 DDL 前以 42501 拒絕，不會落入較寬鬆的 local fallback：
+
+- 任一 marker 存在但無 selector（`R0B_PLATFORM_SELECTOR_REQUIRED`）；
+- 有 manifest／nonce 但無 selector；
+- selector 無效；
+- Hosted manifest 不符；
+- fixture 未 attest；
+- fixture 出現在平台 marker 上。
+
+因此 `db push`、Dashboard SQL editor、Management API 或任何不帶 selector 的路徑在 Hosted 一律 DDL 前拒絕。Supabase 本機 docker（`db reset`）亦屬平台型，同樣需要 selector。
+
+**前狀態檢查：** retention roles 或 schema 已存在時，以 42710 `R0B_RETENTION_PRESENT` 在 DDL 前拒絕（不再嘗試 `CREATE ROLE`）。
+
+**Bound 模式比較：** 在 bound 模式下，G1 以 `-- r0b:observe:begin/end` 之間的單一 SELECT 取得觀察值，並與 manifest 逐段比較：
+
+- `target`（database／OID／owner）
+- `actor`（session、current、OID）
+- `roles`（全部 roles，含 OID、7 旗標、`valid_until` 以 UTC 微秒字串比較、`connection_limit`）
+- `memberships`（全部 edges：member／role／grantor／ADMIN／INHERIT／SET）
+- `functions`（42 個：schema／name／`pg_get_function_arguments`／OID／owner／config／ACL／SECURITY DEFINER／`sha256(pg_get_functiondef)`）
+- `tableHooks`（28 tables：present 的 kind／owner／RLS／FORCE RLS／triggers 與 rules，以及 absent tables）
+- `history`（`schema_migrations` 欄位與型別、全部 version 集合）
+
+另有一條固定規則：bound tables 的 triggers 必須全部 enabled（`TABLE_HOOKS_DISABLED`）。這是因為核准證據沒有 enabled 狀態欄位，所以以固定規則 fail-closed 補足。
+
+**比較的表示法：** 所有 rendering 都在 transaction-local `search_path=''` 與 `COLLATE "C"` 下進行，與核准 Hosted 證據的 qualified rendering 一致。任何不符都以 `R0B_PRESTATE_BINDING_MISMATCH <classes>` 拒絕。
+
+**Hosted manifest：**
+
+- 由下列已批准外部證據推導（每檔 sha256 皆固定）：identity snapshot `e839ee8f…`、32 RPC reconciliation `9028a618…`、helpers `8e9bac98…`、hook capture `2027d3d4…`／SQL `9198eeb5…`、history `f8bce7a7…`、history 欄位 `57a08fdd…`。
+- 內容：88 roles／82 edges／42 functions／28 hook tables／66 versions。
+- 以 canonical JSON（61,077 bytes）commit 於 `HOSTED_MANIFEST`。
+- `deriveHostedManifest()` 可由同一組證據逐 byte 重建；不會自動 refresh。
+- 本輪 Owner run 只比對到 75/88 roles、81/82 edges 的子集；完整矩陣於部署時在交易內重新比較。
+
+**Source capture：** bound 模式以 `current_query()` 取得實際執行字串，並檢查：
+
+- header 行恰出現一次；
+- header 之前只能是 `SET tastkind.r0b_(target|manifest|fixture_nonce) = $r0b$…$r0b$;`（`R0B_SOURCE_PREFIX`／`R0B_SOURCE_CAPTURE`）；
+- 自 header 至結尾即為實際執行的 migration source，並以 transaction-local setting 傳給 G2。
+
+**Scope digest：** G1 計算 retention 範圍外的 catalog digest，並以 transaction-local setting 保存。涵蓋：
+
+- 全部 roles 與 memberships；
+- 非系統 schemas、relations、functions（prosrc／probin／args／rettype 的 sha256）；
+- triggers、rules、policies、default ACLs、event triggers、extensions、publications；
+- database ACL／owner。
+
+### 15.3 G2：精確後狀態、漂移與原子 history
+
+**漂移檢查：** G2 重算 scope digest。凡 G1 之後已提交的並行變更（roles、edges、functions、triggers…），都以 `R0B_POST_GUARD_DRIFT` 整筆 rollback。
+
+**精確後狀態：** retention 後狀態 digest（`-- r0b:poststate:begin/end`）必須等於 `407d86c5d8dae1cfb0419d28b04519221707982298389c5b8859bc0be630dafc`，否則 `R0B_POST_STATE_MISMATCH expected=… observed=…`。Digest 涵蓋：
+
+- schema owner／ACL；
+- 4 tables 的 kind／owner／ACL／RLS／FORCE RLS／options；
+- 全部欄位與 default／generated；
+- constraints、indexes、triggers 與 enabled 狀態；
+- 2 functions（含 `sha256(pg_get_functiondef)`）；
+- policies 數；
+- owner 的 default ACLs；
+- owner 與 builder 的 role 旗標（builder 必須不存在）；
+- 涉及兩者的 memberships 數（必須為 0）；
+- owner 在 retention 以外擁有的物件數。
+
+Digest 不含 OID 與 wildcard；新增內容不會被接受。
+
+**History row（bound 模式）：** G2 之後、`COMMIT` 之前，寫入 `supabase_migrations.schema_migrations(version, name, statements)`。值為 `20261003062157`、`consumer_retention_inactive_persistence_foundation`、`ARRAY[實際執行 source]`。寫入後立即核對：
+
+- 該 version 恰一列、name 精確；
+- `statements` 為一維、下界 1、cardinality 1，`statements[1]` 等於實際 source；
+- 可重現表示法 `encode(sha256(convert_to(statements[1],'UTF8')),'hex')` 等於 source 的 sha256，也就是 migration 檔案 raw bytes 的 SHA-256；
+- 其他欄位等於宣告的 column default（無 default 則為 NULL）；
+- 全部 version 集合等於 manifest 的 66 版加本版。
+
+Entry 另外記錄 `array_to_json(statements)` 的 sha256 作為輔助表示。
+
+**狀態分類（entry 唯讀判定）：**
+
+| 狀態 | 條件 |
+|---|---|
+| ABSENT | 無 roles、無 schema、無 row，history 等於原集合 |
+| APPLIED | 僅 owner、schema 存在、後狀態 digest 精確、row 精確（element sha256 等於檔案 sha256）、history 等於原集合加本版 |
+| INCONSISTENT | 其他一切狀態（例如只有 row 或只有物件） |
+
+**Entry 行為：**
+
+- 在 ABSENT 時才執行一次。
+- APPLIED 時 no-op（執行次數 0、DDL 0）。
+- INCONSISTENT 時停止（DDL 0），不自動 repair。
+- 交易失敗或 commit 結果不明時，以唯讀後檢判定；僅在 ABSENT 且原因已釐清時才重試。
+
+### 15.4 Executor 事實與 canonical entry
+
+**固定版 Supabase CLI 2.109.1 無法作為執行器：**
+
+- `supabase.exe` `22c0f28f…`：`db query` 以 prepared statement 送出 SQL，server 對多語句回傳「cannot insert multiple commands into a prepared statement」，完全不執行（DDL 0）。已以真 binary 驗證（B11、E09）。
+- `db push`（Go）因遠端獨有的 `20260903182941` 觸發 `ErrMissingLocal` 而中止；它會重組 URL 而丟棄 `sslmode`／`sslrootcert`；無法攜帶 selector；並且自己寫 history。
+
+**Canonical entry：** `applyR0BHostedDevelopment()`，由 `runBoundEntry` 以 node-pg simple query 執行（同一 general client 已於 2026-10-05 Owner run 證明 actor 與 TLS）。Entry 拒絕下列任一情況，此時 connects 0、CLI 0、DDL 0：
+
+- 缺 Owner 確認字串；
+- password 不來自環境；
+- 禁用參數（`push`、`--linked`、`--password`、`repair`…）；
+- executor 不是 `node-pg`（CLI 先核對 binary hash，再以 incompatible 拒絕）；
+- host／port／database 或 tenant 不符；
+- 非 `verify-full`；
+- 缺 CA 或 CA sha256 不等於 `700723…f3b7`；
+- migration sha256 不等於 `R0B_MIGRATION_SHA256`；
+- manifest sha256 不符。
+
+連線後會核對憑證鏈的根指紋等於官方根 `80:70:25:AD…CA:FA`，不符則在任何 SQL 之前拒絕。
+
+此 entry 不經本 script CLI 暴露。任何 Hosted 使用，以及「以 node-pg 取代 Owner 原選 CLI 作為執行器」，都須 Owner 另行批准。
+
+### 15.5 F1：批准的管理讀取邊界
+
+原 F1 拒絕所有非 superuser 的 predefined data membership，在 Hosted 必然失敗。新 F1（DDL 前後各一次，訊息仍為 `RETENTION_PREDEFINED_DATA_MEMBERSHIP_UNSAFE`）規則如下：
+
+- 非 superuser 的 `pg_read_all_data` member 只能是已披露的 `postgres`、`cli_login_postgres`、`supabase_etl_admin`、`supabase_read_only_user`。
+- 任何非 superuser 不得是 `pg_write_all_data` member。
+- 六個 App runtime roots 不得為 superuser，也不得以 MEMBER 路徑到達任一 superuser、兩個 predefined data roles 或上述四個管理身分。
+
+本機 smoke／mutation evaluator 同步採用相同規則。這是已批准的前瞻契約變更；本機舊 fixtures 沒有管理 member，觀察結果不變。
+
+### 15.6 Gates、執行入口與差異規則
+
+**CLI：** `node scripts/consumer-retention-persistence-smoke.mjs --pg-bin <PG17 bin> --out <外部目錄> --supabase-cli <supabase.exe 2.109.1> --hosted-evidence <核准證據根目錄>`；mutations 使用相同參數。仍只接受本機參數，DSN／host 一律拒絕（N14）。
+
+**Smoke：** 原 14 success／16 negative 保留。N14 只允許 bound 模式那一條精確的 history INSERT。新增 B01–B12：
+
+| Gate | 內容 |
+|---|---|
+| B01 | 靜態不變量 |
+| B02 | Manifest 由證據逐 byte 重建 |
+| B03 | Plain 相容路徑（明確條件） |
+| B04 | 批准管理讀取被接受 |
+| B05 | Fixture entry 原子套用 |
+| B06 | 重試 APPLIED no-op |
+| B07／B08 | 只有 row 或只有物件時為 INCONSISTENT，執行次數 0 |
+| B09 | Fixture 四個錯誤注入點全部 rollback |
+| B10 | Hosted 分支邏輯（常數替換，僅證明邏輯） |
+| B11 | 真 CLI 不相容 |
+| B12 | Hosted request 正向驗證（不連線） |
+
+**Mutations：**
+
+- 原 17 controls 保留。
+- 其中 M02、M03、M05–M12（`COMMIT` 前改動 storage）先由 G2 以原始 mutant 拒絕並完整 rollback（`G2_RAW_STORAGE_MUTANTS_REJECTED`）。之後 mutant 改以其自身觀察到的後狀態 digest rebase，仍由原行為 evaluator 偵測，保留原意圖。
+- M01、M04、M13–M17 在 G2 之後或 `COMMIT` 之後，不屬 G2 範圍。
+
+**新增 binding controls：** 每項先保存原始 observation，再由獨立 evaluator process 判定。
+
+| 類別 | Controls | 通過條件 |
+|---|---|---|
+| Entry | E01–E15（E08 四子項，共 18 項） | connects 0（E02 為 TLS-only 1 次）、queries 0、spawns 0 |
+| SQL pre-DDL | S01–S38 | 錯誤 prefix 精確、DDL attempts 0、無 boundary notice、持久化狀態不變 |
+| Post-guard drift | D01–D02（以 event trigger advisory pause 在 DDL 中注入並行變更） | 錯誤為 `R0B_POST_GUARD_DRIFT`、DDL attempts > 0、全部 rollback、無本次物件及 history row |
+
+DDL attempts 以 `ddl_command_start` event trigger 呼叫 `nextval` 計數（sequence 不隨 rollback 回復）。Role 類 DDL 不觸發 event trigger，因此另以 boundary notice 確認 DDL 前已拒絕。Setup、parser、evaluator 錯誤一律 BLOCKED，不算偵測成功。
+
+**Differential 範圍：** 只納入實際會套用本 migration 的既有 harness：
+
+- 36 個 `*-postgres(-apply)` harness（全部讀取並套用 `supabase/migrations` 全序列）；
+- 本 R0-B smoke 與 mutations。
+
+在 `fc39891` baseline 與 candidate 兩個 bytes／hash 綁定的隔離 clone 中，以同一解析規則比較 failure identities、runtime causes 與 exit codes；`NEW_UNAUTHORIZED_REGRESSION` 必須為 0。實際結果記錄於外部 corrective report，不改寫本文件。
+
+### 15.7 仍待 Hosted 另案批准的前置條件與限制
+
+| # | 前置條件 |
+|---|---|
+| 1 | 執行器：Owner 原選 CLI 2.109.1 已證明不可行；改用 canonical entry（node-pg）須 Owner 批准 |
+| 2 | Privileged automation：`SUPABASE_ACCESS_TOKEN`（CI `development` environment 與本機）可經 Management API 執行管理 SQL。Scope、持有人、Environment protection 與 App runtime 可達性仍 unknown |
+| 3 | 傳輸：client→pooler TLS 已驗證；pooler→database 的 PostgreSQL TLS 為 false，其他傳輸保護 unknown。由 Owner 決定，不代為接受 |
+| 4 | 部署前唯讀預檢：`schema_migrations` owner／INSERT 權限與欄位 default；完整 88/82 矩陣與全部 bindings 仍相等（只比較、不 refresh） |
+| 5 | 另行授權的 Hosted rehearsal：在 actor 16388 下驗證 CREATE ROLE、ownership、GRANT、supautils／managed hooks；驗證後狀態 digest 與 trigger rendering 在 Hosted 的可攜性；驗證 history 寫入 |
+| 6 | PC-2 ordering：PC-2 若先改動已綁定的 RPC，須重新綁定並重新批准 |
+| 7 | 部署時段：避開 Demo Pool 排程，不得有並行管理 DDL；密碼由 Owner 輸入，用後輪替 |
+
+**威脅模型：** 涵蓋誤用路徑、漂移與並行變更；不保證抵禦惡意 DBA 或 privileged token 持有者。
+
+**殘餘空窗：** G2 至 `COMMIT` 之間，以及 shared catalog，由部署時段限制處理。
+
+本節之後的 commit、post-commit 結果與 independent reacceptance 只追加於外部報告，不再改寫本文件 bytes。R0-B Hosted deployment 仍 BLOCKED；法律 **DRAFT / NOT ACTIVE**；activation pending。
