@@ -21,7 +21,7 @@ import {
   getDefaultPlannedDinner,
   type PlannedMeal
 } from "../features/planned-meal";
-import { useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
+import { PendingMealSaveNotice, useConsumerRuntime, type ConsumerPlannedMealDraft } from "../features/consumer-runtime";
 import { ConsumerLocationPermissionCard } from "../features/consumer-location/ConsumerLocationPermissionCard";
 import { useConsumerLocationRuntime } from "../features/consumer-location/ConsumerLocationProvider";
 import { getConsumerMealRuntimeFlags } from "../features/consumer-meals/featureFlags";
@@ -104,6 +104,8 @@ export default function RecommendationScreen() {
     });
     if (result.status === "succeeded") return "succeeded" as const;
     if (result.status === "uncertain") return "uncertain" as const;
+    // Capacity: the pending-save notice shows the approved capacity copy and the real exits.
+    if (result.errorCode === "capacity_exhausted") return "notice" as const;
     return "failed" as const;
   }
 
@@ -115,6 +117,7 @@ export default function RecommendationScreen() {
         onAddToTodayIntake={addRecommendationToTodayIntake}
         onReturnHome={() => router.replace("/")}
         onUseForMealBuddy={openMealBuddyPrefill}
+        pendingNotice={<PendingMealSaveNotice kinds={["meal_write"]} />}
         preferredMenuItemId={typeof params.preferredMenuItemId === "string" ? params.preferredMenuItemId : undefined}
         provider={canonicalProvider}
         scenario={scenario}

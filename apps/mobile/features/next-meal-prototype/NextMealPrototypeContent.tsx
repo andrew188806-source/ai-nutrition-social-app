@@ -41,11 +41,13 @@ export function NextMealPrototypeContent({
   provider,
   scenario,
   feedbackCompositionOptions,
-  currentLocation
+  currentLocation,
+  pendingNotice
 }: {
   entitlement?: unknown;
   onReturnHome: () => void;
-  onAddToTodayIntake: (candidate: U1NextMealCandidateViewModel) => Promise<"succeeded" | "uncertain" | "failed">;
+  // "notice": the outcome is presented by the screen's pending-save notice (e.g. capacity), not by this card.
+  onAddToTodayIntake: (candidate: U1NextMealCandidateViewModel) => Promise<"succeeded" | "uncertain" | "failed" | "notice">;
   onUseForMealBuddy: (candidate: U1NextMealCandidateViewModel) => void;
   preferredMenuItemId?: string;
   preferredPrototypeId?: string;
@@ -53,6 +55,8 @@ export function NextMealPrototypeContent({
   scenario?: U1NextMealPrototypeScenario;
   feedbackCompositionOptions?: MobileConsumerRecommendationFeedbackCompositionOptions;
   currentLocation?: Readonly<{ latitude: number; longitude: number }>;
+  // Recovery notice for unresolved meal saves (supplied by the screen; it owns the runtime wiring).
+  pendingNotice?: ReactNode;
 }) {
   const baseCopy = zhTW.mobile.nextMealPrototype;
   const copy: Record<keyof typeof baseCopy, string> = LIVE_COMPOSITION ? { ...baseCopy, ...LIVE_NEXT_MEAL_COPY } : baseCopy;
@@ -173,7 +177,7 @@ export function NextMealPrototypeContent({
     setIntakeStatus("submitting");
     const result = await onAddToTodayIntake(candidate);
     if (result !== "succeeded") {
-      setIntakeStatus(result);
+      setIntakeStatus(result === "notice" ? "idle" : result);
       return;
     }
     setIntakeStatus("idle");
@@ -294,11 +298,14 @@ export function NextMealPrototypeContent({
           <Text style={styles.confirmationText}>{copy.confirmedBody}</Text>
         </View>
       ) : null}
-      {intakeStatus !== "idle" ? (
+      {/* With a recovery notice the unresolved state has ONE authority (the notice), which also reflects a later
+          重新確認 success; the local "uncertain" line would otherwise stay stale. */}
+      {intakeStatus !== "idle" && !(intakeStatus === "uncertain" && pendingNotice) ? (
         <Text style={styles.feedbackStatusText}>{intakeStatus === "submitting"
           ? copy.intakeSubmitting
           : intakeStatus === "uncertain" ? copy.intakeUncertain : copy.intakeFailed}</Text>
       ) : null}
+      {pendingNotice ?? null}
 
       <View style={styles.actionStack}>
         <Pressable

@@ -70,6 +70,9 @@ try {
   const mapper = read("apps/mobile/features/consumer-runtime/consumerMealWriteMapper.ts");
   const runtime = read("apps/mobile/features/consumer-runtime/consumerMealWriteRuntime.ts");
   const operationStore = read("apps/mobile/features/consumer-runtime/consumerMealWriteOperationStore.ts");
+  const ledger = read("apps/mobile/features/consumer-runtime/mealSaveOperationLedger.ts");
+  const recovery = read("apps/mobile/features/consumer-runtime/mealSaveRecovery.ts");
+  const finalizationStore = read("apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationOperationStore.ts");
   const composition = read("apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts");
   const provider = read("apps/mobile/features/consumer-runtime/ConsumerRuntimeProvider.tsx");
   const todayModel = read("apps/mobile/features/consumer-meals/todayIntakeUiModel.ts");
@@ -109,9 +112,14 @@ try {
   record("ambiguous result retains same pending operation", /errorCode === "result_uncertain"[\s\S]*pending:\s*true/.test(runtime));
   record("runtime has no automatic or background retry", !/setInterval|setTimeout|background|automaticRetry/i.test(runtime));
   record("operation storage is actor-scoped with TTL", /encodeURIComponent\(actorKey\)/.test(operationStore) && /24 \* 60 \* 60 \* 1000/.test(operationStore));
-  record("expired pending is removed without sending", /Date\.parse\(parsed\.expiresAt\) <= this\.now\(\)\.getTime\(\)[\s\S]*removeItem/.test(operationStore));
+  // TastKind recovery contract (replaces "expired pending is removed without sending"): age never deletes; the 24 h
+  // value is only a staleness hint, and no age comparison can reach removeItem.
+  record("expired pending is retained and only marked stale (never deleted by age)", /MEAL_SAVE_STALE_AFTER_MS/.test(recovery) && !/Date\.parse\(parsed\.expiresAt\) <= this\.now\(\)\.getTime\(\)[\s\S]*removeItem/.test(operationStore) && !/expiresAt[^;\n]*(?:<=|<|>=|>)[^;\n]*(?:now|Date)[\s\S]{0,240}removeItem/.test(ledger + operationStore + finalizationStore));
   record("actor generation suppresses stale responses", /actorKey === this\.actorKey && generation === this\.actorGeneration/.test(runtime) && /setActor\(state\.actorKey, state\.actorGeneration\)/.test(provider));
-  record("logout and actor change clear in-memory and persisted pending", /this\.pending = null/.test(runtime) && /operationStore\.clear\(previousActor\)/.test(runtime));
+  // TastKind recovery contract (replaces "logout and actor change clear in-memory and persisted pending"): the
+  // in-memory selection resets, the persisted operations of every actor stay in that actor's own slots.
+  record("logout and actor change reset the in-memory selection but never clear persisted pending", /this\.pending = null/.test(runtime) && !/operationStore\.clear\(/.test(runtime) && /operationStore\.list\(actorKey\)/.test(runtime));
+  record("negative: the stores expose no clear(actorKey) or purgeActor", !/\bclear\s*\(|purgeActor/.test(operationStore + finalizationStore + ledger));
 
   record("composition creates one Supabase client", (composition.match(/new SupabaseConsumerClientFactory/g) ?? []).length === 1);
   record("Today model creates no second client", !/SupabaseConsumerClientFactory|createOfficialSupabaseConsumerSdkLoader|getSupabaseConsumerEnvironment/.test(todayModel));

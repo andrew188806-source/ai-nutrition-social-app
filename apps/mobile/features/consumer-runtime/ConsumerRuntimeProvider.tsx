@@ -15,6 +15,7 @@ import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consu
 import type { ConsumerMealRecordsService } from "../consumer-meals/consumerMealRecordsService";
 import type { ConsumerAnalysisMealWriteDraft } from "./consumerMealWriteMapper";
 import type { ConsumerMealWriteRuntimeState } from "./consumerMealWriteRuntime";
+import type { MealSaveOperationKind, MealSaveOperationSummary } from "./mealSaveRecovery";
 import type {
   ConsumerMealIdentificationFinalizationDraft,
   ConsumerMealIdentificationFinalizationRuntimeState
@@ -41,6 +42,12 @@ export type ConsumerRuntimeContextValue = {
   retryProfile(): Promise<boolean>;
   createMealRecord(draft: ConsumerAnalysisMealWriteDraft): Promise<ConsumerMealWriteRuntimeState>;
   retryPendingMealRecord(): Promise<ConsumerMealWriteRuntimeState>;
+  // Recovery of unresolved meal saves (both write paths). Every action is bound to the current actor and
+  // generation; retry sends the SAME operation key and payload; defer (暫不處理) cancels nothing.
+  mealSaveOperations: readonly MealSaveOperationSummary[];
+  retryMealSaveOperation(kind: MealSaveOperationKind, opId: string): Promise<void>;
+  deferMealSaveOperation(kind: MealSaveOperationKind, opId: string): Promise<void>;
+  cancelMealSaveOperation(kind: MealSaveOperationKind, opId: string): Promise<void>;
   finalizeMealIdentification(
     draft: ConsumerMealIdentificationFinalizationDraft
   ): Promise<ConsumerMealIdentificationFinalizationRuntimeState>;
@@ -86,7 +93,8 @@ const unavailableMealWriteState: ConsumerMealWriteRuntimeState = {
   mealRecordId: null,
   mealDate: null,
   pending: false,
-  mealDataRevision: 0
+  mealDataRevision: 0,
+  operations: []
 };
 const unavailableMealIdentificationFinalizationState: ConsumerMealIdentificationFinalizationRuntimeState = {
   status: "error",
@@ -97,7 +105,8 @@ const unavailableMealIdentificationFinalizationState: ConsumerMealIdentification
   mealIdentificationFinalizationId: null,
   mealCorrectionIds: null,
   pending: false,
-  finalizationDataRevision: 0
+  finalizationDataRevision: 0,
+  operations: []
 };
 const unavailablePlannedMealState: ConsumerPlannedMealRuntimeState = {
   status: "error", pendingKind: null, errorCode: "configuration_error", plannedMealId: null, mealRecordId: null, revision: 0
@@ -195,6 +204,25 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
         return Promise.resolve(mealWriteRuntime?.reject("authentication_required") ?? unavailableMealWriteState);
       }
       return mealWriteRuntime.retry({ actorKey: state.actorKey, actorGeneration: state.actorGeneration });
+    },
+    mealSaveOperations: [...mealWriteState.operations, ...mealIdentificationFinalizationState.operations].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    retryMealSaveOperation: async (kind, opId) => {
+      if (!state.actorKey || state.authState.status !== "signedIn") return;
+      const context = { actorKey: state.actorKey, actorGeneration: state.actorGeneration };
+      if (kind === "meal_write") await mealWriteRuntime?.retry(context, opId);
+      else await mealIdentificationFinalizationRuntime?.retry(context, opId);
+    },
+    deferMealSaveOperation: async (kind, opId) => {
+      if (!state.actorKey || state.authState.status !== "signedIn") return;
+      const context = { actorKey: state.actorKey, actorGeneration: state.actorGeneration };
+      if (kind === "meal_write") await mealWriteRuntime?.defer(context, opId);
+      else await mealIdentificationFinalizationRuntime?.defer(context, opId);
+    },
+    cancelMealSaveOperation: async (kind, opId) => {
+      if (!state.actorKey || state.authState.status !== "signedIn") return;
+      const context = { actorKey: state.actorKey, actorGeneration: state.actorGeneration };
+      if (kind === "meal_write") await mealWriteRuntime?.cancel(context, opId);
+      else await mealIdentificationFinalizationRuntime?.cancel(context, opId);
     },
     isMealIdentificationFinalizationBoundToOperation: (operationId) => {
       if (!mealIdentificationFinalizationRuntime || !state.actorKey || state.authState.status !== "signedIn") {

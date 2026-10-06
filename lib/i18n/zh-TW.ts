@@ -71,18 +71,85 @@ export const zhTW = {
     },
     consumerMealWrite: {
       submitting: "正在加入今日飲食…",
-      uncertainTitle: "尚未確認是否已加入",
-      uncertainBody: "連線結果不確定。你可以使用同一筆請求重試，或先前往今日飲食確認。",
-      retrySameRequest: "重試同一筆請求",
+      uncertainTitle: "目前無法確認這筆餐點是否已儲存",
+      uncertainBody: "你可以重新確認，或暫時保留、繼續記錄其他餐點。請勿重新建立同一筆餐點，以免重複。",
+      retrySameRequest: "重新確認",
       checkTodayIntake: "前往今日飲食確認",
       errorTitle: "目前無法加入今日飲食",
-      errorBody: "這筆餐點尚未保存，請確認登入與資料後再試一次。"
+      errorBody: "這筆餐點尚未儲存，請確認登入與資料後再試一次。"
+    },
+    // TastKind meal-save recovery: copy for unresolved meal saves (both write paths). A retained
+    // operation may already be saved, so it is never described as "not sent".
+    pendingMealSave: {
+      referenceLabel: "參考碼",
+      actions: {
+        retry: "重新確認",
+        retryDraft: "再試一次",
+        defer: "暫不處理",
+        cancel: "取消這筆",
+        login: "重新登入",
+        consent: "前往完成設定",
+        view: "查看",
+        continueOther: "繼續記錄其他餐點"
+      },
+      inFlight: "正在確認…",
+      staleNote: "這筆已保留超過 24 小時，原內容不會被改動；重新確認不會產生重複紀錄。",
+      deferredNote: "已暫時保留。你可以繼續記錄其他餐點，之後再回到今日飲食重新確認。",
+      summaryTitle: "有 {count} 筆餐點尚待確認",
+      summaryBody: "它們可能已經儲存，請先重新確認以免重複。",
+      unknown: {
+        title: "目前無法確認這筆餐點是否已儲存",
+        titleFinalization: "目前無法確認這筆餐點分析是否已儲存",
+        body: "你可以重新確認，或暫時保留、繼續記錄其他餐點。請勿重新建立同一筆餐點，以免重複。"
+      },
+      unknownLogin: {
+        title: "需要重新登入才能確認這筆餐點是否已儲存",
+        body: "請重新登入原本的帳號。這筆內容已保留，登入前不會被送出。請勿重新建立同一筆餐點。"
+      },
+      unknownConsent: {
+        title: "暫時無法確認這筆餐點是否已儲存",
+        body: "需要先完成必要的同意設定，完成後才能再次確認。內容已保留，請勿重新建立同一筆餐點。"
+      },
+      unknownServer: {
+        title: "目前無法確認這筆餐點是否已儲存",
+        body: "伺服器暫時無法完成確認，稍後再按「重新確認」即可。請勿重新建立同一筆餐點。"
+      },
+      unknownAnomaly: {
+        title: "這筆餐點的確認遇到不一致",
+        body: "請勿重新建立同一筆餐點，並把參考碼提供給客服。"
+      },
+      retryable: {
+        title: "這次沒有儲存成功",
+        body: "伺服器已回覆未寫入，內容已保留，可稍後再試。"
+      },
+      blockedLogin: {
+        title: "請重新登入後再儲存",
+        body: "這筆餐點尚未儲存，內容已保留。"
+      },
+      blockedConsent: {
+        title: "需要先完成必要的同意設定",
+        body: "這筆餐點尚未儲存，內容已保留。"
+      },
+      actorMismatch: {
+        title: "目前登入的帳號與這筆餐點的帳號不同",
+        body: "已停止送出，沒有任何資料被寫入。請登入原本的帳號後再處理。"
+      },
+      capacity: {
+        title: "目前有太多尚待確認的餐點",
+        body: "請先逐筆「重新確認」，才能記錄新的餐點。"
+      },
+      storage: {
+        title: "無法在這支裝置保留這筆餐點",
+        body: "為避免遺失結果，這筆沒有送出。請稍後再試。"
+      },
+      confirmedSaved: "已確認儲存"
     },
     mealIdentificationFinalization: {
       submitting: "正在完整保存餐點分析…",
-      uncertainTitle: "尚未確認餐點分析是否已保存",
-      uncertainBody: "連線結果不確定。請使用同一筆請求重試，或先前往今日飲食確認。",
-      retrySameRequest: "重試同一筆請求",
+      uncertainTitle: "目前無法確認這筆餐點分析是否已儲存",
+      uncertainBody: "你可以重新確認，或暫時保留、繼續記錄其他餐點。請勿重新建立同一筆餐點，以免重複。",
+      retrySameRequest: "重新確認",
+      deferCta: "暫不處理",
       checkTodayIntake: "前往今日飲食確認",
       errors: {
         authentication: {
@@ -107,7 +174,7 @@ export const zhTW = {
         },
         authorization: {
           title: "目前無法保存這筆餐點",
-          body: "登入權限無法完成這次保存，這筆餐點尚未建立。"
+          body: "伺服器未能完成這次保存。這筆內容已保留，可稍後再試。"
         },
         analysis: {
           title: "目前無法使用這份分析",
@@ -2157,7 +2224,7 @@ export const zhTW = {
       addToTodayIntake: "加入今日飲食",
       nutritionTitle: "營養資訊",
       intakeSubmitting: "正在加入今日飲食…",
-      intakeUncertain: "寫入結果尚未確認，請使用既有重試流程確認後再操作。",
+      intakeUncertain: "目前無法確認這筆餐點是否已儲存。你可以重新確認，或暫時保留、繼續記錄其他餐點。請勿重新建立同一筆餐點，以免重複。",
       intakeFailed: "未能加入今日飲食，請稍後再試。",
       findBuddy: "用這餐找飯友",
       buddyHint: "只會開啟飯友卡表單並帶入範例內容，不會自動建立卡片。",

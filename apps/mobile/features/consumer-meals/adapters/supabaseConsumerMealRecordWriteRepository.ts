@@ -1,9 +1,12 @@
 import {
+  ConsumerMealWriteActorBindingMismatchError,
   ConsumerMealWriteAuthenticationRequiredError,
   ConsumerMealWriteAuthorizationFailedError,
+  ConsumerMealWriteEligibilityRequiredError,
   ConsumerMealWriteFunctionRejectedError,
   ConsumerMealWriteMappingFailedError,
   ConsumerMealWritePhaseNotEnabledError,
+  ConsumerMealWriteServerRejectedError,
   ConsumerMealWriteTransportFailedError,
   ConsumerSessionExpiredError
 } from "../../consumer-auth/errors";
@@ -55,7 +58,8 @@ export class SupabaseConsumerMealRecordWriteRepository implements ConsumerMealRe
             SUPABASE_CREATE_CURRENT_USER_MEAL_RECORD_FUNCTION,
             buildCreateMealRecordRpcArgs(validated)
           );
-      if (response.error) return err(mapMealWriteRpcError(response.error));
+      // The SDK reports HTTP status at the TOP LEVEL of the response (error carries only the JSON body).
+      if (response.error) return err(mapMealWriteRpcError(response.error, response.status ?? undefined));
       if (!response.data) return err(new ConsumerMealWriteMappingFailedError("Consumer meal write returned no canonical record."));
       return ok(mapSupabaseMealRecordRowToConsumerMealRecord(response.data, session.value.user.userId));
     } catch (error) {
@@ -96,16 +100,35 @@ function buildCreateMealRecordRpcArgs(input: ValidatedCreateMealRecordInput): Su
   };
 }
 
-function mapMealWriteRpcError(error: SupabaseMealPostgrestErrorLike) {
+export type MealWriteErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null };
+
+// Classification of a structured PostgREST answer. Only trusted, server-authored signals decide:
+//   * ACTOR_BINDING (guard)            -> not sent
+//   * CONSUMER_CORE_ELIGIBILITY_REQUIRED -> consent/eligibility (never "log in again")
+//   * AUTHENTICATION_REQUIRED / 28000 / PGRST301-303 / HTTP 401 -> real authentication failure
+//   * everything else with a non-empty code was rolled back by the server and is NOT a login problem.
+// An answer without a code (network failure, gateway HTML, unreadable) is a transport failure = unknown.
+function mapMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status?: number) {
+  const mapped = classifyMealWriteRpcError(error, status);
+  const code = typeof error.code === "string" && /^[0-9A-Za-z]{5}$/.test(error.code) ? error.code : null;
+  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null } satisfies MealWriteErrorDiagnostics);
+}
+
+function classifyMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status?: number) {
   const message = error.message?.toUpperCase() ?? "";
-  if (error.status === 401 || error.status === 403 || message.includes("AUTHENTICATION_REQUIRED")) {
-    return new ConsumerMealWriteAuthorizationFailedError();
+  const code = typeof error.code === "string" ? error.code : "";
+  const effectiveStatus = status ?? error.status ?? undefined;
+  if (code === "TKACT0") return new ConsumerMealWriteActorBindingMismatchError();
+  if (message.includes("CONSUMER_CORE_ELIGIBILITY_REQUIRED")) return new ConsumerMealWriteEligibilityRequiredError();
+  if (effectiveStatus === 401 || code === "28000" || /^PGRST30[123]$/.test(code) || message.includes("AUTHENTICATION_REQUIRED")) {
+    return new ConsumerMealWriteAuthenticationRequiredError("Consumer meal write requires a current authenticated session.");
   }
-  if (error.code === "22023" || error.code === "23514" || message.includes("INVALID") || message.includes("REQUIRED") || message.includes("TOO_MANY") || message.includes("FORBIDDEN")) {
-    return new ConsumerMealWriteFunctionRejectedError();
-  }
-  if (message.includes("IDEMPOTENCY_KEY_CONFLICT")) {
+  if (code === "23505" || message.includes("IDEMPOTENCY_KEY_CONFLICT")) {
     return new ConsumerMealWriteFunctionRejectedError("Consumer meal write idempotency key conflicts with another payload.");
   }
+  if (code === "22023" || message.includes("INVALID") || message.includes("REQUIRED") || message.includes("TOO_MANY") || message.includes("FORBIDDEN")) {
+    return new ConsumerMealWriteFunctionRejectedError();
+  }
+  if (code.length > 0) return new ConsumerMealWriteServerRejectedError();
   return new ConsumerMealWriteTransportFailedError();
 }

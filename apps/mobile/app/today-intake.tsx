@@ -7,7 +7,7 @@ import { NutritionDetailReport } from "../components/NutritionDetailReport";
 import { PlaceholderScreen } from "../components/PlaceholderScreen.tsx";
 import { getUiMealCalories, useTodayIntakeUiModel } from "../features/consumer-meals";
 import type { TodayIntakeUiMealRecord } from "../features/consumer-meals";
-import { useConsumerRuntime } from "../features/consumer-runtime";
+import { PendingMealSaveNotice, useConsumerRuntime } from "../features/consumer-runtime";
 import { useRestaurantCatalog } from "../features/restaurants/catalog";
 import type { CatalogRestaurantViewModel, RestaurantCatalogUiState } from "../features/restaurants/catalog";
 import {
@@ -117,6 +117,8 @@ export default function TodayIntakeScreen() {
           </View>
         </View>
       </Card>
+
+      <PendingMealSaveNotice />
 
       <NutritionDetailReport summary={summary} />
 

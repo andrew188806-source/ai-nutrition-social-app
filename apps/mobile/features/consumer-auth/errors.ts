@@ -40,6 +40,9 @@ export type ConsumerAuthErrorCode =
   | "meal_write_atomicity_not_supported"
   | "meal_write_partial_write_prevented"
   | "meal_write_read_after_write_failed"
+  | "meal_write_eligibility_required"
+  | "meal_write_server_rejected"
+  | "meal_write_actor_binding_mismatch"
   | "daily_summary_configuration_invalid"
   | "daily_summary_session_missing"
   | "daily_summary_session_expired"
@@ -319,6 +322,29 @@ export class ConsumerMealWriteAtomicityNotSupportedError extends ConsumerAuthErr
 export class ConsumerMealWritePartialWritePreventedError extends ConsumerAuthError {
   constructor(message = "Consumer meal write was prevented to avoid partial data.") {
     super("meal_write_partial_write_prevented", message, false);
+  }
+}
+
+// A structured server answer for a failure that is not a login, consent or input problem (permission
+// fault, lock/statement timeout, missing relation, ...). The attempt was rolled back by the server.
+export class ConsumerMealWriteServerRejectedError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write was rejected by the server.") {
+    super("meal_write_server_rejected", message);
+  }
+}
+
+// Consent / eligibility is required (server token CONSUMER_CORE_ELIGIBILITY_REQUIRED). Not a login failure.
+export class ConsumerMealWriteEligibilityRequiredError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write requires completed consent or eligibility.") {
+    super("meal_write_eligibility_required", message);
+  }
+}
+
+// The actor-bound dispatch guard refused the request BEFORE any network call (operation owner and the
+// token that would sign the request differ). Nothing was sent.
+export class ConsumerMealWriteActorBindingMismatchError extends ConsumerAuthError {
+  constructor(message = "Consumer meal write was not sent: the operation owner differs from the signed-in identity.") {
+    super("meal_write_actor_binding_mismatch", message);
   }
 }
 

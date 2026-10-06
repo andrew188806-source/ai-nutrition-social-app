@@ -175,12 +175,50 @@ try {
   staleDeferred.resolve();
   await stalePromise;
   expect(staleHarness.runtime.getState().status !== "succeeded" && staleHarness.runtime.getState().mealDataRevision === 0, "actor switch suppresses stale success response");
-  expect(await staleHarness.operationStore.load(actor.actorKey) === null, "logout or actor switch clears old actor pending data");
+  // TastKind recovery contract (replaces "logout or actor switch clears old actor pending data"): an actor
+  // switch NEVER deletes an unresolved operation. It stays under its owner, is not visible to the other
+  // actor, and nothing was dispatched for it while the other actor was current.
+  const retainedAfterSwitch = await staleHarness.operationStore.list(actor.actorKey);
+  expect(retainedAfterSwitch.ok && retainedAfterSwitch.entries.length === 1 && retainedAfterSwitch.entries[0].opId === fixedKey && retainedAfterSwitch.entries[0].ownerActorKey === actor.actorKey, "actor switch retains the previous actor's operation under its own owner");
+  expect((await staleHarness.operationStore.list("actor-b")).entries.length === 0, "negative: the other actor sees no foreign operation");
+  const plantedStorage = new authStorage.MemoryConsumerAuthStorage();
+  const plantedHarness = makeRuntime({ storage: plantedStorage });
+  const retainedRaw = await staleHarness.storage.getItem(`tastkind.consumerMealWrite.pending.v2.slot.${encodeURIComponent(actor.actorKey)}.0`);
+  await plantedStorage.setItem(`tastkind.consumerMealWrite.pending.v2.slot.${encodeURIComponent("actor-b")}.0`, retainedRaw);
+  const plantedList = await plantedHarness.operationStore.list("actor-b");
+  expect(retainedRaw !== null && plantedList.entries.length === 0 && plantedList.unusable === 1, "negative: an entry owned by another actor planted under this actor's slot is not loaded and is counted as unusable");
+  // unknown result -> switch away and back: restored with the same key, no request in between
+  let switchCalls = 0;
+  const unknownHarness = makeRuntime({ service: { createCurrentUserMealRecord: async () => { switchCalls += 1; return { ok: false, error: { code: "meal_write_transport_failed", message: "safe" } }; } } });
+  await unknownHarness.runtime.setActor(actor.actorKey, actor.actorGeneration);
+  await unknownHarness.runtime.submit(actor, baseDraft);
+  await unknownHarness.runtime.setActor("actor-b", 2);
+  await unknownHarness.runtime.setActor(actor.actorKey, 3);
+  const backAgain = unknownHarness.runtime.getState();
+  expect(switchCalls === 1 && backAgain.status === "uncertain" && backAgain.pending && (await unknownHarness.operationStore.load(actor.actorKey))?.idempotencyKey === fixedKey, "unknown operation survives switching away and back with the same key and no extra request");
 
   const expiredStorage = new authStorage.MemoryConsumerAuthStorage();
   const expiredStore = new storeModule.ConsumerMealWriteOperationStore(expiredStorage, () => new Date(submittedAt.getTime() + storeModule.CONSUMER_MEAL_WRITE_PENDING_TTL_MS + 1));
   await expiredStorage.setItem(`tastkind.consumerMealWrite.pending.v1.${encodeURIComponent(actor.actorKey)}`, JSON.stringify({ idempotencyKey: fixedKey, input: { ...aiInput, idempotencyKey: fixedKey }, createdAt: submittedAt.toISOString(), expiresAt: new Date(submittedAt.getTime() + storeModule.CONSUMER_MEAL_WRITE_PENDING_TTL_MS).toISOString() }));
-  expect(await expiredStore.load(actor.actorKey) === null, "expired pending request is removed and never auto-sent");
+  // TastKind recovery contract (replaces "expired pending request is removed and never auto-sent"): age never
+  // deletes. A record older than 24 h is kept (migrated as possibly sent), marked stale, and never auto-sent.
+  const expiredList = await expiredStore.list(actor.actorKey);
+  expect(expiredList.ok && expiredList.entries.length === 1 && expiredList.entries[0].opId === fixedKey && expiredList.entries[0].state === "unknown" && expiredList.entries[0].hadUnknown, "expired pending request is kept as a possibly-sent unknown operation");
+  expect((await expiredStorage.getItem(`tastkind.consumerMealWrite.pending.v1.${encodeURIComponent(actor.actorKey)}`)) === null && (await expiredStorage.getItem(`tastkind.consumerMealWrite.pending.v2.slot.${encodeURIComponent(actor.actorKey)}.0`)) !== null, "migration verified the slot entry before dropping the legacy record");
+  let expiredCalls = 0;
+  const longAgo = new Date(submittedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const staleStorage = new authStorage.MemoryConsumerAuthStorage();
+  await staleStorage.setItem(`tastkind.consumerMealWrite.pending.v1.${encodeURIComponent(actor.actorKey)}`, JSON.stringify({ idempotencyKey: fixedKey, input: { ...aiInput, idempotencyKey: fixedKey }, createdAt: submittedAt.toISOString(), expiresAt: new Date(submittedAt.getTime() + storeModule.CONSUMER_MEAL_WRITE_PENDING_TTL_MS).toISOString() }));
+  const staleRuntime = new runtimeModule.ConsumerMealWriteRuntime({
+    service: { createCurrentUserMealRecord: async (input) => { expiredCalls += 1; return { ok: true, value: canonicalRecord(input) }; } },
+    operationStore: new storeModule.ConsumerMealWriteOperationStore(staleStorage, () => longAgo),
+    clock: { now: () => longAgo }, uuidFactory: () => fixedKey
+  });
+  await staleRuntime.setActor(actor.actorKey, actor.actorGeneration);
+  const staleState = staleRuntime.getState();
+  expect(expiredCalls === 0 && staleState.status === "uncertain" && staleState.pending && staleState.operations.length === 1 && staleState.operations[0].stale === true, "negative: 30 days later the operation is restored as stale unknown and nothing is auto-sent");
+  const staleRetried = await staleRuntime.retry({ actorKey: actor.actorKey, actorGeneration: actor.actorGeneration });
+  expect(expiredCalls === 1 && staleRetried.status === "succeeded" && staleRetried.mealRecordId === `record-${fixedKey}`, "explicit retry of a 30-day-old operation sends the original key");
 
   expect(/consumerRuntime\.mode === ["']mock["'][\s\S]*persistCanonicalMealToExplicitDemoStore/.test(analysisSource), "Demo persistence is explicit and mock-only");
   expect(!/fallback[\s\S]{0,100}(?:mock|local)|(?:mock|local)[\s\S]{0,100}fallback/i.test(providerSource + compositionSource), "Supabase failure has no local fallback");

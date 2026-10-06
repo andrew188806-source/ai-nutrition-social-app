@@ -96,6 +96,7 @@ import { ConsumerMealIdentificationFinalizationRuntime } from "./consumerMealIde
 import { ConsumerPlannedMealOperationStore } from "./consumerPlannedMealOperationStore";
 import { ConsumerPlannedMealRuntime } from "./consumerPlannedMealRuntime";
 import { setConsumerClientStateScope } from "../consumer-auth/clientStateScope";
+import { createActorBindingRegistry, withActorBinding } from "../consumer-auth/actorBoundDispatch";
 
 export type ConsumerRuntimeMode = "mock" | "disabled" | "supabase";
 export type ConsumerRuntimeOperation = "idle" | "signingIn" | "signingOut";
@@ -627,9 +628,15 @@ function createMealRuntimeParts(input: {
   const plannedWriteFlags = normalizePlannedMealWriteFlags(mealFlags, input.authFlags.authSource);
   if (writeFlags.issues.length || overviewFlags.issues.length || plannedWriteFlags.issues.length) return null;
   const dependencies = { authPort: input.authPort, mealClient: input.mealClient };
+  // Actor-bound dispatch: ONLY the two meal write repositories receive the tagging rpc proxy. Planned
+  // meals, reads, storage and every other client keep the raw client (unchanged behaviour).
+  const dispatchRegistry = createActorBindingRegistry();
+  const boundMealClient = input.mealClient ? withActorBinding(input.mealClient, dispatchRegistry) : input.mealClient;
+  const writeDependencies = { authPort: input.authPort, mealClient: boundMealClient };
   const mealWriteRuntime = input.mealWriteRuntime ?? new ConsumerMealWriteRuntime({
-    service: createConsumerMealRecordWriteService(writeFlags, dependencies),
-    operationStore: new ConsumerMealWriteOperationStore(input.storage)
+    service: createConsumerMealRecordWriteService(writeFlags, writeDependencies),
+    operationStore: new ConsumerMealWriteOperationStore(input.storage),
+    dispatchBinding: dispatchRegistry
   });
   const finalizationFlags = normalizeMealIdentificationFinalizationFlags(
     getConsumerMealIdentificationFinalizationRuntimeFlags(),
@@ -639,7 +646,7 @@ function createMealRuntimeParts(input: {
     finalizationFlags,
     {
       authPort: input.authPort,
-      finalizationClient: input.mealClient as unknown as SupabaseConsumerMealIdentificationFinalizationClientLike
+      finalizationClient: boundMealClient as unknown as SupabaseConsumerMealIdentificationFinalizationClientLike
     }
   );
   const mealIdentificationFinalizationRuntime =
@@ -649,7 +656,8 @@ function createMealRuntimeParts(input: {
         authPort: input.authPort,
         repository: mealIdentificationFinalizationRepository
       }),
-      operationStore: new ConsumerMealIdentificationFinalizationOperationStore(input.storage)
+      operationStore: new ConsumerMealIdentificationFinalizationOperationStore(input.storage),
+      dispatchBinding: dispatchRegistry
     });
   const basePlannedMealsService = createConsumerPlannedMealsService(overviewFlags, dependencies);
   const basePlannedMealService = input.plannedMealService ?? createConsumerPlannedMealV2Service(plannedWriteFlags, dependencies);

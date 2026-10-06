@@ -3,12 +3,14 @@ import {
   ConsumerMealIdentificationFinalizationAnalysisAlreadyFinalizedError,
   ConsumerMealIdentificationFinalizationAnalysisInvariantViolationError,
   ConsumerMealIdentificationFinalizationAnalysisNotFoundError,
+  ConsumerMealIdentificationFinalizationActorBindingMismatchError,
   ConsumerMealIdentificationFinalizationAnalysisNotReadyError,
   ConsumerMealIdentificationFinalizationAuthenticationRequiredError,
   ConsumerMealIdentificationFinalizationCatalogIdentityRejectedError,
   ConsumerMealIdentificationFinalizationCorrectionInvariantViolationError,
   ConsumerMealIdentificationFinalizationCorrectionValidationFailedError,
   ConsumerMealIdentificationFinalizationDurableStateInconsistencyError,
+  ConsumerMealIdentificationFinalizationEligibilityRequiredError,
   ConsumerMealIdentificationFinalizationForbiddenFieldError,
   ConsumerMealIdentificationFinalizationIdempotencyConflictError,
   ConsumerMealIdentificationFinalizationIdentityInvariantViolationError,
@@ -70,12 +72,32 @@ export function mapFinalizeMealIdentificationRpcResponse(
   };
 }
 
+// Diagnostics only (local reference code): SQLSTATE-like code and HTTP status of the answer. Never the
+// message, never the payload.
+// `structured` = the answer carried a non-empty error code (a server answer, i.e. the RPC transaction ended in rollback);
+// a transport failure WITHOUT a code (network, gateway, unreadable) is `structured: false` = unknown result.
+export type FinalizationErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null; structured: boolean };
+
 export function mapMealIdentificationFinalizationRpcError(
+  error: SupabaseMealIdentificationFinalizationErrorLike,
+  status?: number
+): ConsumerMealIdentificationFinalizationRuntimeError & FinalizationErrorDiagnostics {
+  const mapped = mapFinalizationRpcErrorInner(error, status);
+  const code = typeof error.code === "string" && /^[0-9A-Za-z]{5}$/.test(error.code) ? error.code : null;
+  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null, structured: typeof error.code === "string" && error.code.length > 0 });
+}
+
+function mapFinalizationRpcErrorInner(
   error: SupabaseMealIdentificationFinalizationErrorLike,
   status?: number
 ): ConsumerMealIdentificationFinalizationRuntimeError {
   const token = (error.message ?? "").trim().toUpperCase();
   const effectiveStatus = status ?? error.status ?? undefined;
+
+  // Actor-bound dispatch guard: refused BEFORE any network call (nothing was sent).
+  if (error.code === "TKACT0") {
+    return new ConsumerMealIdentificationFinalizationActorBindingMismatchError();
+  }
 
   // MI-E-C5-B1: v3 token-specific checks come first — several v3 codes share a SQLSTATE with an
   // existing v1/v2 code (ANALYSIS_ALREADY_FINALIZED and ANALYSIS_ACCESS_DENIED both use 23505/
@@ -100,7 +122,11 @@ export function mapMealIdentificationFinalizationRpcError(
     return new ConsumerMealIdentificationFinalizationCorrectionValidationFailedError();
   }
 
-  if (effectiveStatus === 401 || error.code === "28000" || token === "AUTHENTICATION_REQUIRED") {
+  // Consent / eligibility is not a login failure (server token, not SQLSTATE 42501 alone).
+  if (token === "CONSUMER_CORE_ELIGIBILITY_REQUIRED") {
+    return new ConsumerMealIdentificationFinalizationEligibilityRequiredError();
+  }
+  if (effectiveStatus === 401 || error.code === "28000" || (typeof error.code === "string" && /^PGRST30[123]$/.test(error.code)) || token === "AUTHENTICATION_REQUIRED") {
     return new ConsumerMealIdentificationFinalizationAuthenticationRequiredError();
   }
   if (effectiveStatus === 403 || error.code === "42501" || token === "OWNERSHIP_OR_AUTHORIZATION_REJECTED") {
@@ -133,6 +159,8 @@ export function mapMealIdentificationFinalizationRpcError(
   if (token === "INVALID_FINALIZATION" || error.code === "22023") {
     return new ConsumerMealIdentificationFinalizationInvalidInputError();
   }
+  // Unrecognised SQLSTATE or no code at all: a safe generic transport failure (the TYPE is unchanged). Whether the
+  // answer was structured is carried in `structured` and decides rollback vs unknown in the recovery policy.
   return new ConsumerMealIdentificationFinalizationTransportFailedError();
 }
 

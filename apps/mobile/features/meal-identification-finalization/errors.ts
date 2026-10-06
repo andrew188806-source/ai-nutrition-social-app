@@ -15,6 +15,8 @@ export type ConsumerMealIdentificationFinalizationErrorCode =
   | "finalization_ownership_or_authorization_rejected"
   | "finalization_response_malformed"
   | "finalization_transport_failed"
+  | "finalization_eligibility_required"
+  | "finalization_actor_binding_mismatch"
   // MI-E-C5-B1: v3 (real-AI candidate) contract error codes.
   | "finalization_analysis_not_found"
   | "finalization_analysis_access_denied"
@@ -128,6 +130,19 @@ export class ConsumerMealIdentificationFinalizationResponseMalformedError extend
 export class ConsumerMealIdentificationFinalizationTransportFailedError extends ConsumerMealIdentificationFinalizationRuntimeError {
   constructor(message = "Meal identification finalization RPC transport failed.") {
     super("finalization_transport_failed", message, true);
+  }
+}
+
+export class ConsumerMealIdentificationFinalizationEligibilityRequiredError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "Meal identification finalization requires completed consent or eligibility.") {
+    super("finalization_eligibility_required", message);
+  }
+}
+
+// The actor-bound dispatch guard refused the request before any network call. Nothing was sent.
+export class ConsumerMealIdentificationFinalizationActorBindingMismatchError extends ConsumerMealIdentificationFinalizationRuntimeError {
+  constructor(message = "Meal identification finalization was not sent: the operation owner differs from the signed-in identity.") {
+    super("finalization_actor_binding_mismatch", message);
   }
 }
 

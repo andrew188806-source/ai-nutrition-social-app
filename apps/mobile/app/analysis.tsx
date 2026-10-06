@@ -53,7 +53,7 @@ import { generateMealId, generatePhotoId, SingleMealGuiltShare } from "../featur
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getNextMealCandidateCount } from "../features/next-meal-prototype";
 import { getPlannedDinner } from "../features/planned-meal";
-import { useConsumerRuntime } from "../features/consumer-runtime";
+import { PendingMealSaveNotice, useConsumerRuntime } from "../features/consumer-runtime";
 import { toDateKeyInTimeZone } from "../features/consumer-meals/mealDateTime";
 import {
   isSameCatalogCandidate,
@@ -674,6 +674,13 @@ export default function AnalysisScreen() {
     }
   }
 
+  // The foreground unresolved photo operation the user has not set aside yet (暫不處理 acts on it).
+  const unresolvedFinalizationOperation =
+    consumerRuntime.mealSaveOperations.find(
+      (operation) => operation.kind === "finalization" && operation.state === "unknown" && !operation.deferred
+    ) ?? null;
+  const unresolvedFinalizationOperationId = unresolvedFinalizationOperation?.opId ?? null;
+
   async function retryPendingMealIdentificationFinalization() {
     if (finalizationInvocationRef.current) return;
     finalizationInvocationRef.current = true;
@@ -1052,21 +1059,43 @@ export default function AnalysisScreen() {
           ) : null}
           {consumerRuntime.mealIdentificationFinalizationState.status === "uncertain" ? (
             <Card>
-              <SectionTitle title={zhTW.mobile.mealIdentificationFinalization.uncertainTitle} subtitle={zhTW.mobile.mealIdentificationFinalization.uncertainBody} />
+              <SectionTitle title={zhTW.mobile.mealIdentificationFinalization.uncertainTitle} subtitle={unresolvedFinalizationOperationId ? zhTW.mobile.mealIdentificationFinalization.uncertainBody : zhTW.mobile.pendingMealSave.deferredNote} />
+              {unresolvedFinalizationOperation ? (
+                <Text style={styles.mealRecordNote}>{`${zhTW.mobile.pendingMealSave.referenceLabel} ${unresolvedFinalizationOperation.reference}`}</Text>
+              ) : null}
               <View style={styles.ctaColumn}>
                 <PrimaryButton
                   icon="check"
                   label={zhTW.mobile.mealIdentificationFinalization.retrySameRequest}
                   onPress={
                     hasAiFinalizationFlow
-                      ? () => void mealPhotoFinalization.retryPending()
+                      ? () =>
+                          void (mealPhotoFinalization.draft
+                            ? mealPhotoFinalization.retryPending()
+                            : // After a restart the screen has no frozen draft: retry the PERSISTED operation itself.
+                              consumerRuntime.retryPendingMealIdentificationFinalization())
                       : retryPendingMealIdentificationFinalization
                   }
                 />
+                {unresolvedFinalizationOperationId ? (
+                  <SecondaryButton
+                    icon="bookmark"
+                    label={zhTW.mobile.mealIdentificationFinalization.deferCta}
+                    onPress={() => void consumerRuntime.deferMealSaveOperation("finalization", unresolvedFinalizationOperationId)}
+                  />
+                ) : (
+                  <SecondaryButton
+                    icon="camera"
+                    label={zhTW.mobile.pendingMealSave.actions.continueOther}
+                    onPress={() => router.push("/meal-photo")}
+                  />
+                )}
                 <SecondaryButton icon="chart" label={zhTW.mobile.mealIdentificationFinalization.checkTodayIntake} onPress={() => router.push("/today-intake")} />
               </View>
             </Card>
-          ) : (hasAiFinalizationFlow
+          ) : consumerRuntime.mealIdentificationFinalizationState.errorCode === "capacity_exhausted" ? null
+            // Capacity is presented by the pending-save notice below (approved copy + the real exits).
+            : (hasAiFinalizationFlow
               ? Boolean(mealPhotoFinalization.draft?.lastSafeError)
               : consumerRuntime.mealIdentificationFinalizationState.status === "error" ||
                 Boolean(localFinalizationErrorCode)) ? (
@@ -1080,6 +1109,11 @@ export default function AnalysisScreen() {
               onCheckTodayIntake={() => router.push("/today-intake")}
             />
           ) : null}
+
+          <PendingMealSaveNotice
+            kinds={["finalization"]}
+            skip={(operation) => operation.state === "unknown" && !operation.deferred}
+          />
 
           {showLegacyAnalysisBlocks && !isAnalysisConfirmed ? (
             <SnowCard>

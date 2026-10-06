@@ -1573,11 +1573,16 @@ const BASELINE = correctionPublicView(
     let uuid = 0;
     return new ConsumerMealIdentificationFinalizationRuntime({
       service: { finalizeCurrentUserMealIdentification: finalize },
-      operationStore: {
-        save: async (actorKey, operation) => { stored.set(actorKey, operation); },
-        load: async (actorKey) => stored.get(actorKey) ?? null,
-        clear: async (actorKey) => { stored.delete(actorKey); }
-      },
+      operationStore: new (loadTsModule(
+        "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationOperationStore.ts"
+      ).ConsumerMealIdentificationFinalizationOperationStore)(
+        {
+          getItem: async (key) => stored.get(key) ?? null,
+          setItem: async (key, value) => { stored.set(key, value); },
+          removeItem: async (key) => { stored.delete(key); }
+        },
+        () => new Date("2026-08-01T12:00:00.000Z")
+      ),
       clock: { now: () => new Date("2026-08-01T12:00:00.000Z") },
       uuidFactory: () => `client-request-${++uuid}`
     });
@@ -1710,11 +1715,16 @@ const BASELINE = correctionPublicView(
           return finalize(calls.length);
         }
       },
-      operationStore: {
-        save: async (k, o) => { stored.set(k, o); },
-        load: async (k) => stored.get(k) ?? null,
-        clear: async (k) => { stored.delete(k); }
-      },
+      operationStore: new (loadTsModule(
+        "apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationOperationStore.ts"
+      ).ConsumerMealIdentificationFinalizationOperationStore)(
+        {
+          getItem: async (key) => stored.get(key) ?? null,
+          setItem: async (key, value) => { stored.set(key, value); },
+          removeItem: async (key) => { stored.delete(key); }
+        },
+        () => new Date("2026-08-01T12:00:00.000Z")
+      ),
       clock: { now: () => new Date("2026-08-01T12:00:00.000Z") },
       uuidFactory: () => `crid-${++uuid}`
     });
