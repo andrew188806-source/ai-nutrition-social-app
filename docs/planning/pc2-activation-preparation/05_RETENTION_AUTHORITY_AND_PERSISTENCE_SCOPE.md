@@ -1009,3 +1009,92 @@ DDL attempts 以 `ddl_command_start` event trigger 呼叫 `nextval` 計數（seq
 **殘餘空窗：** G2 至 `COMMIT` 之間，以及 shared catalog，由部署時段限制處理。
 
 本節之後的 commit、post-commit 結果與 independent reacceptance 只追加於外部報告，不再改寫本文件 bytes。R0-B Hosted deployment 仍 BLOCKED；法律 **DRAFT / NOT ACTIVE**；activation pending。
+
+## 16. R0-B-CAP：新飲食紀錄 T0 與 provenance capture — authorized local implementation record（2026-10-06）
+
+### 16.1 授權、exact scope 與保留邊界
+
+TastKind Owner 批准 `RETENTION_CAPTURE_SCOPE_PROPOSAL.md` 的「T0＋provenance capture」最小工程包，並批准兩項工程取捨：capture 採 fail-closed（失敗時整筆新增 transaction rollback），以及對 `consumer-retention-persistence-smoke.mjs` 做本輪精確 successor 相容性調整（保留既有檢查能力）。本輪只授權本機施工、可拋棄 PG17 驗證，以及全部 pre-commit gates 通過後的一個 local commit。不授權 Hosted 連線、rehearsal、部署、history repair、回填、purge、entitlement producer、registry 或法律啟用。
+
+Baseline 與 parent：`3eb8d7fa0002555d504d900db44313fca860474a`（R0-B-C1 本機驗收 candidate）。
+
+| 路徑 | 狀態 | 用途 |
+|---|---|---|
+| `supabase/migrations/20261006030000_consumer_retention_capture_anchor.sql` | 新增 | 單一 forward transaction：capture schema／sealed owner／anchor 表／兩個 trigger function／`meal_records` 的 AFTER INSERT trigger |
+| `scripts/consumer-retention-capture-smoke.mjs` | 新增 | 14 positive、11 negative、3 supplementary gates（PG17 disposable） |
+| `scripts/consumer-retention-capture-mutations.mjs` | 新增 | 24 個實際 migration SQL 變異 |
+| `scripts/consumer-retention-persistence-smoke.mjs` | 修改 | 僅 successor 相容性：`baseline()` 與 `frozen()`（見 §16.6） |
+| 本文件 | 修改 | 只追加本節；§1–§15 bytes 保留 |
+
+Timestamp `20261006030000` 晚於原最新 migration `20261003062157`，在 143 個既有檔與全部 tracked paths 中無碰撞。原 143 個 migration、既有 RPC 本體／ACL／signature、App、Edge、dependencies、法律、Demo Pool 與其他 scope 外 bytes／modes 不變。
+
+### 16.2 產品契約（IMPLEMENTED_AND_EVIDENCED；local only）
+
+- **只處理 migration 啟用後新增的 `public.meal_records`**：任何 `INSERT` 都在同一 statement／transaction 內由 `AFTER INSERT FOR EACH ROW` trigger `retention_capture_t0` 寫入恰一列 anchor。
+- **T0 語意**：`date_trunc('milliseconds', transaction_timestamp())`，即首次成功保存該 transaction 的 server UTC 時間，截斷到毫秒（timestamptz 無 rounding typmod，且以 CHECK 強制毫秒對齊、有限、UTC 年 1–9999）。同 transaction 的多筆新增共享同一 T0。T0 **不**讀 `occurred_at`、`meal_date`、`created_at`、payload、caller GUC 或任何訂閱資料。
+- **fail-closed**：anchor 寫入失敗時整筆新增 rollback；所有其他寫入（items、analyses、finalizations、corrections、planned conversion）一併不留下。
+- **重播、request id 回寫、後續寫入不重設 T0**：v2／finalize／conversion 的 replay 在呼叫 v1 INSERT 之前返回，不產生第二列；anchor 另有 BEFORE UPDATE guard（任何實質變更以 `23514` 拒絕）。
+- **同一紀錄只有一列**：`resource_id` 為 PK 並 FK 到 `public.meal_records(id)`，`ON DELETE CASCADE`（刪紀錄、刪帳 cascade 同步移除 anchor；R5 權利處置仍待另包）。
+- **provenance 欄位**：`capture_kind='canonical_meal_insert'`、`capture_contract_version='retention-capture-v1'`、`capture_context ∈ {authenticated_actor,no_actor_claim}`。context 只標記請求 claim 的 `sub` 是否等於紀錄 owner（鏡像 `auth.uid()`：先讀 `request.jwt.claim.sub`，缺時讀 `request.jwt.claims` 的 `sub`；格式不合者視為 `no_actor_claim`）；它不影響 T0，之後的 grant 只可使用 `authenticated_actor`。
+- **既有紀錄不回填**，缺 anchor＝unknown；**沒有 tier、grant、永久權益、保存期限欄位**，不讀 `subscription_entitlements`。
+
+### 16.3 實際 authority、ACL 與物件
+
+- Schema `retention_capture`、表 `detail_capture_anchors`、兩個函式由 sealed 角色 `consumer_retention_capture_owner` 擁有（NOLOGIN、NOINHERIT、NOSUPERUSER、NOCREATEDB、NOCREATEROLE、NOBYPASSRLS、無密碼、**membership 0**；沿用 F2 temporary builder，同 transaction 內 DROP）。
+- 表 ENABLE＋FORCE RLS，唯一 policy 為「只有 capture owner 可 INSERT」；沒有 SELECT／UPDATE／DELETE policy，沒有任何 runtime GRANT；schema 無 `PUBLIC`／anon／authenticated／service_role／authenticator 的 USAGE／CREATE，函式無 PUBLIC EXECUTE。
+- `capture_meal_record_insert()`：`SECURITY DEFINER`、`SET search_path=''`、全 schema-qualify、owner＝capture owner；僅在 `TG_OP=INSERT`、`TG_WHEN=AFTER`、`TG_LEVEL=ROW`、表為 `public.meal_records` 時執行，否則 `RETENTION_CAPTURE_TRIGGER_MISUSE`。`reject_anchor_update()`：`SECURITY INVOKER`、空 search_path。
+- 原 RPC（v1／v2／finalize／legacy_internal／planned create／convert）的 `prosrc`、signature、owner、ACL、config 與 `meal_records`／`meal_record_items` 的 ACL、RLS、policies、欄位、既有 triggers 全部不變（gate P11）；PC-2 的 `require_core` 與 `pc2_core_write` 先於 capture 執行，被拒絕時沒有 INSERT，也沒有 anchor（gate N04）。
+- **管理者邊界（不宣稱保密）**：資料庫管理者（superuser／可 SET ROLE 的身分）仍可讀取、DELETE 或 TRUNCATE anchors，或停用 trigger；本包只防止 client／runtime 偽造、修改或刪除。
+- Migration 自身為 plain 本機模式：任何 Supabase 平台 marker（`pgbouncer`、`supabase_auth_admin`、`dashboard_user`、`supabase_read_only_user`、`supabase_etl_admin` 角色、`supabase_migrations` schema、`supautils.reserved_roles`）或任何 R0-B binding GUC 一律在第一個 DDL 前以 42501 拒絕；沒有 Hosted-bound 模式。Hosted 套用需另案授權的後續 binding 套件。沿用已驗收的 F2 actor 檢查與 F1 管理讀取邊界（DDL 前後各一次），並加入 G2：scope digest（不含本包自身物件）不變，且 post-state 與常數 `3d314fc9c334f02d04932662c80617011bfef13fe418024b98fdc72538e22f76` 完全相同，否則整筆 rollback。
+
+### 16.4 Gates 與結果（fresh；evidence 在 repository 外 `D:\retention-capture-impl-20261006\`）
+
+| 套件 | 結果 |
+|---|---|
+| capture smoke | exit 0；14 positive（P01–P14）／11 negative（N01–N11）／3 supplementary（S01 finalize v2 record-timing、N12 App 保存呼叫、F01 frozen scope），共 28 CHECK 全部 PASS |
+| capture mutations | exit 0；24 個變異（X01–X20，含 A／B／C 子項），20 個 detector 在原 migration 全數通過；23 個由行為 gate 偵測，X15（改 predecessor RPC 的 SECURITY 屬性）由 migration 自身的 `CAP_POST_GUARD_DRIFT` 在安裝前拒絕 |
+| R0-B smoke（successor 調整後） | exit 0；原 14 成功／16 負向／12 binding gates 全過 |
+| R0-B mutations（successor 調整後） | exit 0；原 17 controls＋58 binding controls 全過 |
+
+Gate 重點：五個 canonical 入口（v1、v2、finalize legacy、finalize v3 existing-analysis、planned conversion，加 finalize v2 record-timing）各產生恰一列 anchor 且 T0 與 transaction 時間吻合；補登（過去／未來／跨時區）T0 不隨用餐時間移動；同 key replay 與並行（8 同 key→1 筆、8 不同 key→8 筆）；長交易（`pg_sleep` 後兩次新增）T0＝transaction timestamp；故障注入（items insert、request id 回寫、analysis insert／link、anchor 約束／權限／policy／表缺失）皆整筆 rollback 且同一請求在移除故障後可成功；真實 App TypeScript（repository＋`ConsumerMealWriteRuntime`）對 capture 失敗的處置見 §16.7。
+
+### 16.5 Differential 與 coverage
+
+**R0-B 自身 suites（baseline `3eb8d7fa` 對 candidate，71 組 check 觀察）**：61 組逐位元一致；8 組只有 predecessor seed 的 `created_at`／`updated_at`／`gen_random_uuid()` 執行期值不同（F1_PREAPPLY_UNSAFE_DENIED 與 7 個 F2 控制；遮蔽 timestamp／UUID 後殘差為 0，error／SQLSTATE／持久化狀態相同）；1 組 `IF14` 是預期的 frozen-scope 白名單列示（本包新路徑）；1 組 `N15` 僅輸出目錄路徑不同。17 個原 mutation 的 normal observation 與 mutant failure identity 全部一致；原 14 成功／16 負向／12 binding gates 與 17＋58 controls 全數通過。
+
+**既有 harness（37 個，同一 parse rule 套用兩側；隔離 clone，candidate＝baseline＋本包四個 repository 檔案）**：32 個輸出逐行一致（exit code、failure identity、SQLSTATE 全同）；5 個因確實套用了新 migration，只有 migration 計數與尾端清單不同（143→144、尾端列出新檔），exit code、失敗斷言身分與 SQLSTATE 不變；**NEW_UNAUTHORIZED_REGRESSION＝0**。分開記錄：
+
+- 實際執行到新 migration（plain 模式，完整序列套用成功）：5 個——admin-dashboard-social-policies-d、admin-operational-review-queues-c、restaurant-catalog-authoring-r2b、restaurant-owner-display-name-draft-visibility-r2e、staff-authority-p3-p6-p3k；
+- skip（需要 psql／Linux PG 路徑或環境變數；兩側相同）：5 個——geo-meal-buddy-geo-1d-p0、staff-authority-p3-p6-p2d-b0-a、p2d-b0-b、p3g、p3h；
+- 在更早的 predecessor migration 停止、被自身 inventory precheck 或環境阻擋（兩側相同，不算 R0-B 或本包證據）：27 個。
+
+**Coverage 限制**：只有上述 5 個 harness 真正套用新 migration；其餘 32 個的「一致」不構成本包證據。我的獨立推導比先前 R0-B 清單多出 1 個 harness（`staff-authority-p3-p6-p2d-b0-b-postgres`，讀取並套用全部 migrations，但在本機 skip），因此 differential 範圍為 37 而非 36。
+
+### 16.6 successor 相容性（`consumer-retention-persistence-smoke.mjs`）
+
+只做兩處精確調整，不刪任何 assertion：
+
+1. `baseline()`：原檢查「恰 143 檔且最後一檔是 R0-B」改為「原 143 檔，或原 143 檔加上唯一一個固定名稱、固定 sha256（`22fd1bbb516a38ccb148d108e6045d6abada393354495efc22b464fd35cf5205`）的 capture migration 且它是最後一檔」；任何其他新增、缺失、換名或內容不同的 migration 仍以 `MIGRATION_INVENTORY` 失敗；predecessor 集合排除 R0-B 與該 successor。
+2. `frozen()`：candidate 白名單加入本包三個新路徑；其餘 baseline 比對（3,341 路徑 index／mode／blob、tracked diff、untracked）不變。
+
+兩處調整前後，R0-B 自身 71 組觀察的差異見 §16.5；`consumer-retention-persistence-mutations.mjs` 位元組不變。
+
+### 16.7 App 保存呼叫對 capture 失敗的處置（SOURCE_FACT；未修改 App）
+
+以真實 TypeScript 原始碼（`SupabaseConsumerMealRecordWriteRepository`＋`ConsumerMealWriteRuntime`，in-process transpile）對真 DB 回傳的 capture 故障進行驗證：成功對照保存為 `succeeded`；三種 capture 故障皆**不會被報為成功**（`mealRecordId` 為空、`mealDataRevision` 不增、DB 無紀錄）：約束失敗（SQLSTATE `23514`）→ `error/provider_rejected`；INSERT 權限被拒（`42501`，PostgREST 對應 HTTP 403，模型值）→ `error/authentication_required`；anchor 表缺失（`42P01`，HTTP 500，模型值）→ `uncertain`（保留同 key pending 供重試）。**精確缺口（不修）**：`42501` 被分類為 `authentication_required`，真實根因（capture 權限）對使用者會顯示為需重新驗證；HTTP 狀態對應為模型而非遠端量測。
+
+### 16.8 殘餘空窗、限制與後續依賴
+
+- **Hosted**：本 migration 在 Hosted 環境（任一平台 marker）刻意拒絕套用；Hosted 預期的邏輯差異為「新增 sealed role＋schema＋表＋兩函式＋一個 trigger；不改任何既有 RPC」，實際 OID、ACL 與 Hosted 的 `auth.uid()` 對 `request.jwt.claims` 的等值性、`meal_records` 上建立 trigger 的可行性、PostgREST exposed schemas、Hosted 現有舊 function body（尚無 PC-2）下的行為，都須在後續另行授權的階段取得實際證據，不能以本機推導取代。
+- **Grant producer 未就緒**：可信付款／trial／升級 producer（ENT-F）、status 語意（STATUS-F）、rights／protection 來源、R0-C 顯示接線均為後續依賴；本包不產生 grant，也不推定 Free 或 Paid。
+- **JSON claims fallback**：本機 bootstrap 的 `auth.uid()` 只讀 `request.jwt.claim.sub`，`request.jwt.claims` 的 fallback 僅在本機驗證 capture 讀取行為，與平台函式的等值性屬 Hosted 階段證據。
+- **無 key 重複提交**：直接呼叫 v1 的重複請求仍是兩筆新紀錄、兩個 T0（App 實際走 v2 key 路徑）；本包不改變也不宣稱修好。
+- **scope digest 覆蓋範圍**：沿用 §15.2 的類別；G1 之後並行改動 predecessor RPC 的 COST／STRICT／PARALLEL 等不在 digest 內（X15B 證明由 P11 在安裝後偵測，而非由 G2 攔截）。
+- 管理者／superuser 可 DELETE、TRUNCATE 或停用 trigger；`session_replication_role=replica` 可繞過 trigger（需特權）。
+- 本 migration 的本機套用會啟用 capture trigger；遠端未套用，不宣稱保存功能已上線。R0-B foundation 仍 inactive、Hosted 未部署；法律 **DRAFT／NOT ACTIVE**。
+
+### 16.9 Source bindings 與 fresh／reused
+
+- Fresh：capture smoke、capture mutations、R0-B smoke／mutations（successor 調整後）、37 個既有 harness 的 baseline／candidate differential、frozen／inventory 證明。
+- Reused：R0-B C1 本機獨立驗收證據（`3eb8d7fa`）作為 R0-B 自身 differential 的 baseline 觀察；Hosted manifest 與 PG17 工具鏈沿用既有 hash 驗證。沒有重跑 478 suites、TLS 工具或無關產品驗證。
+- 本節之後的 commit、post-commit 結果只追加於外部報告，不再改寫本文件 bytes。

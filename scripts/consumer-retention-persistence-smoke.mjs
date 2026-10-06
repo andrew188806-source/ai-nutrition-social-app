@@ -12,6 +12,8 @@ import { createHash } from 'node:crypto';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MIGRATION = '20261003062157_consumer_retention_inactive_persistence_foundation.sql';
 export const OWNER = 'consumer_retention_foundation_owner';
+export const CAPTURE_SUCCESSOR = '20261006030000_consumer_retention_capture_anchor.sql';
+export const CAPTURE_SUCCESSOR_SHA256 = '22fd1bbb516a38ccb148d108e6045d6abada393354495efc22b464fd35cf5205';
 export const TABLES = ['owner_authority_state','authority_events','operation_receipts','detail_grants'];
 export const VERSION = 'consumer-retention-owner-2026-10-03-v1';
 export const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -67,8 +69,10 @@ export async function cluster(bin,rec) {
 }
 export async function baseline(cl,rec,{legacy=false}={}){
   const files=fs.readdirSync(path.join(ROOT,'supabase/migrations')).filter(n=>n.endsWith('.sql')).sort();
-  if(files.length!==143||files.at(-1)!==MIGRATION)throw Error('MIGRATION_INVENTORY');
-  const predecessors=files.filter(n=>n!==MIGRATION);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
+  // Exact successor recognition (R0-B-CAP): either the original 143-file inventory, or exactly that inventory plus the one pinned capture migration as the final file.
+  const successor=files.length===144&&files.at(-1)===CAPTURE_SUCCESSOR&&sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',CAPTURE_SUCCESSOR)))===CAPTURE_SUCCESSOR_SHA256;
+  if(!(files.length===143&&files.at(-1)===MIGRATION)&&!(successor&&files.at(-2)===MIGRATION))throw Error('MIGRATION_INVENTORY');
+  const predecessors=files.filter(n=>n!==MIGRATION&&n!==CAPTURE_SUCCESSOR);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
   const db=await cl.connect('postgres','postgres');
   for(const n of predecessors){
     if(legacy&&n==='20260930174028_consumer_pc2_onboarding_consent_foundation.sql'){
@@ -331,7 +335,7 @@ export async function unknownBoundary(rec){
 }
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};
-  const candidate=['supabase/migrations/'+MIGRATION,'scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md'];
+  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md'];
   // The accepted R0-A tree remains the frozen reference even after the additive commit.
   const baseline='3b1957e8dc459db6fdaa06bec873c1acc632ae9a';const entries=git(['ls-tree','-r',baseline]).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return {path:p,mode,blob};});
   const index=new Map(git(['ls-files','--stage']).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');return [p,{mode,blob,stage}];}));
