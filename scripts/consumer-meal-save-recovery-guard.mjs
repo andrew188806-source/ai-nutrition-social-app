@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // TastKind meal-save recovery guard: exact-inventory / frozen-proof / replaced-assertion static checks and the MUTATION
-// controls of the recovery gates (R-01 … R-34).
+// controls of the recovery gates (R-01 … R-36).
 //
 // Mutation controls: each mutant is a textual edit of ONE source file in a throw-away copy of the source tree under the
 // OS temp directory (never inside the repository). The recovery smoke is then run against that copy with only the gates the
@@ -104,9 +104,9 @@ const added = changed.filter((p) => fs.existsSync(path.join(ROOT, p)) && !/^scri
 });
 record("new/changed lines use TastKind only (no old Chinese brand, no Haocu; the two new scripts are excluded because they CONTAIN the banned patterns on purpose)", !added.some((l) => /好廚|好初|Haocu|haocu/i.test(l)), added.filter((l) => /好廚|好初|Haocu|haocu/i.test(l)).slice(0, 3));
 const smokeSource = read("scripts/consumer-meal-save-recovery-smoke.mjs");
-const wanted = Array.from({ length: 34 }, (_, i) => `R-${String(i + 1).padStart(2, "0")}`).filter((id) => id !== "R-27");
+const wanted = Array.from({ length: 36 }, (_, i) => `R-${String(i + 1).padStart(2, "0")}`).filter((id) => id !== "R-27");
 const missingGates = wanted.filter((id) => !new RegExp(`gate\\("${id}[a-z]?"`).test(smokeSource));
-record("the smoke defines R-01…R-34 (R-27 intentionally absent; R-07a/b/c and R-PG present)", missingGates.length === 0 && /gate\("R-07c"/.test(smokeSource) && /gate\("R-PG"/.test(smokeSource), missingGates);
+record("the smoke defines R-01…R-36 (R-27 intentionally absent; R-07a/b/c and R-PG present)", missingGates.length === 0 && /gate\("R-07c"/.test(smokeSource) && /gate\("R-PG"/.test(smokeSource), missingGates);
 record("no purgeActor / clear(actorKey) is introduced anywhere in the product sources", !changed.filter((p) => p.startsWith("apps/")).some((p) => /purgeActor|\bclear\s*\(\s*actorKey/.test(read(p))));
 
 // ---------------------------------------------------------------------------------------------- mutation controls
@@ -159,7 +159,16 @@ const mutants = [
   { id: "M-46", gates: ["R-26"], note: "the card keeps a stale local 'uncertain' line next to the notice", edits: [{ file: `${F}/next-meal-prototype/NextMealPrototypeContent.tsx`, find: "intakeStatus !== \"idle\" && !(intakeStatus === \"uncertain\" && pendingNotice)", replace: "intakeStatus !== \"idle\"" }] },
   { id: "M-47", gates: ["R-17"], note: "normal save: re-confirming a set-aside operation steals a blocking foreground", edits: [{ file: `${RT}/consumerMealWriteRuntime.ts`, find: "if (!this.pending || this.pending.opId === opId || !blocksNewSave(this.pending)) this.pending = entry;", replace: "this.pending = entry;" }] },
   { id: "M-48", gates: ["R-17"], note: "photo: re-confirming a set-aside operation takes over (and locks) the current analysis", edits: [{ file: `${RT}/consumerMealIdentificationFinalizationRuntime.ts`, find: "    if (this.pending?.opId === opId) this.pending = entry;\n    const operationId = this.operationId;", replace: "    this.pending = entry;\n    const operationId = this.operationId;" }] },
-  { id: "M-49", gates: ["R-26"], note: "the photo screen's unknown card has no reference code", edits: [{ file: "apps/mobile/app/analysis.tsx", find: "{`${zhTW.mobile.pendingMealSave.referenceLabel} ${unresolvedFinalizationOperation.reference}`}", replace: "{\"\"}" }] }
+  { id: "M-49", gates: ["R-26"], note: "the photo screen's unknown card has no reference code", edits: [{ file: "apps/mobile/app/analysis.tsx", find: "{`${zhTW.mobile.pendingMealSave.referenceLabel} ${unresolvedFinalizationOperation.reference}`}", replace: "{\"\"}" }] },
+  // D1 / D2 corrective
+  { id: "M-50", gates: ["R-35"], note: "photo: a late success of the bound operation is not published (residual unknown)", edits: [{ file: `${RT}/consumerMealIdentificationFinalizationRuntime.ts`, find: "if (wasForeground && value && this.isCurrentOperation(actorKey, generation, operationId)) return this.complete(actorKey, value);", replace: "if (!late && wasForeground && value && this.isCurrentOperation(actorKey, generation, operationId)) return this.complete(actorKey, value);" }] },
+  { id: "M-51", gates: ["R-35"], note: "photo: the foreground/analysis-operation check is dropped (an earlier operation's late success lands on the new photo)", edits: [{ file: `${RT}/consumerMealIdentificationFinalizationRuntime.ts`, find: "if (wasForeground && value && this.isCurrentOperation(actorKey, generation, operationId)) return this.complete(actorKey, value);", replace: "if (value && this.isCurrent(actorKey, this.actorGeneration)) return this.complete(actorKey, value);" }] },
+  { id: "M-52", gates: ["R-35"], note: "photo: the actor check is dropped (A's late success is published to B)", edits: [{ file: `${RT}/consumerMealIdentificationFinalizationRuntime.ts`, find: "if (wasForeground && value && this.isCurrentOperation(actorKey, generation, operationId)) return this.complete(actorKey, value);", replace: "if (value && this.actorKey !== null) return this.complete(actorKey, value);" }] },
+  { id: "M-53", gates: ["R-36"], note: "normal save: the untrusted-answer gate is removed (text classification of code-less answers returns)", edits: [{ file: `${F}/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts`, find: "  if (!TRUSTED_SERVER_ERROR_CODE.test(code)) return new ConsumerMealWriteTransportFailedError();\n", replace: "" }] },
+  { id: "M-54", gates: ["R-36"], note: "photo: the untrusted-answer gate is removed (code-less 401/403/409 classified as login/server/conflict)", edits: [{ file: `${F}/meal-identification-finalization/mealIdentificationFinalizationMappers.ts`, find: "  if (!isTrustedServerErrorCode(error.code)) {\n    return new ConsumerMealIdentificationFinalizationTransportFailedError();\n  }\n", replace: "" }] },
+  { id: "M-55", gates: ["R-36"], note: "photo: any non-empty code counts as server-authored again", edits: [{ file: `${F}/meal-identification-finalization/mealIdentificationFinalizationMappers.ts`, find: "return typeof code === \"string\" && /^(?:[0-9A-Z]{5}|PGRST\\d{3})$/.test(code);", replace: "return typeof code === \"string\" && code.length > 0;" }] },
+  { id: "M-56", gates: ["R-35"], note: "photo screen: the late-success adoption is removed (STATIC detector; UI behaviour is verified in the UI flow)", edits: [{ file: "apps/mobile/app/analysis.tsx", find: "    if (next.submissionStatus === \"succeeded\") completeMealPhotoFinalization(next);\n", replace: "" }] },
+  { id: "M-57", gates: ["R-35"], note: "photo screen: the 暫不處理 note is shown without a set-aside operation (STATIC detector)", edits: [{ file: "apps/mobile/app/analysis.tsx", find: "subtitle={!unresolvedFinalizationOperationId && deferredFinalizationOperation ? zhTW.mobile.pendingMealSave.deferredNote", replace: "subtitle={!unresolvedFinalizationOperationId ? zhTW.mobile.pendingMealSave.deferredNote" }] },
 ];
 
 const COPY_DIRS = [`${F}/consumer-auth`, `${F}/consumer-meals`, `${F}/consumer-runtime`, `${F}/meal-identification-finalization`, `${F}/meal-identification`];

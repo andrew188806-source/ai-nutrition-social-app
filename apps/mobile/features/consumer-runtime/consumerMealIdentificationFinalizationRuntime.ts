@@ -496,7 +496,10 @@ export class ConsumerMealIdentificationFinalizationRuntime {
     if (classification.cls === "saved") {
       const value = "result" in answer && answer.result.ok ? (answer.result.value as FinalizationValue) : null;
       const wasForeground = this.pending?.opId === operation.opId;
-      if (publishable && value) return this.complete(actorKey, value);
+      // A trusted success of the operation that is still the foreground of the analysis bound to this runtime (same
+      // actor, generation and analysis operation) resolves it — also when it arrives after the local wait. Any other
+      // success is reconciled in the owner's ledger only and is never published to another analysis or account.
+      if (wasForeground && value && this.isCurrentOperation(actorKey, generation, operationId)) return this.complete(actorKey, value);
       if (wasForeground && this.isCurrent(actorKey, generation)) this.pending = null;
       // Late (or no-longer-foreground) success: the ledger is reconciled; refresh data for the owner's
       // current session only, and never touch another account's state.

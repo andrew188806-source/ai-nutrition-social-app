@@ -74,8 +74,9 @@ export function mapFinalizeMealIdentificationRpcResponse(
 
 // Diagnostics only (local reference code): SQLSTATE-like code and HTTP status of the answer. Never the
 // message, never the payload.
-// `structured` = the answer carried a non-empty error code (a server answer, i.e. the RPC transaction ended in rollback);
-// a transport failure WITHOUT a code (network, gateway, unreadable) is `structured: false` = unknown result.
+// `structured` = the answer carried a well-formed server error code (a server answer, i.e. the RPC transaction ended in
+// rollback); a transport failure without one (network, gateway, unreadable, malformed code) is `structured: false` =
+// unknown result.
 export type FinalizationErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null; structured: boolean };
 
 export function mapMealIdentificationFinalizationRpcError(
@@ -84,7 +85,14 @@ export function mapMealIdentificationFinalizationRpcError(
 ): ConsumerMealIdentificationFinalizationRuntimeError & FinalizationErrorDiagnostics {
   const mapped = mapFinalizationRpcErrorInner(error, status);
   const code = typeof error.code === "string" && /^[0-9A-Za-z]{5}$/.test(error.code) ? error.code : null;
-  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null, structured: typeof error.code === "string" && error.code.length > 0 });
+  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null, structured: isTrustedServerErrorCode(error.code) });
+}
+
+// Only a well-formed server error code (SQLSTATE or PGRSTnnn) makes an answer server-authored. A missing, empty or
+// malformed code (gateway/proxy text, HTML, unreadable body) proves nothing about the write, whatever its text or HTTP
+// status says.
+function isTrustedServerErrorCode(code: unknown): boolean {
+  return typeof code === "string" && /^(?:[0-9A-Z]{5}|PGRST\d{3})$/.test(code);
 }
 
 function mapFinalizationRpcErrorInner(
@@ -97,6 +105,10 @@ function mapFinalizationRpcErrorInner(
   // Actor-bound dispatch guard: refused BEFORE any network call (nothing was sent).
   if (error.code === "TKACT0") {
     return new ConsumerMealIdentificationFinalizationActorBindingMismatchError();
+  }
+  // Not server-authored: transport failure (structured: false => unknown in the recovery policy).
+  if (!isTrustedServerErrorCode(error.code)) {
+    return new ConsumerMealIdentificationFinalizationTransportFailedError();
   }
 
   // MI-E-C5-B1: v3 token-specific checks come first — several v3 codes share a SQLSTATE with an

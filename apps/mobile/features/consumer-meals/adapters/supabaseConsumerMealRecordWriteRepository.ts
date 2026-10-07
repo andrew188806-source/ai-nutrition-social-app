@@ -102,12 +102,14 @@ function buildCreateMealRecordRpcArgs(input: ValidatedCreateMealRecordInput): Su
 
 export type MealWriteErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null };
 
+const TRUSTED_SERVER_ERROR_CODE = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/;
+
 // Classification of a structured PostgREST answer. Only trusted, server-authored signals decide:
 //   * ACTOR_BINDING (guard)            -> not sent
 //   * CONSUMER_CORE_ELIGIBILITY_REQUIRED -> consent/eligibility (never "log in again")
 //   * AUTHENTICATION_REQUIRED / 28000 / PGRST301-303 / HTTP 401 -> real authentication failure
-//   * everything else with a non-empty code was rolled back by the server and is NOT a login problem.
-// An answer without a code (network failure, gateway HTML, unreadable) is a transport failure = unknown.
+//   * everything else with a well-formed code was rolled back by the server and is NOT a login problem.
+// An answer without a well-formed code (network failure, gateway text/HTML, unreadable) is a transport failure = unknown.
 function mapMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status?: number) {
   const mapped = classifyMealWriteRpcError(error, status);
   const code = typeof error.code === "string" && /^[0-9A-Za-z]{5}$/.test(error.code) ? error.code : null;
@@ -119,6 +121,10 @@ function classifyMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status
   const code = typeof error.code === "string" ? error.code : "";
   const effectiveStatus = status ?? error.status ?? undefined;
   if (code === "TKACT0") return new ConsumerMealWriteActorBindingMismatchError();
+  // Only an answer carrying a well-formed server error code (SQLSTATE or PGRSTnnn) is server-authored. A missing,
+  // empty or malformed code (gateway/proxy text, HTML, unreadable body) proves nothing about the write, whatever its
+  // text or HTTP status says: transport failure = unknown, never "not written".
+  if (!TRUSTED_SERVER_ERROR_CODE.test(code)) return new ConsumerMealWriteTransportFailedError();
   if (message.includes("CONSUMER_CORE_ELIGIBILITY_REQUIRED")) return new ConsumerMealWriteEligibilityRequiredError();
   if (effectiveStatus === 401 || code === "28000" || /^PGRST30[123]$/.test(code) || message.includes("AUTHENTICATION_REQUIRED")) {
     return new ConsumerMealWriteAuthenticationRequiredError("Consumer meal write requires a current authenticated session.");

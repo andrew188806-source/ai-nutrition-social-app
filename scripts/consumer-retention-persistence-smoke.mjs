@@ -374,14 +374,27 @@ export const RECOVERY_SUCCESSOR=Object.freeze({parent:'654b2a372eee6dcf2243a4788
 // bytes (exact mode/blob below) recognise this file and consumer-retention-capture-smoke.mjs as an authorized, path-bound
 // validation successor. Binding is one-way: these validators bind the guard's bytes; the guard binds only their paths.
 export const CORRECTIVE_SUCCESSOR=Object.freeze({base:RECOVERY_SUCCESSOR.commit,overrides:Object.freeze({'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','551d7dc992c6f8fdd7b0edb1e6ffb73a31dbf125'])})});
+// D1/D2 product corrective of that validation successor (photo late success; untrusted error answers): the same 27 paths
+// and the corrective's bytes, except exactly these six (exact mode/blob). No path is added. One-way binding again: this
+// file binds their bytes; none of them records this file's or the capture smoke's hash.
+export const D1D2_SUCCESSOR=Object.freeze({base:'f6f90262bfe3e83c3dd8d39b02ba74cabc8c97d0',overrides:Object.freeze({
+  'apps/mobile/app/analysis.tsx':Object.freeze(['100644','9201c6fcfb7909fa59aaee08610a601cc8d81271']),
+  'apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts':Object.freeze(['100644','7d7f185dea738e5fd184678620d59553e6a38b2e']),
+  'apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts':Object.freeze(['100644','3bfe6dd2bc4d20379d70d11199ffa5fb83540299']),
+  'apps/mobile/features/meal-identification-finalization/mealIdentificationFinalizationMappers.ts':Object.freeze(['100644','e1bc2ede2eed859682194b9afa44f8e4400b88dc']),
+  'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','3d5b8942dc46e3c4cc8309348d2e346b0ea70a4d']),
+  'scripts/consumer-meal-save-recovery-smoke.mjs':Object.freeze(['100644','f83b89f62ca8a54ca58eb45e7971c7071aa93d2a'])
+})});
 // git: (args) => stdout of a git command run at the tree under test. Returns {state:'capture'|'recovery'|'corrective'|
-// 'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record) or 'corrective' (exact record with the
-// corrected guard) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
+// 'd1d2'|'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record), 'corrective' (exact record with the
+// corrected guard) or 'd1d2' (exact record with the six D1/D2 overrides) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
 export function recoverySuccessorState(git){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
   const overrides=CORRECTIVE_SUCCESSOR.overrides;
   if(Object.keys(overrides).length!==1||!Object.keys(overrides).every(p=>paths.includes(p)))throw Error('CORRECTIVE_RECORD_SHAPE');
+  const d1d2=D1D2_SUCCESSOR.overrides;
+  if(Object.keys(d1d2).length!==6||!Object.keys(d1d2).every(p=>paths.includes(p)))throw Error('D1D2_RECORD_SHAPE');
   const rows=out=>out.trim().split('\n').filter(Boolean);
   const parent=new Map(rows(git(['ls-tree','-r',S.parent,'--',...paths])).map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return [p,{mode,blob}];}));
   const index=new Map();for(const l of rows(git(['ls-files','--stage','--',...paths]))){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
@@ -394,11 +407,13 @@ export function recoverySuccessorState(git){
     return !!b&&!!i&&i.mode===b.mode&&i.blob===b.blob&&worktree.get(p)===b.blob;};
   if(S.entries.filter(([s])=>s==='M').some(([,p])=>!parent.has(p)))throw Error('RECOVERY_PARENT_TREE_UNAVAILABLE');
   const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
-  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),cap=S.entries.map(atCapture);
+  const atD1D2=e=>d1d2[e[1]]?atRecord([e[0],e[1],...d1d2[e[1]]]):atCorrective(e);
+  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),fix=S.entries.map(atD1D2),cap=S.entries.map(atCapture);
   if(rec.every(Boolean))return {state:'recovery',exempt:true,paths,violations:[]};
   if(cor.every(Boolean))return {state:'corrective',exempt:true,paths,violations:[]};
+  if(fix.every(Boolean))return {state:'d1d2',exempt:true,paths,violations:[]};
   if(cap.every(Boolean))return {state:'capture',exempt:false,paths,violations:[]};
-  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
+  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]||fix[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
 }
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};

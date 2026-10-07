@@ -1399,6 +1399,130 @@ let aliasMap = { };
 const aliasBack = (data) => { let text = JSON.stringify(data); for (const [uuidValue, alias] of Object.entries(aliasMap)) text = text.split(`"${uuidValue}"`).join(`"${alias}"`); return JSON.parse(text); };
 const pgResponse = (r) => (r.ok ? { data: aliasBack(r.rows[0].s), error: null, status: 200 } : structured(r.code, r.message));
 
+// ============================================================================================ D1 / D2 corrective
+gate("R-35", "a late success resolves the bound photo operation and nothing else [H-FS + STATIC]", async () => {
+  const elapsed = { race: (p) => Promise.race([p.then((value) => ({ timedOut: false, value })), wait(15).then(() => ({ timedOut: true }))]) };
+  // current photo: local wait elapsed, then the original request commits and answers
+  const g1 = deferred();
+  const h = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g1 }], localWait: elapsed }));
+  expect((await submit(h)).status === "uncertain", "photo: the elapsed local wait first shows the operation as unresolved");
+  g1.resolve(); await wait(40);
+  const s1 = h.runtime.getState();
+  expect(s1.status === "succeeded" && Boolean(s1.mealRecordId) && !s1.pending && (await entriesOf(h)).length === 0 && h.model.rowsOf("A").length === 1 && h.client.calls.length === 1, "photo: a late trusted success of the bound operation publishes succeeded with its durable IDs (no residual unknown, no extra request)");
+  // no unresolved state is left, so the screen offers no retry control; a programmatic retry has no ledger target and sends nothing
+  await h.runtime.retry(actorCtx());
+  expect(s1.status === "succeeded" && h.client.calls.length === 1 && (await entriesOf(h)).length === 0, "photo: after the late success no retry target remains and nothing is re-sent");
+  // set aside (暫不處理) while still on the same photo, then the late success
+  const g2 = deferred();
+  const d = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g2 }], localWait: elapsed }));
+  await submit(d); await d.runtime.defer(actorCtx());
+  g2.resolve(); await wait(40);
+  expect(d.runtime.getState().status === "succeeded" && (await entriesOf(d)).length === 0, "photo: set aside, then a late success of the still-bound operation resolves it");
+  // a NEW photo is in front: the earlier operation's late success never lands on it
+  const g3 = deferred();
+  const n = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g3 }], localWait: elapsed }));
+  await submit(n); await n.runtime.defer(actorCtx());
+  expect(n.runtime.beginAnalysisOperation(actorCtx(), "analysis-op-2") === true, "photo: the set-aside operation lets a new analysis bind");
+  const newPhotoBefore = JSON.stringify(slim(n.runtime.getState()));
+  g3.resolve(); await wait(40);
+  expect(JSON.stringify(slim(n.runtime.getState())) === newPhotoBefore && n.runtime.getState().status === "idle" && (await entriesOf(n)).length === 0 && n.runtime.isBoundToOperation(actorCtx(), "analysis-op-2"), "photo: the earlier operation's late success reconciles its ledger only and never appears as the new photo's save");
+  // account switch: A's late success never changes B's screen
+  const g4 = deferred();
+  const x = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g4, as: "A" }], localWait: elapsed }));
+  await submit(x);
+  await x.runtime.setActor("B", 2); x.world.user = "B";
+  x.runtime.beginAnalysisOperation(actorCtx("B", 2), "analysis-op-b");
+  const bBefore = JSON.stringify(slim(x.runtime.getState()));
+  g4.resolve(); await wait(40);
+  expect(JSON.stringify(slim(x.runtime.getState())) === bBefore && x.runtime.getState().status !== "succeeded" && (await x.store.list("A")).entries.length === 0 && (await x.store.list("B")).entries.length === 0, "photo: A's late success reconciles A's ledger and never changes B's screen");
+  // sign-out: the late success is reconciled for the owner and nothing is published
+  const g5 = deferred();
+  const o = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g5, as: "A" }], localWait: elapsed }));
+  await submit(o);
+  await o.runtime.setActor(null, 2);
+  g5.resolve(); await wait(40);
+  expect(o.runtime.getState().status === "idle" && (await o.store.list("A")).entries.length === 0, "photo: after sign-out the late success is reconciled in the owner's ledger and nothing is shown");
+  // normal save keeps its existing behaviour: a late success ends the unresolved state (idle), one row
+  const g6 = deferred();
+  const w = await boot(makeNormal({ behaviors: [{ kind: "gate", gate: g6 }], localWait: elapsed }));
+  await submit(w);
+  g6.resolve(); await wait(40);
+  expect(w.runtime.getState().status === "idle" && !w.runtime.getState().pending && (await entriesOf(w)).length === 0 && w.model.rowsOf("A").length === 1, "normal save: a late success still ends the unresolved state (unchanged behaviour)");
+  // STATIC: the analysis screen adopts only its OWN operation's late success (operation-scoped status) and never shows
+  // the 暫不處理 note unless such an operation exists
+  const screen = readText("apps/mobile/app/analysis.tsx");
+  expect(/mealPhotoFinalization\.runtimeStatus !== "succeeded"\) return;/.test(screen) && /draft\.submissionStatus !== "failed" \|\| draft\.lastSafeError !== "result_uncertain"\) return;/.test(screen) && /applyMealPhotoFinalizationResult\(draft, lateFinalizationState\)/.test(screen) && /if \(next\.submissionStatus === "succeeded"\) completeMealPhotoFinalization\(next\);/.test(screen), "STATIC: the photo screen completes from the runtime's operation-scoped success only for its own unresolved draft");
+  expect(/!unresolvedFinalizationOperationId && deferredFinalizationOperation \? zhTW\.mobile\.pendingMealSave\.deferredNote/.test(screen), "STATIC: the set-aside note is shown only for an operation the user actually set aside");
+});
+
+gate("R-36", "answers without a well-formed server error code stay unknown on both write paths; trusted codes unchanged [H-SDK + H-FS]", async () => {
+  const BODIES = [
+    ["kong-502-json", 502, "application/json", JSON.stringify({ message: "An invalid response was received from the upstream server" })],
+    ["html-502-invalid", 502, "text/html", "<html><body><h1>502 Bad Gateway</h1><p>Invalid response from upstream</p></body></html>"],
+    ["html-503-required", 503, "text/html", "<html><body>Service Unavailable. Retry is required later.</body></html>"],
+    ["proxy-502-forbidden", 502, "application/json", JSON.stringify({ message: "Upstream connection forbidden by proxy policy" })],
+    ["codeless-401-token", 401, "application/json", JSON.stringify({ message: "AUTHENTICATION_REQUIRED" })],
+    ["codeless-403-token", 403, "application/json", JSON.stringify({ message: "OWNERSHIP_OR_AUTHORIZATION_REJECTED" })],
+    ["codeless-409-conflict", 409, "application/json", JSON.stringify({ message: "IDEMPOTENCY_KEY_CONFLICT" })],
+    ["empty-code", 500, "application/json", JSON.stringify({ code: "", message: "INVALID", details: null, hint: null })],
+    ["malformed-code", 502, "application/json", JSON.stringify({ code: "BAD_GATEWAY", message: "INVALID upstream", details: null, hint: null })],
+    ["numeric-code", 502, "application/json", JSON.stringify({ code: 502, message: "invalid", details: null, hint: null })],
+    ["lowercase-code", 500, "application/json", JSON.stringify({ code: "pgrst301", message: "INVALID", details: null, hint: null })]
+  ];
+  const build = (kind, body, commit) => {
+    const model = createServerModel();
+    const calls = [];
+    const backend = async (input, init) => {
+      const fn = String(input).split("/rpc/")[1];
+      const args = JSON.parse(init.body);
+      calls.push(args.p_client_request_id);
+      const committed = commit || calls.length > 1 ? model.handle("A", fn, args) : null;
+      if (calls.length > 1) return new Response(JSON.stringify(okPayload(fn, committed.row)), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(body[3], { status: body[1], headers: { "content-type": body[2] } });
+    };
+    const registry = C.dispatch.createActorBindingRegistry();
+    const client = C.dispatch.withActorBinding(SDK.createClient(SB_URL, ANON_KEY, { accessToken: async () => jwt("A"), global: { fetch: C.dispatch.createActorBindingFetchGuard({ supabaseUrl: SB_URL, inner: backend }) } }), registry);
+    const world = { user: "A" };
+    let n = kind === "normal" ? 3600 : 3700;
+    if (kind === "normal") {
+      const repo = new C.repoW.SupabaseConsumerMealRecordWriteRepository({ authPort: authPortFor(world), mealClient: client, writeEnabled: true });
+      const store = new C.storeW.ConsumerMealWriteOperationStore(new MapStorage());
+      return { kind, model, calls, store, runtime: new C.runtimeW.ConsumerMealWriteRuntime({ service: { createCurrentUserMealRecord: (i) => repo.createCurrentUserMealRecord(i) }, operationStore: store, uuidFactory: () => uuid(n++), dispatchBinding: registry }) };
+    }
+    const service = new C.svcF.ConsumerMealIdentificationFinalizationService({ authPort: authPortFor(world), repository: new C.repoF.SupabaseConsumerMealIdentificationFinalizationRepository(client) });
+    const store = new C.storeF.ConsumerMealIdentificationFinalizationOperationStore(new MapStorage());
+    return { kind: "finalization", model, calls, store, runtime: new C.runtimeF.ConsumerMealIdentificationFinalizationRuntime({ service, operationStore: store, uuidFactory: () => uuid(n++), dispatchBinding: registry }) };
+  };
+  for (const kind of ["normal", "finalization"]) for (const body of BODIES) for (const commit of [true, false]) {
+    const h = await boot(build(kind, body, commit));
+    const first = await submit(h);
+    const [entry] = await entriesOf(h);
+    const op = h.runtime.getState().operations[0];
+    expect(entry && entry.state === "unknown" && entry.hadUnknown && first.status === "uncertain" && op && !op.actions.includes("cancel") && h.model.rowsOf("A").length === (commit ? 1 : 0), `${kind}/${body[0]}/${commit ? "committed" : "not committed"}: real SDK answer without a well-formed code => unknown (kept, not cancellable, never "not written")`);
+    const done = await h.runtime.retry(actorCtx());
+    expect((done.status === "succeeded" || (kind === "normal" && done.status === "idle") || kind === "finalization") && (await entriesOf(h)).length === 0 && h.model.rowsOf("A").length === 1 && h.calls.length === 2 && h.calls[0] === h.calls[1], `${kind}/${body[0]}/${commit ? "committed" : "not committed"}: 重新確認 sends the original key once; exactly one row`);
+  }
+  // classification boundary (H-FS, typed repository errors)
+  for (const make of bothKinds) {
+    for (const [label, error, status] of [["code missing", { message: "INVALID" }, 400], ["code empty", { code: "", message: "REQUIRED", details: "", hint: "" }, 400], ["code malformed", { code: "E-502", message: "FORBIDDEN", details: "", hint: "" }, 502], ["code null", { code: null, message: "TOO_MANY", details: "", hint: "" }, 429]]) {
+      const h = await boot(make({ behaviors: [] }));
+      h.client.rpc = async () => ({ data: null, error, status });
+      await submit(h);
+      const [e] = await entriesOf(h);
+      expect(e && e.state === "unknown" && e.hadUnknown, `${make.name}: ${label} => unknown`);
+    }
+    // trusted codes keep their classification (no relaxation of login, consent, ownership or input rules)
+    const trusted = [["22023", "INVALID_MEAL_RECORD", 400], ["XX000", "boom", 500], ["28000", "AUTHENTICATION_REQUIRED", 401], ["42501", "CONSUMER_CORE_ELIGIBILITY_REQUIRED", 403]];
+    for (const [code, message, status] of trusted) {
+      const h = await boot(make({ behaviors: [{ kind: "fault", code, message, status }] }));
+      await submit(h);
+      const [e] = await entriesOf(h);
+      const expected = code === "22023" ? (make === makeNormal ? null : "removed-or-anomaly") : code === "XX000" ? "retryable" : code === "28000" ? "blocked_login" : "blocked_consent";
+      expect(expected === null ? !e : expected === "removed-or-anomaly" ? !e || e.state !== "unknown" : e && e.state === expected, `${make.name}: trusted code ${code} keeps its classification`);
+    }
+  }
+});
+
 gate("R-PG", "real PostgreSQL 17 + real migrations: R-02/R-03/R-10/R-14 and the full R-07c matrix [H-PG; PostgREST modelled]", async () => {
   await withPg(async ({ fresh, act, rpcSql, U, BU }) => {
     const ids = uidOf(U, BU);
@@ -1411,6 +1535,7 @@ gate("R-PG", "real PostgreSQL 17 + real migrations: R-02/R-03/R-10/R-14 and the 
       const { sql, values } = rpcSql(fn, args);
       const r = await act(c, ids[world.user], sql, values);
       if (b?.kind === "committedThenNet" && r.ok) return NET();
+      if (b?.kind === "committedThenGateway" && r.ok) return { data: null, error: { message: "An invalid response was received from the upstream server" }, status: 502 };
       return pgResponse(r);
     } });
     const build = (c, make, { behaviors = [], world = { user: "A" }, storage = new MapStorage(), localWait, start = 12000 } = {}) => {
@@ -1428,16 +1553,16 @@ gate("R-PG", "real PostgreSQL 17 + real migrations: R-02/R-03/R-10/R-14 and the 
     const rowsFor = (c) => c.q("select m.user_id, m.client_request_id, a.original_recorded_at t0 from public.meal_records m left join retention_capture.detail_capture_anchors a on a.resource_id=m.id order by m.created_at");
     const ONE = (kind, h, name) => (kind === "normal" ? h.runtime.submit(ctx(), baseDraft(name)) : h.runtime.submit(ctx(), finDraft(undefined, name)));
     for (const kind of ["normal", "finalize"]) {
-      // R-02 / R-14: committed, answer lost, replay: same row, one anchor, T0 unchanged
-      await fresh(`r02${kind}`, async (c) => {
-        const h = build(c, kind, { behaviors: [{ kind: "committedThenNet" }] });
+      // R-02 / R-14 / R-36: committed, answer lost, replay: same row, one anchor, T0 unchanged
+      for (const lost of ["committedThenNet", "committedThenGateway"]) await fresh(`r02${kind}${lost === "committedThenNet" ? "" : "gw"}`, async (c) => {
+        const h = build(c, kind, { behaviors: [{ kind: lost }] });
         await h.runtime.setActor("A", 1); if (kind === "finalize") h.runtime.beginAnalysisOperation(actorCtx(), "analysis-op-1");
         const first = await ONE(kind, h, "pg lost");
         const t0 = (await rowsFor(c))[0]?.t0?.getTime();
         await wait(300);
         const done = await h.runtime.retry(actorCtx());
         const rows = await rowsFor(c);
-        expect(first.status === "uncertain" && done.status === "succeeded" && rows.length === 1 && rows[0].t0.getTime() === t0 && (await h.store.list("A")).entries.length === 0, `R-02 PG/${kind}: replay returns the original row; one row, one anchor, T0 unchanged`);
+        expect(first.status === "uncertain" && done.status === "succeeded" && rows.length === 1 && rows[0].t0.getTime() === t0 && (await h.store.list("A")).entries.length === 0, `R-02 PG/${kind}/${lost}: replay returns the original row; one row, one anchor, T0 unchanged`);
       });
       // R-10: eligibility lost -> identical denial for committed and never-sent operations; restore -> one row each
       await fresh(`r10${kind}`, async (c) => {

@@ -19,6 +19,7 @@ import {
   useMealPhotoAnalysis,
   useMealPhotoFinalization,
   useMealPhotoUpload,
+  applyMealPhotoFinalizationResult,
   type MealPhotoFinalizationDraftState,
   type MealPhotoFinalizationField
 } from "../features/analysis";
@@ -397,6 +398,17 @@ export default function AnalysisScreen() {
     onSuccess: completeMealPhotoFinalization,
     ownershipSafeSession
   });
+  // A trusted success of THIS analysis' own operation that arrived after the local wait: the photo hook had already
+  // recorded the request as unresolved, so the screen adopts the success the runtime published for the operation bound
+  // to this analysis (operation-scoped status) and completes with its durable IDs. Nothing is sent from here.
+  const lateFinalizationState = consumerRuntime.mealIdentificationFinalizationState;
+  useEffect(() => {
+    const draft = mealPhotoFinalization.draft;
+    if (completionSnapshot || !draft || mealPhotoFinalization.runtimeStatus !== "succeeded") return;
+    if (draft.submissionStatus !== "failed" || draft.lastSafeError !== "result_uncertain") return;
+    const next = applyMealPhotoFinalizationResult(draft, lateFinalizationState);
+    if (next.submissionStatus === "succeeded") completeMealPhotoFinalization(next);
+  }, [completeMealPhotoFinalization, completionSnapshot, lateFinalizationState, mealPhotoFinalization.draft, mealPhotoFinalization.runtimeStatus]);
   const frozenFinalizationContext =
     mealPhotoFinalization.payloadLocked && mealPhotoFinalization.draft
       ? mealPhotoFinalization.draft.context
@@ -680,6 +692,11 @@ export default function AnalysisScreen() {
       (operation) => operation.kind === "finalization" && operation.state === "unknown" && !operation.deferred
     ) ?? null;
   const unresolvedFinalizationOperationId = unresolvedFinalizationOperation?.opId ?? null;
+  // The 暫不處理 note is shown only for a photo operation the user actually set aside.
+  const deferredFinalizationOperation =
+    consumerRuntime.mealSaveOperations.find(
+      (operation) => operation.kind === "finalization" && operation.state === "unknown" && operation.deferred
+    ) ?? null;
 
   async function retryPendingMealIdentificationFinalization() {
     if (finalizationInvocationRef.current) return;
@@ -1059,7 +1076,7 @@ export default function AnalysisScreen() {
           ) : null}
           {consumerRuntime.mealIdentificationFinalizationState.status === "uncertain" ? (
             <Card>
-              <SectionTitle title={zhTW.mobile.mealIdentificationFinalization.uncertainTitle} subtitle={unresolvedFinalizationOperationId ? zhTW.mobile.mealIdentificationFinalization.uncertainBody : zhTW.mobile.pendingMealSave.deferredNote} />
+              <SectionTitle title={zhTW.mobile.mealIdentificationFinalization.uncertainTitle} subtitle={!unresolvedFinalizationOperationId && deferredFinalizationOperation ? zhTW.mobile.pendingMealSave.deferredNote : zhTW.mobile.mealIdentificationFinalization.uncertainBody} />
               {unresolvedFinalizationOperation ? (
                 <Text style={styles.mealRecordNote}>{`${zhTW.mobile.pendingMealSave.referenceLabel} ${unresolvedFinalizationOperation.reference}`}</Text>
               ) : null}
