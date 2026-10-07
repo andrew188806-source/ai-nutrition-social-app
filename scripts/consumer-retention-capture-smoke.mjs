@@ -8,7 +8,8 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
-  ROOT, MIGRATION, CAPTURE_SUCCESSOR, CAPTURE_SUCCESSOR_SHA256, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK
+  ROOT, MIGRATION, CAPTURE_SUCCESSOR, CAPTURE_SUCCESSOR_SHA256, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK,
+  recoverySuccessorState
 } from './consumer-retention-persistence-smoke.mjs';
 import { activateDisposableFixture } from './pc2-consumer-onboarding-fixtures.mjs';
 
@@ -692,7 +693,6 @@ async function appSave(ctx, label, { failing }) {
   const writeRepo = loadTs(path.join(FEATURES, 'consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts'));
   const runtimeMod = loadTs(path.join(FEATURES, 'consumer-runtime/consumerMealWriteRuntime.ts'));
   const storeMod = loadTs(path.join(FEATURES, 'consumer-runtime/consumerMealWriteOperationStore.ts'));
-  void storeMod;
   const names = ['p_meal_type', 'p_occurred_at', 'p_meal_date', 'p_client_request_id', 'p_timezone', 'p_title', 'p_note', 'p_source', 'p_items'];
   const cast = { p_meal_type: 'public.meal_type', p_occurred_at: 'timestamptz', p_meal_date: 'date', p_client_request_id: 'uuid', p_timezone: 'text', p_title: 'text', p_note: 'text', p_source: 'public.meal_source_type', p_items: 'jsonb' };
   const calls = [];
@@ -709,8 +709,9 @@ async function appSave(ctx, label, { failing }) {
   const authPort = { getCurrentSession: async () => ({ ok: true, value: { user: { userId: ELIGIBLE } } }) };
   const repository = new writeRepo.SupabaseConsumerMealRecordWriteRepository({ authPort, mealClient, writeEnabled: true });
   const service = { createCurrentUserMealRecord: input => repository.createCurrentUserMealRecord(input) };
+  // The App's real operation store over a controlled, per-call in-memory storage (no device storage involved).
   const memory = new Map();
-  const operationStore = { save: async (k, v) => { memory.set(k, v); }, load: async k => memory.get(k) ?? null, clear: async k => { memory.delete(k); } };
+  const operationStore = new storeMod.ConsumerMealWriteOperationStore({ getItem: async k => memory.get(k) ?? null, setItem: async (k, v) => { memory.set(k, v); }, removeItem: async k => { memory.delete(k); } });
   const runtime = new runtimeMod.ConsumerMealWriteRuntime({ service, operationStore, clock: { now: () => new Date() }, uuidFactory: () => uuid(failing ? 2800 : 2801) });
   await runtime.setActor('actor-key', 1);
   const state = await runtime.submit({ actorKey: 'actor-key', actorGeneration: 1, timezone: 'Asia/Taipei' }, {
@@ -749,18 +750,22 @@ function git(args) {
 export function frozenProof() {
   const entries = git(['ls-tree', '-r', BASELINE_COMMIT]).trim().split('\n').map(l => { const [m, p] = l.split('\t'); const [mode, , blob] = m.split(' '); return { path: p, mode, blob }; });
   const index = new Map(git(['ls-files', '--stage']).trim().split('\n').map(l => { const [m, p] = l.split('\t'); const [mode, blob, stage] = m.split(' '); return [p, { mode, blob, stage }]; }));
-  const violations = [];
+  // Only the exact, complete meal-save recovery successor (record in the persistence smoke) exempts its 27 paths;
+  // a capture-state or invalid tree keeps every check below for them. The capture state itself is unchanged.
+  const successor = recoverySuccessorState(git);
+  const exempt = new Set(successor.exempt ? successor.paths : []);
+  const violations = [...successor.violations];
   for (const e of entries) {
-    if (ALLOWED_PATHS.includes(e.path)) continue;
+    if (ALLOWED_PATHS.includes(e.path) || exempt.has(e.path)) continue;
     const i = index.get(e.path);
     if (!i || i.mode !== e.mode || i.blob !== e.blob || i.stage !== '0') violations.push(e.path + ':index');
   }
-  for (const p of git(['diff', BASELINE_COMMIT, '--name-only']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p)) violations.push(p + ':tracked');
+  for (const p of git(['diff', BASELINE_COMMIT, '--name-only']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':tracked');
   for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p)) violations.push(p + ':untracked');
   const added = [...index.keys()].filter(p => !entries.some(e => e.path === p));
-  for (const p of added) if (!ALLOWED_PATHS.includes(p)) violations.push(p + ':added');
+  for (const p of added) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':added');
   const wt = ALLOWED_PATHS.filter(p => fs.existsSync(path.join(ROOT, p)));
-  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt };
+  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, violations: successor.violations } };
 }
 export function inventoryProof() {
   const dir = path.join(ROOT, 'supabase/migrations');

@@ -333,16 +333,85 @@ export async function unknownBoundary(rec){
   const input={actorId:uuid(1),resourceId:uuid(101),policyVersion:VERSION,evaluationInstant:T0,resourceKind:'detail',action:{kind:'evaluate'},originalRecordedAt:fact(T0),materialState:fact('present'),protection:fact('unknown'),coreEligibility:fact('unknown'),rightsState:fact('unknown'),currentEntitlement:fact({tier:'paid',validFrom:T0,validUntil:null}),acquiredGrant:fact({kind:'detail',policyVersion:VERSION,originalRecordedAt:T0,acquisition:{eventId:uuid(11),at:T0,tier:'paid'},retainedUntil:E180})};
   const grantUnknown=structuredClone(input);for(const value of Object.values(grantUnknown)){if(value?.binding)value.binding.provenance='resolved';}grantUnknown.acquiredGrant.binding.provenance='unknown';const unknownGrant=load('index').evaluateConsumerRetention(grantUnknown);const before=JSON.stringify(input),a=load('index').evaluateConsumerRetention(input),b=load('index').evaluateConsumerRetention(input);rec.check('IF12',unknownGrant.retentionStatus==='unknown'&&!unknownGrant.purgeAllowed&&unknownGrant.reasons.some(x=>x.code==='PROVENANCE_UNKNOWN'&&x.field==='acquiredGrant')&&a.retentionStatus==='unknown'&&a.visibilityStatus==='unknown'&&!a.purgeAllowed&&a.grantTransitionProposal.kind==='pending'&&a.reasons.some(x=>x.code==='PROVENANCE_UNKNOWN')&&JSON.stringify(a)===JSON.stringify(b)&&before===JSON.stringify(input),{input,a,b,grantUnknown,unknownGrant,sourceHashes:Object.fromEntries(['types','policy','evaluate','index'].map(n=>[n,sha(fs.readFileSync(path.join(moduleRoot,n+'.ts')))]))});
 }
+// Meal-save recovery successor of the accepted capture state: the EXACT record of commit 52ae695 over its parent
+// 654b2a37 (27 paths: status, mode, git blob), fixed here and never caller-supplied. A tree is recognised only when
+// ALL 27 paths are at the capture state (the original acceptance), or ALL 27 match this record (historical identity of
+// 52ae695), or ALL 27 match CORRECTIVE_SUCCESSOR below — exactly in the index (mode, blob, stage 0) and in the worktree
+// (bytes); a partial, missing, renamed, re-moded or re-written path is a violation. Every other path keeps the unchanged
+// frozen-scope checks. Validation boundary: these records do not cover this file or consumer-retention-capture-smoke.mjs
+// (they stay in their rounds' allowed lists); their own bytes are bound by external review, the committed diff and
+// controls, never by a self-hash.
+export const RECOVERY_SUCCESSOR=Object.freeze({parent:'654b2a372eee6dcf2243a478857b17f3b8a34786',commit:'52ae695363557c67878f3e0c1c3dce7c651c8dc8',entries:Object.freeze([
+  ['M','apps/mobile/app/analysis.tsx','100644','d9ff65d9122f9c637cd69f9aba0136ea86987f09'],
+  ['M','apps/mobile/app/recommendation.tsx','100644','c1739951ae227e70e597526699bc57ea0ab37c6a'],
+  ['M','apps/mobile/app/today-intake.tsx','100644','a10cc7a3e9917d3a89e0b80f4b7f38079edc0cf5'],
+  ['A','apps/mobile/features/consumer-auth/actorBoundDispatch.ts','100644','332be0a68ba662913e16953b0a107b964f0a56f8'],
+  ['M','apps/mobile/features/consumer-auth/errors.ts','100644','37322e3fd33577475092e3489d0c24e1cd91165f'],
+  ['M','apps/mobile/features/consumer-auth/supabaseSdkLoader.ts','100644','e368a7223e9e5573c55eea49b41e6806eb4a5285'],
+  ['M','apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts','100644','2e6206efca8eca8c9c4f39a23a7d2873a19679d1'],
+  ['M','apps/mobile/features/consumer-runtime/ConsumerRuntimeProvider.tsx','100644','575d9039b6c720c7605933c9b31a6c8c9611ac21'],
+  ['A','apps/mobile/features/consumer-runtime/PendingMealSaveNotice.tsx','100644','afbc8a5c83e3c433523b6d79ff5277f129cf9000'],
+  ['M','apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationOperationStore.ts','100644','caf3c6b7391faf2c7406644836af9710c612c135'],
+  ['M','apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts','100644','67d9c1b35c4a960bd9cfa13e49e6cef7988b89ec'],
+  ['M','apps/mobile/features/consumer-runtime/consumerMealWriteOperationStore.ts','100644','a4265e649137e6e84a93b92cd19ea93572826505'],
+  ['M','apps/mobile/features/consumer-runtime/consumerMealWriteRuntime.ts','100644','644da4956272774d82744e6678b38d7054eb3626'],
+  ['M','apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts','100644','d24b9ae8f4dbc4a1143afac15877df0b6b6144ef'],
+  ['M','apps/mobile/features/consumer-runtime/index.ts','100644','cd00acb5615de631df291ec5c2d508e5e7f1aa52'],
+  ['A','apps/mobile/features/consumer-runtime/mealSaveOperationLedger.ts','100644','4b68eae678c116a477ba7c425968dc7da808ca64'],
+  ['A','apps/mobile/features/consumer-runtime/mealSaveRecovery.ts','100644','00316887e18af22215e4b74591f894596b358be1'],
+  ['M','apps/mobile/features/meal-identification-finalization/errors.ts','100644','7d2b334fc5aaed3e0f11168f46dd2926bdf50402'],
+  ['M','apps/mobile/features/meal-identification-finalization/mealIdentificationFinalizationMappers.ts','100644','f7346544e24055f280b97e7b59690da0433f0b97'],
+  ['M','apps/mobile/features/next-meal-prototype/NextMealPrototypeContent.tsx','100644','4516b2ea543f06f2a44921c5550c8673564ba050'],
+  ['M','lib/i18n/zh-TW.ts','100644','182b3ec89d3848493066ab8c9b4ff028fcf0ea09'],
+  ['A','scripts/consumer-meal-save-recovery-guard.mjs','100644','75f2a28c06edac300dd9faa881af938754e762a5'],
+  ['A','scripts/consumer-meal-save-recovery-smoke.mjs','100644','6e12cde1b16d8b9f8d5972c90d59d84950b8d15c'],
+  ['M','scripts/consumer-runtime-phase-2z-b2-b-mobile-meal-write-guard.mjs','100644','00bac328332fa38033bd628b83db2f582eada9c0'],
+  ['M','scripts/consumer-runtime-phase-2z-b2-b-mobile-meal-write-smoke.mjs','100644','d12c0e4113fb807e6cc8fb61243a4426e36a9fb3'],
+  ['M','scripts/meal-identification-finalization-mi-e-c5-b2-smoke.mjs','100644','9f9ca8f54bb5fffc19a4041e7bdfde4605cb1935'],
+  ['M','scripts/meal-identification-finalization-mi-e-c5-r5-smoke.mjs','100644','0e9f5074171ae4bc10b0a3b18324a11f42049def']
+].map(e=>Object.freeze(e)))});
+// Validation-only corrective of that successor: the same 27 paths and bytes, except the recovery guard, whose corrected
+// bytes (exact mode/blob below) recognise this file and consumer-retention-capture-smoke.mjs as an authorized, path-bound
+// validation successor. Binding is one-way: these validators bind the guard's bytes; the guard binds only their paths.
+export const CORRECTIVE_SUCCESSOR=Object.freeze({base:RECOVERY_SUCCESSOR.commit,overrides:Object.freeze({'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','551d7dc992c6f8fdd7b0edb1e6ffb73a31dbf125'])})});
+// git: (args) => stdout of a git command run at the tree under test. Returns {state:'capture'|'recovery'|'corrective'|
+// 'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record) or 'corrective' (exact record with the
+// corrected guard) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
+export function recoverySuccessorState(git){
+  const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
+  if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
+  const overrides=CORRECTIVE_SUCCESSOR.overrides;
+  if(Object.keys(overrides).length!==1||!Object.keys(overrides).every(p=>paths.includes(p)))throw Error('CORRECTIVE_RECORD_SHAPE');
+  const rows=out=>out.trim().split('\n').filter(Boolean);
+  const parent=new Map(rows(git(['ls-tree','-r',S.parent,'--',...paths])).map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return [p,{mode,blob}];}));
+  const index=new Map();for(const l of rows(git(['ls-files','--stage','--',...paths]))){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));const hashed=present.length?rows(git(['hash-object','--',...present])):[];
+  const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
+  const one=p=>{const i=index.get(p);return i&&i.length===1&&i[0].stage==='0'?i[0]:null;};
+  const atRecord=([,p,mode,blob])=>{const i=one(p);return !!i&&i.mode===mode&&i.blob===blob&&worktree.get(p)===blob;};
+  const atCapture=([s,p])=>{const i=one(p),b=parent.get(p);
+    if(s==='A')return !b&&!index.has(p)&&!worktree.has(p);
+    return !!b&&!!i&&i.mode===b.mode&&i.blob===b.blob&&worktree.get(p)===b.blob;};
+  if(S.entries.filter(([s])=>s==='M').some(([,p])=>!parent.has(p)))throw Error('RECOVERY_PARENT_TREE_UNAVAILABLE');
+  const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
+  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),cap=S.entries.map(atCapture);
+  if(rec.every(Boolean))return {state:'recovery',exempt:true,paths,violations:[]};
+  if(cor.every(Boolean))return {state:'corrective',exempt:true,paths,violations:[]};
+  if(cap.every(Boolean))return {state:'capture',exempt:false,paths,violations:[]};
+  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
+}
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};
   const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md'];
   // The accepted R0-A tree remains the frozen reference even after the additive commit.
   const baseline='3b1957e8dc459db6fdaa06bec873c1acc632ae9a';const entries=git(['ls-tree','-r',baseline]).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return {path:p,mode,blob};});
   const index=new Map(git(['ls-files','--stage']).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');return [p,{mode,blob,stage}];}));
-  const violations=[];for(const e of entries){const i=index.get(e.path);if(!i||i.mode!==e.mode||i.blob!==e.blob||i.stage!=='0')violations.push(e.path+':index');}
-  const diff=git(['diff',baseline,'--name-only']);for(const p of diff.trim().split('\n').filter(Boolean))if(!candidate.includes(p))violations.push(p+':tracked');
+  // Only an exact, complete recovery successor exempts its 27 paths; otherwise they meet the unchanged checks below.
+  const successor=recoverySuccessorState(git);const exempt=new Set(successor.exempt?successor.paths:[]);
+  const violations=[...successor.violations];for(const e of entries){if(exempt.has(e.path))continue;const i=index.get(e.path);if(!i||i.mode!==e.mode||i.blob!==e.blob||i.stage!=='0')violations.push(e.path+':index');}
+  const diff=git(['diff',baseline,'--name-only']);for(const p of diff.trim().split('\n').filter(Boolean))if(!candidate.includes(p)&&!exempt.has(p))violations.push(p+':tracked');
   const untracked=git(['ls-files','--others','--exclude-standard']).trim().split('\n').filter(Boolean);for(const p of untracked)if(!candidate.includes(p))violations.push(p+':untracked');
-  rec.check('IF14',entries.length===3341&&violations.length===0,{baseline,tracked:entries.length,violations,candidate,untracked});rec.check('N16',violations.length===0,{violations});
+  rec.check('IF14',entries.length===3341&&violations.length===0,{baseline,tracked:entries.length,violations,candidate,untracked,recoverySuccessor:{state:successor.state,violations:successor.violations}});rec.check('N16',violations.length===0,{violations});
 }
 export async function concurrency(cl,c,rec){
   const a=await cl.connect(),b=await cl.connect();await rec.query(a,'BEGIN');await rec.query(b,"BEGIN;set local statement_timeout='8s'");

@@ -60,6 +60,15 @@ export const INVENTORY = [
   "scripts/meal-identification-finalization-mi-e-c5-r5-smoke.mjs"
 ];
 
+// Authorized validation-only successor (corrective round): the two retention validators recognise the exact recovery
+// successor. They are bound here by PATH only and all-or-nothing (both modified and present, or neither); their bytes are
+// bound by external review, patch, hashes, controls and the committed diff. They in turn bind THIS guard's bytes, so the
+// binding runs one way only and there is no cycle.
+export const VALIDATION_SUCCESSOR = Object.freeze([
+  "scripts/consumer-retention-capture-smoke.mjs",
+  "scripts/consumer-retention-persistence-smoke.mjs"
+]);
+
 const RT0 = "apps/mobile/features/consumer-runtime";
 const changedFromBaseline = () => {
   const tracked = git(["diff", "--name-only", BASELINE]).stdout.split("\n").filter(Boolean);
@@ -67,7 +76,10 @@ const changedFromBaseline = () => {
   return [...new Set([...tracked, ...untracked])].sort();
 };
 const changed = changedFromBaseline();
-record("candidate inventory is exact (27 distinct paths: 21 modified + 6 added; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(changed) === JSON.stringify([...INVENTORY].sort()), { extra: changed.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !changed.includes(p)) });
+const validationSuccessor = changed.filter((p) => VALIDATION_SUCCESSOR.includes(p));
+const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p));
+const validationSuccessorExact = validationSuccessor.length === 0 || (validationSuccessor.length === VALIDATION_SUCCESSOR.length && validationSuccessor.every((p) => fs.existsSync(path.join(ROOT, p))));
+record("candidate inventory is exact (27 distinct recovery paths: 21 modified + 6 added, plus either none or exactly both authorized retention validators; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(recoveryChanged) === JSON.stringify([...INVENTORY].sort()) && validationSuccessorExact, { extra: recoveryChanged.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !recoveryChanged.includes(p)), validationSuccessor });
 record("server paths: 0 (supabase/** byte-identical, modes unchanged)", git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.trim() === "" && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.trim() === "");
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));
 record("all 144 migrations present and byte-identical to the baseline", migrations.length === 144 && git(["diff", "--quiet", BASELINE, "--", "supabase/migrations"]).status === 0);
