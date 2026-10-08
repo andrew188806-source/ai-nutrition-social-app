@@ -74,10 +74,12 @@ export function mapFinalizeMealIdentificationRpcResponse(
 
 // Diagnostics only (local reference code): SQLSTATE-like code and HTTP status of the answer. Never the
 // message, never the payload.
-// `structured` = the answer carried a well-formed server error code (a server answer, i.e. the RPC transaction ended in
-// rollback); a transport failure without one (network, gateway, unreadable, malformed code) is `structured: false` =
-// unknown result.
-export type FinalizationErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null; structured: boolean };
+// `structured` = the answer carried a well-formed server error code. It is a question-A signal only (a server-looking answer arrived)
+// and does NOT say that the call was rolled back; an answer without one (network, gateway, unreadable, malformed code) is
+// `structured: false` = unknown result.
+// `serverToken` = the server's message when it is a bare upper-case token (else null); never free text. It feeds the recovery
+// policy's proof check; `structured` only says that a server-looking answer arrived.
+export type FinalizationErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null; structured: boolean; serverToken: string | null };
 
 export function mapMealIdentificationFinalizationRpcError(
   error: SupabaseMealIdentificationFinalizationErrorLike,
@@ -85,7 +87,8 @@ export function mapMealIdentificationFinalizationRpcError(
 ): ConsumerMealIdentificationFinalizationRuntimeError & FinalizationErrorDiagnostics {
   const mapped = mapFinalizationRpcErrorInner(error, status);
   const code = typeof error.code === "string" && /^[0-9A-Za-z]{5}$/.test(error.code) ? error.code : null;
-  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null, structured: isTrustedServerErrorCode(error.code) });
+  const serverToken = typeof error.message === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(error.message) ? error.message : null;
+  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null, structured: isTrustedServerErrorCode(error.code), serverToken });
 }
 
 // Only a well-formed server error code (SQLSTATE or PGRSTnnn) makes an answer server-authored. A missing, empty or
@@ -99,7 +102,7 @@ function mapFinalizationRpcErrorInner(
   error: SupabaseMealIdentificationFinalizationErrorLike,
   status?: number
 ): ConsumerMealIdentificationFinalizationRuntimeError {
-  const token = (error.message ?? "").trim().toUpperCase();
+  const token = typeof error.message === "string" ? error.message.trim().toUpperCase() : "";
   const effectiveStatus = status ?? error.status ?? undefined;
 
   // Actor-bound dispatch guard: refused BEFORE any network call (nothing was sent).
@@ -172,7 +175,7 @@ function mapFinalizationRpcErrorInner(
     return new ConsumerMealIdentificationFinalizationInvalidInputError();
   }
   // Unrecognised SQLSTATE or no code at all: a safe generic transport failure (the TYPE is unchanged). Whether the
-  // answer was structured is carried in `structured` and decides rollback vs unknown in the recovery policy.
+  // answer was structured is carried in `structured` (question A); whether anything was written is decided only by proof, in the recovery policy.
   return new ConsumerMealIdentificationFinalizationTransportFailedError();
 }
 

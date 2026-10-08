@@ -6,7 +6,8 @@
 //   * what the user is shown (copy key, executable actions, local reference code),
 //   * the local wait (the ONLY timer in the recovery stack — it is not a retry).
 //
-// Safety rules encoded here (see the approved scope, final-r2):
+// Safety rules encoded here (see the approved scope, final-r2, as superseded for outcome certainty by the external R-11 addendum of
+// 2026-10-08: "structured error code => rolled back" no longer holds; only PROOF makes an operation "not written"):
 //   1. An operation that ever had an unknown result stays unknown: a later rollback, denial,
 //      conflict, `not_sent` or consent failure proves nothing about the earlier attempt. Only a
 //      trusted success removes it.
@@ -24,8 +25,8 @@ export type MealSaveOperationKind = "meal_write" | "finalization";
 // new       = persisted, never dispatched
 // inflight  = an attempt may be on the wire (journal written before dispatch)
 // unknown   = result not known (sticky)
-// retryable = confirmed rolled back by a structured server answer, no unknown history
-// blocked_* = confirmed not written, waiting for login / consent, no unknown history
+// retryable = PROVEN not written (see "Outcome certainty" below), no unknown history
+// blocked_* = PROVEN not written, waiting for login / consent, no unknown history
 export type MealSaveEntryState = "new" | "inflight" | "unknown" | "retryable" | "blocked_login" | "blocked_consent";
 
 export type MealSaveReason = "transport" | "deadline" | "unreadable" | "login" | "consent" | "server" | "invalid" | "conflict";
@@ -201,7 +202,8 @@ const finalizationServerFaultCodes = new Set([
   "finalization_durable_state_inconsistency"
 ]);
 
-// `structured` marks a transport-typed error that carried a server error code: the RPC ended in rollback (server fault).
+// `structured` marks a transport-typed error that carried a well-formed server error code (question A only: a server-looking answer
+// arrived). It is NOT evidence of a rollback; see classifyFinalizationOutcome.
 export function classifyFinalizationErrorCode(code: string, sqlstate: string | null = null, structured = false): MealSaveClassification {
   const meta = (reason: MealSaveReason | null): MealSaveAttemptMeta => ({ reason, sqlstate });
   if (code === "finalization_transport_failed") return structured ? { cls: "server_fault", meta: meta("server") } : { cls: "unknown", meta: meta("transport") };
@@ -214,6 +216,120 @@ export function classifyFinalizationErrorCode(code: string, sqlstate: string | n
   if (code === "finalization_configuration_invalid") return { cls: "rejected_input", meta: meta(null), localFailure: "configuration" };
   if (finalizationServerFaultCodes.has(code)) return { cls: "server_fault", meta: meta("server") };
   return { cls: "rejected_input", meta: meta("invalid") };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Outcome certainty (Owner R-11, 2026-10-08)
+// ---------------------------------------------------------------------------------------------
+//
+// The two typed-code classifiers above answer question A only: what should the user do next (log in, give consent, fix the input,
+// try later). Question B — is the outcome of the save certain? — is answered here, separately, and ONLY by proof:
+//
+//   * `notDispatched`: this device observed that the SDK's rpc method was never called for the attempt (a local refusal), or
+//   * `guardRefused`: the dispatch guard recorded that it refused this exact request (it never reached the network), or
+//   * `rollbackEvidence`: the answer is a row of the rollback-evidence table below (exact SQLSTATE + exact server token that the RPC
+//     body itself raises) and its HTTP status is not disqualifying.
+//
+// The error-code format, the message words and the HTTP status are never proof by themselves. Without proof the operation, its
+// original key and payload are kept and the outcome is UNKNOWN; unknown history is sticky (a later refusal never erases it).
+
+export type MealSaveAnswerProof = { notDispatched?: boolean; guardRefused?: boolean; rollbackEvidence?: boolean };
+
+export type RollbackRpc = "create" | "finalize";
+
+// (1) Function-authored refusals. Each pair is raised by a RAISE EXCEPTION inside the PL/pgSQL call tree of ITS OWN rpc (latest
+// definitions in supabase/migrations: create_current_user_meal_record_v2 / finalize_current_user_meal_identification_v1 and the
+// functions they call; the recovery smoke re-reads the migrations and fails when a pair is not raised inside that rpc's tree). A
+// PL/pgSQL function cannot COMMIT and PostgREST commits only when the call returns without error, so an error raised there aborts
+// the request's transaction before any COMMIT. The proof stands on these upstream premises, stated in the external R-11 addendum:
+// the target backend serves those function definitions behind PostgREST, and nothing between the function and the SDK fabricates
+// a PostgreSQL-shaped answer. A pair of the other rpc, a bare code, or a token with another code is not evidence.
+const rollbackTokens: Record<RollbackRpc, Readonly<Record<string, readonly string[]>>> = {
+  create: {
+    "22023": [
+      "CLIENT_REQUEST_ID_REQUIRED", "MEAL_TYPE_REQUIRED", "OCCURRED_AT_REQUIRED", "MEAL_DATE_REQUIRED", "INVALID_TIMEZONE", "TITLE_TOO_LONG",
+      "NOTE_TOO_LONG", "SOURCE_REQUIRED", "ITEMS_MUST_BE_ARRAY", "ITEMS_REQUIRED", "TOO_MANY_ITEMS", "ITEM_MUST_BE_OBJECT", "ITEM_FORBIDDEN_FIELD",
+      "ITEM_UNKNOWN_FIELD", "DISPLAY_NAME_REQUIRED", "INVALID_DISPLAY_NAME", "INVALID_NUTRITION", "UNKNOWN_NUTRITION_FIELD",
+      "INVALID_NUTRITION_VALUE", "NEGATIVE_NUTRITION_VALUE", "INVALID_NUTRITION_SOURCE", "INVALID_CONFIDENCE_SCORE", "INVALID_CONSUMED_RATIO"
+    ],
+    "23505": ["IDEMPOTENCY_KEY_CONFLICT"],
+    "28000": ["AUTHENTICATION_REQUIRED"],
+    "42501": ["CONSUMER_CORE_ELIGIBILITY_REQUIRED"],
+    P0001: ["CANONICAL_MEAL_RECORD_NOT_FOUND"]
+  },
+  finalize: {
+    "22023": ["INVALID_FINALIZATION", "FORBIDDEN_FIELD", "ANALYSIS_NOT_FOUND", "INVALID_CANDIDATE", "CORRECTION_VALIDATION_FAILED", "ANALYSIS_NOT_READY", "UNSUPPORTED_CONTRACT_VERSION"],
+    "23503": ["CATALOG_IDENTITY_REJECTED"],
+    "23505": ["IDEMPOTENCY_KEY_CONFLICT", "ANALYSIS_ALREADY_FINALIZED"],
+    "23514": ["DURABLE_STATE_INCONSISTENCY", "DURABLE_FINALIZATION_FAILED", "IDENTITY_INVARIANT_VIOLATION", "ANALYSIS_INVARIANT_VIOLATION", "CORRECTION_INVARIANT_VIOLATION"],
+    "28000": ["AUTHENTICATION_REQUIRED"],
+    "42501": ["CONSUMER_CORE_ELIGIBILITY_REQUIRED", "ANALYSIS_ACCESS_DENIED", "OWNERSHIP_OR_AUTHORIZATION_REJECTED"],
+    P0001: ["DURABLE_FINALIZATION_FAILED"]
+  }
+};
+
+// (2) A bare engine SQLSTATE (23502, 23514, 42501, 42P01, 55P03, 57014, ...) is NOT evidence, whatever it measured on a local
+// PostgreSQL: the same code gives no authorship, so it cannot show at which stage of the request it was produced. It stays unknown
+// (the operation and its key are kept; 重新確認 replays the original key). Only a function-authored pair in the table above counts,
+// because its token can only be produced by the RPC body, which runs before COMMIT.
+
+// Statuses that suggest an intermediary answered. An answer carrying one never counts as evidence. This is a disqualifier only: a
+// status is never evidence by itself.
+const intermediaryStatuses: ReadonlySet<number> = new Set([502, 503, 504]);
+
+export function hasRollbackEvidence(rpc: RollbackRpc, answer: { code?: unknown; message?: unknown; status?: unknown }): boolean {
+  const { code, message, status } = answer;
+  if (typeof code !== "string" || typeof status !== "number" || !Number.isInteger(status)) return false;
+  if (status < 400 || status > 599 || intermediaryStatuses.has(status)) return false;
+  return typeof message === "string" && rollbackTokens[rpc][code]?.includes(message) === true;
+}
+
+// The recovery guard checks these tables against the migrations.
+export const rollbackEvidenceTables = { tokens: rollbackTokens };
+
+// Proof for one failed attempt from two independent sources, neither of them text: the device's own observation of the attempt
+// (`observation`, from the dispatch binding) and the typed error's diagnostics (the server's SQLSTATE, its bare-token message —
+// null for free text — and the top-level HTTP status). A binding that cannot observe yields no notDispatched / guardRefused.
+export function proofFromError(rpc: RollbackRpc, error: object, observation?: { called: boolean; refused: boolean }, localOnlySource = false): MealSaveAnswerProof {
+  const e = error as { sqlstate?: unknown; serverToken?: unknown; httpStatus?: unknown };
+  return {
+    notDispatched: localOnlySource || (observation !== undefined && !observation.called && !observation.refused),
+    guardRefused: observation?.refused === true,
+    rollbackEvidence: hasRollbackEvidence(rpc, { code: e.sqlstate, message: e.serverToken, status: e.httpStatus })
+  };
+}
+
+// A classification that says "the server did not write this" (or that the user must act because it did not) is kept only when the
+// attempt is proven not to have written. Otherwise the outcome stays unknown and the reason keeps answering question A.
+function requireProof(base: MealSaveClassification, proof: MealSaveAnswerProof): MealSaveClassification {
+  switch (base.cls) {
+    case "needs_login":
+    case "needs_consent":
+    case "server_fault":
+    case "rolled_back":
+    case "rejected_input":
+    case "conflict": {
+      if (base.localFailure || proof.notDispatched || proof.rollbackEvidence) return base;
+      const reason: MealSaveReason = base.cls === "needs_login" ? "login" : base.cls === "needs_consent" ? "consent" : "server";
+      return { cls: "unknown", meta: { ...base.meta, reason } };
+    }
+    case "not_sent":
+      return proof.guardRefused ? base : { cls: "unknown", meta: { ...base.meta, reason: "server" } };
+    default:
+      return base;
+  }
+}
+
+// Typed local errors that the client can only produce before anything is sent.
+const localMealWriteCodes = new Set(["meal_write_payload_too_large", "meal_write_ownership_field_rejected"]);
+
+export function classifyMealWriteOutcome(code: string, message: string, sqlstate: string | null, proof: MealSaveAnswerProof): MealSaveClassification {
+  const base = classifyMealWriteErrorCode(code, message, sqlstate);
+  return localMealWriteCodes.has(code) || code.startsWith("meal_write_invalid") ? base : requireProof(base, proof);
+}
+
+export function classifyFinalizationOutcome(code: string, sqlstate: string | null, structured: boolean, proof: MealSaveAnswerProof): MealSaveClassification {
+  return requireProof(classifyFinalizationErrorCode(code, sqlstate, structured), proof);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -383,6 +499,9 @@ export function createLocalWait(
 export type MealSaveDispatchBinding = {
   bind(opId: string, ownerActorKey: string): void;
   release(opId: string): void;
+  // What this device observed about the attempt that was just bound: did the SDK's rpc method get called at all, and did the dispatch
+  // guard refuse it. Optional: a binding that cannot observe never produces proof, so the outcome stays unknown.
+  observe?(opId: string): { called: boolean; refused: boolean };
 };
 
 // ---------------------------------------------------------------------------------------------

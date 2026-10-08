@@ -100,7 +100,9 @@ function buildCreateMealRecordRpcArgs(input: ValidatedCreateMealRecordInput): Su
   };
 }
 
-export type MealWriteErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null };
+// `serverToken` = the server's message when it is a bare upper-case token (a server-authored refusal token), else null. Never free
+// text. The recovery policy decides from it (with the code and the status) whether the answer proves that nothing was written.
+export type MealWriteErrorDiagnostics = { sqlstate: string | null; httpStatus: number | null; serverToken: string | null };
 
 const TRUSTED_SERVER_ERROR_CODE = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/;
 
@@ -108,16 +110,18 @@ const TRUSTED_SERVER_ERROR_CODE = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/;
 //   * ACTOR_BINDING (guard)            -> not sent
 //   * CONSUMER_CORE_ELIGIBILITY_REQUIRED -> consent/eligibility (never "log in again")
 //   * AUTHENTICATION_REQUIRED / 28000 / PGRST301-303 / HTTP 401 -> real authentication failure
-//   * everything else with a well-formed code was rolled back by the server and is NOT a login problem.
+//   * everything else with a well-formed code is a server-looking answer that says WHAT to tell the user; whether it proves that
+//     nothing was written is decided by the recovery policy (rollback evidence), never here.
 // An answer without a well-formed code (network failure, gateway text/HTML, unreadable) is a transport failure = unknown.
 function mapMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status?: number) {
   const mapped = classifyMealWriteRpcError(error, status);
   const code = typeof error.code === "string" && /^[0-9A-Za-z]{5}$/.test(error.code) ? error.code : null;
-  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null } satisfies MealWriteErrorDiagnostics);
+  const serverToken = typeof error.message === "string" && /^[A-Z][A-Z0-9_]{2,63}$/.test(error.message) ? error.message : null;
+  return Object.assign(mapped, { sqlstate: code, httpStatus: status ?? error.status ?? null, serverToken } satisfies MealWriteErrorDiagnostics);
 }
 
 function classifyMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status?: number) {
-  const message = error.message?.toUpperCase() ?? "";
+  const message = typeof error.message === "string" ? error.message.trim().toUpperCase() : "";
   const code = typeof error.code === "string" ? error.code : "";
   const effectiveStatus = status ?? error.status ?? undefined;
   if (code === "TKACT0") return new ConsumerMealWriteActorBindingMismatchError();
@@ -125,16 +129,14 @@ function classifyMealWriteRpcError(error: SupabaseMealPostgrestErrorLike, status
   // empty or malformed code (gateway/proxy text, HTML, unreadable body) proves nothing about the write, whatever its
   // text or HTTP status says: transport failure = unknown, never "not written".
   if (!TRUSTED_SERVER_ERROR_CODE.test(code)) return new ConsumerMealWriteTransportFailedError();
-  if (message.includes("CONSUMER_CORE_ELIGIBILITY_REQUIRED")) return new ConsumerMealWriteEligibilityRequiredError();
-  if (effectiveStatus === 401 || code === "28000" || /^PGRST30[123]$/.test(code) || message.includes("AUTHENTICATION_REQUIRED")) {
+  if (message === "CONSUMER_CORE_ELIGIBILITY_REQUIRED") return new ConsumerMealWriteEligibilityRequiredError();
+  if (effectiveStatus === 401 || code === "28000" || /^PGRST30[123]$/.test(code) || message === "AUTHENTICATION_REQUIRED") {
     return new ConsumerMealWriteAuthenticationRequiredError("Consumer meal write requires a current authenticated session.");
   }
-  if (code === "23505" || message.includes("IDEMPOTENCY_KEY_CONFLICT")) {
+  if (code === "23505" || message === "IDEMPOTENCY_KEY_CONFLICT") {
     return new ConsumerMealWriteFunctionRejectedError("Consumer meal write idempotency key conflicts with another payload.");
   }
-  if (code === "22023" || message.includes("INVALID") || message.includes("REQUIRED") || message.includes("TOO_MANY") || message.includes("FORBIDDEN")) {
-    return new ConsumerMealWriteFunctionRejectedError();
-  }
+  if (code === "22023") return new ConsumerMealWriteFunctionRejectedError();
   if (code.length > 0) return new ConsumerMealWriteServerRejectedError();
   return new ConsumerMealWriteTransportFailedError();
 }

@@ -131,6 +131,11 @@ const S1 = {
   NOT_NULL: { v2: ["23502", 'null value in column "display_name_snapshot" of relation "meal_record_items" violates not-null constraint'], fin: null },
   CONFLICT: { v2: ["23505", "IDEMPOTENCY_KEY_CONFLICT"], fin: ["23505", "IDEMPOTENCY_KEY_CONFLICT"] }
 };
+// DP-1 (Owner, 2026-10-08): a bare engine SQLSTATE proves nothing about the stage it was produced at. The fixture for "a server rollback that
+// is PROVEN" is therefore a function-authored pair of the rpc's own evidence table (R-37): finalize 23514/DURABLE_FINALIZATION_FAILED (raised
+// by the handler of the finalize body), create P0001/CANONICAL_MEAL_RECORD_NOT_FOUND (raised after the insert inside the create body).
+const rbPair = (make) => (make === makeFin ? { code: "23514", message: "DURABLE_FINALIZATION_FAILED" } : { code: "P0001", message: "CANONICAL_MEAL_RECORD_NOT_FOUND" });
+const rbFault = (make) => ({ kind: "fault", ...rbPair(make) });
 
 function createServerModel() {
   const model = {
@@ -192,19 +197,23 @@ const authPortFor = (world) => ({ getCurrentSession: async () => ({ ok: true, va
 
 function makeNormal({ behaviors = [], model = createServerModel(), world = { user: "A" }, storage = new MapStorage(), localWait, binding, start = 1000, clock = { now: () => NOW } } = {}) {
   const client = makeClient(model, world, behaviors);
-  const repo = new C.repoW.SupabaseConsumerMealRecordWriteRepository({ authPort: authPortFor(world), mealClient: client, writeEnabled: true });
+  // The registry both tags/observes the rpc call (like the production composition) and is the default dispatch binding, so a refusal made
+  // before the SDK is called is OBSERVED as "not dispatched"; a custom `binding` has no observation and therefore yields no proof.
+  const registry = C.dispatch.createActorBindingRegistry();
+  const repo = new C.repoW.SupabaseConsumerMealRecordWriteRepository({ authPort: authPortFor(world), mealClient: C.dispatch.withActorBinding(client, registry), writeEnabled: true });
   const store = new C.storeW.ConsumerMealWriteOperationStore(storage);
   let n = start;
-  const runtime = new C.runtimeW.ConsumerMealWriteRuntime({ service: { createCurrentUserMealRecord: (input) => repo.createCurrentUserMealRecord(input) }, operationStore: store, clock, uuidFactory: () => uuid(n++), localWait, dispatchBinding: binding });
+  const runtime = new C.runtimeW.ConsumerMealWriteRuntime({ service: { createCurrentUserMealRecord: (input) => repo.createCurrentUserMealRecord(input) }, operationStore: store, clock, uuidFactory: () => uuid(n++), localWait, dispatchBinding: binding ?? registry });
   return { kind: "normal", runtime, store, storage, client, model, world, repo };
 }
 function makeFin({ behaviors = [], model = createServerModel(), world = { user: "A" }, storage = new MapStorage(), localWait, binding, start = 2000, clock = { now: () => NOW } } = {}) {
   const client = makeClient(model, world, behaviors);
-  const repo = new C.repoF.SupabaseConsumerMealIdentificationFinalizationRepository(client);
+  const registry = C.dispatch.createActorBindingRegistry();
+  const repo = new C.repoF.SupabaseConsumerMealIdentificationFinalizationRepository(C.dispatch.withActorBinding(client, registry));
   const service = new C.svcF.ConsumerMealIdentificationFinalizationService({ authPort: authPortFor(world), repository: repo });
   const store = new C.storeF.ConsumerMealIdentificationFinalizationOperationStore(storage);
   let n = start;
-  const runtime = new C.runtimeF.ConsumerMealIdentificationFinalizationRuntime({ service, operationStore: store, clock, uuidFactory: () => uuid(n++), localWait, dispatchBinding: binding });
+  const runtime = new C.runtimeF.ConsumerMealIdentificationFinalizationRuntime({ service, operationStore: store, clock, uuidFactory: () => uuid(n++), localWait, dispatchBinding: binding ?? registry });
   return { kind: "finalization", runtime, store, storage, client, model, world, repo };
 }
 const submit = (h, actor = "A", gen = 1, name) => (h.kind === "normal" ? h.runtime.submit(ctx(actor, gen), baseDraft(name)) : h.runtime.submit(ctx(actor, gen), finDraft(undefined, name)));
@@ -224,14 +233,14 @@ const gate = (id, title, run) => gates.push({ id, title, run });
 gate("R-01", "explicit rollback then retry [H-FS]", async () => {
   for (const make of bothKinds) {
     // first failure, no unknown history: structured rollback => retryable, same key on retry, exactly one row
-    const h = await boot(make({ behaviors: [{ kind: "fault", code: "55P03", message: "canceling statement due to lock timeout" }] }));
+    const h = await boot(make({ behaviors: [rbFault(make)] }));
     const first = await submit(h);
     const [entry] = await entriesOf(h);
-    expect(first.status === "error" && !first.mealRecordId && entry?.state === "retryable" && entry.hadUnknown === false, `${make.name}: rollback without history is retryable`);
+    expect(first.status === "error" && !first.mealRecordId && entry?.state === "retryable" && entry.hadUnknown === false, `${make.name}: a PROVEN rollback (function-authored pair) without history is retryable`);
     const retried = await h.runtime.retry(actorCtx());
     expect(retried.status === "succeeded" && h.model.rowsOf("A").length === 1 && h.client.calls.length === 2 && h.client.calls[0].key === h.client.calls[1].key, `${make.name}: retry sends the same key, one row`);
     // with prior unknown: a later rollback proves nothing about the earlier attempt
-    const u = await boot(make({ behaviors: [{ kind: "net" }, { kind: "fault", code: "55P03", message: "canceling statement due to lock timeout" }] }));
+    const u = await boot(make({ behaviors: [{ kind: "net" }, rbFault(make)] }));
     await submit(u);
     await u.runtime.retry(actorCtx());
     const [after] = await entriesOf(u);
@@ -283,7 +292,7 @@ gate("R-03", "late response / local wait [H-FS]", async () => {
     const g3 = deferred();
     const t = await boot(make({ behaviors: [{ kind: "gate", gate: g3, commit: false }], localWait: elapsed }));
     await submit(t);
-    t.model.faults.push({ code: "55P03", message: "canceling statement due to lock timeout" });
+    t.model.faults.push(rbPair(make));
     await t.runtime.retry(actorCtx());
     g3.resolve();
     await wait(40);
@@ -558,14 +567,20 @@ gate("R-09", "real authentication failure [H-FS]", async () => {
     const first = await submit(h);
     const [entry] = await entriesOf(h);
     const summary = h.runtime.getState().operations[0];
-    expect(entry.state === "blocked_login" && !entry.hadUnknown && /authentication_required$/.test(first.errorCode) && summary.actions.includes("login") && summary.actions.includes("retry") && summary.actions.includes("cancel"), `${make.name}/${fault.error.code}: needs_login, retained under the account`);
+    // R-11 (2026-10-08): 28000 + the server token AUTHENTICATION_REQUIRED is raised by the RPC body (rollback evidence). A JWT failure
+    // answered by PostgREST (PGRST30x, HTTP 401) is not proof: the user is still told to log in (question A) but the outcome is unknown (B).
+    const proven = fault.error.code === "28000";
+    expect(proven
+      ? entry.state === "blocked_login" && !entry.hadUnknown && /authentication_required$/.test(first.errorCode) && summary.actions.includes("login") && summary.actions.includes("retry") && summary.actions.includes("cancel")
+      : entry.state === "unknown" && entry.hadUnknown && entry.lastReason === "login" && first.status === "uncertain" && summary.actions.includes("login") && summary.actions.includes("retry") && summary.actions.includes("defer") && !summary.actions.includes("cancel"),
+    `${make.name}/${fault.error.code}: ${proven ? "proven needs_login (blocked_login), retained under the account" : "login prompt WITHOUT proof: unknown/login, retained, never cancellable"}`);
     await h.runtime.setActor(null, 2);
     await h.runtime.setActor("A", 3);
     if (make === makeFin) h.runtime.beginAnalysisOperation(actorCtx("A", 3), "analysis-op-3");
     const done = await h.runtime.retry(actorCtx("A", 3), entry.opId);
     // Retry by id = the notice's 重新確認. Normal save reports it in the foreground; a photo operation is
     // resolved beside the bound analysis (never taking it over), so the authority is ledger + server.
-    expect((make === makeNormal ? done.status === "succeeded" : done.status !== "succeeded") && (await entriesOf(h)).length === 0 && h.model.rowsOf("A").length === 1 && h.client.calls.at(-1).key === entry.opId, `${make.name}/${fault.error.code}: after re-login as the same account the retry succeeds`);
+    expect((make === makeNormal ? done.status === "succeeded" : (proven ? done.status !== "succeeded" : true)) && (await entriesOf(h)).length === 0 && h.model.rowsOf("A").length === 1 && h.client.calls.at(-1).key === entry.opId, `${make.name}/${fault.error.code}: after re-login as the same account the retry succeeds`);
     const u = await boot(make({ behaviors: [{ kind: "net" }, ...behaviours] }));
     await submit(u);
     await u.runtime.retry(actorCtx());
@@ -612,7 +627,9 @@ gate("R-10", "consent withdrawn / eligibility lost [H-FS]", async () => {
 });
 
 gate("R-11", "permission / server-fault classification with measured payloads and real SDK response shape [H-FS]", async () => {
-  const expectedRetryable = ["CAPTURE_PRIVILEGE", "TABLE_MISSING", "CHECK_VIOLATION", "LOCK_TIMEOUT", "STATEMENT_TIMEOUT", "NOT_NULL"];
+  // DP-1: the measured create-path payloads carry a BARE engine SQLSTATE: question A (server fault) stays, question B (certainty) is unknown.
+  // On the finalize path the body's handler re-raises its own pair (OWNERSHIP_OR_AUTHORIZATION_REJECTED / DURABLE_*): proof. A bare 57014 stays unknown.
+  const finalizeProven = new Set(["CAPTURE_PRIVILEGE", "TABLE_MISSING", "CHECK_VIOLATION", "LOCK_TIMEOUT"]);
   for (const make of bothKinds) {
     const key = make === makeNormal ? "v2" : "fin";
     for (const [name, payload] of Object.entries(S1)) {
@@ -625,19 +642,22 @@ gate("R-11", "permission / server-fault classification with measured payloads an
       if (name === "ELIGIBILITY") expect(entry?.state === "blocked_consent", `${make.name}/${name}: consent`);
       else if (name === "AUTH") expect(entry?.state === "blocked_login", `${make.name}/${name}: login`);
       else if (name === "CONFLICT") expect(!entry && /idempotency_conflict$/.test(state.errorCode), `${make.name}/${name}: conflict`);
-      else expect(expectedRetryable.includes(name) && entry?.state === "retryable" && state.status === "error" && !/authentication_required$/.test(state.errorCode), `${make.name}/${name}: server fault, retryable, never login copy`);
+      else if (key === "fin" && finalizeProven.has(name)) expect(entry?.state === "retryable" && entry.hadUnknown === false && state.status === "error" && !/authentication_required$/.test(state.errorCode), `${make.name}/${name}: handler-authored pair (${pair[1]}) => proven rollback, retryable, never login copy`);
+      else expect(entry?.state === "unknown" && entry.hadUnknown && entry.lastReason === "server" && state.status === "uncertain" && !/authentication_required$/.test(state.errorCode) && !h.runtime.getState().operations[0].actions.includes("cancel"), `${make.name}/${name}: bare engine SQLSTATE ${pair[0]} => unknown (server reason kept), key kept, no cancel`);
     }
     for (const status of [400, 403, 404, 409, 500, 503]) {
       const h = await boot(make({ behaviors: [{ kind: "fault", code: "42501", message: "permission denied for table x", status }] }));
       await submit(h);
-      expect((await entriesOf(h))[0]?.state === "retryable", `${make.name}: 42501 without the eligibility token is a server fault at HTTP ${status} too`);
+      const e42501 = (await entriesOf(h))[0];
+      // DP-1: a bare engine 42501 is unknown at EVERY status (its text and status are not authorship)
+      expect(e42501?.state === "unknown" && e42501.lastReason === "server" && e42501.hadUnknown, `${make.name}: bare engine 42501 is unknown at HTTP ${status}`);
     }
     const topLevel401 = await boot(make({ behaviors: [{ kind: "fault", code: "XX000", message: "boom", status: 401 }] }));
     await submit(topLevel401);
-    expect((await entriesOf(topLevel401))[0]?.state === "blocked_login", `${make.name}: a structured answer with top-level HTTP 401 is a real authentication failure (status read from the response, not from error)`);
+    expect((await entriesOf(topLevel401))[0]?.state === "unknown" && (await entriesOf(topLevel401))[0].lastReason === "login", `${make.name}: a structured answer with top-level HTTP 401 asks the user to log in (status read from the response) but is not proof of non-write: unknown/login`);
     const login = await boot(make({ behaviors: [{ kind: "fault", code: "PGRST301", message: "JWT invalid", status: 401 }] }));
     await submit(login);
-    expect((await entriesOf(login))[0]?.state === "blocked_login", `${make.name}: a structured 401 is a real authentication failure`);
+    expect((await entriesOf(login))[0]?.state === "unknown" && (await entriesOf(login))[0].lastReason === "login", `${make.name}: a PostgREST 401 (PGRST301) asks the user to log in but is not proof of non-write: unknown/login`);
   }
   // legacy harness shape (status inside the error body) must not change the real-shape conclusion
   const legacy = await boot(makeNormal({ behaviors: [] }));
@@ -887,7 +907,7 @@ gate("R-17", "capacity, storage failure, size [H-FS + H-CRASH]", async () => {
   // both kinds: the refusal stays visible (capacity_exhausted) until a slot is free again, and ends as soon as a
   // NON-foreground slot is freed (cancel of a never-unknown draft); a late success of a held op frees it too.
   for (const make of bothKinds) {
-    const k = make({ behaviors: [{ kind: "fault", code: "55P03", message: "canceling statement due to lock timeout" }, ...Array.from({ length: 19 }, () => ({ kind: "net" }))] });
+    const k = make({ behaviors: [rbFault(make), ...Array.from({ length: 19 }, () => ({ kind: "net" }))] });
     await boot(k);
     let op = 1;
     const next = async () => { if (k.kind === "finalization") k.runtime.beginAnalysisOperation(actorCtx(), `analysis-op-cap-${op++}`); };
@@ -930,10 +950,10 @@ gate("R-17", "capacity, storage failure, size [H-FS + H-CRASH]", async () => {
     expect(own.status === "succeeded" && f.client.calls.length === 3, "finalization: the current photo is still saved afterwards");
   }
   // drafts occupy slots too and are freed by their own cancel
-  const d = await boot(makeNormal({ behaviors: [{ kind: "fault", code: "55P03", message: "canceling statement due to lock timeout" }] }));
+  const d = await boot(makeNormal({ behaviors: [rbFault(makeNormal)] }));
   await submit(d);
   const [draft] = await entriesOf(d);
-  expect(draft.state === "retryable", "a rolled-back draft occupies a slot");
+  expect(draft.state === "retryable", "a PROVEN rolled-back draft occupies a slot");
   await d.runtime.cancel(actorCtx(), draft.opId);
   expect((await entriesOf(d)).length === 0, "cancel frees the draft's slot");
   // storage failure: nothing is sent
@@ -957,13 +977,13 @@ gate("R-17", "capacity, storage failure, size [H-FS + H-CRASH]", async () => {
 });
 
 gate("R-18", "local reference code and privacy [H-FS + STATIC]", async () => {
-  const h = await boot(makeNormal({ behaviors: [{ kind: "fault", code: "55P03", message: "canceling statement due to lock timeout" }, { kind: "net" }] }));
+  const h = await boot(makeNormal({ behaviors: [rbFault(makeNormal), { kind: "net" }] }));
   await submit(h, "A", 1, "秘密餐點名稱 private-meal");
   const state = h.runtime.getState();
   const op = state.operations[0];
   expect(/^TK-[NF]-[A-Z]{2}-([0-9A-Z]{5}|NET|DLN|—)-[0-9a-f]{8}$/.test(op.reference), `reference code format (${op.reference})`);
   const [entry] = await entriesOf(h);
-  expect(op.reference.endsWith(entry.opId.replace(/-/g, "").slice(0, 8)) && op.reference.includes("55P03"), "reference carries the SQLSTATE and 8 hex of the random operation id only");
+  expect(op.reference.endsWith(entry.opId.replace(/-/g, "").slice(0, 8)) && op.reference.includes("P0001"), "reference carries the SQLSTATE and 8 hex of the random operation id only");
   for (const secret of ["秘密餐點名稱", "private-meal", "A", "Bearer", "Authorization", "token"]) {
     if (secret.length === 1) continue;
     expect(!op.reference.includes(secret), `reference does not contain ${secret}`);
@@ -1030,7 +1050,7 @@ gate("R-21", "cancel only without unknown history [H-FS]", async () => {
   const [u] = await entriesOf(h);
   await h.runtime.cancel(actorCtx(), u.opId);
   expect((await entriesOf(h)).length === 1, "an unknown operation cannot be cancelled");
-  for (const [label, behaviours] of [["rolled back", [{ kind: "fault", code: "55P03", message: "canceling statement due to lock timeout" }]], ["needs login", [{ kind: "fault", code: "28000", message: "AUTHENTICATION_REQUIRED" }]], ["needs consent", [{ kind: "fault", code: "42501", message: "CONSUMER_CORE_ELIGIBILITY_REQUIRED" }]]]) {
+  for (const [label, behaviours] of [["rolled back", [rbFault(makeNormal)]], ["needs login", [{ kind: "fault", code: "28000", message: "AUTHENTICATION_REQUIRED" }]], ["needs consent", [{ kind: "fault", code: "42501", message: "CONSUMER_CORE_ELIGIBILITY_REQUIRED" }]]]) {
     const d = await boot(makeNormal({ behaviors: behaviours }));
     await submit(d);
     const [draft] = await entriesOf(d);
@@ -1048,7 +1068,7 @@ gate("R-21", "cancel only without unknown history [H-FS]", async () => {
 });
 
 gate("R-22", "no automatic retry [H-FS + STATIC]", async () => {
-  const h = await boot(makeNormal({ behaviors: [{ kind: "net" }, { kind: "fault", code: "28000", message: "AUTHENTICATION_REQUIRED" }, { kind: "fault", code: "55P03", message: "x" }] }));
+  const h = await boot(makeNormal({ behaviors: [{ kind: "net" }, { kind: "fault", code: "28000", message: "AUTHENTICATION_REQUIRED" }, rbFault(makeNormal)] }));
   await submit(h);
   const calls = h.client.calls.length;
   await h.runtime.setActor("A", 2); await h.runtime.setActor(null, 3); await h.runtime.setActor("A", 4);
@@ -1119,7 +1139,7 @@ gate("R-25", "photo finalize specifics [H-FS + STATIC]", async () => {
   await tick(10);
   expect(live.runtime.beginAnalysisOperation(actorCtx(), "analysis-op-2") === false, "an in-flight attempt blocks binding another analysis");
   gt.resolve(); await p;
-  const rt = await boot(makeFin({ behaviors: [{ kind: "fault", code: "55P03", message: "x" }] }));
+  const rt = await boot(makeFin({ behaviors: [rbFault(makeFin)] }));
   await rt.runtime.submit(ctx(), finDraft(uuid(8802), "p"));
   expect(rt.runtime.beginAnalysisOperation(actorCtx(), "analysis-op-2") === true && (await entriesOf(rt)).length === 1, "a known-not-written draft does not block another analysis");
   // restart without any screen state: the runtime retries the persisted operation itself
@@ -1284,7 +1304,8 @@ gate("R-32", "not_sent: guard refusal never changes unknown history [H-SDK + pur
   expect(clean.action === "update" && clean.entry.state === "new" && clean.entry.attempts === 0 && clean.entry.hadUnknown === false, "no history: not_sent restores `new`, attempt not counted, no history added");
   const sticky = R.applyAttemptOutcome(mkEntry({ hadUnknown: true, priorState: "unknown", attempts: 2, lastReason: "transport" }), { cls: "not_sent" }, "t");
   expect(sticky.action === "update" && sticky.entry.state === "unknown" && sticky.entry.hadUnknown === true && sticky.entry.attempts === 1 && sticky.entry.lastReason === "transport", "with unknown history: not_sent keeps it unknown and does not erase it");
-  expect(R.classifyMealWriteErrorCode("meal_write_actor_binding_mismatch", "").cls === "not_sent" && R.classifyFinalizationErrorCode("finalization_actor_binding_mismatch").cls === "not_sent", "both paths classify the guard code as not_sent (never unknown)");
+  expect(R.classifyMealWriteOutcome("meal_write_actor_binding_mismatch", "", null, { guardRefused: true }).cls === "not_sent" && R.classifyFinalizationOutcome("finalization_actor_binding_mismatch", null, false, { guardRefused: true }).cls === "not_sent", "both paths classify the guard code as not_sent when the guard recorded the refusal");
+  expect(R.classifyMealWriteOutcome("meal_write_actor_binding_mismatch", "", null, {}).cls === "unknown" && R.classifyFinalizationOutcome("finalization_actor_binding_mismatch", null, false, {}).cls === "unknown", "the guard code WITHOUT the guard's own record is unknown (a code is never proof of non-dispatch)");
   // end-to-end with the real SDK: unknown first, then a refused dispatch
   const model = createServerModel(); const log = []; const world = { current: "A", tv: 1, hooks: {}, switched: () => {} };
   const backend = async (input, init) => { const fn = String(input).match(/\/rpc\/([a-z0-9_]+)/)[1]; const claims = claimsOf(new Headers(init.headers).get("authorization")); log.push(claims.sub); if (world.netNext) { world.netNext = false; throw new TypeError("Network request failed"); } const r = respond(model, claims.sub, fn, JSON.parse(init.body)); return new Response(JSON.stringify(r.error ?? r.data), { status: r.status }); };
@@ -1307,7 +1328,7 @@ gate("R-32", "not_sent: guard refusal never changes unknown history [H-SDK + pur
 
 gate("R-33", "capacity recovery actions per occupied state [presenter + H-FS]", async () => {
   const h = await boot(makeNormal({ behaviors: [] }));
-  const states = [["unknown", { kind: "net" }], ["draft", { kind: "fault", code: "55P03", message: "x" }], ["login", { kind: "fault", code: "28000", message: "AUTHENTICATION_REQUIRED" }], ["consent", { kind: "fault", code: "42501", message: "CONSUMER_CORE_ELIGIBILITY_REQUIRED" }]];
+  const states = [["unknown", { kind: "net" }], ["draft", rbFault(makeNormal)], ["login", { kind: "fault", code: "28000", message: "AUTHENTICATION_REQUIRED" }], ["consent", { kind: "fault", code: "42501", message: "CONSUMER_CORE_ELIGIBILITY_REQUIRED" }]];
   const mix = makeNormal({ behaviors: states.map((s) => s[1]) });
   await boot(mix);
   for (const [label] of states) {
@@ -1455,7 +1476,7 @@ gate("R-35", "a late success resolves the bound photo operation and nothing else
   expect(/!unresolvedFinalizationOperationId && deferredFinalizationOperation \? zhTW\.mobile\.pendingMealSave\.deferredNote/.test(screen), "STATIC: the set-aside note is shown only for an operation the user actually set aside");
 });
 
-gate("R-36", "answers without a well-formed server error code stay unknown on both write paths; trusted codes unchanged [H-SDK + H-FS]", async () => {
+gate("R-36", "answers without a well-formed server error code stay unknown on both write paths; well-formed codes are classified only with proof (R-37) [H-SDK + H-FS]", async () => {
   const BODIES = [
     ["kong-502-json", 502, "application/json", JSON.stringify({ message: "An invalid response was received from the upstream server" })],
     ["html-502-invalid", 502, "text/html", "<html><body><h1>502 Bad Gateway</h1><p>Invalid response from upstream</p></body></html>"],
@@ -1498,7 +1519,7 @@ gate("R-36", "answers without a well-formed server error code stay unknown on bo
     const first = await submit(h);
     const [entry] = await entriesOf(h);
     const op = h.runtime.getState().operations[0];
-    expect(entry && entry.state === "unknown" && entry.hadUnknown && first.status === "uncertain" && op && !op.actions.includes("cancel") && h.model.rowsOf("A").length === (commit ? 1 : 0), `${kind}/${body[0]}/${commit ? "committed" : "not committed"}: real SDK answer without a well-formed code => unknown (kept, not cancellable, never "not written")`);
+    expect(entry && entry.state === "unknown" && entry.hadUnknown && entry.lastReason === "transport" && first.status === "uncertain" && op && !op.actions.includes("cancel") && h.model.rowsOf("A").length === (commit ? 1 : 0), `${kind}/${body[0]}/${commit ? "committed" : "not committed"}: real SDK answer without a well-formed code => unknown (kept, not cancellable, never "not written")`);
     const done = await h.runtime.retry(actorCtx());
     expect((done.status === "succeeded" || (kind === "normal" && done.status === "idle") || kind === "finalization") && (await entriesOf(h)).length === 0 && h.model.rowsOf("A").length === 1 && h.calls.length === 2 && h.calls[0] === h.calls[1], `${kind}/${body[0]}/${commit ? "committed" : "not committed"}: 重新確認 sends the original key once; exactly one row`);
   }
@@ -1512,13 +1533,13 @@ gate("R-36", "answers without a well-formed server error code stay unknown on bo
       expect(e && e.state === "unknown" && e.hadUnknown, `${make.name}: ${label} => unknown`);
     }
     // trusted codes keep their classification (no relaxation of login, consent, ownership or input rules)
-    const trusted = [["22023", "INVALID_MEAL_RECORD", 400], ["XX000", "boom", 500], ["28000", "AUTHENTICATION_REQUIRED", 401], ["42501", "CONSUMER_CORE_ELIGIBILITY_REQUIRED", 403]];
-    for (const [code, message, status] of trusted) {
+    // R-11 (2026-10-08): a well-formed code alone is not proof. Evidence rows keep their classification; everything else is unknown.
+    const trusted = [["22023", "INVALID_MEAL_RECORD", 400, "unknown"], ["XX000", "boom", 500, "unknown"], ["28000", "AUTHENTICATION_REQUIRED", 401, "blocked_login"], ["42501", "CONSUMER_CORE_ELIGIBILITY_REQUIRED", 403, "blocked_consent"], ["22023", make === makeNormal ? "NEGATIVE_NUTRITION_VALUE" : "INVALID_FINALIZATION", 400, "removed"]];
+    for (const [code, message, status, expected] of trusted) {
       const h = await boot(make({ behaviors: [{ kind: "fault", code, message, status }] }));
       await submit(h);
       const [e] = await entriesOf(h);
-      const expected = code === "22023" ? (make === makeNormal ? null : "removed-or-anomaly") : code === "XX000" ? "retryable" : code === "28000" ? "blocked_login" : "blocked_consent";
-      expect(expected === null ? !e : expected === "removed-or-anomaly" ? !e || e.state !== "unknown" : e && e.state === expected, `${make.name}: trusted code ${code} keeps its classification`);
+      expect(expected === "removed" ? !e : e && e.state === expected, `${make.name}: code ${code} / ${message} => ${expected}`);
     }
   }
 });
@@ -1531,10 +1552,12 @@ gate("R-PG", "real PostgreSQL 17 + real migrations: R-02/R-03/R-10/R-14 and the 
       this.calls.push({ fn, key: args.p_client_request_id, user: world.user });
       const b = behaviors.shift();
       if (b?.kind === "net") return NET();
+      if (b?.kind === "engineNoCommit") return structured(b.code, b.message);
       if (b?.kind === "gate") await b.gate.promise;
       const { sql, values } = rpcSql(fn, args);
       const r = await act(c, ids[world.user], sql, values);
       if (b?.kind === "committedThenNet" && r.ok) return NET();
+      if (b?.kind === "committedThenEngine" && r.ok) return structured(b.code, b.message);
       if (b?.kind === "committedThenGateway" && r.ok) return { data: null, error: { message: "An invalid response was received from the upstream server" }, status: 502 };
       return pgResponse(r);
     } });
@@ -1563,6 +1586,23 @@ gate("R-PG", "real PostgreSQL 17 + real migrations: R-02/R-03/R-10/R-14 and the 
         const done = await h.runtime.retry(actorCtx());
         const rows = await rowsFor(c);
         expect(first.status === "uncertain" && done.status === "succeeded" && rows.length === 1 && rows[0].t0.getTime() === t0 && (await h.store.list("A")).entries.length === 0, `R-02 PG/${kind}/${lost}: replay returns the original row; one row, one anchor, T0 unchanged`);
+      });
+      // DP-1 (PG): the six measured engine SQLSTATEs, answered after a REAL commit and without one, look identical to the client: unknown, same key,
+      // no cancel; 重新確認 ends with exactly one row and (committed twin) the SAME T0 anchor.
+      for (const [code, message] of [["55P03", "canceling statement due to lock timeout"], ["57014", "canceling statement due to statement timeout"], ["42P01", "relation \"x\" does not exist"], ["23502", "null value in column \"display_name_snapshot\" violates not-null constraint"], ["23514", "new row violates check constraint \"rec_block\""], ["42501", "permission denied for table detail_capture_anchors"]]) for (const committed of [true, false]) await fresh(`dp1${kind}${code}${committed ? "c" : "n"}`, async (c) => {
+        const h = build(c, kind, { behaviors: [{ kind: committed ? "committedThenEngine" : "engineNoCommit", code, message }] });
+        await h.runtime.setActor("A", 1); if (kind === "finalize") h.runtime.beginAnalysisOperation(actorCtx(), "analysis-op-1");
+        const first = await ONE(kind, h, "pg engine answer");
+        const [entry] = (await h.store.list("A")).entries;
+        const summary = h.runtime.getState().operations[0];
+        const t0 = committed ? (await rowsFor(c))[0]?.t0?.getTime() : null;
+        expect(first.status === "uncertain" && entry?.state === "unknown" && entry.hadUnknown && entry.lastSqlstate === code && summary && !summary.actions.includes("cancel") && summary.actions.includes("retry") && (await rowsFor(c)).length === (committed ? 1 : 0), `DP-1 PG/${kind}/${code}/${committed ? "committed" : "not committed"}: unknown, key kept, no cancel`);
+        await h.runtime.cancel(actorCtx(), entry.opId);
+        expect((await h.store.list("A")).entries.length === 1, `DP-1 PG/${kind}/${code}/${committed ? "committed" : "not committed"}: cancel is refused`);
+        await wait(50);
+        const done = await h.runtime.retry(actorCtx());
+        const rows = await rowsFor(c);
+        expect(done.status === "succeeded" && rows.length === 1 && h.client.calls.length === 2 && h.client.calls[1].key === h.client.calls[0].key && (!committed || rows[0].t0.getTime() === t0) && (await h.store.list("A")).entries.length === 0, `DP-1 PG/${kind}/${code}/${committed ? "committed" : "not committed"}: 重新確認 replays the original key; one row, one anchor${committed ? ", T0 unchanged" : ""}`);
       });
       // R-10: eligibility lost -> identical denial for committed and never-sent operations; restore -> one row each
       await fresh(`r10${kind}`, async (c) => {
@@ -1641,6 +1681,266 @@ gate("R-PG", "real PostgreSQL 17 + real migrations: R-02/R-03/R-10/R-14 and the 
     fs.writeFileSync(path.join(OUT, "R07C-matrix-pg.json"), JSON.stringify(rows, null, 2));
     assertMatrix(rows, "PostgreSQL backend");
   });
+});
+
+// ============================================================================================ F-1 / F-2 corrective (Owner R-11, 2026-10-08)
+// The 2026-10-06 R-11 text ("structured error => rolled back") is SUPERSEDED, not rewritten: only a PROVEN "not written" (local
+// non-dispatch, a guard-recorded refusal, or a row of the rollback-evidence tables) may leave an operation cancellable or
+// re-creatable. The error-code format, the message words and the HTTP status are never proof.
+gate("R-37", "outcome certainty: only proof makes an operation 'not written'; everything else keeps the operation and its key [H-SDK + H-FS + STATIC]", async () => {
+  const R = C.recovery;
+  // ---- the evidence tables are exactly what the migrations raise (drift detector) and the engine list is the measured one
+  const migrationsDir = path.join(root, "supabase/migrations");
+  const sql = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort().map((f) => fs.readFileSync(path.join(migrationsDir, f), "utf8")).join("\n");
+  const tables = R.rollbackEvidenceTables;
+  // latest definition of every function (by name) over the migrations in order; its body = the dollar-quoted text
+  const defs = {};
+  for (const file of fs.readdirSync(migrationsDir).filter((x) => x.endsWith(".sql")).sort()) {
+    const text = fs.readFileSync(path.join(migrationsDir, file), "utf8");
+    const re = /create\s+(?:or\s+replace\s+)?function\s+([\w."]+)\s*\(/gi;
+    let m;
+    while ((m = re.exec(text))) {
+      const rest = text.slice(m.index); const tag = rest.match(/\bas\s+(\$\w*\$)/i);
+      if (!tag) continue;
+      const open = rest.indexOf(tag[1], tag.index); const close = rest.indexOf(tag[1], open + tag[1].length);
+      defs[m[1].replace(/"/g, "")] = rest.slice(open, close + tag[1].length);
+    }
+  }
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const treeOf = (name, seen = new Set()) => {
+    if (seen.has(name) || !defs[name]) return seen;
+    seen.add(name);
+    for (const other of Object.keys(defs)) if (other !== name && [other, other.replace(/^public\./, "")].some((n) => new RegExp("(^|[^\\w.])" + escRe(n) + "\\s*\\(", "i").test(defs[name]))) treeOf(other, seen);
+    return seen;
+  };
+  const rpcRoots = { create: "public.create_current_user_meal_record_v2", finalize: "public.finalize_current_user_meal_identification_v1" };
+  const trees = Object.fromEntries(Object.entries(rpcRoots).map(([rpc, name]) => [rpc, [...treeOf(name)]]));
+  expect(Object.values(rpcRoots).every((n) => defs[n]) && trees.create.length >= 3 && trees.finalize.length >= 3, "STATIC: both rpc roots resolve to their latest definitions and call trees");
+  const missing = [];
+  for (const [rpc, byCode] of Object.entries(tables.tokens)) for (const [code, tokens] of Object.entries(byCode)) for (const token of tokens) {
+    const re = new RegExp(`raise\\s+exception\\s+'${token}'\\s+using\\s+errcode\\s*=\\s*'${code}'`, "i");
+    if (!trees[rpc].some((fn) => re.test(defs[fn]))) missing.push(`${rpc}:${code}:${token}`);
+  }
+  expect(missing.length === 0, `STATIC: every evidence pair is raised with exactly that SQLSTATE inside the call tree of ITS OWN rpc (latest definitions), not merely somewhere in supabase/migrations (missing: ${missing.join(",")})`);
+  expect(!("engineCodes" in tables) && Object.keys(tables).join() === "tokens", "STATIC (DP-1): there is no engine-SQLSTATE list in the evidence tables; a bare engine code is never evidence");
+  expect(!/\.test\(|new RegExp|startsWith|includes\(/.test(readText(`${F}/consumer-runtime/mealSaveRecovery.ts`).split("export function hasRollbackEvidence")[1].split("export const rollbackEvidenceTables")[0].replace(/rollbackTokens\[rpc\]\[code\]\?\.includes\(message\) === true/, "")), "STATIC: hasRollbackEvidence decides by table lookup only (no regex, prefix or substring test)");
+
+  // ---- pure rules
+  const ok = (rpc, code, message, status) => R.hasRollbackEvidence(rpc, { code, message, status });
+  expect(ok("create", "22023", "NEGATIVE_NUTRITION_VALUE", 400) && ok("create", "23505", "IDEMPOTENCY_KEY_CONFLICT", 409) && ok("create", "42501", "CONSUMER_CORE_ELIGIBILITY_REQUIRED", 403) && ok("create", "28000", "AUTHENTICATION_REQUIRED", 401) && ok("finalize", "23514", "DURABLE_FINALIZATION_FAILED", 400) && ok("finalize", "42501", "OWNERSHIP_OR_AUTHORIZATION_REJECTED", 403), "pure: exact server-authored pairs are evidence");
+  expect(["create", "finalize"].every((rpc) => ["55P03", "57014", "42P01", "23502", "23514", "42501"].every((c) => [400, 403, 404, 409, 500].every((st) => ["engine text is free", "", "canceling statement due to lock timeout", "permission denied for table x"].every((msg) => !ok(rpc, c, msg, st)) && !ok(rpc, c, undefined, st) && !ok(rpc, c, null, st)))), "pure (DP-1): the six measured engine SQLSTATEs are NOT evidence on either rpc, at any status, with any free text or none");
+  expect(!ok("create", "22023", "INVALID_FINALIZATION", 400) && !ok("finalize", "22023", "NEGATIVE_NUTRITION_VALUE", 400) && !ok("create", "22023", "invalid input", 400) && !ok("create", "XX000", "boom", 500), "pure: a pair of the OTHER rpc, free text, or an unlisted code is not evidence");
+  expect(!ok("create", "23505", "duplicate key value violates unique constraint \"x\"", 409) && !ok("create", "08007", "transaction resolution unknown", 500) && !ok("create", "40003", "statement completion unknown", 500) && !ok("create", "57P01", "terminating connection", 500) && !ok("create", "40001", "could not serialize", 500), "pure: 23505 WITHOUT the idempotency token (a concurrent attempt committed the row), 08007, 40003, 57P01, 40001 are never evidence");
+  expect(![502, 503, 504, 200, 0, 399].some((s) => ok("create", "42501", "CONSUMER_CORE_ELIGIBILITY_REQUIRED", s)) && !ok("create", "42501", "CONSUMER_CORE_ELIGIBILITY_REQUIRED", null) && !ok("create", 42501, "CONSUMER_CORE_ELIGIBILITY_REQUIRED", 403), "pure: an intermediary status, a non-error status, a missing status or a non-string code disqualify the answer");
+
+  // ---- real SDK + real guard + real registry; the server model decides whether the call committed
+  const build = (kind, answer, { commit, sessionUser = "A" } = {}) => {
+    const model = createServerModel(); const calls = [];
+    const backend = async (input, init) => {
+      const fn = String(input).split("/rpc/")[1]; const args = JSON.parse(init.body); calls.push(args.p_client_request_id);
+      if (calls.length > 1) { const r = model.handle("A", fn, args); return new Response(JSON.stringify(okPayload(fn, r.row)), { status: 200, headers: { "content-type": "application/json" } }); }
+      if (commit) model.handle("A", fn, args);
+      return new Response(answer.body, { status: answer.status, headers: { "content-type": answer.ct ?? "application/json" } });
+    };
+    const registry = C.dispatch.createActorBindingRegistry();
+    const client = C.dispatch.withActorBinding(SDK.createClient(SB_URL, ANON_KEY, { accessToken: async () => jwt("A"), global: { fetch: C.dispatch.createActorBindingFetchGuard({ supabaseUrl: SB_URL, inner: backend }) } }), registry);
+    const world = { user: sessionUser }; let n = kind === "normal" ? 4600 : 4700;
+    if (kind === "normal") {
+      const repo = new C.repoW.SupabaseConsumerMealRecordWriteRepository({ authPort: authPortFor(world), mealClient: client, writeEnabled: true });
+      const store = new C.storeW.ConsumerMealWriteOperationStore(new MapStorage());
+      return { kind, model, calls, store, runtime: new C.runtimeW.ConsumerMealWriteRuntime({ service: { createCurrentUserMealRecord: (i) => repo.createCurrentUserMealRecord(i) }, operationStore: store, uuidFactory: () => uuid(n++), dispatchBinding: registry }) };
+    }
+    const service = new C.svcF.ConsumerMealIdentificationFinalizationService({ authPort: authPortFor(world), repository: new C.repoF.SupabaseConsumerMealIdentificationFinalizationRepository(client) });
+    const store = new C.storeF.ConsumerMealIdentificationFinalizationOperationStore(new MapStorage());
+    return { kind: "finalization", model, calls, store, runtime: new C.runtimeF.ConsumerMealIdentificationFinalizationRuntime({ service, operationStore: store, uuidFactory: () => uuid(n++), dispatchBinding: registry }) };
+  };
+  const J = (status, body) => ({ status, body: JSON.stringify(body) });
+  // answers that are NOT proof: the server HAS committed first, yet the client must never call it "not written"
+  const NOT_PROOF = [
+    ["08006 connection_failure", J(503, { code: "08006", message: "connection failure" }), "server"],
+    ["08007 transaction_resolution_unknown", J(500, { code: "08007", message: "transaction resolution unknown" }), "server"],
+    ["40003 statement_completion_unknown", J(500, { code: "40003", message: "statement completion unknown" }), "server"],
+    ["57P01 admin_shutdown", J(500, { code: "57P01", message: "terminating connection due to administrator command" }), "server"],
+    ["40001 serialization_failure (not measured on the real engine)", J(500, { code: "40001", message: "could not serialize access" }), "server"],
+    ["XX000 internal_error", J(500, { code: "XX000", message: "internal error" }), "server"],
+    ["XX000 + a message that contains INVALID", J(500, { code: "XX000", message: "invalid memory alloc request size" }), "server"],
+    ["57014 + free text containing REQUIRED but status 503", J(503, { code: "57014", message: "statement timeout: required lock" }), "server"],
+    // DP-1: the six measured engine SQLSTATEs, at their natural statuses, are unknown on BOTH paths
+    ["55P03 lock_not_available (engine)", J(500, { code: "55P03", message: "canceling statement due to lock timeout" }), "server"],
+    ["57014 query_canceled (engine)", J(500, { code: "57014", message: "canceling statement due to statement timeout" }), "server"],
+    ["42P01 undefined_table (engine)", J(404, { code: "42P01", message: "relation \"x\" does not exist" }), "server"],
+    ["23502 not_null_violation (engine)", J(400, { code: "23502", message: "null value in column \"display_name_snapshot\" violates not-null constraint" }), "server"],
+    ["23514 check_violation (engine)", J(400, { code: "23514", message: "new row for relation \"detail_capture_anchors\" violates check constraint \"rec_block\"" }), "server"],
+    ["42501 insufficient_privilege (engine)", J(403, { code: "42501", message: "permission denied for table detail_capture_anchors" }), "server"],
+    ["PGRST000", J(503, { code: "PGRST000", message: "Database client error. Retrying the connection." }), "server"],
+    ["PGRST001", J(503, { code: "PGRST001", message: "Database connection error. Retrying the connection." }), "server"],
+    ["PGRST002", J(503, { code: "PGRST002", message: "Could not query the database for the schema cache. Retrying." }), "server"],
+    ["PGRST003", J(504, { code: "PGRST003", message: "Timed out acquiring connection from connection pool." }), "server"],
+    ["PGRST116", J(406, { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" }), "server"],
+    ["23505 duplicate key (a concurrent attempt committed the row)", J(409, { code: "23505", message: "duplicate key value violates unique constraint \"meal_records_client_request_id_key\"" }), "server"],
+    ["22023 with an unlisted message", J(400, { code: "22023", message: "invalid input" }), "server"],
+    ["evidence pair behind a 502", J(502, { code: "23505", message: "IDEMPOTENCY_KEY_CONFLICT" }), "server"],
+    ["evidence pair behind a 504 (question A still says: consent)", J(504, { code: "42501", message: "CONSUMER_CORE_ELIGIBILITY_REQUIRED" }), "consent"],
+    ["28000 with a message that is not the server token", J(401, { code: "28000", message: "invalid authorization specification" }), "login"],
+    ["PGRST301 JWT expired (401)", J(401, { code: "PGRST301", message: "JWT expired" }), "login"],
+    ["PGRST302 anonymous access is disabled (401)", J(401, { code: "PGRST302", message: "Anonymous access is disabled" }), "login"],
+    ["PGRST303 JWT claims check failed (401)", J(401, { code: "PGRST303", message: "JWT claim check failed" }), "login"],
+    ["XX000 with HTTP 401", J(401, { code: "XX000", message: "internal" }), "login"],
+    ["code-only envelope {code:XX000}", J(500, { code: "XX000" }), "server"],
+    ["message is a number {code:XX000,message:123}", J(500, { code: "XX000", message: 123 }), "server"]
+  ];
+  for (const kind of ["normal", "finalization"]) for (const [label, answer, reason] of NOT_PROOF) for (const commit of [true, false]) {
+    // the client cannot tell the committed twin from the not-committed twin: identical ledger result, original key, no cancel; 重新確認 ends with one row
+    const h = await boot(build(kind, answer, { commit }));
+    const first = await submit(h);
+    const [entry] = await entriesOf(h);
+    const op = h.runtime.getState().operations[0];
+    expect(entry && entry.state === "unknown" && entry.hadUnknown && entry.lastReason === reason && first.status === "uncertain" && op && !op.actions.includes("cancel") && op.actions.includes("retry") && h.model.rowsOf("A").length === (commit ? 1 : 0), `${kind}/${label}/${commit ? "committed" : "not committed"}: kept as unknown (${reason}), same key, never cancellable, never "not written"`);
+    await h.runtime.cancel(actorCtx(), entry.opId);
+    expect((await entriesOf(h)).length === 1, `${kind}/${label}/${commit ? "committed" : "not committed"}: cancel is refused`);
+    const done = await h.runtime.retry(actorCtx());
+    expect((await entriesOf(h)).length === 0 && h.model.rowsOf("A").length === 1 && h.calls.length === 2 && h.calls[0] === h.calls[1] && done.status !== "error", `${kind}/${label}/${commit ? "committed" : "not committed"}: 重新確認 replays the ORIGINAL key once (no new key, no automatic retry); exactly one row`);
+  }
+  // answers that ARE proof: the server did not commit; the operation may be cancelled / re-created only here
+  const PROOF = [
+    ["conflict token", J(409, { code: "23505", message: "IDEMPOTENCY_KEY_CONFLICT" }), { create: "removed", finalize: "removed" }],
+    ["input token (22023 + a table token of that rpc)", J(400, { code: "22023", message: { create: "NEGATIVE_NUTRITION_VALUE", finalize: "INVALID_FINALIZATION" } }), { create: "removed", finalize: "removed" }],
+    ["eligibility token", J(403, { code: "42501", message: "CONSUMER_CORE_ELIGIBILITY_REQUIRED" }), { create: "blocked_consent", finalize: "blocked_consent" }],
+    ["authentication token", J(401, { code: "28000", message: "AUTHENTICATION_REQUIRED" }), { create: "blocked_login", finalize: "blocked_login" }],
+    ["create canonical-record token", J(500, { code: "P0001", message: "CANONICAL_MEAL_RECORD_NOT_FOUND" }), { create: "retryable" }],
+    ["finalize ownership token", J(403, { code: "42501", message: "OWNERSHIP_OR_AUTHORIZATION_REJECTED" }), { finalize: "retryable" }],
+    ["finalize durable token", J(400, { code: "23514", message: "DURABLE_FINALIZATION_FAILED" }), { finalize: "retryable" }]
+  ];
+  for (const kind of ["normal", "finalization"]) for (const [label, answer, expectations] of PROOF) {
+    const rpc = kind === "normal" ? "create" : "finalize";
+    if (!expectations[rpc]) continue;
+    const body = typeof JSON.parse(answer.body).message === "object" ? J(answer.status, { code: "22023", message: JSON.parse(answer.body).message[rpc] }) : answer;
+    const h = await boot(build(kind, body, { commit: false }));
+    await submit(h);
+    const [entry] = await entriesOf(h);
+    const want = expectations[rpc];
+    expect(want === "removed" ? !entry : entry && entry.state === want && entry.hadUnknown === false, `${kind}/${label}: proven not written (server did not commit) => ${want}`);
+    if (want === "retryable" || want.startsWith("blocked_")) expect(h.runtime.getState().operations[0].actions.includes("cancel"), `${kind}/${label}: a proven-not-written draft may be cancelled`);
+  }
+  // ---- sticky: any later answer, proof or not, never clears an earlier unknown
+  for (const kind of ["normal", "finalization"]) for (const [label, answer] of [...PROOF.map(([l, a]) => [l, a]), ...NOT_PROOF.filter(([l]) => /\(engine\)/.test(l)).map(([l, a]) => [l, a]), ["XX000", J(500, { code: "XX000", message: "boom" })]]) {
+    const rpc = kind === "normal" ? "create" : "finalize";
+    const body = (() => { const p = JSON.parse(answer.body); return typeof p.message === "object" ? J(answer.status, { code: "22023", message: p.message[rpc] }) : answer; })();
+    const model = createServerModel(); const calls = [];
+    const backend = async (input, init) => { const args = JSON.parse(init.body); calls.push(args.p_client_request_id); if (calls.length === 1) { model.handle("A", String(input).split("/rpc/")[1], args); throw new TypeError("Network request failed"); } return new Response(body.body, { status: body.status, headers: { "content-type": "application/json" } }); };
+    const registry = C.dispatch.createActorBindingRegistry();
+    const client = C.dispatch.withActorBinding(SDK.createClient(SB_URL, ANON_KEY, { accessToken: async () => jwt("A"), global: { fetch: C.dispatch.createActorBindingFetchGuard({ supabaseUrl: SB_URL, inner: backend }) } }), registry);
+    const world = { user: "A" }; let n = 4800;
+    let h;
+    if (kind === "normal") { const repo = new C.repoW.SupabaseConsumerMealRecordWriteRepository({ authPort: authPortFor(world), mealClient: client, writeEnabled: true }); const store = new C.storeW.ConsumerMealWriteOperationStore(new MapStorage()); h = { kind, store, runtime: new C.runtimeW.ConsumerMealWriteRuntime({ service: { createCurrentUserMealRecord: (i) => repo.createCurrentUserMealRecord(i) }, operationStore: store, uuidFactory: () => uuid(n++), dispatchBinding: registry }) }; }
+    else { const service = new C.svcF.ConsumerMealIdentificationFinalizationService({ authPort: authPortFor(world), repository: new C.repoF.SupabaseConsumerMealIdentificationFinalizationRepository(client) }); const store = new C.storeF.ConsumerMealIdentificationFinalizationOperationStore(new MapStorage()); h = { kind: "finalization", store, runtime: new C.runtimeF.ConsumerMealIdentificationFinalizationRuntime({ service, operationStore: store, uuidFactory: () => uuid(n++), dispatchBinding: registry }) }; }
+    await boot(h); await submit(h);
+    await h.runtime.retry(actorCtx());
+    const [entry] = await entriesOf(h); const op = h.runtime.getState().operations[0];
+    expect(entry && entry.state === "unknown" && entry.hadUnknown && !op.actions.includes("cancel"), `${kind}/unknown then ${label}: an earlier unknown is never cleared by a later answer`);
+  }
+  // ---- provenance by observation, never by the code
+  {
+    // no session: nothing reaches the SDK => proven not dispatched => blocked_login (cancellable)
+    for (const make of bothKinds) {
+      const h = await boot(make({ world: { user: "A" } })); h.world.user = null; await submit(h);
+      expect(h.client.calls.length === 0 && (await entriesOf(h))[0]?.state === "blocked_login" && !(await entriesOf(h))[0].hadUnknown, `${make.name}: a refusal made before the SDK was called is proven not dispatched`);
+    }
+    // the very same typed error produced from a server answer (the SDK WAS called) without evidence is unknown
+    for (const make of bothKinds) {
+      const h = await boot(make({ behaviors: [{ kind: "fault", code: "PGRST301", message: "JWT expired", status: 401 }] })); await submit(h);
+      expect((await entriesOf(h))[0]?.state === "unknown" && (await entriesOf(h))[0].lastReason === "login", `${make.name}: the same login failure after the SDK was called is NOT proof`);
+    }
+    // a binding that cannot observe never yields proof
+    const noObserve = await boot(makeNormal({ world: { user: "A" }, binding: { bind() {}, release() {} } })); noObserve.world.user = null; await submit(noObserve);
+    expect((await entriesOf(noObserve))[0]?.state === "unknown", "a dispatch binding without observe() yields no proof: the outcome stays unknown");
+  }
+  // guard refusal: confirmed by the guard's own record (R-32 covers the refused/unknown-history case); a SERVER that sends the same code is not proof
+  for (const kind of ["normal", "finalization"]) {
+    const h = await boot(build(kind, J(409, { code: "TKACT0", message: "ACTOR_BINDING_MISMATCH" }), { commit: true }));
+    await submit(h);
+    const [entry] = await entriesOf(h);
+    expect(entry && entry.state === "unknown" && entry.hadUnknown && h.model.rowsOf("A").length === 1, `${kind}: a server answer carrying TKACT0 that the guard did not record is unknown, not "not sent"`);
+  }
+  // a result that did not come from the Supabase repository (mock / disabled source) cannot have written anything remotely
+  {
+    const errors = loadC(`${F}/meal-identification-finalization/errors.ts`);
+    const mk = (source) => {
+      const store = new C.storeF.ConsumerMealIdentificationFinalizationOperationStore(new MapStorage()); let n = 5900;
+      return { kind: "finalization", store, runtime: new C.runtimeF.ConsumerMealIdentificationFinalizationRuntime({ service: { finalizeCurrentUserMealIdentification: async () => ({ ok: false, error: new errors.ConsumerMealIdentificationFinalizationInvalidInputError("x"), source }) }, operationStore: store, uuidFactory: () => uuid(n++) }) };
+    };
+    const mock = await boot(mk("mock")); await submit(mock);
+    expect((await entriesOf(mock)).length === 0 && mock.runtime.getState().status === "error", "a failure answered by the mock source is a local, definitive failure (nothing can have been written remotely)");
+    const live = await boot(mk("supabase")); await submit(live);
+    expect((await entriesOf(live))[0]?.state === "unknown", "the same typed failure from the supabase source, without evidence, is unknown");
+  }
+});
+
+gate("R-38", "F-1: a trusted late success after a generation / session change leaves ledger and runtime consistent [H-FS]", async () => {
+  const elapsed = { race: (p) => Promise.race([p.then((value) => ({ timedOut: false, value })), wait(15).then(() => ({ timedOut: true }))]) };
+  const clean = async (h, label) => { const s = h.runtime.getState(); expect(s.status === "idle" && !s.pending && !s.mealRecordId && s.operations.length === 0 && (await entriesOf(h)).length === 0, `${label}: ledger empty and runtime idle (no pending state without a ledger entry, no retry target)`); };
+  for (const [label, move] of [
+    ["same account signs out and in", async (h) => { await h.runtime.setActor(null, 2); await h.runtime.setActor("A", 3); }],
+    ["same account, generation +1 (no sign-out)", async (h) => { await h.runtime.setActor("A", 2); }],
+    ["A -> B -> A", async (h) => { await h.runtime.setActor("B", 2); await h.runtime.setActor("A", 3); }]
+  ]) {
+    const g = deferred();
+    const h = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g, as: "A" }], localWait: elapsed }));
+    expect((await submit(h)).status === "uncertain", `${label}: the local wait elapsed first`);
+    await move(h);
+    const before = h.client.calls.length;
+    g.resolve(); await wait(60);
+    await clean(h, label);
+    const gen = h.runtime.getState();
+    // the user can start a NEW photo: it binds, saves, and shows its own result
+    const generation = label.includes("->") ? 3 : label.includes("signs out") ? 3 : 2;
+    expect(h.runtime.beginAnalysisOperation(actorCtx("A", generation), "analysis-op-new") === true, `${label}: a new analysis binds (the restored foreground no longer blocks it)`);
+    const saved = await h.runtime.submit(ctx("A", generation), finDraft(undefined, "after"));
+    expect(saved.status === "succeeded" && h.model.rowsOf("A").length === 2 && h.client.calls.length === before + 1, `${label}: the new photo saves normally, nothing was sent automatically for the old operation`);
+    expect(gen.status === "idle", `${label}: (state before the new submit was idle)`);
+  }
+  {
+    // a late success must never publish into B's session
+    const g = deferred();
+    const h = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g, as: "A" }], localWait: elapsed }));
+    await submit(h); await h.runtime.setActor("B", 2); h.world.user = "B"; h.runtime.beginAnalysisOperation(actorCtx("B", 2), "analysis-op-b");
+    const bBefore = JSON.stringify(slim(h.runtime.getState()));
+    g.resolve(); await wait(60);
+    expect(JSON.stringify(slim(h.runtime.getState())) === bBefore && (await h.store.list("A")).entries.length === 0, "A's late success reconciles A's ledger and never changes B's screen");
+  }
+  {
+    // set aside, then session change, then a new photo in the foreground, THEN the old late success
+    const g = deferred(); const g2 = deferred();
+    // only the FIRST attempt (the old operation) has its local wait elapse; the new photo keeps waiting
+    const firstOnly = (() => { let n = 0; return { race: (p) => (n++ === 0 ? elapsed.race(p) : p.then((value) => ({ timedOut: false, value }))) }; })();
+    const h = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g, as: "A" }, { kind: "gate", gate: g2, as: "A" }], localWait: firstOnly }));
+    await submit(h); await h.runtime.defer(actorCtx());
+    await h.runtime.setActor(null, 2); await h.runtime.setActor("A", 3);
+    expect(h.runtime.beginAnalysisOperation(actorCtx("A", 3), "analysis-op-new") === true, "a set-aside operation does not block the new photo after re-login");
+    const pNew = h.runtime.submit(ctx("A", 3), finDraft(undefined, "new photo")); await wait(20);
+    const mid = JSON.stringify(slim(h.runtime.getState()));
+    g.resolve(); await wait(60);
+    expect(JSON.stringify(slim(h.runtime.getState())) === mid && h.runtime.getState().status === "submitting", "the OLD operation's late success never touches the new photo that is in flight");
+    g2.resolve(); const done = await pNew;
+    expect(done.status === "succeeded" && h.model.rowsOf("A").length === 2 && (await entriesOf(h)).length === 0, "the new photo then completes with its own result; both writes exist exactly once");
+  }
+  {
+    // ordering: late success arrives BETWEEN sign-out and the next sign-in
+    const g = deferred();
+    const h = await boot(makeFin({ behaviors: [{ kind: "gate", gate: g, as: "A" }], localWait: elapsed }));
+    await submit(h); await h.runtime.setActor(null, 2);
+    g.resolve(); await wait(60);
+    await h.runtime.setActor("A", 3);
+    await clean(h, "late success while signed out, then the same account signs in");
+  }
+  {
+    // the normal-save runtime keeps its behaviour (control)
+    const g = deferred();
+    const h = await boot(makeNormal({ behaviors: [{ kind: "gate", gate: g, as: "A" }], localWait: elapsed }));
+    await submit(h); await h.runtime.setActor(null, 2); await h.runtime.setActor("A", 3);
+    g.resolve(); await wait(60);
+    expect(h.runtime.getState().status === "idle" && (await entriesOf(h)).length === 0, "normal save: same-account re-login then late success is idle with an empty ledger (unchanged)");
+  }
 });
 
 // ============================================================================================ runner

@@ -385,9 +385,22 @@ export const D1D2_SUCCESSOR=Object.freeze({base:'f6f90262bfe3e83c3dd8d39b02ba74c
   'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','3d5b8942dc46e3c4cc8309348d2e346b0ea70a4d']),
   'scripts/consumer-meal-save-recovery-smoke.mjs':Object.freeze(['100644','f83b89f62ca8a54ca58eb45e7971c7071aa93d2a'])
 })});
+// F-1/F-2 product corrective of that D1/D2 successor (late success after a generation change; outcome certainty by proof, Owner R-11 of
+// 2026-10-08): the same 27 paths and the d1d2 bytes, except exactly these 8 (exact mode/blob). No path is added. One-way binding again: this
+// file binds their bytes; none of them records this file's or the capture smoke's hash.
+export const F1F2_SUCCESSOR=Object.freeze({base:'b014b1367bee78fd2375e9648633ab592e52da01',overrides:Object.freeze({
+  'apps/mobile/features/consumer-auth/actorBoundDispatch.ts':Object.freeze(['100644','e074cc8f10581362e10513848ea98a7f95c6f632']),
+  'apps/mobile/features/consumer-meals/adapters/supabaseConsumerMealRecordWriteRepository.ts':Object.freeze(['100644','d89a6376c284e9bbf2fc4381c7cf1ea013f9b8f0']),
+  'apps/mobile/features/consumer-runtime/consumerMealIdentificationFinalizationRuntime.ts':Object.freeze(['100644','0712119a22766b41a4c479973ec6d7060660de1b']),
+  'apps/mobile/features/consumer-runtime/consumerMealWriteRuntime.ts':Object.freeze(['100644','6a9aac78b966d3f7519290fe1a6d487461dfd651']),
+  'apps/mobile/features/consumer-runtime/mealSaveRecovery.ts':Object.freeze(['100644','2741fdb682676cba60a93db7ac743ffa039debcd']),
+  'apps/mobile/features/meal-identification-finalization/mealIdentificationFinalizationMappers.ts':Object.freeze(['100644','c93c6bcbae532d76d4fd1bdf160f50b9c203496c']),
+  'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','66abb8527ca6e506041b33402c5a38ee9401e5ee']),
+  'scripts/consumer-meal-save-recovery-smoke.mjs':Object.freeze(['100644','63ac42730c8aef2f771b1be4f8918e0dc3f4ecb2'])
+})});
 // git: (args) => stdout of a git command run at the tree under test. Returns {state:'capture'|'recovery'|'corrective'|
-// 'd1d2'|'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record), 'corrective' (exact record with the
-// corrected guard) or 'd1d2' (exact record with the six D1/D2 overrides) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
+// 'd1d2'|'f1f2'|'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record), 'corrective' (exact record with the
+// corrected guard) or 'd1d2' (exact record with the six D1/D2 overrides) or 'f1f2' (that record with the F-1/F-2 overrides) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
 export function recoverySuccessorState(git){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
@@ -395,6 +408,8 @@ export function recoverySuccessorState(git){
   if(Object.keys(overrides).length!==1||!Object.keys(overrides).every(p=>paths.includes(p)))throw Error('CORRECTIVE_RECORD_SHAPE');
   const d1d2=D1D2_SUCCESSOR.overrides;
   if(Object.keys(d1d2).length!==6||!Object.keys(d1d2).every(p=>paths.includes(p)))throw Error('D1D2_RECORD_SHAPE');
+  const f1f2=F1F2_SUCCESSOR.overrides;
+  if(Object.keys(f1f2).length!==8||!Object.keys(f1f2).every(p=>paths.includes(p)))throw Error('F1F2_RECORD_SHAPE');
   const rows=out=>out.trim().split('\n').filter(Boolean);
   const parent=new Map(rows(git(['ls-tree','-r',S.parent,'--',...paths])).map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return [p,{mode,blob}];}));
   const index=new Map();for(const l of rows(git(['ls-files','--stage','--',...paths]))){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
@@ -408,12 +423,14 @@ export function recoverySuccessorState(git){
   if(S.entries.filter(([s])=>s==='M').some(([,p])=>!parent.has(p)))throw Error('RECOVERY_PARENT_TREE_UNAVAILABLE');
   const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
   const atD1D2=e=>d1d2[e[1]]?atRecord([e[0],e[1],...d1d2[e[1]]]):atCorrective(e);
-  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),fix=S.entries.map(atD1D2),cap=S.entries.map(atCapture);
+  const atF1F2=e=>f1f2[e[1]]?atRecord([e[0],e[1],...f1f2[e[1]]]):atD1D2(e);
+  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),fix=S.entries.map(atD1D2),f12=S.entries.map(atF1F2),cap=S.entries.map(atCapture);
   if(rec.every(Boolean))return {state:'recovery',exempt:true,paths,violations:[]};
   if(cor.every(Boolean))return {state:'corrective',exempt:true,paths,violations:[]};
   if(fix.every(Boolean))return {state:'d1d2',exempt:true,paths,violations:[]};
+  if(f12.every(Boolean))return {state:'f1f2',exempt:true,paths,violations:[]};
   if(cap.every(Boolean))return {state:'capture',exempt:false,paths,violations:[]};
-  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]||fix[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
+  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]||fix[k]||f12[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
 }
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};

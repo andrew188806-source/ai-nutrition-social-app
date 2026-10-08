@@ -12,10 +12,11 @@ import { MealSaveLedgerError } from "./mealSaveOperationLedger";
 import {
   applyAttemptOutcome,
   blocksNewSave,
-  classifyMealWriteErrorCode,
+  classifyMealWriteOutcome,
   createLocalWait,
   describeMealWriteInput,
   isCancellable,
+  proofFromError,
   summarizeMealSaveEntry,
   type LocalWait,
   type MealSaveClassification,
@@ -331,12 +332,15 @@ export class ConsumerMealWriteRuntime {
     );
     const raced = await this.localWait.race(settled);
     this.options.dispatchBinding?.release(operation.opId);
+    // The observation belongs to THIS attempt only while it has not timed out: a later attempt of the same key re-binds and would
+    // overwrite it, and a late answer of a timed-out attempt is already unknown history, so it never needs proof.
+    const observation = raced.timedOut ? undefined : this.options.dispatchBinding?.observe?.(operation.opId);
     if (raced.timedOut) {
       // Stop waiting locally. The request is NOT cancelled and may still commit: unknown, sticky.
       void settled.then((late) => this.settleAttempt(actorKey, generation, entry, late, true));
       return this.settleAttempt(actorKey, generation, entry, { timeout: true }, false);
     }
-    return this.settleAttempt(actorKey, generation, entry, raced.value, false);
+    return this.settleAttempt(actorKey, generation, entry, raced.value, false, observation);
   }
 
   private async settleAttempt(
@@ -344,7 +348,8 @@ export class ConsumerMealWriteRuntime {
     generation: number,
     operation: ConsumerMealWriteLedgerEntry,
     answer: { timeout: true } | { thrown: unknown } | { result: Awaited<ReturnType<ConsumerMealRecordWriteService["createCurrentUserMealRecord"]>> },
-    late: boolean
+    late: boolean,
+    observation?: { called: boolean; refused: boolean }
   ): Promise<ConsumerMealWriteRuntimeState> {
     let classification: MealSaveClassification;
     let errorCode: string | null = null;
@@ -357,7 +362,7 @@ export class ConsumerMealWriteRuntime {
       errorMessage = answer.result.error.message;
       const sqlstate = (answer.result.error as { sqlstate?: string | null }).sqlstate ?? null;
       const httpStatus = (answer.result.error as { httpStatus?: number | null }).httpStatus ?? null;
-      classification = classifyMealWriteErrorCode(errorCode, errorMessage, sqlstate);
+      classification = classifyMealWriteOutcome(errorCode, errorMessage, sqlstate, proofFromError("create", answer.result.error, observation));
       classification = { ...classification, meta: { ...classification.meta, httpStatus } };
     }
 

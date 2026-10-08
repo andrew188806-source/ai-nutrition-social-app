@@ -83,14 +83,40 @@ export function decodeBearerSubject(authorization: string | null | undefined): s
 // Registry + rpc proxy
 // ---------------------------------------------------------------------------------------------
 
+// Local observation of one attempt (R-11, 2026-10-08): the guard records the idempotency key of every request it refuses (such a
+// request never reaches the network). The registry records whether the SDK's rpc method was called for an operation at all. Neither
+// is an error code or a message: they are what this device actually did, so they can PROVE "not dispatched". Bounded, in memory,
+// single JS context (same assumption as the module-level ledger lock).
+const refusedKeys = new Map<string, true>();
+const REFUSED_KEYS_CAP = 64;
+let forwardedCount = 0;
+
+function recordRefusal(body: unknown): void {
+  if (typeof body !== "string") return;
+  try {
+    const key = (JSON.parse(body) as { p_client_request_id?: unknown }).p_client_request_id;
+    if (typeof key !== "string" || !key) return;
+    refusedKeys.set(key, true);
+    while (refusedKeys.size > REFUSED_KEYS_CAP) refusedKeys.delete(refusedKeys.keys().next().value as string);
+  } catch {
+    // an unreadable body records nothing: the refusal then stays unconfirmed and the outcome is treated as unknown
+  }
+}
+
+export type ActorBindingObservation = { called: boolean; refused: boolean };
+
 export type ActorBindingRegistry = {
   bind(opId: string, ownerActorKey: string): void;
   release(opId: string): void;
   ownerOf(opId: string): string | undefined;
+  noteCall(opId: string): void;
+  // Consumes the observation of the attempt that was just made.
+  observe(opId: string): ActorBindingObservation;
 };
 
 export function createActorBindingRegistry(): ActorBindingRegistry {
   const owners = new Map<string, string>();
+  const calls = new Set<string>();
   return {
     bind(opId, ownerActorKey) {
       owners.set(opId, ownerActorKey);
@@ -100,6 +126,12 @@ export function createActorBindingRegistry(): ActorBindingRegistry {
     },
     ownerOf(opId) {
       return owners.get(opId);
+    },
+    noteCall(opId) {
+      calls.add(opId);
+    },
+    observe(opId) {
+      return { called: calls.delete(opId), refused: refusedKeys.delete(opId) };
     }
   };
 }
@@ -115,6 +147,7 @@ export function withActorBinding<T extends object>(client: T, registry: ActorBin
     const builder = options === undefined ? target.rpc(fn, args) : target.rpc(fn, args, options);
     if (!ACTOR_BOUND_RPC_NAMES.includes(fn)) return builder;
     const key = typeof args?.p_client_request_id === "string" ? (args.p_client_request_id as string) : null;
+    if (key) registry.noteCall(key);
     const owner = key ? registry.ownerOf(key) : undefined;
     const tagged = builder as RpcBuilderLike;
     if (typeof tagged.setHeader !== "function") return builder;
@@ -150,8 +183,11 @@ function inScope(url: string, supabaseUrl: string): boolean {
 }
 
 export function createActorBindingFetchGuard(options: { supabaseUrl: string; inner?: ActorBindingFetch }): ActorBindingFetch {
-  const forward: ActorBindingFetch = (input, init) => (options.inner ?? ((i, n) => (globalThis.fetch as unknown as ActorBindingFetch)(i, n)))(input, init);
-  return async (input, init) => {
+  const forward: ActorBindingFetch = (input, init) => {
+    forwardedCount++;
+    return (options.inner ?? ((i, n) => (globalThis.fetch as unknown as ActorBindingFetch)(i, n)))(input, init);
+  };
+  const decide: ActorBindingFetch = async (input, init) => {
     const initHeaders = init?.headers;
     const headers = new Headers(initHeaders as ConstructorParameters<typeof Headers>[0]);
     const expected = headers.get(ACTOR_BINDING_HEADER);
@@ -169,5 +205,14 @@ export function createActorBindingFetchGuard(options: { supabaseUrl: string; inn
     // Same synchronous step: the verified headers object is the one that is sent (tag removed).
     headers.delete(ACTOR_BINDING_HEADER);
     return forward(input, { ...init, headers });
+  };
+  // A request that was decided WITHOUT being forwarded was refused by this guard and never reached the network: record its key so that a
+  // later TKACT0 answer can be confirmed against what this device actually did (a concurrent forward only makes the record miss, which
+  // leaves the outcome unknown — the safe direction).
+  return async (input, init) => {
+    const before = forwardedCount;
+    const response = await decide(input, init);
+    if (forwardedCount === before) recordRefusal(init?.body);
+    return response;
   };
 }

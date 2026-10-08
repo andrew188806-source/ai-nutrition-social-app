@@ -17,10 +17,11 @@ import { MealSaveLedgerError } from "./mealSaveOperationLedger";
 import {
   applyAttemptOutcome,
   blocksNewSave,
-  classifyFinalizationErrorCode,
+  classifyFinalizationOutcome,
   createLocalWait,
   describeFinalizationInput,
   isCancellable,
+  proofFromError,
   summarizeMealSaveEntry,
   type LocalWait,
   type MealSaveClassification,
@@ -459,12 +460,14 @@ export class ConsumerMealIdentificationFinalizationRuntime {
     );
     const raced = await this.localWait.race(settled);
     this.options.dispatchBinding?.release(operation.opId);
+    // See the normal-save runtime: the observation is only valid for an attempt that has not timed out.
+    const observation = raced.timedOut ? undefined : this.options.dispatchBinding?.observe?.(operation.opId);
     if (raced.timedOut) {
       // Stop waiting locally. The request is NOT cancelled and may still commit: unknown, sticky.
       void settled.then((late) => this.settleAttempt(actorKey, generation, operationId, entry, late, true));
       return this.settleAttempt(actorKey, generation, operationId, entry, { timeout: true }, false);
     }
-    return this.settleAttempt(actorKey, generation, operationId, entry, raced.value, false);
+    return this.settleAttempt(actorKey, generation, operationId, entry, raced.value, false, observation);
   }
 
   private async settleAttempt(
@@ -473,7 +476,8 @@ export class ConsumerMealIdentificationFinalizationRuntime {
     operationId: string | null,
     operation: ConsumerMealIdentificationFinalizationLedgerEntry,
     answer: { timeout: true } | { thrown: unknown } | { result: ServiceResult },
-    late: boolean
+    late: boolean,
+    observation?: { called: boolean; refused: boolean }
   ): Promise<ConsumerMealIdentificationFinalizationRuntimeState> {
     let classification: MealSaveClassification;
     let errorCode: string | null = null;
@@ -485,7 +489,7 @@ export class ConsumerMealIdentificationFinalizationRuntime {
       const sqlstate = (answer.result.error as { sqlstate?: string | null }).sqlstate ?? null;
       const httpStatus = (answer.result.error as { httpStatus?: number | null }).httpStatus ?? null;
       const structured = (answer.result.error as { structured?: boolean }).structured === true;
-      classification = classifyFinalizationErrorCode(errorCode, sqlstate, structured);
+      classification = classifyFinalizationOutcome(errorCode, sqlstate, structured, proofFromError("finalize", answer.result.error, observation, answer.result.source !== "supabase"));
       classification = { ...classification, meta: { ...classification.meta, httpStatus } };
     }
 
@@ -500,11 +504,11 @@ export class ConsumerMealIdentificationFinalizationRuntime {
       // actor, generation and analysis operation) resolves it — also when it arrives after the local wait. Any other
       // success is reconciled in the owner's ledger only and is never published to another analysis or account.
       if (wasForeground && value && this.isCurrentOperation(actorKey, generation, operationId)) return this.complete(actorKey, value);
-      if (wasForeground && this.isCurrent(actorKey, generation)) this.pending = null;
+      if (wasForeground) this.pending = null;
       // Late (or no-longer-foreground) success: the ledger is reconciled; refresh data for the owner's
       // current session only, and never touch another account's state.
       if (ownerIsCurrent) {
-        this.update({ ...this.state, finalizationDataRevision: this.state.finalizationDataRevision + 1 });
+        this.update(wasForeground ? idleState(this.state.finalizationDataRevision + 1, this.state.operations) : { ...this.state, finalizationDataRevision: this.state.finalizationDataRevision + 1 });
         await this.refreshOperations(actorKey, this.actorGeneration);
       }
       return this.state;
