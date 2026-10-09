@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useSyncExternalStore, type ReactN
 import { useConsumerRuntime } from "../consumer-runtime/ConsumerRuntimeProvider";
 import type { ConsumerOnboardingController } from "./controller";
 import type { OnboardingSnapshot } from "./types";
-const empty: OnboardingSnapshot = Object.freeze({ bundle: null, state: null, pending: false, uncertain: false, error: null });
+const empty: OnboardingSnapshot = Object.freeze({ documentStatus: "error", bundle: null, state: null, pending: false, uncertain: false, error: null });
 const noSubscribe = () => () => undefined;
 const Context = createContext<{ controller: ConsumerOnboardingController | null; snapshot: OnboardingSnapshot }>({ controller: null, snapshot: empty });
 export function ConsumerOnboardingProvider({ controller, children }: { controller: ConsumerOnboardingController | null; children: ReactNode }) {

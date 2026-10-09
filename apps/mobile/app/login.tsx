@@ -1,5 +1,6 @@
 import { useConsumerOnboarding } from "../features/consumer-onboarding/ConsumerOnboardingProvider";
 import { pc2Copy as pc2 } from "../features/consumer-onboarding/copy";
+import { DocumentStatusNotice } from "../features/consumer-onboarding/DocumentStatusNotice";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -53,7 +54,7 @@ export default function LoginScreen() {
         ) : (
           <View style={styles.card}>
             <Pressable disabled={busy || !onboarding} onPress={() => setCreateAccount(!createAccount)}><Text>{createAccount ? "已有帳號：登入" : "建立新帳號"}</Text></Pressable>
-            {createAccount ? <View style={styles.notice}><Text>{pc2.required}</Text>{!snapshot.bundle ? <Text>{pc2.unavailable}</Text> : null}<Text>密碼至少 8 字元。</Text></View> : null}
+            {createAccount ? <View style={styles.notice}><Text>{pc2.required}</Text><DocumentStatusNotice snapshot={snapshot} retry={onboarding ? () => void onboarding.refresh() : undefined} disabled={busy} /><Text>密碼至少 8 字元。</Text></View> : null}
             {snapshot.error === "confirmation_required" ? <Text>{pc2.confirmation}</Text> : snapshot.error && snapshot.error !== "unavailable" ? <Text>{pc2.error}</Text> : null}
             <Text style={styles.inputLabel}>{copy.emailLabel}</Text>
             <TextInput

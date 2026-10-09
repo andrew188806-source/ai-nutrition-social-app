@@ -3,7 +3,7 @@ import { confirmationCodeFromUrl } from "./authRedirect";
 import { parseParticipationState, parseRequiredBundle, type OnboardingRpcClient, type OnboardingSnapshot, type RequiredBundle } from "./types";
 export type OnboardingAuthPort = ConsumerAuthPort & { completeEmailConfirmation?: (code: string) => ReturnType<ConsumerAuthPort["signUp"]> };
 export type OnboardingOptions = { authPort: OnboardingAuthPort; client: OnboardingRpcClient; redirect: string | null; invalidateAccess: () => void; timeoutMs?: number };
-const initial = (): OnboardingSnapshot => ({ bundle: null, state: null, pending: false, uncertain: false, error: null });
+const initial = (): OnboardingSnapshot => ({ documentStatus: "idle", bundle: null, state: null, pending: false, uncertain: false, error: null });
 export class ConsumerOnboardingController {
   private snapshot = initial(); private actor: string | null = null; private scope = ""; private epoch = 0; private sequence = 0;
   private listeners = new Set<() => void>();
@@ -31,13 +31,26 @@ export class ConsumerOnboardingController {
     } finally { if (timer !== undefined) clearTimeout(timer); }
   }
   async refresh() {
+    if (this.snapshot.pending) return false;
     const epoch = this.epoch; const sequence = this.sequence + 1;
-    return this.run(async () => {
-      const bundle = parseRequiredBundle(await this.rpc("get_consumer_required_documents"));
+    const current = () => epoch === this.epoch && sequence === this.sequence;
+    this.emit({ documentStatus: "loading", bundle: null });
+    const result = await this.run(async () => {
+      let bundle: RequiredBundle | null;
+      try {
+        bundle = parseRequiredBundle(await this.rpc("get_consumer_required_documents"));
+      } catch (error) {
+        if (current()) this.emit({ documentStatus: "error", bundle: null });
+        throw error;
+      }
+      if (current()) this.emit({ bundle, documentStatus: bundle ? "available" : "unavailable" });
       let state = null;
       if (this.actor) { await this.sessionActor(); state = parseParticipationState(await this.rpc("get_authenticated_consumer_participation_state")); await this.sessionActor(); }
-      if (epoch === this.epoch && sequence === this.sequence) this.emit({ bundle, state, uncertain: false, error: bundle ? null : "unavailable" });
+      if (current()) this.emit({ bundle, state, uncertain: false, error: bundle ? null : "unavailable" });
     }, true);
+    // run advances the sequence on timeout: late document responses cannot revive the view.
+    if (!result && epoch === this.epoch && this.snapshot.documentStatus === "loading") this.emit({ documentStatus: "error", bundle: null });
+    return result;
   }
   async signUp(email: string, password: string) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || password.length < 8 || password.length > 128) { this.emit({ error: "invalid_input" }); return false; }

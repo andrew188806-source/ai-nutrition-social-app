@@ -1,7 +1,8 @@
 export type RequiredDocument = Readonly<{ documentId: "membership-terms" | "privacy-policy" | "ai-training-terms"; version: string; consentType: string; contentSha256: string; content: string }>;
 export type RequiredBundle = Readonly<{ bundleVersion: string; locale: "zh-TW"; documents: readonly RequiredDocument[] }>;
 export type ParticipationState = Readonly<{ documentsAvailable: boolean; onboardingComplete: boolean; coreEligible: boolean; trainingGranted: boolean; preparationCompatibility: boolean; ageAttested: boolean; agePolicyVersion: "social-adult-self-attestation-v1"; socialQualified: boolean; participation: "not_participating" | "opted_in" | "paused"; socialEligible: boolean }>;
-export type OnboardingSnapshot = Readonly<{ bundle: RequiredBundle | null; state: ParticipationState | null; pending: boolean; uncertain: boolean; error: "unavailable" | "invalid_input" | "confirmation_required" | "request_failed" | "timeout" | "stale" | null }>;
+export type DocumentReadStatus = "idle" | "loading" | "available" | "unavailable" | "error";
+export type OnboardingSnapshot = Readonly<{ documentStatus: DocumentReadStatus; bundle: RequiredBundle | null; state: ParticipationState | null; pending: boolean; uncertain: boolean; error: "unavailable" | "invalid_input" | "confirmation_required" | "request_failed" | "timeout" | "stale" | null }>;
 export type OnboardingRpcClient = { rpc(name: string, args?: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }> };
 const fields = ["documentsAvailable", "onboardingComplete", "coreEligible", "trainingGranted", "preparationCompatibility", "ageAttested", "socialQualified", "socialEligible"] as const;
 export function parseParticipationState(value: unknown): ParticipationState {
