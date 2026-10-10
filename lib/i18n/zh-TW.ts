@@ -1,6 +1,6 @@
 export const zhTW = {
   common: {
-    appName: "好初 AI 營養社交",
+    appName: "TastKind",
     phaseBadge: "投資人 Demo",
     placeholder: "功能預覽",
     comingSoon: "即將開放",

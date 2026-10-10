@@ -410,18 +410,21 @@ export function ConsumerRuntimeNavigationGate({ children }: { children: ReactNod
   const { controller: onboarding, snapshot } = useConsumerOnboarding();
   const route = String(segments[0] ?? "");
   const recovery = Boolean(onboarding) && PC2_RECOVERY_ROUTES.includes(route);
-  const destination = onboarding ? pc2RouteDestination(route, runtime.state.authState.status === "signedIn", snapshot) : null;
   const authStatus = runtime.state.authState.status;
   const onLoginRoute = String(segments[0] ?? "") === "login";
   const profileLoading = runtime.state.profileState.status === "loading";
-  const signedInReady = authStatus === "signedIn" && !profileLoading;
+  const accessLoading = Boolean(onboarding) && authStatus === "signedIn" && (snapshot.pending || snapshot.documentStatus === "idle" || snapshot.documentStatus === "loading");
+  const routingReady = authStatus !== "initializing" && !profileLoading && !accessLoading;
+  const destination = onboarding && routingReady ? pc2RouteDestination(route, authStatus === "signedIn", snapshot) : null;
+  const signedInReady = authStatus === "signedIn" && routingReady;
   const signedOutLike = authStatus === "signedOut" || (authStatus === "error" && runtime.state.errorCode !== "configuration_error");
 
   useEffect(() => {
+    if (!routingReady) return;
     if (destination) router.replace(destination as never);
     else if (signedOutLike && !onLoginRoute && !recovery) router.replace("/login");
-    if (signedInReady && onLoginRoute) router.replace(onboarding ? "/onboarding" as never : "/");
-  }, [onLoginRoute, router, signedInReady, signedOutLike, recovery, destination, onboarding]);
+    if (signedInReady && onLoginRoute) router.replace(onboarding && (!snapshot.state?.coreEligible || snapshot.uncertain || (snapshot.demoEnvironment === true && !snapshot.demo?.confirmed)) ? "/onboarding" as never : "/");
+  }, [onLoginRoute, router, signedInReady, signedOutLike, recovery, destination, onboarding, routingReady, snapshot.state?.coreEligible, snapshot.uncertain, snapshot.demoEnvironment, snapshot.demo?.confirmed]);
 
   if (runtime.configurationError || runtime.state.errorCode === "configuration_error") {
     return <RuntimeBoundary errorCode="configuration_error" />;
@@ -429,7 +432,7 @@ export function ConsumerRuntimeNavigationGate({ children }: { children: ReactNod
   if (authStatus === "disabled" || runtime.state.errorCode === "account_disabled") {
     return <RuntimeBoundary errorCode="account_disabled" />;
   }
-  if (authStatus === "initializing" || profileLoading) {
+  if (authStatus === "initializing" || profileLoading || (accessLoading && !recovery)) {
     return <RuntimeLoadingBoundary />;
   }
   if (destination || (signedOutLike && !onLoginRoute && !recovery) || (signedInReady && onLoginRoute)) {
