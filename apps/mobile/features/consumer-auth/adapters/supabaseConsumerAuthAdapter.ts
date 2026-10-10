@@ -1,4 +1,4 @@
-import { ConsumerAuthOperationNotEnabledError, ConsumerEmailConfirmationRequiredError } from "../errors";
+import { ConsumerAuthError, ConsumerAuthOperationNotEnabledError, ConsumerEmailConfirmationRequiredError } from "../errors";
 import type { ConsumerAuthPort, ConsumerAuthStateListener } from "../ports";
 import type { ConsumerPasswordResetInput, ConsumerSignInInput, ConsumerSignUpInput } from "../types";
 import { err, ok } from "../types";
@@ -62,6 +62,40 @@ export class SupabaseConsumerAuthAdapter implements ConsumerAuthPort {
     if (!this.options.emailRedirectTo || !this.options.signupAdmission || !(await this.options.signupAdmission())) return err(new ConsumerAuthOperationNotEnabledError("Canonical signup documents or configured callback unavailable."));
     const response = await this.authClient.signUp({ email: input.email, password: input.password, options: { emailRedirectTo: this.options.emailRedirectTo } });
     if (response.error) return err(mapSupabaseAuthError(response.error));
+    const session = mapSupabaseSessionToConsumerAuthSession(response.data?.session);
+    return session ? ok(session) : err(new ConsumerEmailConfirmationRequiredError());
+  }
+
+
+  private otpError(error: { code?: string | null; status?: number | null } | null | undefined) {
+    const code = error?.code;
+    if (error?.status === 429 || code === "over_email_send_rate_limit" || code === "over_request_rate_limit")
+      return new ConsumerAuthError("email_otp_rate_limited", "Email verification is rate limited.");
+    if (code === "otp_expired")
+      return new ConsumerAuthError("email_otp_invalid_or_expired", "Email code is invalid, expired, or already used.");
+    return new ConsumerAuthError("email_otp_send_failed", "Email verification request failed.");
+  }
+
+  async sendEmailCode(input: { email: string; purpose: "login" | "signup" }) {
+    if (!this.transportEnabled || !this.authClient.signInWithOtp)
+      return err(new ConsumerAuthOperationNotEnabledError("Email OTP transport is unavailable."));
+    // Account creation retains canonical document admission. Login never creates an account.
+    if (input.purpose === "signup" && (!this.options.signupAdmission || !(await this.options.signupAdmission())))
+      return err(new ConsumerAuthOperationNotEnabledError("Canonical signup documents unavailable."));
+    const response = await this.authClient.signInWithOtp({ email: input.email, options: { shouldCreateUser: input.purpose === "signup" } });
+    return response.error ? err(this.otpError(response.error)) : ok(undefined);
+  }
+
+  async verifyEmailCode(input: { email: string; token: string }) {
+    if (!this.transportEnabled || !this.authClient.verifyOtp)
+      return err(new ConsumerAuthOperationNotEnabledError("Email OTP transport is unavailable."));
+    // Installed auth-js documents 'email' for signup and signin; signup/magiclink are deprecated.
+    const response = await this.authClient.verifyOtp({ email: input.email, token: input.token, type: "email" });
+    if (response.error) return err(this.otpError(response.error));
+    if (response.data?.session?.user?.email?.trim().toLowerCase() !== input.email.trim().toLowerCase()) {
+      await this.authClient.signOut({ scope: "local" });
+      return err(new ConsumerAuthError("email_otp_identity_mismatch", "Verified email identity mismatch."));
+    }
     const session = mapSupabaseSessionToConsumerAuthSession(response.data?.session);
     return session ? ok(session) : err(new ConsumerEmailConfirmationRequiredError());
   }

@@ -9,7 +9,9 @@ export function ConsumerOnboardingProvider({ controller, children }: { controlle
   const runtime = useConsumerRuntime();
   const snapshot = useSyncExternalStore(controller?.subscribe ?? noSubscribe, controller?.getSnapshot ?? (() => empty), controller?.getSnapshot ?? (() => empty));
   useEffect(() => { controller?.bindScope(runtime.state.actorKey, runtime.state.actorGeneration); }, [controller, runtime.state.actorKey, runtime.state.actorGeneration]);
-  return <Context.Provider value={{ controller, snapshot }}>{children}</Context.Provider>;
+  const effectiveSnapshot: OnboardingSnapshot = controller && !controller.isBoundTo(runtime.state.actorKey, runtime.state.actorGeneration)
+    ? { documentStatus: "loading", bundle: null, state: null, pending: true, uncertain: true, error: null, demoStatus: "loading", demo: null, demoEnvironment: null } : snapshot;
+  return <Context.Provider value={{ controller, snapshot: effectiveSnapshot }}>{children}</Context.Provider>;
 }
 export function useConsumerOnboarding() { return useContext(Context); }
 export { PC2_RECOVERY_ROUTES, pc2RouteDestination } from "./controller";

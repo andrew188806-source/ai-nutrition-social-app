@@ -1,19 +1,23 @@
+import { ACTOR_BINDING_HEADER } from "../consumer-auth/actorBoundDispatch";
+import { ConsumerEmailOtpController } from "../consumer-auth/emailOtpController";
 import type { ConsumerAuthPort } from "../consumer-auth/ports";
 import { confirmationCodeFromUrl } from "./authRedirect";
-import { parseParticipationState, parseRequiredBundle, type OnboardingRpcClient, type OnboardingSnapshot, type RequiredBundle } from "./types";
+import { parseDemoDraftState, parseParticipationState, parseRequiredBundle, type OnboardingRpcClient, type OnboardingSnapshot, type RequiredBundle } from "./types";
 export type OnboardingAuthPort = ConsumerAuthPort & { completeEmailConfirmation?: (code: string) => ReturnType<ConsumerAuthPort["signUp"]> };
-export type OnboardingOptions = { authPort: OnboardingAuthPort; client: OnboardingRpcClient; redirect: string | null; invalidateAccess: () => void; timeoutMs?: number };
-const initial = (): OnboardingSnapshot => ({ documentStatus: "idle", bundle: null, state: null, pending: false, uncertain: false, error: null });
+export type OnboardingOptions = { authPort: OnboardingAuthPort; client: OnboardingRpcClient; redirect: string | null; invalidateAccess: () => void; timeoutMs?: number; demoModeAllowed?: boolean };
+const initial = (): OnboardingSnapshot => ({ demoStatus: "idle", demoEnvironment: null, demo: null, documentStatus: "idle", bundle: null, state: null, pending: false, uncertain: false, error: null });
 export class ConsumerOnboardingController {
   private snapshot = initial(); private actor: string | null = null; private scope = ""; private epoch = 0; private sequence = 0;
   private listeners = new Set<() => void>();
-  constructor(private readonly options: OnboardingOptions) {}
+  readonly emailOtp: ConsumerEmailOtpController;
+  constructor(private readonly options: OnboardingOptions) { this.emailOtp = new ConsumerEmailOtpController(options.authPort); }
   getSnapshot = () => this.snapshot;
+  isBoundTo = (actor: string | null, generation: number) => this.scope === (actor ?? "") + ":" + generation;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private emit(patch: Partial<OnboardingSnapshot>) { this.snapshot = Object.freeze({ ...this.snapshot, ...patch }); for (const l of this.listeners) l(); }
   bindScope(actor: string | null, generation: number) { const scope = `${actor ?? ""}:${generation}`; if (scope === this.scope) return; this.scope = scope; this.actor = actor; this.epoch++; this.sequence++; this.snapshot = initial(); this.emit({}); void this.refresh(); }
   private async rpc(name: string, args?: Record<string, unknown>) { const r = await this.options.client.rpc(name, args); if (r.error) throw new Error("Canonical request failed"); return r.data; }
-  private async sessionActor() { const r = await this.options.authPort.getCurrentSession(); if (!r.ok || !r.value || r.value.user.userId !== this.actor) throw new Error("Actor changed"); }
+  private async sessionActor(expected = this.actor) { const r = await this.options.authPort.getCurrentSession(); if (expected !== this.actor || !r.ok || !r.value || r.value.user.userId !== expected) throw new Error("Actor changed"); }
   private async run(action: () => Promise<void>, uncertainOnFailure = false) {
     if (this.snapshot.pending) return false;
     const epoch = this.epoch, sequence = ++this.sequence;
@@ -34,8 +38,22 @@ export class ConsumerOnboardingController {
     if (this.snapshot.pending) return false;
     const epoch = this.epoch; const sequence = this.sequence + 1;
     const current = () => epoch === this.epoch && sequence === this.sequence;
-    this.emit({ documentStatus: "loading", bundle: null });
+    this.emit({ documentStatus: "loading", bundle: null, ...(this.options.demoModeAllowed ? { demoStatus: "loading" as const, demo: null, demoEnvironment: null } : {}) });
     const result = await this.run(async () => {
+      if (this.options.demoModeAllowed) {
+        if (this.actor) {
+          await this.sessionActor();
+          const demo = parseDemoDraftState(await this.rpc("get_authenticated_demo_draft_state"));
+          await this.sessionActor();
+          if (current()) this.emit({ demo, demoEnvironment: demo.demoEnabled, demoStatus: "ready" });
+          if (demo.demoEnabled) { if (current()) this.emit({ state: demo.participationState, bundle: null, documentStatus: "unavailable", uncertain: false, error: null }); return; }
+        } else {
+          const value = await this.rpc("get_consumer_demo_environment") as { demoEnabled?: unknown; projectRef?: unknown };
+          if (typeof value?.demoEnabled !== "boolean" || value.projectRef !== "msbgnnoorsoefuiwluye") throw new Error("Invalid demo environment");
+          if (current()) this.emit({ demoEnvironment: value.demoEnabled, demoStatus: "ready" });
+          if (value.demoEnabled) { if (current()) this.emit({ state: null, bundle: null, documentStatus: "unavailable", uncertain: false, error: null }); return; }
+        }
+      }
       let bundle: RequiredBundle | null;
       try {
         bundle = parseRequiredBundle(await this.rpc("get_consumer_required_documents"));
@@ -49,7 +67,26 @@ export class ConsumerOnboardingController {
       if (current()) this.emit({ bundle, state, uncertain: false, error: bundle ? null : "unavailable" });
     }, true);
     // run advances the sequence on timeout: late document responses cannot revive the view.
-    if (!result && epoch === this.epoch && this.snapshot.documentStatus === "loading") this.emit({ documentStatus: "error", bundle: null });
+    if (!result && epoch === this.epoch && this.snapshot.documentStatus === "loading") this.emit({ documentStatus: "error", bundle: null, ...(this.options.demoModeAllowed ? { demoStatus: "error" as const } : {}) });
+    return result;
+  }
+  async confirmDemo() {
+    if (!this.actor || this.snapshot.pending || !this.options.demoModeAllowed || !this.snapshot.demo?.demoEnabled) return false;
+    const actor = this.actor, epoch = this.epoch, sequence = this.sequence + 1;
+    const result = await this.run(async () => {
+      await this.sessionActor(actor);
+      if (epoch !== this.epoch || sequence !== this.sequence) throw new Error("Actor changed");
+      const builder = this.options.client.rpc("confirm_authenticated_demo_draft", { p_confirm: true }) as PromiseLike<{ data: unknown; error: unknown }> & { setHeader?: (name: string, value: string) => unknown };
+      if (typeof builder.setHeader !== "function") throw new Error("Actor binding unavailable");
+      builder.setHeader(ACTOR_BINDING_HEADER, actor);
+      const response = await builder;
+      if (response.error) throw new Error("Demo confirmation failed");
+      const demo = parseDemoDraftState(response.data);
+      await this.sessionActor(actor);
+      if (!demo.demoEnabled || !demo.confirmed || !demo.participationState.coreEligible) throw new Error("Demo confirmation not established");
+      if (epoch === this.epoch && sequence === this.sequence) this.emit({ demo, demoStatus: "ready", state: demo.participationState, uncertain: false, error: null });
+    }, true);
+    if (result) this.options.invalidateAccess();
     return result;
   }
   async signUp(email: string, password: string) {
@@ -99,6 +136,7 @@ export const PC2_RECOVERY_ROUTES = Object.freeze(["login", "auth-callback", "onb
 export function pc2RouteDestination(route: string, authenticated: boolean, snapshot: OnboardingSnapshot): string | null {
   if (PC2_RECOVERY_ROUTES.includes(route)) return null;
   if (!authenticated) return "/login";
+  if (snapshot.demoEnvironment === true && (!snapshot.demo?.confirmed || snapshot.demoStatus !== "ready")) return "/onboarding";
   if (!snapshot.state?.coreEligible || snapshot.uncertain) return "/onboarding";
   if (["meal-buddies", "meal-buddy-candidate-profile", "meal-buddy-chat", "community-card", "community-card-settings", "social"].includes(route) && !snapshot.state.socialEligible) return "/participation-settings";
   return null;

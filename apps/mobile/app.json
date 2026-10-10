@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "好廚 AI 營養社交",
+    "name": "TastKind AI 營養社交",
     "slug": "haocu-ai-nutrition-social",
     "scheme": "haocu",
     "plugins": [
@@ -8,8 +8,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "好廚需要存取你的相簿，才能選擇餐點照片進行分析。",
-          "cameraPermission": "好廚需要使用相機，才能拍攝餐點照片進行分析。",
+          "photosPermission": "TastKind需要存取你的相簿，才能選擇餐點照片進行分析。",
+          "cameraPermission": "TastKind需要使用相機，才能拍攝餐點照片進行分析。",
           "microphonePermission": false
         }
       ],
@@ -17,7 +17,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "好廚需要你的位置，才能推薦附近的餐廳與適合一起吃飯的飯友。只有在你使用這項功能時才會取得位置。",
+          "locationWhenInUsePermission": "TastKind需要你的位置，才能推薦附近的餐廳與適合一起吃飯的飯友。只有在你使用這項功能時才會取得位置。",
           "locationAlwaysPermission": false,
           "locationAlwaysAndWhenInUsePermission": false,
           "isIosBackgroundLocationEnabled": false,

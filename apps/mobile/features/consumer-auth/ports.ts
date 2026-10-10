@@ -22,6 +22,8 @@ export interface ConsumerAuthPort {
   observeAuthState(listener: ConsumerAuthStateListener): ConsumerAuthUnsubscribe;
   signIn(input: ConsumerSignInInput): Promise<ConsumerAuthResult<ConsumerAuthSession>>;
   signUp(input: ConsumerSignUpInput): Promise<ConsumerAuthResult<ConsumerAuthSession>>;
+  sendEmailCode?(input: { email: string; purpose: "login" | "signup" }): Promise<ConsumerAuthResult<void>>;
+  verifyEmailCode?(input: { email: string; token: string }): Promise<ConsumerAuthResult<ConsumerAuthSession>>;
   signOut(): Promise<ConsumerAuthResult<void>>;
   refreshSession(): Promise<ConsumerAuthResult<ConsumerAuthSession | null>>;
   sendPasswordReset(input: ConsumerPasswordResetInput): Promise<ConsumerAuthResult<void>>;

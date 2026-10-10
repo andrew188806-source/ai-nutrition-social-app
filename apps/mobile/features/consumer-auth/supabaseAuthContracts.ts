@@ -4,6 +4,7 @@ export type SupabaseAuthProviderName = "email" | "phone" | "anonymous" | "apple"
 
 export type SupabaseAuthUserLike = {
   id?: string | null;
+  email?: string | null;
   app_metadata?: { provider?: string | null } | null;
   is_anonymous?: boolean | null;
   email_confirmed_at?: string | null;
@@ -43,8 +44,10 @@ export type SupabaseAuthClientLike = {
   getSession(): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   signInWithPassword(input: { email: string; password: string }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   signUp(input: { email: string; password: string; options?: { data?: Record<string, unknown>; emailRedirectTo?: string } }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
+  signInWithOtp?(input: { email: string; options: { shouldCreateUser: boolean } }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
+  verifyOtp?(input: { email: string; token: string; type: "email" }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   exchangeCodeForSession?(code: string): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
-  signOut(): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
+  signOut(options?: { scope: "local" | "global" | "others" }): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
   refreshSession(): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   resetPasswordForEmail(email: string): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
   onAuthStateChange(callback: (event: SupabaseAuthEventLike, session: SupabaseSessionLike | null) => void): SupabaseAuthStateChangeResultLike;

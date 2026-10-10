@@ -59,7 +59,7 @@ export const zhTW = {
         body: "帳號狀態不允許進入應用程式。如需協助，請聯絡服務人員。"
       },
       canonicalProfileLabel: "Canonical Profile",
-      profileFallback: "好廚使用者",
+      profileFallback: "TastKind使用者",
       profileStatusActive: "帳號使用中",
       demoCardsTitle: "Demo 資料卡",
       demoCardsBody: "以下統計與設定仍為本機展示資料，尚未宣稱來自 canonical profile。",
@@ -208,11 +208,11 @@ export const zhTW = {
     },
     mediaCapture: {
       cameraPermissionDeniedTitle: "無法使用相機",
-      cameraPermissionDeniedBody: "好廚需要相機權限才能拍攝餐點照片，請在系統設定中開啟權限。",
-      cameraPermissionAskAgainBody: "好廚需要相機權限才能拍攝餐點照片，請允許權限後再試一次。",
+      cameraPermissionDeniedBody: "TastKind需要相機權限才能拍攝餐點照片，請在系統設定中開啟權限。",
+      cameraPermissionAskAgainBody: "TastKind需要相機權限才能拍攝餐點照片，請允許權限後再試一次。",
       galleryPermissionDeniedTitle: "無法開啟相簿",
-      galleryPermissionDeniedBody: "好廚需要相簿權限才能選擇餐點照片，請在系統設定中開啟權限。",
-      galleryPermissionAskAgainBody: "好廚需要相簿權限才能選擇餐點照片，請允許權限後再試一次。",
+      galleryPermissionDeniedBody: "TastKind需要相簿權限才能選擇餐點照片，請在系統設定中開啟權限。",
+      galleryPermissionAskAgainBody: "TastKind需要相簿權限才能選擇餐點照片，請允許權限後再試一次。",
       galleryAssetErrors: {
         gallery_asset_unavailable: {
           title: "無法使用這張照片",
@@ -933,12 +933,12 @@ export const zhTW = {
     },
     consumerLocation: {
       title: "使用你的位置",
-      body: "開啟後，好廚會用你目前的位置推薦附近的餐廳與飯友。位置只在你使用這項功能時取得，不會保存，也不會顯示給其他人。",
+      body: "開啟後，TastKind會用你目前的位置推薦附近的餐廳與飯友。位置只在你使用這項功能時取得，不會保存，也不會顯示給其他人。",
       allow: "使用目前位置",
       retry: "再試一次",
       acquiring: "正在取得你的位置…",
       denied: "還沒有取得位置權限。你仍然可以正常使用其他功能，開啟後才會有附近的推薦。",
-      deniedForever: "位置權限已關閉。若要看到附近的推薦，請到手機的「設定」開啟好廚的位置權限。",
+      deniedForever: "位置權限已關閉。若要看到附近的推薦，請到手機的「設定」開啟TastKind的位置權限。",
       servicesDisabled: "手機的定位服務目前是關閉的。請到「設定」開啟定位後再試一次。",
       failed: "目前抓不到你的位置，請稍後再試一次。"
     },

@@ -1,3 +1,4 @@
+import { isConsumerDemoClientAllowed } from "../consumer-onboarding/demoEnvironment";
 import { ConsumerOnboardingController } from "../consumer-onboarding/controller";
 import { configuredConsumerAuthRedirect } from "../consumer-onboarding/authRedirect";
 import { parseRequiredBundle, type OnboardingRpcClient } from "../consumer-onboarding/types";
@@ -464,7 +465,15 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
       const onboardingClient = client as unknown as OnboardingRpcClient;
       const redirect = configuredConsumerAuthRedirect();
       const authPort = new SupabaseConsumerAuthAdapter({ authClient: client.auth, transportEnabled: true, emailRedirectTo: redirect,
-        signupAdmission: async () => { const r = await onboardingClient.rpc("get_consumer_required_documents"); return !r.error && parseRequiredBundle(r.data) !== null; }
+        signupAdmission: async () => {
+          if (isConsumerDemoClientAllowed()) {
+            const result = await onboardingClient.rpc("get_consumer_demo_environment");
+            const value = result.data as { demoEnabled?: unknown; projectRef?: unknown } | null;
+            if (result.error || typeof value?.demoEnabled !== "boolean" || value.projectRef !== "msbgnnoorsoefuiwluye") return false;
+            if (value.demoEnabled) return true; // Normal Auth account only; no draft confirmation or legal consent.
+          }
+          const r = await onboardingClient.rpc("get_consumer_required_documents"); return !r.error && parseRequiredBundle(r.data) !== null;
+        }
       });
       const scaffold = createConsumerAuthScaffold({
         flags: authFlags,
@@ -539,7 +548,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         });
       }
       const controller = new ConsumerAuthProfileRuntime({ authPort, profileService: scaffold.profileService, refreshLifecycle });
-      const onboarding = new ConsumerOnboardingController({ authPort, client: onboardingClient, redirect, invalidateAccess: () => controller.invalidateAccess() });
+      const onboarding = new ConsumerOnboardingController({ authPort, client: onboardingClient, redirect, invalidateAccess: () => controller.invalidateAccess(), demoModeAllowed: isConsumerDemoClientAllowed() });
       return {
         ok: true,
         value: {

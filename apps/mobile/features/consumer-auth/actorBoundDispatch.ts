@@ -25,7 +25,8 @@ export const ACTOR_BINDING_MISMATCH_MESSAGE = "ACTOR_BINDING_MISMATCH";
 export const ACTOR_BOUND_RPC_NAMES: readonly string[] = [
   "create_current_user_meal_record",
   "create_current_user_meal_record_v2",
-  "finalize_current_user_meal_identification_v1"
+  "finalize_current_user_meal_identification_v1",
+  "confirm_authenticated_demo_draft"
 ];
 
 const BASE64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";

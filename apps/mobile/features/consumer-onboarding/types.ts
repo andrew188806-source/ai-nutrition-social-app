@@ -2,7 +2,7 @@ export type RequiredDocument = Readonly<{ documentId: "membership-terms" | "priv
 export type RequiredBundle = Readonly<{ bundleVersion: string; locale: "zh-TW"; documents: readonly RequiredDocument[] }>;
 export type ParticipationState = Readonly<{ documentsAvailable: boolean; onboardingComplete: boolean; coreEligible: boolean; trainingGranted: boolean; preparationCompatibility: boolean; ageAttested: boolean; agePolicyVersion: "social-adult-self-attestation-v1"; socialQualified: boolean; participation: "not_participating" | "opted_in" | "paused"; socialEligible: boolean }>;
 export type DocumentReadStatus = "idle" | "loading" | "available" | "unavailable" | "error";
-export type OnboardingSnapshot = Readonly<{ documentStatus: DocumentReadStatus; bundle: RequiredBundle | null; state: ParticipationState | null; pending: boolean; uncertain: boolean; error: "unavailable" | "invalid_input" | "confirmation_required" | "request_failed" | "timeout" | "stale" | null }>;
+export type OnboardingSnapshot = Readonly<{ demoStatus?: "idle" | "loading" | "ready" | "error"; demoEnvironment?: boolean | null; demo?: DemoDraftState | null; documentStatus: DocumentReadStatus; bundle: RequiredBundle | null; state: ParticipationState | null; pending: boolean; uncertain: boolean; error: "unavailable" | "invalid_input" | "confirmation_required" | "request_failed" | "timeout" | "stale" | null }>;
 export type OnboardingRpcClient = { rpc(name: string, args?: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }> };
 const fields = ["documentsAvailable", "onboardingComplete", "coreEligible", "trainingGranted", "preparationCompatibility", "ageAttested", "socialQualified", "socialEligible"] as const;
 export function parseParticipationState(value: unknown): ParticipationState {
@@ -21,4 +21,12 @@ export function parseRequiredBundle(value: unknown): RequiredBundle | null {
   if (typeof b.bundleVersion !== "string" || !b.bundleVersion || b.locale !== "zh-TW" || !Array.isArray(b.documents) || b.documents.length !== 3 || new Set(b.documents.map((d) => d.documentId)).size !== 3) throw new Error("Incomplete documents");
   for (const d of b.documents) if (required.get(d.documentId) !== d.consentType || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(d.version) || !/^[a-f0-9]{64}$/.test(d.contentSha256) || typeof d.content !== "string" || !d.content.trim()) throw new Error("Invalid publication binding");
   return Object.freeze({ bundleVersion: b.bundleVersion, locale: b.locale, documents: Object.freeze(b.documents.map((d) => Object.freeze({ ...d }))) });
+}
+
+export type DemoDraftState = Readonly<{ demoEnabled: boolean; confirmed: boolean; confirmedAt: string | null; participationState: ParticipationState }>;
+export function parseDemoDraftState(value: unknown): DemoDraftState {
+ if (!value || typeof value !== "object") throw new Error("Invalid demo state");
+ const row = value as Record<string, unknown>;
+ if (typeof row.demoEnabled !== "boolean" || typeof row.confirmed !== "boolean" || (row.confirmed ? typeof row.confirmedAt !== "string" || !Number.isFinite(Date.parse(row.confirmedAt)) : row.confirmedAt !== null)) throw new Error("Invalid demo confirmation");
+ return Object.freeze({ demoEnabled: row.demoEnabled, confirmed: row.confirmed, confirmedAt: row.confirmedAt as string | null, participationState: parseParticipationState(row.participationState) });
 }
