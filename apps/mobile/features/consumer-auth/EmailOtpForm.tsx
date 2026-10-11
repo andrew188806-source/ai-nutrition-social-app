@@ -15,7 +15,7 @@ const messages: Record<string, string> = {
   email_otp_identity_mismatch: "驗證身分不一致，請重新登入。",
   operation_not_enabled: "目前無法寄送驗證碼；新帳號仍須等待必要文件開放。"
 };
-export function EmailOtpForm({ controller, purpose, disabled = false }: { controller: ConsumerEmailOtpController | null; purpose: EmailOtpPurpose; disabled?: boolean }) {
+export function EmailOtpForm({ controller, purpose, afterVerify = "/onboarding", disabled = false }: { controller: ConsumerEmailOtpController | null; purpose: EmailOtpPurpose; afterVerify?: "/onboarding" | "/account-password"; disabled?: boolean }) {
   const router = useRouter();
   const snapshot = useSyncExternalStore(controller?.subscribe ?? noopSubscribe, controller?.getSnapshot ?? (() => unavailable), controller?.getSnapshot ?? (() => unavailable));
   const [email, setEmail] = useState("");
@@ -28,7 +28,7 @@ export function EmailOtpForm({ controller, purpose, disabled = false }: { contro
   const seconds = Math.max(0, Math.ceil((snapshot.resendAt - now) / 1000));
   async function verify() {
     const value = code; setCode("");
-    if (controller && await controller.verify(value)) router.replace("/onboarding" as never);
+    if (controller && await controller.verify(value)) router.replace(afterVerify as never);
   }
   return <View style={{ gap: 12 }}>
     <Text>輸入信箱、收取驗證碼，再在此畫面輸入；不需點擊郵件連結。</Text>

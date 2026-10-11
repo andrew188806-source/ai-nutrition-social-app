@@ -1,28 +1,48 @@
 import { NotoSansTC_400Regular, NotoSansTC_500Medium, NotoSansTC_700Bold, NotoSansTC_900Black } from "@expo-google-fonts/noto-sans-tc";
 import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { Stack } from "expo-router";
-import { useFonts } from "expo-font";
+import { loadAsync, useFonts } from "expo-font";
+import { useEffect, useState } from "react";
+import { Pressable, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
 import { ConsumerRuntimeNavigationGate, ConsumerRuntimeProvider } from "../features/consumer-runtime";
 import { ConsumerLocationProvider } from "../features/consumer-location/ConsumerLocationProvider";
 import { snowPalette } from "../theme/tokens";
 
-export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    NotoSansTC_400Regular,
-    NotoSansTC_500Medium,
-    NotoSansTC_700Bold,
-    NotoSansTC_900Black,
-    SpaceGrotesk_500Medium,
-    SpaceGrotesk_700Bold
-  });
+const appFonts = { NotoSansTC_400Regular, NotoSansTC_500Medium, NotoSansTC_700Bold, NotoSansTC_900Black, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold };
 
-  if (!fontsLoaded) {
-    return null;
+// Typography is optional: it must not prevent Auth initialization or leave the product blank.
+function FontStatusNotice() {
+  const [loaded, fontError] = useFonts(appFonts);
+  const [retried, setRetried] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => {
+    if (loaded || retried) return;
+    const timer = setTimeout(() => setFailed(true), 15000);
+    return () => clearTimeout(timer);
+  }, [loaded, retried]);
+  async function retry() {
+    if (retrying) return;
+    setRetrying(true);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([loadAsync(appFonts), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("FONT_TIMEOUT")), 15000); })]);
+      setRetried(true); setFailed(false);
+    } catch { setFailed(true); }
+    finally { if (timer !== undefined) clearTimeout(timer); setRetrying(false); }
   }
+  if (loaded || retried || (!failed && !fontError)) return null;
+  return <View style={{ padding: 10, backgroundColor: snowPalette.card }}>
+    <Text accessibilityRole="alert">字型未能載入，暫用系統字型；功能仍可操作。</Text>
+    <Pressable accessibilityRole="button" disabled={retrying} onPress={() => void retry()}><Text>{retrying ? "正在重試字型…" : "重試字型載入"}</Text></Pressable>
+  </View>;
+}
 
+export default function RootLayout() {
   return (
     <ConsumerRuntimeProvider>
+      <FontStatusNotice />
       <ConsumerLocationProvider>
         <ConsumerRuntimeNavigationGate>
           <Stack

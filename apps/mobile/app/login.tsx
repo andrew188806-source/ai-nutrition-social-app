@@ -14,7 +14,8 @@ export default function LoginScreen() {
   const copy = zhTW.mobile.consumerAuth;
   const { controller: onboarding, snapshot } = useConsumerOnboarding();
   const [createAccount, setCreateAccount] = useState(false);
-  const [passwordMode, setPasswordMode] = useState(false);
+  const [passwordMode, setPasswordMode] = useState(true);
+  const [passwordSetup, setPasswordSetup] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export default function LoginScreen() {
     await runtime.signIn(email, password);
     setPassword("");
   }
-  const runtimeError = runtime.state.errorCode === "authentication_timeout" ? pc2.uncertain : runtime.state.errorCode === "operation_not_enabled" ? copy.operationNotEnabled : runtime.state.errorCode === "authentication_failed" ? copy.authFailed : null;
+  const runtimeError = runtime.state.errorCode === "authentication_timeout" ? pc2.uncertain : runtime.state.errorCode === "operation_not_enabled" ? copy.operationNotEnabled : runtime.state.errorCode === "authentication_failed" ? "登入失敗：請確認電子郵件與產品密碼，或使用驗證碼登入。" : null;
   return <KeyboardAvoidingView style={styles.shell} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.header}><Text style={styles.title}>{zhTW.mobile.loginTitle}</Text><Text style={styles.subtitle}>{zhTW.mobile.loginSubtitle}</Text></View>
@@ -36,15 +37,18 @@ export default function LoginScreen() {
         <Text style={styles.cardTitle}>{copy.demoTitle}</Text><Text style={styles.cardBody}>{copy.demoBody}</Text>
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => void runtime.signInDemo()} style={[styles.primaryButton, busy && styles.buttonDisabled]}><Text style={styles.primaryButtonText}>{busy ? copy.signingIn : copy.demoSignIn}</Text></Pressable>
       </View> : <View style={styles.card}>
-        <Pressable accessibilityRole="button" disabled={busy || !onboarding} onPress={() => { onboarding?.emailOtp.changeEmail(); setCreateAccount(!createAccount); setPasswordMode(false); setPassword(""); setValidationError(null); }}><Text>{createAccount ? "已有帳號：登入" : "建立新帳號"}</Text></Pressable>
-        {createAccount && snapshot.demoEnvironment === true ? <View style={styles.notice}><Text>Development Demo 註冊。先以郵件驗證碼建立帳號；登入後才確認 Demo 草稿，不代表正式法律同意或訓練授權。</Text></View> : createAccount ? <View style={styles.notice}><Text>{pc2.required}</Text><DocumentStatusNotice snapshot={snapshot} retry={onboarding ? () => void onboarding.refresh() : undefined} disabled={busy} /><Text>驗證信箱後仍須完成必要文件授權，才能使用相關功能。</Text></View> : <Pressable accessibilityRole="button" disabled={busy} onPress={() => { onboarding?.emailOtp.changeEmail(); setPasswordMode(!passwordMode); setPassword(""); setValidationError(null); }}><Text>{passwordMode ? "改用信箱驗證碼登入" : "使用既有密碼登入"}</Text></Pressable>}
+        <Pressable accessibilityRole="button" disabled={busy || !onboarding} onPress={() => { onboarding?.emailOtp.changeEmail(); setCreateAccount(!createAccount); setPasswordMode(createAccount); setPasswordSetup(false); setPassword(""); setValidationError(null); }}><Text>{createAccount ? "已有帳號：登入" : "建立新帳號"}</Text></Pressable>
+        {createAccount && snapshot.demoEnvironment === true ? <View style={styles.notice}><Text>Development Demo 註冊。先以郵件驗證碼建立帳號；登入後才確認 Demo 草稿，不代表正式法律同意或訓練授權。</Text></View> : createAccount ? <View style={styles.notice}><Text>{pc2.required}</Text><DocumentStatusNotice snapshot={snapshot} retry={onboarding ? () => void onboarding.refresh() : undefined} disabled={busy} /><Text>驗證信箱後仍須完成必要文件授權，才能使用相關功能。</Text></View> : <Pressable accessibilityRole="button" disabled={busy} onPress={() => { onboarding?.emailOtp.changeEmail(); setPasswordMode(!passwordMode); setPasswordSetup(false); setPassword(""); setValidationError(null); }}><Text>{passwordMode ? "使用驗證碼登入" : "使用電子郵件與密碼登入"}</Text></Pressable>}
         {runtime.mode === "disabled" ? <View style={styles.notice}><Text>{copy.disabledTitle}</Text><Text>{copy.disabledBody}</Text></View> : null}
-        {!passwordMode || createAccount ? <EmailOtpForm controller={onboarding?.emailOtp ?? null} purpose={createAccount ? "signup" : "login"} disabled={busy || !emailSignInAvailable || (createAccount && !snapshot.bundle && snapshot.demoEnvironment !== true)} /> : <View style={{ gap: 12 }}>
+        {runtimeError && runtime.state.authState.status === "error" ? <View style={{ gap: 12 }}><Text accessibilityRole="alert" style={styles.errorText}>{runtimeError}</Text>{Platform.OS === "web" ? <Pressable accessibilityRole="button" onPress={() => globalThis.location.reload()}><Text>重新查核登入狀態</Text></Pressable> : null}</View> : null}
+        {!passwordMode || createAccount ? <EmailOtpForm controller={onboarding?.emailOtp ?? null} afterVerify={passwordSetup ? "/account-password" : undefined} purpose={createAccount ? "signup" : "login"} disabled={busy || !emailSignInAvailable || (createAccount && !snapshot.bundle && snapshot.demoEnvironment !== true)} /> : <View style={{ gap: 12 }}>
           <Text style={styles.inputLabel}>{copy.emailLabel}</Text><TextInput accessibilityLabel={copy.emailLabel} autoCapitalize="none" autoComplete="email" editable={!busy && emailSignInAvailable} inputMode="email" keyboardType="email-address" onChangeText={setEmail} placeholder={copy.emailPlaceholder} style={styles.input} value={email} />
           <Text style={styles.inputLabel}>{copy.passwordLabel}</Text><TextInput accessibilityLabel={copy.passwordLabel} autoCapitalize="none" autoComplete="current-password" editable={!busy && emailSignInAvailable} onChangeText={setPassword} onSubmitEditing={() => void submitPasswordSignIn()} secureTextEntry style={styles.input} value={password} />
           {validationError || runtimeError ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{validationError ?? runtimeError}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={busy || !emailSignInAvailable} onPress={() => void submitPasswordSignIn()} style={[styles.primaryButton, busy && styles.buttonDisabled]}><Text style={styles.primaryButtonText}>{busy ? copy.signingIn : copy.signIn}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={busy || !emailSignInAvailable} onPress={() => void submitPasswordSignIn()} style={[styles.primaryButton, busy && styles.buttonDisabled]}><Text style={styles.primaryButtonText}>{busy ? copy.signingIn : "登入"}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={busy || !onboarding} onPress={() => { onboarding?.emailOtp.changeEmail(); setPassword(""); setValidationError(null); setPasswordSetup(true); setPasswordMode(false); }}><Text>忘記密碼／尚未設定產品密碼</Text></Pressable>
         </View>}
+        {passwordSetup ? <Text>先以最新郵件驗證碼登入，再由你自行設定 TastKind 產品密碼；不會自動修改密碼或同意紀錄。</Text> : null}
       </View>}
     </ScrollView>
   </KeyboardAvoidingView>;

@@ -119,21 +119,25 @@ export function useTodayIntakeUiModel(input: {
   useEffect(() => {
     let cancelled = false;
     if (!enabled || !input.overviewService || !input.actorKey) {
-      setState((current) => ({ status: "error", model: current.model, error: "Today Intake requires an authenticated runtime." }));
+      setState({ status: "error", model: null, error: "尚無可用的登入身分或資料服務，請重試。" });
       return () => { cancelled = true; };
     }
-    setState((current) => ({ status: "loading", model: current.model, error: null }));
+    setState({ status: "loading", model: null, error: null });
+    const timer = setTimeout(() => {
+      if (!cancelled) { cancelled = true; setState({ status: "error", model: null, error: "今日營養摘要讀取逾時，請重試。" }); }
+    }, 15000);
     getCurrentUserTodayIntakeUiModel({ date: stableDate, overviewService: input.overviewService, plannedMealsLoader: input.plannedMealsLoader })
       .then((model) => {
-        if (!cancelled) setState({ status: "ready", model, error: null });
+        if (!cancelled) { clearTimeout(timer); setState({ status: "ready", model, error: null }); }
       })
-      .catch((error) => {
+      .catch(() => {
         if (!cancelled) {
-          setState((current) => ({ status: "error", model: current.model, error: "Today Intake overview could not be loaded." }));
+          clearTimeout(timer);
+          setState({ status: "error", model: null, error: "今日營養摘要讀取失敗，請重試。" });
         }
       });
     return () => {
-      cancelled = true;
+      cancelled = true; clearTimeout(timer);
     };
   }, [enabled, input.actorGeneration, input.actorKey, input.overviewService, input.plannedMealsLoader, input.revision, stableDate, version]);
 

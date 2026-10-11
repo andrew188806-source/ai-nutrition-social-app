@@ -132,7 +132,7 @@ export class ConsumerOnboardingController {
 }
 
 // All static and server-backed feature routes use the same canonical core state. Recovery is explicit.
-export const PC2_RECOVERY_ROUTES = Object.freeze(["login", "auth-callback", "onboarding", "consent-document", "account-support", "participation-settings"]);
+export const PC2_RECOVERY_ROUTES = Object.freeze(["login", "auth-callback", "account-password", "onboarding", "consent-document", "account-support", "participation-settings"]);
 export function pc2RouteDestination(route: string, authenticated: boolean, snapshot: OnboardingSnapshot): string | null {
   if (PC2_RECOVERY_ROUTES.includes(route)) return null;
   if (!authenticated) return "/login";

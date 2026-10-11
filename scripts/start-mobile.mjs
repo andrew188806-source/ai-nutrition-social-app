@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -114,24 +115,19 @@ if (preflightErrors.length) {
   process.exit(1);
 }
 
-function quoteCmdArg(value) {
-  return /[\s"]/u.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
-}
-
-const command = process.platform === "win32" ? "cmd.exe" : "npx";
-const args = process.platform === "win32"
-  ? ["/d", "/s", "/c", ["npx", "expo", "start", ...extraArgs].map(quoteCmdArg).join(" ")]
-  : ["expo", "start", ...extraArgs];
-
-const child = spawn(command, args, {
-  cwd: mobileRoot,
-  env: {
-    ...process.env,
-    ...Object.fromEntries(forwarded),
-    EXPO_NO_DEPENDENCY_VALIDATION: "1"
-  },
-  stdio: "inherit"
-});
+// Use the same Node process for Expo and its tools; npx can silently select another PATH runtime.
+const resolveMobile = createRequire(path.join(mobileRoot, "package.json"));
+const expoPackage = resolveMobile.resolve("expo/package.json");
+const expoCli = path.join(path.dirname(expoPackage), "bin", "cli");
+const childEnv = { ...process.env, ...Object.fromEntries(forwarded), EXPO_NO_DEPENDENCY_VALIDATION: "1" };
+const inheritedPath = process.env.PATH ?? process.env.Path ?? "";
+for (const name of Object.keys(childEnv)) if (name.toUpperCase() === "PATH") delete childEnv[name];
+childEnv.PATH = path.dirname(process.execPath) + path.delimiter + inheritedPath;
+console.log("  Node runtime         : " + process.version);
+const workerArgs = process.platform === "win32" && extraArgs.includes("--web") && !extraArgs.some(arg => arg === "--max-workers" || arg.startsWith("--max-workers=")) ? ["--max-workers", "1"] : [];
+if (workerArgs.length) console.log("  Windows web workers  : 1 (explicit --max-workers overrides)");
+const child = spawn(process.execPath, [expoCli, "start", ...workerArgs, ...extraArgs], { cwd: mobileRoot, env: childEnv, windowsHide: true, stdio: "inherit" });
+child.on("error", () => { console.error("Expo could not start. Check the configured Node runtime and project installation."); process.exitCode = 1; });
 
 child.on("exit", (code, signal) => {
   if (signal) {

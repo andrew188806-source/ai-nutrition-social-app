@@ -7,6 +7,8 @@ export class ConsumerEmailOtpController {
   private state: EmailOtpSnapshot = Object.freeze({ status: "idle", email: "", purpose: "login", resendAt: 0, attempts: 0, error: null });
   private listeners = new Set<() => void>();
   private epoch = 0;
+  private verifiedAt: number | null = null;
+  private verifiedUserId: string | null = null;
   constructor(private readonly auth: ConsumerAuthPort, private readonly now: () => number = Date.now) {}
   getSnapshot = () => this.state;
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
@@ -15,6 +17,7 @@ export class ConsumerEmailOtpController {
   changeEmail() {
     if (this.busy()) return false;
     this.epoch++;
+    this.verifiedAt = null; this.verifiedUserId = null;
     // Keep the sending cooldown when switching email or auth mode.
     this.emit({ status: "idle", email: "", purpose: "login", error: null });
     return true;
@@ -46,6 +49,38 @@ export class ConsumerEmailOtpController {
       return true;
     } catch { if (epoch === this.epoch) this.emit({ status: priorStatus, error: "email_otp_transport_failed" }); return false; }
   }
+  async setOwnPassword(password: string) {
+    if (this.busy() || this.state.status !== "verified" || this.verifiedAt === null || !this.verifiedUserId || this.now() - this.verifiedAt > 300000) {
+      this.emit({ error: "password_reauthentication_required" }); return false;
+    }
+    if (password.length < 8) { this.emit({ error: "password_invalid" }); return false; }
+    if (!this.auth.setOwnPassword) { this.emit({ error: "operation_not_enabled" }); return false; }
+    const epoch = this.epoch, actor = this.verifiedUserId;
+    this.emit({ status: "verifying", error: null });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("PASSWORD_SETTINGS_TIMEOUT")), 15000); });
+      const current = await Promise.race([this.auth.getCurrentSession(), deadline]);
+      if (epoch !== this.epoch || !current.ok || current.value?.user.userId !== actor) {
+        if (epoch === this.epoch) this.emit({ status: "verified", error: "password_reauthentication_required" }); return false;
+      }
+      const result = await Promise.race([this.auth.setOwnPassword({ expectedUserId: actor, password }), deadline]);
+      password = "";
+      if (epoch !== this.epoch) return false;
+      this.emit({ status: "verified", error: result.ok ? null : result.error.code });
+      if (result.ok) { this.verifiedAt = null; this.verifiedUserId = null; }
+      return result.ok;
+    } catch (error) {
+      password = "";
+      if (epoch === this.epoch) {
+        const uncertain = error instanceof Error && error.message === "PASSWORD_SETTINGS_TIMEOUT";
+        if (uncertain) { this.epoch++; this.verifiedAt = null; this.verifiedUserId = null; }
+        this.emit({ status: "verified", error: uncertain ? "password_update_uncertain" : "password_update_failed" });
+      }
+      return false;
+    } finally { if (timer !== undefined) clearTimeout(timer); }
+  }
+
   async verify(token: string) {
     if (this.busy() || this.state.status !== "code_sent") return false;
     if (!new RegExp("^\\d{" + DEVELOPMENT_EMAIL_OTP_LENGTH + "}$").test(token)) { this.emit({ error: "invalid_code" }); return false; }
@@ -58,6 +93,7 @@ export class ConsumerEmailOtpController {
       token = "";
       if (epoch !== this.epoch) return false;
       if (!r.ok) { this.emit({ status: "code_sent", error: r.error.code }); return false; }
+      this.verifiedAt = this.now(); this.verifiedUserId = r.value.user.userId;
       this.emit({ status: "verified", error: null });
       return true;
     } catch { token = ""; if (epoch === this.epoch) this.emit({ status: "code_sent", error: "email_otp_transport_failed" }); return false; }

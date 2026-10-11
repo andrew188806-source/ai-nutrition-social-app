@@ -89,8 +89,9 @@ export default function LandingScreen() {
           <Card>
             <SectionHeader
               title={zhTW.mobile.todayNutritionSummary.cardTitle}
-              subtitle={intakeState.status === "error" ? intakeState.error : zhTW.mobile.todayNutritionSummary.cardSubtitle}
+              subtitle={intakeState.status === "error" ? intakeState.error : "正在讀取今日營養摘要…"}
             />
+            {intakeState.status === "error" ? <Pressable accessibilityRole="button" onPress={intakeState.refresh} style={{ padding: 12, borderWidth: 1, borderRadius: 12, borderColor: colors.line }}><Text style={{ color: colors.ink }}>重試今日營養摘要</Text></Pressable> : null}
           </Card>
         ) : (
           <>

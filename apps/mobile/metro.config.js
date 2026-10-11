@@ -6,7 +6,15 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
-config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), workspaceRoot]));
+// Windows NodeWatcher must not crawl every unrelated app, document or evidence tree.
+// The mobile import inventory uses workspace lib/ and packages/; dependencies retain both roots.
+if (process.platform === "win32") {
+  config.watchFolders = [projectRoot, ...["lib", "packages", "node_modules"].map(folder => path.join(workspaceRoot, folder))];
+  // Installed Metro supports lazy SHA1: hash modules/assets when used instead of every file at startup.
+  config.watcher = { ...config.watcher, unstable_lazySha1: true };
+} else {
+  config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), workspaceRoot]));
+}
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules")

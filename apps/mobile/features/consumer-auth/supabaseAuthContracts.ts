@@ -47,6 +47,8 @@ export type SupabaseAuthClientLike = {
   signInWithOtp?(input: { email: string; options: { shouldCreateUser: boolean } }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   verifyOtp?(input: { email: string; token: string; type: "email" }): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   exchangeCodeForSession?(code: string): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
+  getUser?(): Promise<SupabaseAuthResponseLike<{ user: SupabaseAuthUserLike | null }>>;
+  updateUser?(attributes: { password: string }): Promise<SupabaseAuthResponseLike<{ user: SupabaseAuthUserLike | null }>>;
   signOut(options?: { scope: "local" | "global" | "others" }): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
   refreshSession(): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   resetPasswordForEmail(email: string): Promise<SupabaseAuthResponseLike<Record<string, never>>>;

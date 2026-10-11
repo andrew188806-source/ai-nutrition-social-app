@@ -100,6 +100,29 @@ export class SupabaseConsumerAuthAdapter implements ConsumerAuthPort {
     return session ? ok(session) : err(new ConsumerEmailConfirmationRequiredError());
   }
 
+  async setOwnPassword(input: { expectedUserId: string; password: string }) {
+    if (!this.transportEnabled || !this.authClient.getUser || !this.authClient.updateUser)
+      return err(new ConsumerAuthOperationNotEnabledError("Password settings transport is unavailable."));
+    if (!input.expectedUserId || input.password.length < 8)
+      return err(new ConsumerAuthError("password_invalid", "Password does not meet the minimum length."));
+    const verified = await this.authClient.getUser();
+    const user = verified.data?.user;
+    if (verified.error || !user || user.id !== input.expectedUserId || !user.email_confirmed_at || user.is_anonymous)
+      return err(new ConsumerAuthError("password_reauthentication_required", "Verify your own email again."));
+    const current = await this.authClient.getSession();
+    if (current.error || current.data?.session?.user?.id !== user.id)
+      return err(new ConsumerAuthError("password_reauthentication_required", "Account changed before password settings."));
+    const response = await this.authClient.updateUser({ password: input.password });
+    input.password = "";
+    if (response.error) {
+      const code = response.error.code;
+      return err(new ConsumerAuthError(code === "weak_password" ? "password_weak" : code === "same_password" ? "password_unchanged" : code === "reauthentication_needed" ? "password_reauthentication_required" : "password_update_failed", "Password settings were not completed."));
+    }
+    if (response.data?.user?.id !== user.id)
+      return err(new ConsumerAuthError("password_reauthentication_required", "Password update identity could not be verified."));
+    return ok(undefined);
+  }
+
   async completeEmailConfirmation(code: string) {
     if (!this.transportEnabled || !this.authClient.exchangeCodeForSession || !code) return err(new ConsumerAuthOperationNotEnabledError("Configured confirmation transport unavailable."));
     const response = await this.authClient.exchangeCodeForSession(code);
