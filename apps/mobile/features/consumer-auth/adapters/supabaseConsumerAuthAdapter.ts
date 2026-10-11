@@ -51,6 +51,8 @@ export class SupabaseConsumerAuthAdapter implements ConsumerAuthPort {
     if (!this.transportEnabled) return err(new ConsumerAuthOperationNotEnabledError("Supabase sign-in is disabled."));
     if (!input.email || !input.password) return err(new ConsumerAuthOperationNotEnabledError("Email/password are required by this transport."));
     const response = await this.authClient.signInWithPassword({ email: input.email, password: input.password });
+    if (response.error?.code === "invalid_credentials")
+      return err(new ConsumerAuthError("authentication_required", "Email/password credentials were rejected."));
     if (response.error) return err(mapSupabaseAuthError(response.error));
     const session = mapSupabaseSessionToConsumerAuthSession(response.data?.session);
     return session ? ok(session) : err(new ConsumerAuthOperationNotEnabledError("Provider did not return a session."));
