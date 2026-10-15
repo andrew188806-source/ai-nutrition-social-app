@@ -1098,3 +1098,208 @@ Gate 重點：五個 canonical 入口（v1、v2、finalize legacy、finalize v3 
 - Fresh：capture smoke、capture mutations、R0-B smoke／mutations（successor 調整後）、37 個既有 harness 的 baseline／candidate differential、frozen／inventory 證明。
 - Reused：R0-B C1 本機獨立驗收證據（`3eb8d7fa`）作為 R0-B 自身 differential 的 baseline 觀察；Hosted manifest 與 PG17 工具鏈沿用既有 hash 驗證。沒有重跑 478 suites、TLS 工具或無關產品驗證。
 - 本節之後的 commit、post-commit 結果只追加於外部報告，不再改寫本文件 bytes。
+
+## 17. R0-B-ENT0：Entitlement fact ledger、monotonic coverage 與 `state_at` — authorized local implementation record（2026-10-09）
+
+### 17.1 授權、Owner 決策 OQ-1 與 exact scope
+
+- **Owner 決策（OQ-1，2026-10-09）**：14 天 Premium 免費試用享有 Paid 等級的餐點保存權益，但 Trial 不等同於已付款訂閱。(1) 試用期間建立的紀錄適用 Paid 180 天，自紀錄建立時間起算；(2) 試用到期且未正式訂閱後，新建立紀錄依當下實際 Free 權益判定；(3) 已建立紀錄不得因試用到期而追溯縮短；(4) 試用期間轉正式付費不得重複延長，必須維持既有升級邊界規則；(5) Trial 必須保留可辨識的獨立權益事實，不得偽裝為真實付款事件。
+- **與本文件既有規則的核對（結論：無衝突）**：§2.1 的 Free 14／Paid 180（自 T0 起算）、「建立時取得保存權益」、「Free 未到期升級延至原 T0＋180 天、不是 upgrade time＋180 天」、「已得 E180 不再延長」與「降級不縮期限」均維持不變。OQ-1 只核定了本文件原先標為待核定的 trial 映射（STATUS-F 段：「不新增 `trial` code」、trial 有效時點待核定）：trial 是獨立的 Paid 等級事實。本包**不計算** E14／E180、不寫 grant、不處理升級延長；這些仍是後續包的責任，必須在讀取 `state_at` 的結果後依本文件規則實作。
+- **授權範圍（Owner 逐字）**：Append-only entitlement fact ledger；Monotonic coverage；`state_at(owner, instant)`；Production producer registry = empty；Unknown 不得被推定為 Free；Retention 繼續 inactive；不變更 meal-save runtime 行為。僅限提案已盤點的 7 個 path、一個新 forward migration 與必要相容性修正。禁止 push，禁止自行啟用 retention。
+- **Exact 7 paths**：`supabase/migrations/20261010010000_consumer_retention_entitlement_authority.sql`（新增）、`scripts/consumer-retention-entitlement-smoke.mjs`（新增）、`scripts/consumer-retention-entitlement-mutations.mjs`（新增）、本文件（追加 §17）、`scripts/consumer-retention-persistence-smoke.mjs`、`scripts/consumer-retention-capture-smoke.mjs`、`scripts/consumer-meal-save-recovery-guard.mjs`（三個 validator 的 successor 相容性調整，不刪任何 assertion）。
+
+### 17.2 產品契約（IMPLEMENTED_AND_EVIDENCED；local only；ENT0-R2，取代 R1 的 AP-4 一致性機制；其餘 AP-1／2／3／5 不變；**R3 修訂：reader 順序與「free／paid 的穩定範圍」以 §17.15 為準——R2 的對應敘述對進行中 admission 不成立，保留為歷史**）
+
+**三種保證彼此獨立，不可互相替代：**
+
+1. **不可變的 T0 capture**：保存交易的 T0（server transaction start，毫秒）由 R0-B-CAP 的 `retention_capture.detail_capture_anchors` 在同交易寫入且不可更新。本包不修改它。
+2. **`entitlement_state_at(owner, instant)`**：依「查詢當下」可見的 ledger、coverage 最新值與 registry 計算的函式。它**不是歷史記錄**：同一 `(owner, instant)` 在不同時間呼叫，可能因資訊補足而得到不同答案。本包只規定「哪些變化允許、哪些被拒」（見「答案變化規則」）；**不**承諾 ENT0 的歷史答案永不改變。
+3. **未來 ENT1 持久化的 grant 及其 provenance**：本包**不存在、不產生**。ENT0 不建立保存 grant、不縮短既有 grant、不作到期收合或刪除；`free` 本身不授權任何清除（purge）。ENT1 尚未實作，本文件不宣稱它已解決任何問題。
+
+- **Fact**：「owner O 在 `[valid_from, valid_until)`（閉開區間，毫秒精度）屬於 class C」，C ∈ `paid`、`trial`，由已註冊 producer 在其有效視窗內斷言。**`valid_until` 必填且為有限區間（AP-1）**：事實自足，`state_at` 只憑列內容判定成員資格。`NOT NULL` **不是**長度上限，本包**不制定** billing 期限上限，也**不能**防止永久或不合理超長的 Paid（例如 `[producer 的 registered_at, 9999-12-31)` 會被接受；`valid_from` 早於 producer 的 `registered_at` 的事實一律被拒，所以區間下界不可能早於註冊時間）；合理期限由未來的可信 producer 契約（ENT-F）保證。**事實到期而不再續發，只表示「到期不續約」，不代表即時取消、退款或作廢**（這些事件模型無法表示，見下）。append-only：內容不可更新；唯一鍵 `(owner, namespace, upstream_event_id)`；`semantic_digest` 由資料庫計算，呼叫端不能提供；同 id 同內容為 replay（回原 `event_id`），同 id 不同內容為 `ENT_EVENT_CONFLICT`（23505）。
+- **Coverage**：每個 `(owner, namespace)` 一列單調 `covered_through`（嚴格遞增、`revision` 每次 +1、不得超過資料庫時鐘）；`valid_from ≤ covered_through` 的新事實一律拒絕（`ENT_EVENT_BELOW_COVERAGE`）。Coverage 只證明「該 producer 在此之前沒有未送達的事實」，**只用來證明 Free**（AP-2）。
+- **`entitlement_state_at(owner, instant)`**（AP-2、AP-3）：單一 SQL 敘述（單一 snapshot）；不以 `now()` 作為評估點、不讀 `subscription_entitlements`、不讀任何 meal／retention 物件。`instant` 在未來 → `unknown/INSTANT_IN_FUTURE`。存在涵蓋該瞬間的 `paid` 或 `trial` 事實 → `state=paid`（本包定義的保存權益層級），**不論 coverage**；這是對原核准判定順序（任一必要 coverage 不足先於 Paid → `COVERAGE_SHORT`）的**明確契約修訂，不歸入 OQ-1**。僅有 `trial` 時 `basis=trial`（OQ-1：Paid 等級，不是付款），有 `paid` 時 `basis=paid_subscription`，證據列出全部 event id。沒有事實時，只有「**必要 producer 集合非空**，且其中**每一個**在該瞬間的 coverage ≥ instant」才回 `free`；「必要」＝該瞬間 `registered_at ≤ instant < retired_at`（`retired_at` 為空則無上界）。其餘為 `unknown`（`NO_REQUIRED_PRODUCER`、`COVERAGE_SHORT`）。**Unknown 從不被推定為 Free。**`free` 的語意是「依**已註冊**的 producer 集合」；ENT0 無法得知未註冊的來源（見 §17.8）。**本包不提供完整的訂閱狀態判定**。
+- **重疊、衝突與模型限制（AP-3）**：不強制保留 `CONTRADICTORY` 狀態名稱。必須區分三類，**不得**以「同 key 異內容被拒」推論「所有矛盾都不存在」：(a) **同 key 衝突**——同 `(owner, namespace, upstream_event_id)` 異內容：在 admission 被拒（23505），不進 ledger；(b) **不同 key／producer 的事實**——模型只表示正向權益期間，彼此（包含正常 trial→paid 重疊、同類別不同 producer 的一致事實）一律相容並存，聯集為 Paid 層級並列證據；ENT0 **無法判斷**兩筆相容事實在現實中是否其實互相衝突；(c) **模型不能表示的事件**——取消、退款、作廢與更正：沒有對應的資料型別或 API，ENT0 **不處理**；後發的較短事實**不會**取消較長事實；同 id 更正被拒。本包已對所有「可表示且已儲存」的資料組合逐一核對（事實×事實、事實×coverage、事實×producer 視窗、coverage×producer 視窗）：入庫後不存在互斥而仍被輸出為已知結果的組合——不是因為 (a) 被拒，而是因為上述組合要不是被 admission 條件排除、就是在模型下相容；並以獨立 oracle 對隨機可表示資料比對 `state_at` 輸出（P17）。若日後資料模型新增可表示的否定類別，必須同時定義其衝突處理。
+- **Producer 的有效時間與一致性（AP-4，R2 修訂；取代 R1 的「5 秒 commit 上限」）**：`producers(namespace, role_name, registered_at, retired_at)`，有效視窗為閉開 `[registered_at, retired_at)`。R1 的 5 秒上限已被獨立驗收證明可被允許操作繞過（`SET CONSTRAINTS … IMMEDIATE`、`PREPARE TRANSACTION`、guard 之後的 commit 路徑延遲），**已移除，不再有任何依賴交易年齡、提交時間或固定秒數的保證**。一致性改由「同一把鎖＋寫入後蓋章」建立：(1) **registry 鎖**＝資料表 `retention_entitlement.producers` 的資料表鎖。registry 寫入（INSERT／UPDATE／DELETE／TRUNCATE）由 PostgreSQL 自動取得 ROW EXCLUSIVE 或更強的鎖，持有到該交易結束（COMMIT、ROLLBACK、連線中斷、`COMMIT PREPARED`／`ROLLBACK PREPARED`），且只在列已可見**之後**才釋放；因此 `SET CONSTRAINTS`、`PREPARE TRANSACTION`、較晚排隊的 deferred 工作、同步複寫等待，都不能讓寫入的列在鎖仍被持有時被任何 reader 看見，也不能讓 reader 在寫入尚未完成時取得答案。權威 reader（`entitlement_state_at`）與兩個 producer 函式（`admit_entitlement_event`、`advance_entitlement_coverage`）在**判斷任何事情之前**取得同一表的 SHARE 鎖，等待尚未結束的 registry 寫入；(2) **蓋章**：registry 列的有效時間（`registered_at`、首次 `retired_at`）必須不早於 BEFORE trigger（此時寫入者已持有鎖）所讀伺服器時鐘的**下一個整毫秒**（`floor_ms(clock)+1ms`，嚴格晚於該讀數）；INSERT 的 `registered_at` 為 NULL 時由 trigger 以該下界蓋章；明確值早於下界即 `ENT_PRODUCER_RETROACTIVE`（含 R1 的「恰等於交易開始」寫法）；(3) **reader 順序**：取 SHARE 鎖（每一次等待最長＝函式層級 `lock_timeout`，目前 2 秒；**這是每一次等鎖各自的上限，不是整個呼叫的總上限**，見 §17.10）→（**R3 新增，見 §17.15**：對該 owner 在每個已註冊 namespace 的 per-owner advisory 鎖取共享鎖，等待進行中的 admission／coverage advance）→ 取樣伺服器時鐘 → `instant` 晚於該取樣則 `unknown/INSTANT_IN_FUTURE` → 單一敘述解析（新的 READ COMMITTED 快照，必晚於鎖取得）。等不到鎖回 `unknown/REGISTRY_LOCK_TIMEOUT`（永不為 `free`、不是錯誤、不附證據、不改變任何 producer 的必要性）；答案帶 `sampled_at`（取樣時鐘，毫秒）；(4) **入口契約（由函式強制，不是註解）**：只接受 READ COMMITTED，其他隔離級別一律 `ENT_ISOLATION_UNSUPPORTED`（`0A000`）；`entitlement_state_at` 為 VOLATILE（PostgreSQL 不允許 STABLE 函式執行 `LOCK TABLE`，且 VOLATILE 才會在鎖之後取新快照）；(5) **鎖順序固定**：registry 鎖 → per-owner advisory 鎖 →（ENT1）其他；`admit`／`advance` 取不到鎖時以 `55P03` 失敗且不寫入任何列；(6) 事實不得早於 producer 註冊時間（`ENT_EVENT_BEFORE_PRODUCER_REGISTRATION`）；已合法接收的事實不因 producer 退休而消失；registry 列不可刪除，身分與註冊時間不可改。**不在保證內**：superuser／資料表擁有者的刻意操作（`session_replication_role=replica`、停用 trigger、TRUNCATE、直接改 catalog）、伺服器時鐘向後調整、備援（standby）上的讀取、連線池（pooler）語意（皆未驗證，見 §17.14）。成本與可用性見 §17.10。**本 migration 的 registry 為空，且不對任何角色授予 EXECUTE。**
+- **答案變化規則與權威答案的穩定範圍（R2）**：允許（資訊補足）：unknown→free／paid（coverage 前進、新事實、退休生效時間到達）；`basis` 由 `trial` 變 `paid_subscription`（仍為 Paid）。不會發生：paid→非 paid（帳號刪除 CASCADE 除外）；來自必要 producer 的新事實改變已證明的 Free（`valid_from ≤ coverage` 被拒，且 admit／advance 以 registry 鎖與 per-owner advisory 鎖串行）。被拒（會使已證明的 Free 失去依據）：晚註冊 producer 回補早於其註冊的事實（free→paid）、回溯的 registry 寫入（free→unknown、unknown→free）、registry 列刪除。**【R3 更正：R2 的下一句對「在退休時間之前通過視窗檢查、reader 回答之後才提交」的 admission 不成立（F1，已重現）；R3 的成立條件與前提見 §17.15】對符合 §17.10 入口契約的呼叫，`free` 與 `paid` 不會被任何之後符合契約的操作推翻**（之後才取得 registry 鎖的寫入，其有效時間必晚於該答案的取樣時鐘；已證明 Free 的 producer 不能再補寫涵蓋該瞬間的事實；Paid 事實不可變）；`unknown` 不承諾，可能變為 `free`／`paid`；這**不是**歷史記錄，帳號刪除（CASCADE）、特權操作與時鐘回撥不在保證內。
+- **OQ-1 的語意映射**：(1)(3) 試用期間建立的紀錄，其 `state_at` 為 Paid 層級；trial 到期、coverage 前進不會使該 Paid 答案變回 Free（Paid 事實不可變）。**最終保存期限的決定與持久化屬 ENT1，不在本包。**(2) trial 到期後的新瞬間，在必要 producer 的 coverage 證明下為 `free`，否則 `unknown`；(4) 轉付費是另一筆 `paid` 事實，trial 事實不被修改，重疊期只回一個狀態並列出兩筆證據，本包不計算 E14／E180、不產生任何延長；(5) trial 在帳本中是獨立 `class='trial'`，`basis` 與 `paid_subscription` 可區分，表中沒有任何付款欄位。
+- **Producer 身分 = 已註冊的資料庫角色**：函式以 `pg_has_role(session_user, role_name, 'USAGE')` 驗證，字串引數不構成身分。
+
+### 17.3 實際 authority、ACL 與物件
+
+新 schema `retention_entitlement`、sealed owner `consumer_retention_entitlement_owner`（NOLOGIN、NOINHERIT、無 superuser／createrole／bypassrls、無成員）、三張表（`producers`、`entitlement_events`、`entitlement_coverage`；ENABLE＋FORCE RLS；僅 owner policy，無 DELETE policy，無任何 runtime role policy）、三個 SECURITY DEFINER 函式（`admit_entitlement_event`、`advance_entitlement_coverage`、`entitlement_state_at`；`search_path=''`；各自帶函式層級 `lock_timeout='2s'`；`state_at` 為 VOLATILE，因為它必須先取 registry 鎖再取新快照）、三個 SECURITY INVOKER trigger 函式（事實不可更新、coverage 只能前進一個 revision、producer 守衛：身分不可改且只能退役一次、registry 有效時間以持有 registry 鎖之後讀取的伺服器時鐘蓋章為不早於下一個整毫秒、不得回溯、不得刪列；沒有 deferred 或 COMMIT 時檢查；全部共 3 個 trigger）。骨架沿用 R0-B-CAP／foundation：F2 DDL actor、管理邊界、G1 平台 marker 拒絕、builder→owner 角色交接與成員殘留檢查、ACL 清理、G2 scope 不變＋精確 post-state digest（`aa4c8eee8bfb9aa29030ce602a43f58afea81b0c4fcbc9f49e2c957a3f0bd003`（R3；R2 為 `a19b5c2f…3ec5`、R1 為 `14913c95…8536`），外部固定）。Migration 不改任何既有物件（fingerprint 以 proc／class／columns／policy／trigger／constraint／namespace／default ACL／roles／members／event trigger 逐類比對）；不建立 meal_records 上的 trigger；不 backfill；不 purge。
+
+### 17.4 Gates 與結果（**R1 歷史記錄；已被 §17.11（R2）取代**；R1 施工者自測；evidence 在 repository 外 `D:\ent0-r1-20261009\`；**不是 acceptance，等待獨立 reacceptance**）
+
+> **R2 取代聲明**：本節描述 R1 candidate（5944036b）的自測，**保留為歷史**。其中 N17「>5 秒的長交易於 COMMIT 被拒」與「特權 `SET CONSTRAINTS IMMEDIATE` 繞過僅記錄」所依據的 5 秒 commit 上限已被獨立 reacceptance 證明可由被委派寫入者繞過，**已於 R2 移除**；36／36、4 個 trigger、「`state_at` 為 STABLE」等數字與敘述僅對 R1 成立，R2 的數字見 §17.11。
+
+全部於 disposable PostgreSQL 17.6（loopback、fsync=off、template＝142 檔 baseline＋foundation＋capture）執行；每個 gate 一個獨立資料庫並以 `ctx.pre`／`ctx.post` 比對 migration 前後的 catalog fingerprint。
+
+**ENT0 smoke（`consumer-retention-entitlement-smoke.mjs`）36／36**：
+- *Positive 17*：P01 空 registry→unknown 從不 Free；P02 paid 閉開區間；P03 Free 只在 coverage 下可證；**P04 OQ-1 trial＝Paid 等級但 `basis=trial`、非付款**；**P05 OQ-1 試用到期且無訂閱→新紀錄 Free（billing coverage 缺→unknown）**；**P06 OQ-1 既有紀錄的瞬間之後不被縮短**；**P07 OQ-1 試用中轉付費不重複延長**；P08 replay 冪等且 digest 獨立計算一致；P09 多 namespace、註冊／退役時窗（晚註冊 producer 的早期事實被拒）；P10 6 輪並行；P11 producer 交易未提交時 reader 看不到半套；P12 exact post-state、sealed role、ACL、policy、4 個 trigger；P13 catalog fingerprint 前後逐類相同＋真實 meal-save RPC 仍成功；P14 帳號刪除移除事實；**P15 恰好註冊／退休瞬間的必要集合邊界（acceptance mutant X01／X02 的有效 detector）**；**P16 三個歷史案例（free→paid、free→unknown、unknown→free）在 registry 變動下答案不變**；**P17 `state_at` 對隨機可表示資料與獨立 oracle 逐一比對（6060 筆，0 差異）**。
+- *Negative 18*：N01–N12 如前（N10 的時鐘讀取清單改為 state_at 1／admit 2／advance 3／guard 1，`transaction_timestamp` 僅限 registry 守衛；N12 的 fault anchor 改為 deferred constraint trigger）；**N13 producer 不得對註冊前發言（恰等於可、少 1 ms 拒、跨越拒、replay 不受影響）**；**N14 registry INSERT／UPDATE／DELETE 各自獨立的負向／正向控制**；**N15 授權隨有效視窗（未生效即 42501、生效後可；未來退休到期前可作業、到期後 42501，含 replay；退休前的事實保留）**；**N16 不可表示的事件不被默默處理（無取消／退款 API、同 key 更正被拒、較短後發事實不取消較長事實、到期＝不續約）**；**N17 registry 交易長度與守衛恰好邊界（恰等於交易開始可、少 1 ms 拒、>5 秒的長交易於 COMMIT 被拒；特權 `SET CONSTRAINTS IMMEDIATE` 繞過僅記錄、不入裁決）**；**N18 並行與 lock 順序（等鎖後越過退休時間的呼叫被拒；跨退休時間的並行 admit 全部符合視窗；未提交的 coverage advance 讓並行低於 coverage 的 admit 等待後被拒）**。
+- *F01* frozen scope／inventory：state `ent0`、145 檔 migration、`changedBaselineMigrations=0`、migration sha256 與外部 pin 相符。
+
+**Regression（同一 R1 candidate）**：recovery smoke＋PG 40／40；recovery guard 85／85；capture smoke 28／28；capture mutations 24／24；persistence smoke 83／83（含 IF14、N16 於 `ent0`）；persistence mutations 127／127；c5-b2／c5-r5 smoke exit 0；b2-b smoke 42／42；b2-b guard main 38／50 與 detached HEAD 37／50 分開記錄（兩種狀態下 base 與 R1 的失敗 identity 逐項相同，只有內嵌的 migration 計數與最新檔名不同）；`tsc` `apps/mobile` exit 0；差分僅重跑受影響子集（skipped 與兩側提前中止＝未驗證，不計 parity）。
+
+### 17.5 Mutation 控制與誠實分類（**R1 歷史記錄；已被 §17.12（R2）取代**）
+
+> **R2 取代聲明**：本節的 80 個 mutants、75／4／1 分類與 Y100／Y101（5 秒 commit 上限）屬 R1；R2 的 mutant 處置見 §17.12（80 個逐一處置：保留、重新錨定、轉換、退役，並新增 R2 行為 mutants）。
+
+`consumer-retention-entitlement-mutations.mjs` 對**真實 migration SQL** 施加單點缺陷（共 **80** 個），先在乾淨資料庫上 raw apply：被 `ENT_POST_STATE_MISMATCH` 擋下者以觀測到的 digest 重新固定後安裝（66 個），再於安裝後的資料庫上執行指定 gate；setup 錯誤一律 BLOCKED，不算偵測。分類（每個 spec 預先宣告 `expect`）：
+
+- **行為偵測 75**（指名的 primary gate 失敗）：原有 60 個（OQ-1 專屬 7、unknown 被推定 Free 4 個變形、跨 owner 洩漏、區間邊界、producer 身分、權限／ACL、digest、replay、coverage／event 邊界、trigger、unique key、advisory lock、毫秒 CHECK、auth.users FK、predecessor 保護、migration 前置條件與 G2）＋R1 新增 15 個（Y90–Y104：註冊前發言、授權忽略註冊起點、未來退休提前關閉授權、回溯註冊、回溯退休、刪列、**退休邊界 `<=`（acceptance X01）、註冊邊界 `<`（acceptance X02）**、guard 只管 UPDATE、**授權視窗在呼叫開始而非持鎖時判斷**、移除 COMMIT 交易長度檢查、長度檢查放寬為 1 小時、守衛拒絕恰等於交易開始、事實起點恰等於註冊被拒、**還原原核准順序（AP-2 反轉）**）。
+- **migration 自身 guard 擋下 4**（**不**計為行為偵測）：`Y43`（builder role 殘留）、`Y70`／`Y71`／`Y72`（meal_records trigger、meal-save RPC、predecessor ACL 被改→`ENT_POST_GUARD_DRIFT`）。
+- **等價 green control 1（不計為 killed）**：`Y60` 移除 `advance_entitlement_coverage` 內「回退」檢查——`coverage_guard` trigger 以相同 SQLSTATE 與訊息擋下，行為不可觀測地等價（縱深防禦）；`Y61` 同時移除兩層後由 N06 殺死。
+
+X01／X02 在驗收時存活的原因是**沒有任何 gate 在恰好的註冊／退休瞬間探測**（mutation 確實改到有效 source，結果在邊界瞬間不同）；R1 以 P15 補上有效 detector，二者現在由 P15 殺死，不再以未觸及的 gate 當通過。
+
+### 17.6 successor 相容性（三個 validator）
+
+三個 validator 各只做 exact-once 錨點的 successor 調整，**不刪任何 assertion**，三者的 bytes 由外部審查、patch、hashes、controls 與 committed diff 綁定：
+
+1. `consumer-retention-persistence-smoke.mjs`：新增 `ENT0_MIGRATION`／`ENT0_MIGRATION_SHA256` 與 `ENT0_FILES`（migration、ENT0 smoke、ENT0 mutations 的 mode＋blob）、`ENT0_RECOVERY_OVERRIDES`（修正後 recovery guard 的 blob）與 `ent0FilesState`；`baseline()` 接受「143 檔」「144 檔（含 capture）」或「145 檔（再加上唯一固定 sha256 的 ENT0 migration，且為最後一檔）」；`recoverySuccessorState` 新增 `ent0` 狀態，並以 wrapper 強制 **all-or-nothing**（ENT0 檔無 ENT0 record、ENT0 record 無檔案、任一檔 bytes／mode／index 不符皆 `invalid`）；`frozen()` 候選白名單加入三個 ENT0 新路徑。
+2. `consumer-retention-capture-smoke.mjs`：F01 在 `ent0` 狀態接受 145 檔與 `[capture, ENT0]` 兩個新路徑；frozen proof 只在 `ent0` 狀態准許三個 ENT0 路徑（其他狀態維持 violation）。
+3. `consumer-meal-save-recovery-guard.mjs`：新增 `ENT0_PATHS`（4 路徑）；inventory／server-path／migration-count 三項檢查的**名稱不變**、條件改為 successor-aware；新增 1 項 all-or-nothing 檢查。
+
+**綁定方向為單向**：persistence smoke 釘住 ENT0 三檔與 guard 的 blob；guard 只以路徑綁定；ENT0 smoke／mutations 只 import helper（程式碼 import，不記錄任何 hash）；沒有任何檔案記錄 persistence smoke 或自身的 hash（`binding-controls` 的 structural 檢查為證）。
+
+### 17.7 相對原核准提案的契約修訂（逐項揭露；批准：Owner AP-1…AP-5，2026-10-10 授權施工；批准原文由實作者保存於外部紀錄）
+
+下列是**契約修訂**，不是實作細節；它們**不**被 OQ-1 自動涵蓋：
+
+1. **AP-1 `valid_until` 必填，有限區間。**用途是事實自足（見 §17.2）。`NOT NULL` **不能**防止永久或不合理超長的 Paid；本包**不制定** billing 期限上限；期限合理性由未來 ENT-F 保證。事實到期不續發＝「到期不續約」，**不代表**即時取消、退款或作廢。
+2. **AP-2 正向 Paid／trial 事實獨立證明本包定義的保存權益層級；coverage 用於證明 Free。**這是對原判定順序（coverage 不足先於 Paid）的明確修訂。理由：資料模型沒有否定類別；Paid 誤判的代價是過度保存而非資料遺失。
+3. **AP-3 不強制保留 `CONTRADICTORY` 狀態名稱。**正常 trial→paid 重疊與相容的正向事實共存。必須區分：同 key 衝突（admission 即拒）／不同 key 或 producer 的相容事實（共存，ENT0 無法判斷其現實衝突）／模型不能表示的取消、退款、作廢與更正（**不處理**）。本包**不提供完整訂閱狀態判定**，不把未表示的事件視為已處理；「同 key 異內容被拒」**不**構成「所有矛盾都不存在」的理由（§17.2 逐一列舉了可表示資料的組合）。
+4. **AP-4 producer 有效區間與 DB 硬化（R2 修訂；Owner 已批准其產品行為：有限等待、無法取得一致資料時 unknown、admission／coverage 失敗且不寫入、不得 Free、不縮短 grant、不 purge）**：`[registered_at, retired_at)`；事實不得早於 producer 註冊時間；registry 不得回溯、不得刪列；future retirement 到期前的合法作業保留；已合法接收的事實不因退休而消失。**R1 的「5 秒 commit 上限」被取代**：它可被 `SET CONSTRAINTS … IMMEDIATE`（不需 superuser，被委派的寫入者即可）、`PREPARE TRANSACTION` 與 guard 之後的 commit 路徑延遲繞過，且「5 秒＋提交延遲」沒有可證明的上限。R2 的契約是 registry 鎖＋寫入後蓋章＋reader／admission 入口契約（§17.2、§17.10）。**這逆轉了本包先前 smoke（P09）的行為——晚註冊 producer 的早期事實不再被接受。**
+5. **AP-5 下游契約**：registry 完整性封存及必要來源契約完成前，ENT1 不得把 provisional `free` 當成最終完整事實。**Free 本身不授權 purge**；ENT0 不建立保存 grant、不縮短既有 grant、不作到期收合或刪除。
+
+與原核准提案**一致**、不需另行批准：已記錄的事實不論其 producer 當下是否仍「必要」都計入（退役 producer 的事實仍成立；「必要」集合只決定 Free 的 coverage 要求）；`owner_user_id` 以外鍵綁 `auth.users(id)` 並 `ON DELETE CASCADE`（提案 `03` §4.1、`02` §5、P14）。
+
+另：Recovery guard 的靜態檢查名稱全數保留，條件改為 successor-aware，另新增 1 項 all-or-nothing 的 ENT0 檢查（R1 未再修改）。
+
+### 17.8 殘餘空窗、限制與後續依賴
+
+- **沒有 producer**：registry 為空、無人可 EXECUTE。真實付款／trial／升級 producer（ENT-F）、status 語意（STATUS-F）、trial 開始／結束的可信來源、grant／E14／E180 計算與 R0-C 顯示接線均為後續依賴；本包不產生 grant，也不推定 Free 或 Paid。
+- **Hosted 前提未驗證**：PostgREST 的 `session_user` 是 `authenticator`，因此 billing producer 必須是**直連的專用資料庫角色**；Hosted 的角色拓撲與 `session_user` 行為屬後續 Hosted 階段證據。本 migration 與其他 R0-B 系列一樣拒絕在任何平台 marker 的環境套用。
+- superuser／管理者可繞過 trigger 與 RLS、DELETE 或 TRUNCATE（需特權）；sealed owner 可 TRUNCATE 但不可登入且無成員。`session_replication_role=replica` 可繞過 trigger（需特權）。
+- 解析仍為**單一 SQL 敘述**（單一 snapshot，無第二次讀取）；其快照取得點在 registry 鎖與時鐘取樣**之後**，此順序由 registry 寫入者在讀取途中開著、reader 先建立快照再等待、`PREPARE TRANSACTION`、同步複寫停滯等時序注入證明（N17、N19–N23），不是只靠靜態檢查（P13 仍檢查敘述結構）。
+- Retention 仍 inactive；R0-B foundation、capture 與本包均未部署到 Hosted；法律 **DRAFT／NOT ACTIVE**。
+- **來源完整性不在本包（AP-5）**：`free` 只代表「依已註冊的 producer 集合，無事實且 coverage 完整」。ENT0 沒有「registry 已完整」的證明；在 registry 完整性封存（ENT-R）及必要來源契約（ENT-F）完成前，ENT1 不得把 provisional `free` 當成最終完整事實。`free` 本身**不授權** purge，ENT0 也不建立／縮短保存 grant、不作到期收合或刪除。
+- **ENT1 的最低要求與邊界（R2）**：(1) 以 §17.10 的入口契約呼叫 `entitlement_state_at`（READ COMMITTED、直接呼叫，不包在 STABLE／IMMUTABLE 函式或視圖中），並在解析當下持久化 tier、basis、`sampled_at`、T0（複製自 anchor）、證據 event id 與 namespace、各必要 namespace 的 coverage revision、必要 producer 清單與 policy 版本；(2) `unknown`（含 `REGISTRY_LOCK_TIMEOUT`）一律不核發 grant、不縮短或重設既有 grant、不得視為 Free，稍後重試；(3) 不得以任何經過時間、固定等待或 settle margin 判斷「資料已完整」——**不存在可證明的 margin**；(4) 之後的 `state_at` 只用來偵測升級（Paid 事實涵蓋 T0）並延長至原 T0＋180 天，結果變為 `unknown` 或不同只作為 provenance 漂移警示，**不得縮短或重設**；(5) 鎖順序 registry 鎖 → per-owner → 其他，且 registry 寫入交易不得先呼叫權威函式（兩個各持 SHARE 的交易再寫 registry 會死結，PostgreSQL 回 `40P01`）。**本包不宣稱「解析與 grant 持久化分屬不同交易（split transaction）時 grant 的建立」已被證明**：N23 的 ENT1 持久化模型只證明所列排程與前提下，模型內被持久化的 free／paid 答案與最終狀態一致；ENT1 本身（持久化內容、封存、provenance）與 registry 完整性封存（ENT-R）尚不存在，仍是後續依賴。**以下四件事彼此獨立，不得互相替代**：① registry 在解析當下的一致性（本包處理）；② fact／coverage 的完整性（事實來源是否已齊備；ENT0 沒有此證明）；③ 歷史答案是否可變（`unknown` 可變；`free`／`paid` 不被符合契約的後續操作推翻；不是歷史記錄）；④ 未來 grant 的證據與封存（ENT1）。provisional `free` 永遠不是 grant 核發或 purge 的最終依據。
+- **無撤銷／更正路徑**：錯誤或事後不可信的事實不可由自動路徑更正；由特權帳號帶外處理，已核發 grant 不縮短。
+- **退休前須補齊 coverage**：producer 在 `retired_at` 之後不能再 `advance`；其 `[最後 coverage, retired_at)` 內的 instant 若未補齊會永遠 `unknown`（保守）。退休應以未來日期安排，並在到期前把 coverage 推到退休時刻。
+- **時鐘依賴（R2）**：蓋章下界、`INSTANT_IN_FUTURE` 判斷與 producer 授權視窗都使用伺服器牆鐘 `clock_timestamp()`；保證假設牆鐘不向後跳（時鐘步進回撥不在保護內，未驗證）。沒有任何檢查使用 `transaction_timestamp()` 或交易年齡；R1 的「COMMIT 時交易不超過 5 秒」及其「`SET CONSTRAINTS … IMMEDIATE` 為特權繞過（superuser-only）」的說法**已撤回**（非 superuser 的被委派寫入者即可執行，已於 R1 reacceptance 驗證）。
+- `entitlement_state_at` 為 `VOLATILE`（必須如此：PostgreSQL 不允許 STABLE 函式執行 `LOCK TABLE`，且 VOLATILE 才會在鎖之後取新的快照；`admit`／`advance` 亦為 VOLATILE 並先取 registry 鎖）。
+- 本 migration 尚未匯入或部署到任何非拋棄式資料庫，因此**沒有就地升級路徑**：若任何拋棄式資料庫曾套用過先前的 ENT0 candidate，須整庫丟棄重建；對已存在 `retention_entitlement` schema 或 sealed role 的資料庫，本 migration 以 `ENT_ALREADY_PRESENT` 拒絕（N11f／N11g）。
+- **R3 補充**：呼叫者自己的未提交 registry／fact／coverage 寫入對其後的權威呼叫可見，這樣的答案不是已提交證據，不得在該交易之外被持久化或當成 grant 依據；「Free」的完整前提與 reader 對進行中 admission 的等待見 §17.15。ENT0 不提供不可變歷史，不提供 ENT1 的 split-transaction 安全，也不提供 registry 封存；provisional `free` 永遠不是 grant 核發或 purge 的依據。
+- 本節之後的 commit、post-commit 結果只追加於外部報告，不再改寫本文件 bytes。
+
+### 17.9 Source bindings 與 fresh／reused（**R1 歷史記錄；已被 §17.13（R2）取代**；R1 施工者自測；不是 acceptance）
+
+- Fresh（對 R1 最終 tree）：ENT0 smoke 全部（含 F01 於 clean committed）、ENT0 mutations 全部、recovery smoke＋PG、recovery guard、capture／persistence smoke 與 mutations、binding controls（歷史狀態、正向／負向、meta-mutant）、frozen proof、受影響子集差分、b2-b guard 兩種 branch 狀態、`tsc`。
+- Reused（附理由）：未變 source 的有效證據：R0-A policy smoke／mutations、c5／b2-b smoke 的先前通過結果僅作對照，本輪仍已重跑；298 支差分的歷史分類（驗收報告 §4.5）沿用其「分類方法與結論」而不重跑全集，理由是 R1 只改 ENT0 自身五個檔案、不改它們的輸入面。
+- Candidate 位於 repository 外的隔離 clone；原 ENT0 candidate（626f0808）未被修改或覆蓋，R1 為其子 commit；**未 push、未對原 repository commit 或 git am**；最終 commit SHA、tree、bundle 與雜湊記載於外部施工報告（本文件不記錄自身所在 commit）。
+
+### 17.10 R2 一致性契約：誰取什麼鎖、答案保證到哪裡、成本（R2 修訂；產品行為已獲 Owner 批准，施工與自測見 §17.11–§17.14，等待獨立 reacceptance）
+
+- **同一把鎖**：只有一個 registry 鎖＝資料表 `retention_entitlement.producers` 的資料表鎖。**寫入者**（registry INSERT／UPDATE／DELETE／TRUNCATE）自動持有 ROW EXCLUSIVE 以上直到交易結束；**權威 reader**（`entitlement_state_at`）與 **admission**（`admit_entitlement_event`、`advance_entitlement_coverage`）持有 SHARE 直到**呼叫者的交易**結束。**【R3 取代：此結論對「已退休但仍有進行中 admission」的 producer 不成立，reader 必須等待 per-owner 鎖；見 §17.15】**facts／coverage 資料表**不需要**額外同步：同一 owner×namespace 的 admit／advance 由既有 per-owner advisory 鎖串行，且 `valid_from ≤ coverage` 的事實被拒，所以已證明的 Free 不會被之後的事實推翻。
+- **生命週期與順序**：registry 鎖在 COMMIT、ROLLBACK、連線中斷（含被終止）、`COMMIT PREPARED`／`ROLLBACK PREPARED` 時釋放，且寫入列先可見、後釋放鎖；已 PREPARE 的寫入交易持續持有鎖（reader 等待直到其結局或 `lock_timeout`）。固定順序 registry → per-owner → 其他；逆序造成的循環由 PostgreSQL 偵測（自動重排或 `40P01`），不會無聲逾時。
+- **快照**：reader／admission 在鎖之後的每個命令取新的 READ COMMITTED 快照；其他隔離級別一律拒絕（`ENT_ISOLATION_UNSUPPORTED`）。**唯讀交易可呼叫**（SHARE 鎖在唯讀交易中可取得）；備援上的行為未驗證。
+- **時間**：蓋章下界 `floor_ms(clock)+1ms`（寫入者，鎖之後）；reader 取樣微秒時鐘（鎖之後）；`registered_at`／`retired_at` 與 T0 同為毫秒精度；`instant ≤ 取樣` 才解析。任何已完成取樣的 reader 之後才取得 registry 鎖的寫入，其有效時間嚴格晚於該 reader 能解析的任何 `instant`，沒有取整空窗。
+- **`lock_timeout` 的語意（每一次等待，不是整個呼叫）**：三個函式各帶 `SET lock_timeout='2s'`，它對函式內**每一次**等鎖（registry 鎖、per-owner advisory 鎖、`FOR UPDATE` 列鎖）**各自**計時；**不是整個呼叫的時間上限**。N22 證明：兩段各約 1.4 秒的等待使一次 admission 的總耗時超過 2 秒而仍成功；第二段等待本身超過 2 秒則 `55P03` 且不寫入任何列。函式層級的 SET 在呼叫結束（成功、`55P03`、其他例外、savepoint 回滾）時由 PostgreSQL 還原為呼叫者原值，**不污染呼叫者的 `lock_timeout`**（N22(d) 逐一驗證成功／逾時／例外／savepoint／`SET LOCAL` 後的值）。reader 的逾時被轉成 `unknown/REGISTRY_LOCK_TIMEOUT`；per-owner 與列鎖逾時仍是 `55P03`。
+- **SHARE 的持有時間與呼叫者成本**：SHARE 持有到**呼叫者交易結束**（**R3 更正：限於該呼叫所在、未被回滾的（子）交易；位於被 `ROLLBACK TO SAVEPOINT` 回滾的 savepoint 或被捕捉例外的 EXCEPTION 子交易內時，registry SHARE 與 per-owner 鎖隨之釋放，見 §17.15**），不是到函式返回。呼叫者在權威呼叫之後讓交易保持開啟，會讓 registry 寫入者一直等（寫入者沒有函式層級逾時，需自行設 `lock_timeout`，或由伺服器設 `idle_in_transaction_session_timeout`）；已排隊的寫入者又會讓之後到達的 reader 也排隊（公平佇列）。N23(c) 驗證 SHARE 持有至呼叫者交易結束、COMMIT 後釋放。因此 ENT1 的解析交易應保持短；ENT0 不替呼叫者決定其交易長度。
+- **保證到哪裡**：見 §17.2「答案變化規則與權威答案的穩定範圍」。**不是歷史記錄；不是對特權操作的保證。**
+- **ENT1 前置條件與邊界**：見 §17.8「ENT1 的最低要求與邊界（R2）」。ENT0 不實作 ENT1、不建立 grant、不核發任何權益；**不宣稱 split-transaction 的 grant 建立已被證明**。
+- **timeout 的安全結果**：reader 等不到鎖 → `unknown/REGISTRY_LOCK_TIMEOUT`（不是 `free`、不核發 grant、不縮短既有 grant、不取消任何來源的必要性）；admission／advance 等不到鎖 → `55P03`，不寫入任何列（N22：事件、coverage、producer 列數前後相同）。
+- **成本（不隱瞞）**：(a) reader 與 admission 會等待任何尚未結束的 registry 寫入（含不同 owner 的），每一次等待最長＝函式層級 `lock_timeout`（2 秒），逾時 reader 得 unknown、admission 得 `55P03`；(b) 已排隊的 registry 寫入會讓之後到達的 reader 排在其後（公平佇列），上限同為持有者交易長度與 `lock_timeout`；(c) VACUUM／ANALYZE／CREATE INDEX 類（SHARE UPDATE EXCLUSIVE）對 registry 表的鎖會讓 reader 等待至逾時；(d) 持有 registry 表 SHARE 的長交易會阻塞 registry 寫入；(e) 擁有 registry 表授權的主體可持有鎖造成不可用（結果是 unknown，不是錯誤答案）；(f) 無競爭時延遲與 R1 同量級（design 輪於本機拋棄式 PG 17.6 量測 state_at p50：R1 0.41 ms、R2 0.42 ms；8 條並行 reader 吞吐相同；R2 施工輪未重新量測）。registry 預期是低頻、受管制的寫入。
+- **§17.15(c) 歷史文字（已被 Owner D-1 取代，2026-10-11；保留供稽核）**：(c) **兩個呼叫者交易若都先呼叫 `entitlement_state_at`（取得 shared）、再對同一 owner／namespace 呼叫 `admit_entitlement_event`（要求 exclusive 升級）會互相等待，PostgreSQL 回 `40P01`（一方被中止）**；因此 admit／advance 的呼叫者交易不得先在同一交易內對同一 owner 呼叫權威 reader（N25(f) 以真實死結驗證：恰一方成功、另一方 `40P01`、無資料遺失、不 hang）。ENT1 的解析交易應與 producer 的寫入交易分開、且保持短。
+
+### 17.11 R2 Gates 與結果（**R3 補充：R2 的 N19–N23 未涵蓋「進行中 admission 對已退休 producer」的案例，由 R3 的 N24／N25 補上，見 §17.16**；R2 施工者自測；evidence 在 repository 外 `D:\ent0-r2-impl-20261010\`；**不是 acceptance，等待獨立 reacceptance**）
+
+全部於 disposable PostgreSQL 17.6（loopback、fsync=off、`max_prepared_transactions=8`、template＝142 檔 baseline＋foundation＋capture）執行；每個 gate 一個獨立資料庫。
+
+**ENT0 smoke（`consumer-retention-entitlement-smoke.mjs`）41／41**＝17 positive＋23 negative＋1 supplementary（F01）。**與 R1 的計數差**：R1 的「36」＝17 P＋18 N＋1 F01；R2 提案中的「35」只算 P＋N（17＋18），不含 F01；R2 為 17 P＋23 N（新增 N19–N23）＋F01＝41。
+- 重寫的 8 個 gate（舊斷言→新斷言→理由）見外部報告 `report/gate-rewrite-table.md`：P12（trigger 數 4→3、無 deferrable、三個定義者函式 `lock_timeout=2s` 且皆 VOLATILE）、P16（三個歷史案例改以 registry 守衛的 R2 行為驗證）、N10（時鐘讀取清單：guard 以 `clock_timestamp` 讀、不再有任何函式讀 `transaction_timestamp`／`statement_timestamp`；一個 resolver 敘述＋前置的鎖／取樣）、N12（fault anchor：不再有 deferred constraint trigger，改以 `producer_guard`）、N14（以長期註冊的列驗證回溯退休，NULL 蓋章、明確 now 被拒）、N15（授權視窗隨有效時間；NULL 蓋章）、N17（5 秒 commit 上限→「蓋章在持鎖之後」：蓋章試驗、邊界、長交易、`SET CONSTRAINTS` 各模式與切換、持鎖等待之後蓋章）、N18(a)（lock-order 的等待改為約 1.3 秒，使整個等待落在每次 2 秒的 `lock_timeout` 之內）。
+- 新增 N19–N23（S01–S17 的時序行為）：**N19** reader 等待開著的 registry 寫入且不得答錯（`SET CONSTRAINTS ALL IMMEDIATE`／模式切換、guard 之後的慢 deferred 工作、writer 對 reader 取樣的順序與 `INSTANT_IN_FUTURE`／持鎖後取樣、timeout→`unknown/REGISTRY_LOCK_TIMEOUT`、rollback、被終止的寫入者、被取消的 reader、60 次提交／可見／取樣順序試驗）；**N20** `PREPARE TRANSACTION`／`COMMIT PREPARED`／`ROLLBACK PREPARED`（2 秒與 20 秒兩種逾時）與同步複寫停滯（COMMIT 卡在 guard 之後，reader 仍等待、不在列可見之前回答）；**N21** 三個函式拒絕 REPEATABLE READ／SERIALIZABLE 且無部分寫入、先前 SELECT、唯讀、STABLE 包裝、同一敘述先建立快照；**N22** admission／coverage 與 registry 寫入（等待後成功；逾時 `55P03` 無部分寫入；未提交的退休；每次等待各自計時；`lock_timeout` 不污染；identity 先於鎖）；**N23** 三個歷史案例仍被拒、鎖順序（合規順序無死結、反序不 hang、兩個持 SHARE 再寫 registry 的交易死結被偵測）、SHARE 持有至呼叫者交易結束、含 backend 終止／rollback／2PC／`SET CONSTRAINTS` 的隨機壓力與 ENT1 持久化模型（同交易與分交易寫入的 free／paid 答案皆與最終狀態一致）。
+- S01–S17 對應：S01→N19(a)；S02→N19(b)；S03→N17(4)、N19(d)；S04→N19(c)；S05→N20；S06→N20；S07→N21；S08→N19(d,d2)；S09→N22(a)；S10→N19(e)；S11→N17；S12→N23(a)；S13→N22(b)；S14→N21(b)；S15→N23(b)；S16→N23(d)；S17→N19(f)。
+
+**Regression（R2 最終 bytes）**：recovery smoke＋PG 40／40；recovery guard 85／85；capture smoke 28／28；capture mutations 24／24；persistence smoke 83／83（含 IF14、N16 於 `ent0`）；persistence mutations 127／127；c5-b2／c5-r5 smoke exit 0；b2-b smoke 42／42；policy smoke／mutations exit 0（27 個 mutation controls）；`tsc` `apps/mobile` exit 0。計數與 R1 相同；差別僅在被釘住的 ENT0 bytes（migration sha256 `fa05867b…29a6`）。b2-b guard 的 main／detached 兩種分支狀態與 R1 比對的 failure identity、17 支受影響差分與 clean committed 的重跑，為 commit 之後才能取得的結果，只記載於外部施工報告（本文件不改寫自身 bytes）；skipped 與兩側提前中止＝未驗證，不計 parity。
+
+### 17.12 R2 Mutation 控制與處置
+
+`consumer-retention-entitlement-mutations.mjs` 現有 **95** 個 spec（R1 的 80 個逐一處置＋新增 17 個行為 mutants）；raw apply 先看 migration 自身 guard，被 `ENT_POST_STATE_MISMATCH` 擋下者以觀測 digest 重新固定後安裝（81 個），再於安裝後的資料庫執行指定 gate。**分類（每個 spec 預先宣告 `expect`；digest／guard 拒絕與行為偵測分開）**：行為偵測 90（指名的 primary gate 失敗）；migration 自身 guard 擋下 4（Y43、Y70、Y71、Y72；預先宣告為 `any`，**不**計為行為偵測）；等價 green control 1（Y60，不計為 killed）。
+- **R1 的 80 個處置**：保留 71（spec 與 anchor 不變；其中 Y98 的 detector 清單移除 P16：沒有 INSERT guard 時 NULL 蓋章的登錄違反 NOT NULL，P16 連 fixture 都建不起來，那是 setup 失敗＝BLOCKED、不是偵測；Y98 仍由 N14 以行為殺死）、重新錨定 5（Y18、Y38、Y39、Y93、Y94；原因：蓋章改以 `v_bound`／`v_sampled` 與函式標頭新增 `lock_timeout`）、轉換 2（Y40：STABLE→VOLATILE 的方向反轉，改為把 VOLATILE 降為 STABLE，PostgreSQL 因 `LOCK TABLE` 而拒絕，行為上無法回答；Y102：改為「恰等於下界被拒」，因而也會拒絕所有 NULL 蓋章）、退役 2（Y100、Y101：不再有 COMMIT 時 5 秒 trigger；缺陷類別由新的 Y120「重新引入 COMMIT 時下界」涵蓋）。Y96／Y97（acceptance mutants X01／X02）原樣保留，仍由 P15 殺死。逐項表見外部報告 `report/mutation-disposition.md`。
+- **新增 17 個 R2 行為 mutants**（Y110–Y126：reader／admission／advance 的鎖移除或過弱、三個隔離檢查移除、蓋章來源錯誤（交易開始／語句開始／非下一毫秒）、重新引入 COMMIT 時下界、timeout 回報 Free／未被捕捉、逾時過長、取樣在鎖之前、鎖在身分檢查之前），**每個都由指名的行為 gate（N17、N19、N21、N22）偵測，不是 digest 或 guard 拒絕**。
+- 存活 mutant：0。
+
+### 17.13 R2 Source bindings 與 fresh／reused（R2 施工者自測；不是 acceptance）
+
+- **Source bindings（單向，無 self-hash；機制與 R1 相同）**：persistence smoke 釘住 {ENT0 migration sha256 `fa05867b…29a6`、migration blob `804e760f…`、ENT0 smoke blob `21276816…`、ENT0 mutations blob `30dbdc10…`、recovery guard blob（未變）}；recovery guard 與 capture smoke 不含任何 ENT0／persistence blob；ENT0 smoke／mutations 只做程式碼 import；Doc 05 只由 guard 以路徑綁定。本包**沒有**新增任何綁定方向，也沒有修改三個 successor validator 中除 persistence smoke 之外的兩個（capture smoke、recovery guard 的 bytes 與 R1 相同）。
+- **Fresh（對 R2 最終 bytes）**：ENT0 smoke 41／41（最終 bytes 各一次於 staged tree，另於 clean committed tree 重跑；先前 bytes 的 3 次連續全跑 3／3 通過，首次全跑的 N20 失敗見外部報告「事件與偏差」）；ENT0 mutations 95／95 符合預期；recovery smoke＋PG、recovery guard、capture／persistence smoke 與 mutations、c5／b2-b smoke、policy smoke／mutations、`tsc`（皆為 staged tree 上最終 bytes）；binding negatives、frozen proof、diff／encoding／secret 檢查、b2-b guard 兩種分支狀態與受影響差分於 commit 之後（外部報告）。
+- **Reused（附理由）**：R1 reacceptance 對**未被 R2 改動**的輸入面所做的驗證（baseline 側 recovery guard 84／84、capture 28、persistence 83、recovery smoke 40；298 支歷史差分的分類方法與結論）——R2 只改 R1 的同五個檔案，不改它們的輸入面；PG 17.6 二進位複本（sha256 與驗收輪相同）；AP-1／AP-2／AP-3／AP-5 的行為由 P01–P17、N01–N16 在 R2 bytes 上**重新執行**（不是沿用）；design 輪的 prototype 探針（7f0be372）**不當作 acceptance 證據**，其 S01–S17 全部由本輪新的正式 gates 取代。
+- Candidate 位於 repository 外的隔離 clone（原 ENT0 candidate 626f0808 與 R1 candidate 5944036b 皆未被修改，R2 為 5944036b 的子 commit）；**未 push、未對原 repository commit／stage／git am**；最終 commit SHA、tree、bundle 與雜湊記載於外部施工報告。
+
+### 17.14 R2 證明邊界、假設與未驗證清單（**R3 補充：其中「free／paid 不被推翻」的範圍以 §17.15 為準**）
+
+- **已證明（本機拋棄式 PG 17.6，所列排程與前提）**：§17.11 的時序行為；`lock_timeout` 每次等待各自計時且不污染；SHARE 持有至呼叫者交易結束；三個歷史案例仍被拒；在 N23 的模型與排程內，被持久化的 free／paid 答案與最終狀態一致。
+- **不宣稱**：split-transaction 的 grant 建立已被證明；ENT1 的證據與封存；registry 完整性（ENT-R）與必要來源契約（ENT-F）；fact／coverage 的完整性；任何超出所列排程的組合。provisional `free` 不是 grant 核發或 purge 的最終依據。
+- **假設／未驗證**：伺服器牆鐘不向後跳（未驗證；回撥不在保護內）；備援（standby）上的讀取（`LOCK TABLE` 在恢復中不可用，預期失敗而非回答，未驗證）；連線池（pooler／PgBouncer transaction mode）對隔離級別、`SET LOCAL`、advisory 鎖與交易邊界的語意（未驗證）；Hosted PostgreSQL 的角色拓撲與 `session_user`（未驗證）；superuser／資料表擁有者的刻意操作、`session_replication_role=replica`、停用 trigger、TRUNCATE、直接改 catalog（不在保證內）；帳號刪除 CASCADE 會移除事實（不在穩定保證內）；效能量測沿用 design 輪結果，R2 施工輪未重新量測。
+
+### 17.15 R3 修訂（F1）：進行中的 admission 必須先被 reader 等待——契約、鎖順序與 Free 的前提（R3 修訂；施工與自測見 §17.16–§17.19，等待獨立 reacceptance）
+
+**缺陷（R2 獨立驗收 F1，已重現）**：R2 的 reader 只在 registry 表上取 SHARE。producer 的**排定退休**（`retired_at` 設在未來）到期不需要任何 registry 寫入，所以 registry 鎖無法排序它。一個在退休時間**之前**通過視窗檢查、寫入了事實但**尚未結束交易**的 admission，其事實對 reader 的快照不可見；reader 以「該 producer 已退休、不再必要」回答 `free`，之後該 admission COMMIT（或 `COMMIT PREPARED`），同一 `(owner, instant)` 變成 `paid`。R2 §17.10 的「facts／coverage 不需要額外同步」與 §17.2 的「`free` 不會被之後符合契約的操作推翻」**對這個案例不成立，已撤回**（歷史文字保留並標註取代）。仍必要的 producer 沒有此問題（其 coverage advance 與 admission 在同一把 per-owner advisory 鎖上串行）。
+
+**R3 的最小同步（沿用既有的 per-owner 機制，不新增物件、不新增 ACL）**：`entitlement_state_at` 在取得 registry SHARE 之後、取樣時鐘之前，依 namespace 的固定順序（`COLLATE "C"`）對該 owner 在**每一個已註冊 namespace**（含已退休者）取 **共享（shared）** 的 per-owner advisory 鎖（鍵＝`owner:retention_entitlement:namespace`，與 admit／advance 取的 exclusive 鎖同一把）。進行中的 admission／coverage advance 持有該 exclusive 鎖直到其交易結束（COMMIT、ROLLBACK、連線中斷、`COMMIT PREPARED`／`ROLLBACK PREPARED`；`PREPARE TRANSACTION` 之後仍持有），所以 reader 會等到它們結束，才取樣時鐘並以新的 READ COMMITTED 快照解析。shared 與 shared 相容：同一 owner 的多個 reader 不互相阻塞；不同 owner 的鍵不同，完全不受影響；registry 鎖已被持有，所以 namespace 清單在走訪期間不會改變。
+
+- **鎖順序**：registry SHARE → per-owner advisory（namespace 順序）→ 取樣時鐘 → 單一敘述解析。admit／advance 的順序同為 registry SHARE → per-owner exclusive。**取樣時鐘與快照都在等待之後**：reader 回答的 `sampled_at` 不早於所有被等待的 admission 的結局；等待期間提交的事實可被解析敘述看見。
+- **結局**：admission COMMIT／COMMIT PREPARED→reader 看見事實，回 `paid`；ROLLBACK／ROLLBACK PREPARED／被終止→事實不存在，reader 回 `free`（若 coverage 足夠）；等待超過函式層級 `lock_timeout`（2 秒，**每一次等待各自計時**）→ `unknown/OWNER_LOCK_TIMEOUT`（永不為 `free`、不是錯誤、`sampled_at` 為 NULL、不附證據、不寫入任何資料）。在 savepoint／PL/pgSQL EXCEPTION 子交易中逾時時，該段已取得的 per-owner 鎖隨子交易一併釋放。
+- **不需要的阻塞**：reader 不鎖 facts／coverage 資料表，不使用表層鎖；只對「同一 owner、各 namespace」的鍵等待。N25 驗證：進行中的 owner A admission 不阻塞 owner B 的 reader 與 admission、也不阻塞同一 owner 的另一個 reader。
+- **成本（不隱瞞）**：(a) reader 對同一 owner 進行中的 admission／coverage advance 最多等 2 秒（每個 namespace 各自計時；N 個 namespace 的最壞總等待為 N×2 秒，ENT0 預期 N 很小）；(b) **reader 在等待 per-owner 鎖期間持有 registry SHARE**，所以此時到達的 registry 寫入者會排在這個等待的 reader 之後（最長約一個 `lock_timeout`），並使其後到達的 reader 排在該寫入者之後（公平佇列；N25(g) 量測）；(c) **已核准的並行取捨（Owner D-1，2026-10-11）**：`entitlement_state_at` 對該 owner 在**每一個已註冊 namespace** 取共享（shared）per-owner 鎖，而 `admit_entitlement_event`／`advance_entitlement_coverage` 取同一把鍵的排他（exclusive）鎖。因此，**兩個並行的呼叫者交易，若各自先呼叫 `entitlement_state_at`、再對同一 owner 的**任一** namespace 呼叫 `admit_entitlement_event` 或 `advance_entitlement_coverage`（共享→排他升級），可能互相等待，PostgreSQL 以 `40P01` 中止其中一筆**（被中止者的交易進入 aborted 狀態，須 ROLLBACK；另一筆可完成）。範圍是**同一 owner 的任意 namespace 組合**，不限同一 namespace。**單一交易且沒有競爭者時，不宣稱必然死結**（實測成功）。 接受前提（缺一不可）：(1) 被拒絕或被中止的操作**沒有部分持久化**；(2) 失敗（含 `40P01`、`55P03`、`OWNER_LOCK_TIMEOUT`）**不得被當作成功，也不得被當作 Free 或任何 grant／purge 的證據**；(3) 未來 producer 必須自行處理交易 rollback、重試、idempotency 與 producer window——**本契約不批准、也不實作這些 producer**；(4) **不接受**任何其他死結形態、資料遺失或 authority bypass。ENT1 的解析交易仍應與 producer 的寫入交易分開、且保持短。N25(f)（恰一方成功、另一方 `40P01`、無資料遺失、不 hang）是本取捨的行為證據。
+- **Free 的前提（R3 明確化）**：`free` 只在下列全部成立時回答：①該 owner 在**所有已註冊 namespace**上沒有尚未結束的 admission／coverage advance（reader 已等待至其結局）；②必要 producer 集合非空，且每個必要 producer 於該瞬間的 coverage ≥ instant；③registry 在解析當下一致（registry SHARE，§17.2）；④該 instant 不晚於取樣時鐘。**`free` 仍只是 provisional**：registry 完整性（ENT-R）、來源完整性（ENT-F）與 ENT1 的封存不存在，`free` 不是 grant 核發或 purge 的依據。`unknown`（含 `OWNER_LOCK_TIMEOUT`）一律不核發 grant、不縮短既有 grant。
+- **呼叫者自己的未提交資料不是已提交證據**：同一交易內先做的 registry 寫入、admission 或 coverage advance，對同一交易之後的 `entitlement_state_at` 是可見的，答案會把它們算進去；這樣的答案**不得**在該交易之外（持久化、回傳給其他交易、當成 grant 依據）被當成「已提交」的證據：交易可能 ROLLBACK，答案隨之失效。ENT0 不替呼叫者判斷這一點；ENT1 的解析必須在不含自身未提交 producer 寫入的交易中進行。
+- **SHARE／per-owner 鎖與 savepoint**：呼叫所取得的 registry SHARE 與 per-owner 鎖持有到**該呼叫所在的（子）交易提交到最外層**為止；若呼叫位於之後被 `ROLLBACK TO SAVEPOINT` 回滾的 savepoint，或位於被捕捉例外的 PL/pgSQL `EXCEPTION` 子交易之內，這些鎖隨該子交易的回滾**立即釋放**（N25(d) 逐一驗證 plain／rollback／release 三種）；`RELEASE SAVEPOINT` 不釋放。因此「SHARE 持有到呼叫者交易結束」（§17.10）的陳述，限定於該呼叫未被回滾的子交易所包含。
+- **仍不宣稱**：ENT0 給出不可變的歷史（`unknown` 可變，`free`／`paid` 僅在上列前提與假設下不被符合契約的後續操作推翻）；ENT1 的 split-transaction 安全；registry 封存或完整性；任何超出所列排程的組合。逾時 → `unknown`，從不 Free；admission／coverage 失敗不留下部分資料（N22、N25(c)）。
+
+### 17.16 R3 Gates 與結果（R3 施工者自測；evidence 在 repository 外 `D:\ent0-r3-impl-20261011\`；**不是 acceptance，等待獨立 reacceptance**）
+
+**ENT0 smoke 45／45**＝17 positive＋25 negative＋3 supplementary（F01、F02、F03）。相對 R2 的 41：新增 N24、N25、F02、F03；N10 的時鐘／鎖白名單改為 R3 版本（恰一次 `pg_advisory_xact_lock_shared`、恰一個 `SELECT` 迴圈走訪 registry namespace、位置在 `LOCK TABLE` 之後與取樣之前、無動態 SQL）；既有 gate 的 detector 名稱匹配 `(REGISTRY|OWNER)_LOCK_TIMEOUT`。
+- **N24（進行中 admission 在任何答案之前被等待）**：真實進行中的 admission 在排定退休時間之前通過視窗檢查，退休時間經過，reader 從另一個 session 解析，admission 以各種方式結束，再以獨立的最終解析（`verdict`）比對每個答案：COMMIT、ROLLBACK、`PREPARE TRANSACTION`→`COMMIT PREPARED`／`ROLLBACK PREPARED`、被終止、reader 超過等待上限（unknown、不是 free，事實事後提交）、PREPARE 之後才在 reader 逾時後 `COMMIT PREPARED`／`ROLLBACK PREPARED`、多 producer／多筆進行中 admission（paid 與 trial 混合、全數消失、部分回滾）、reader 的呼叫者交易先前已有 SELECT（快照在等待之後）、退休邊界 r−1ms／r／r+1ms、仍必要 producer 的對照（reader 等待、不在事實可見前回 free）、「尚未寫入」階段（admission 等 owner 鎖時退休時間經過→被拒、reader 與最終答案一致 free）；每個情境使用獨立 owner；結束時沒有遺留的 prepared transaction。
+- **N25（owner 同步的成本、逾時與鎖順序）**：進行中的 coverage advance 被等待（free）或逾時 unknown；admission 與 coverage advance 對同一 producer 與 reader 的競爭；逾時 unknown 且無任何持久化、被終止的 admission 不留下任何東西；savepoint 回滾釋放／plain 與 release 不釋放且逾時 fail-closed（`55P03`、無部分寫入）；不同 owner、其他 reader 不被阻塞；兩呼叫者交易先 resolve 後 admit 的死結（恰一成功、一 `40P01`、不 hang）；等待中的 reader 持有 registry SHARE，registry 寫入者排隊後被放行、不 hang。
+- **F02（`TK_GATES` 選擇契約）／F03（runner mutants）**：見 §17.18。
+- 在 **R2 migration 文字**上以同一套 detector 重跑（`tools/run-gates-on-source.mjs`）：N24 在 10 個子檢查失敗並出現 V-READ（答案 `free`、最終 `paid`）；N25 在 8 個子檢查失敗——**R2 缺陷被偵測**。
+- 隨機壓力（N23）與其餘 N／P gates 在 R3 bytes 上重新執行。
+
+### 17.17 R3 Mutation 控制與處置
+
+`consumer-retention-entitlement-mutations.mjs` 現有 **105** 個 spec（R2 的 95 個＋R3 新增 10 個 Y130–Y139）；Y122 重新錨定（reader 現有兩個 `lock_not_available` handler，錨點改為 registry 鎖區塊）。新增 mutants（每個都由指名的行為 gate 偵測，且 raw apply 為 `ENT_POST_STATE_MISMATCH`，以觀測 digest 重新固定後安裝；digest 拒絕與行為偵測分開記錄）：Y130 移除 owner 等待（F1 缺陷本身）、Y131 只 try 不等待、Y132 只等必要 producer（R2 的保護範圍）、Y133 在等待之前先算出答案（舊快照）、Y134 不等時鐘已關閉視窗的 producer（退休邊界）、Y135 reader 取 exclusive（互相阻塞）、Y136 session 層級鎖（不釋放）、Y137 以整張 events 表鎖等待（跨 owner 過度阻塞）、Y138 逾時回報 Free、Y139 逾時例外未被捕捉。Harness 另新增每個 gate 的 watchdog（逾 15 分鐘＝BLOCKED，不是偵測）。逐項偵測 gate 與失敗子檢查見外部報告。
+
+### 17.18 R3 修訂（F2）：`TK_GATES` 選擇契約
+
+**缺陷（R2 獨立驗收 F2）**：R2 的 smoke runner 對 `TK_GATES` 以「id 前綴」過濾；未知 id 使選擇結果為空，runner 印出 `result.json` 並以 **exit 0、0 個檢查**結束——一個「通過」的假象。
+**R3 契約**（`selectGates`＋`outcomeOf`，與 `TK_MUTANTS` 一致：只接受**完整 id**）：
+- `TK_GATES` 未設定 → 全部 gate；
+- 設定且每個 token 都是已知的完整 id → **恰好**這些 gate（以固定的正規順序執行，與書寫順序無關；重複只算一次，空白可容忍）；
+- 未知 id、**混合**（已知＋未知）、空 token（含結尾逗號）、空值、只有分隔符、前綴（例如 `N10`）→ **在啟動任何 cluster、讀取任何 PG binary 之前**以 `UNKNOWN_GATE_ID`／`EMPTY_GATE_SELECTION` 失敗，exit 2，不執行任何 gate，不建立 `--out` 目錄；
+- 選擇被執行完畢之後仍比對「選了什麼」與「跑了什麼」：選到零個、或有任何被選取的 gate 沒有執行 → `BLOCKED`（exit 2，`reason=SELECTION_NOT_EXECUTED`），**永不為通過**；`result.json` 記錄 `selected`、`checks`、`notExecuted`；
+- 不跳過任何初始化（選擇完全合法時，cluster、template、fixture 與全量執行相同）；沒有「僅提示」的 exit 0 路徑，也沒有 dry-run 模式。
+**測試**：F02（正向與負向、真實子行程）：18 列表驅動契約（12 列選擇、6 列結果判定）；6 個真實 runner 子行程的拒絕案例（未知／混合／空值／分隔符／前綴／結尾逗號：exit≠0、0 行 `CHECK`、未建立 out 目錄）；1 個真實正向子行程（`P02,P01` 無序輸入 → 恰好依正規順序執行 P01、P02，`result.json` 的 `selected` 一致，exit 0）。F03：6 個 runner mutants（m1 未知 id 被忽略、m2 前綴比對、m3 允許空選擇、m4 未設定＝選到零個、m5 零執行＝通過、m6 被選取但未執行的 gate 被忽略）逐一以 `Function#toString` 取出實際函式原始碼、施加單點缺陷後重新編譯，**每個 mutant 都使契約表至少一列失敗**；pristine 版本零列失敗。註：R2 原行為（m1＋m2＋m5 的組合）因此會被偵測。
+
+### 17.19 R3 Source bindings、fresh／reused 與未驗證邊界（R3 施工者自測；不是 acceptance）
+
+- **範圍**：R3 相對 R2 candidate（`970e71f7`）恰好改動 **5 個路徑**（ENT0 migration、ENT0 smoke、ENT0 mutations、persistence smoke 的 pin、本文件）；相對 ENT0 baseline 的路徑集合維持原先的 7 個。未改 meal-save runtime、T0 capture、billing、ENT1。Migration 只改 `entitlement_state_at`（新增 owner 等待區塊與兩個宣告變數）、標頭註解與 post-state digest（`aa4c8eee…d003`）；migration sha256 `73476e71…d809`、blob `63d2697e…`。
+- **Source bindings（單向，無 self-hash；機制與 R2 相同）**：persistence smoke 釘住 {ENT0 migration sha256／blob、ENT0 smoke blob `3203a271…`、ENT0 mutations blob `7312e0c3…`}；ENT0 smoke／mutations 只做程式碼 import；本文件只由 guard 以路徑綁定。沒有新增任何綁定方向。
+- **Fresh（對 R3 最終 bytes）**：ENT0 smoke **45／45**（17 P＋25 N＋3 supplementary；N24、N25、F02、F03 為新增；P11 的 `during` 斷言由 `COVERAGE_SHORT` 改為 `OWNER_LOCK_TIMEOUT`——reader 現在會等待進行中的 producer 交易，逾時為 unknown，從不看到只有 fact 或只有 coverage 的一半）；ENT0 mutations **105／105 符合預期**（100 個行為偵測、4 個 migration 自身 guard〔Y43、Y70、Y71、Y72，預先宣告為 `any`，不計為行為偵測〕、1 個等價 green control〔Y60，不計為 killed〕；38 個 detector 對未改 migration 的 control 全綠）；recovery smoke＋PG 40／40；recovery guard 85／85；capture smoke 28／28；capture mutations 24／24；persistence smoke 83／83；persistence mutations 127／127；c5-b2／c5-r5／b2-b smoke（b2-b 42／42）；policy smoke／mutations（27 controls）；`tsc`；Doc 05 以外的 F1 探針（獨立於 gates 的 15 個情境）在 R2 上重現 F1（S11、S11b 各 1 個違規），在 R3 上全為 0。
+- **R2 對照**：同一組新 gates 在 R2 migration 文字上執行：N24 10 個子檢查失敗並出現 V-READ，N25 8 個子檢查失敗（§17.16）；F2 以 6 個 runner mutants 與 3 個整份 runner 副本（舊前綴過濾、舊前綴過濾加零執行通過、未知 id 靜默丟棄）驗證：F02 在每一個副本上失敗，pristine 通過。
+- **Reused（附理由）**：R2 reacceptance 對未被 R3 改動的輸入面的驗證（baseline 側各 guard 的結果與 298 支歷史差分的分類方法）；PG 17.6 二進位（sha256 與驗收輪相同）；AP-1／2／3／5 的行為由 P01–P17、N01–N16 在 R3 bytes 上**重新執行**，不是沿用。
+- **未驗證／邊界**：split-transaction 的 grant 建立（不宣稱）；ENT1、registry 封存（ENT-R）、來源完整性（ENT-F）；備援、連線池、Hosted 角色拓撲與 `session_user`；牆鐘回撥；特權操作；reader 端「鎖順序反轉」缺陷（R3 的 reader 先取 registry SHARE、再取 owner 鎖；施工者的 mutants 沒有反序類，N23／N25(f) 涵蓋實際會發生的死結形態；**整合更正 2026-10-11**：此類缺陷**有**確定性動態證據——獨立驗收的排程 S14〔寫入者先持 registry 寫鎖、reader 呼叫、寫入者於同交易 admit〕在 R3 為 0 把 owner 鎖、無 40P01，而反序 meta-mutant 使 reader 阻塞於 registry 鎖時持有 owner 鎖並被選為 40P01 victim；candidate 自己的 N25 對該 mutant 亦附帶失敗；證據在 `D:\ent0-r3-acc-20261011\`；原先「沒有確定性偵測」的敘述已更正，歷史敘述見 §17.19 Git 歷史）；單次本機拋棄式 PG 17.6 的時序（等待與逾時門檻以 2 秒函式層級 `lock_timeout` 為準，gates 以 20 秒與 2 秒兩種設定、並以 `PREPARE TRANSACTION` 的時序注入驗證，不是形式化證明）；效能沒有重新量測（reader 在無競爭時多取 N 個 shared advisory 鎖，N＝已註冊 namespace 數）。
+- Candidate 位於 repository 外的隔離 clone（R1 5944036b、R2 970e71f7 皆未被修改，R3 為其子 commit）；**未 push、未對原 repository commit／stage／git am**；最終 commit SHA、tree、bundle 與雜湊記載於外部施工報告（本文件不記錄自身所在 commit）。
+
+### 17.20 R3 整合紀錄（整合 corrective；2026-10-11 起草，2026-10-15 修訂為 origin lineage 基底）
+
+- **Owner D-1（選項 1）**：見 §17.15(c)（已以 Owner 核准文字取代）。
+- **整合基底**：origin/main `ad53f5ed977943d9b0b07f63c38cb0c62ab0dee6`（`7ed55fc` 的後代，其間 4 個 commit：`862f4b9`、`602c042`、`cd120e9`、`ad53f5e`）。同一整合補丁亦相容 `7ed55fc` 基底。
+- **整合更正**：migration 檔頭標記 `(R2)`→`(R3)`（僅註解，不在 post-state digest 內；raw sha256 與 blob 因而改變，相關 pins 同步更新）；§17.19 鎖序敘述更正。
+- **successor 記錄（兩筆，皆為逐位元釘住、全有或全無）**：(1) PC-2 consent-document successor（`7ed55fc`，10 條路徑）；(2) origin successor（`7ed55fc`→`ad53f5e`，26 條路徑，其中 1 個 forward migration）。兩者僅記錄**被觀察到的已提交 bytes 的身分**，**不**表示該 successor 已被審查或接受；其批准與驗收證據缺口列於外部整合方案。**不放寬任何產品 bytes、不使用 blanket allowlist。**
+- **migration 排序**：新增的 forward migrations 依檔名排序為 capture（`20261006030000`）、ENT0（`20261010010000`）、origin demo（`20261010172126`）。**ENT0 不是最後一個**；validators 以「精確有序尾端＋逐檔 sha256」判斷（`[]`、`[capture]`、`[capture, ENT0]`、`[capture, ENT0, demo]`），不假設任何一個為最後。上文歷史記載的「145 檔、`[capture, ENT0]`」為 `7ed55fc` 基底狀態；在 origin 基底為 146 檔、`[capture, ENT0, demo]`。
+- 本整合不改變 accepted R3 的任何 SQL 行為；ENT1、producer、registry sealing、Hosted、pooler、standby、牆鐘回撥與大規模鎖數仍未驗證。

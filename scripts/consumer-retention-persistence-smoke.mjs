@@ -14,6 +14,49 @@ export const MIGRATION = '20261003062157_consumer_retention_inactive_persistence
 export const OWNER = 'consumer_retention_foundation_owner';
 export const CAPTURE_SUCCESSOR = '20261006030000_consumer_retention_capture_anchor.sql';
 export const CAPTURE_SUCCESSOR_SHA256 = '22fd1bbb516a38ccb148d108e6045d6abada393354495efc22b464fd35cf5205';
+// R0-B-ENT0 (Owner-approved 2026-10-09): ONE additional forward migration (entitlement fact ledger, coverage, state_at; producer registry empty) after the capture migration.
+// Binding is one-way: this file pins the migration's sha256 and the exact mode/blob of the three new ENT0 files and of the corrected recovery guard; none of them
+// records this file's hash, and the new smoke/mutation scripts only import helpers from it (code import, no hash).
+export const ENT0_MIGRATION = '20261010010000_consumer_retention_entitlement_authority.sql';
+export const ENT0_MIGRATION_SHA256 = 'ac29c01615cc63e79c32117142beca443f41b7f268a4cb309c3ab39093dee0dc';
+export const ENT0_FILES = Object.freeze({
+  ['supabase/migrations/' + ENT0_MIGRATION]: Object.freeze(['100644', '81e7c248765df0367e5b76192bb6e2ff5dc243d9']),
+  'scripts/consumer-retention-entitlement-smoke.mjs': Object.freeze(['100644', '21dd3456319f55a4c5bae7ebbbdbcef6adc2655d']),
+  'scripts/consumer-retention-entitlement-mutations.mjs': Object.freeze(['100644', '7312e0c36501b4cfdaf57d04efb29f9e2601cdf6'])
+});
+// Origin successor (commits 862f4b9..ad53f5e on origin/main, 7ed55fc -> ad53f5e): ONE more forward migration, which sorts AFTER the ENT0 migration, plus 25 other paths (5 recovery, 5 PC-2, 16 other).
+// This is an IDENTITY binding of the observed committed bytes only. It does NOT record that the successor was reviewed or accepted. Binding is one-way: this file pins their bytes; none of them
+// records this file's hash. All-or-nothing, and recognized only together with the 'ent0' recovery state and the PC-2 record. Entries: [status, path, mode, blob at ad53f5e, blob at 7ed55fc or null, layer].
+export const DEMO_MIGRATION = '20261010172126_consumer_demo_draft_confirmation.sql';
+export const DEMO_MIGRATION_SHA256 = '2542424ee84b01ccb76e1667f958310fcee92a40c092a7edd14e72447d200d27';
+export const DEMO_SUCCESSOR = Object.freeze({from:'7ed55fc23e193b73dc7af7ed5c907f773866e5a9',commit:'ad53f5ed977943d9b0b07f63c38cb0c62ab0dee6',entries:Object.freeze([
+  ["M","apps/mobile/app.json","100644","30cc8852e3bc776eedd03eb02ed87eeb358cd25e","8a5da164e0e1b125d82497b1e941032b872e43d7","O"],
+  ["M","apps/mobile/app/_layout.tsx","100644","e05143e621e9c31283e7a3fa931b848125870c50","559a85b883c73dac661a197f75179020f377b30f","O"],
+  ["A","apps/mobile/app/account-password.tsx","100644","bcd9e69889b69f2e2fde7997fa28e0fcc64cab59",null,"O"],
+  ["M","apps/mobile/app/index.tsx","100644","329b36a3fa9ac8ebfc5042ad9fdf92c9e0f7c0a7","d6ad67460297534887a619767cc53c72f87859c2","O"],
+  ["M","apps/mobile/app/login.tsx","100644","1709aea8ff73d58353e06fc254d5d27c938789b8","791680071656310a4cb1afc55a9777e9801a6e06","P"],
+  ["M","apps/mobile/app/me.tsx","100644","1caaa5b306fd55e52f72a0137b4a17e20da47898","a2d0d0b3334f40d2845c8dfab01c1bf26f6b0deb","O"],
+  ["A","apps/mobile/features/consumer-auth/EmailOtpForm.tsx","100644","0527bf970e4693952bb7052e7e188311534f9dac",null,"O"],
+  ["M","apps/mobile/features/consumer-auth/actorBoundDispatch.ts","100644","595fb455c0488581fbb8fc76382c3076899fc569","e074cc8f10581362e10513848ea98a7f95c6f632","R"],
+  ["M","apps/mobile/features/consumer-auth/adapters/supabaseConsumerAuthAdapter.ts","100644","4e969076c34c8f75f5a643161bf5c3b92051421c","f87cdb42e8aff7b5aed94e1ed92b5f18cf97d685","O"],
+  ["A","apps/mobile/features/consumer-auth/emailOtpController.ts","100644","be0f1448afb4a889b9acfb4791d7b7e5215b6d3e",null,"O"],
+  ["M","apps/mobile/features/consumer-auth/errors.ts","100644","5044fcec3c6ceedc9e42420233bdb9e91bac84d0","37322e3fd33577475092e3489d0c24e1cd91165f","R"],
+  ["M","apps/mobile/features/consumer-auth/ports.ts","100644","055b3386f6b631eb9afc80eb34a284ce9ee92273","22c06fa540ad19f6400777408a2db7166900538a","O"],
+  ["M","apps/mobile/features/consumer-auth/supabaseAuthContracts.ts","100644","065cd9d5993d7c8ccdb29242a3fc679215d0ac99","a4cfe01712b3048677a7e2900cd82feaf1e64f29","O"],
+  ["M","apps/mobile/features/consumer-meals/todayIntakeUiModel.ts","100644","a55cb50e335200a0689f8521e7b02d7e46bb9f46","2ea8b0ab26698fcfa0230e56dad0eeb7d58b8c8e","O"],
+  ["M","apps/mobile/features/consumer-onboarding/ConsumerOnboardingProvider.tsx","100644","f55519b0f403ba2f458baa2c25471ffad3f0dc28","a5f8d5a8eb93fce439d38c7561f6f55d79b27be5","P"],
+  ["M","apps/mobile/features/consumer-onboarding/OnboardingScreen.tsx","100644","c3d7fa4774218fc01269873fc618e927cb6a4481","23b25db56209c4b2dff9da4f57256136f65998d7","P"],
+  ["M","apps/mobile/features/consumer-onboarding/controller.ts","100644","b1cd3a6d986051293323a7bb12379e4d96842b87","cf5d63fcafdf1c831e27892e0c631012cff6f5a2","P"],
+  ["A","apps/mobile/features/consumer-onboarding/demoEnvironment.ts","100644","a41b71ddae235ac0be48535f6cfa3c96f99236f8",null,"O"],
+  ["M","apps/mobile/features/consumer-onboarding/types.ts","100644","3b412488649269dee89f8f9233822da05c8ef857","5fb95b2c7d3eb7adaa2289de6c59202b45862c02","P"],
+  ["M","apps/mobile/features/consumer-runtime/ConsumerRuntimeProvider.tsx","100644","e6c4904673e490d95746eef2ed2b6940b96bc53f","575d9039b6c720c7605933c9b31a6c8c9611ac21","R"],
+  ["M","apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts","100644","1cbc0eecb4a8294b964ad2d55121783bf8fa3e37","d24b9ae8f4dbc4a1143afac15877df0b6b6144ef","R"],
+  ["M","apps/mobile/metro.config.js","100644","e08876050d38383612ccfb7d5b92086e2b88ad36","74366693c1db09daa321773fef6c6c0c93a96c64","O"],
+  ["M","lib/i18n/zh-TW.ts","100644","b8430448c5322a5b8f078a568db63fba1c301e33","182b3ec89d3848493066ab8c9b4ff028fcf0ea09","R"],
+  ["A","scripts/demo-draft-confirmation-smoke.mjs","100644","96b82d1cb104874823034f900b8cbe20c4f7cf7d",null,"O"],
+  ["M","scripts/start-mobile.mjs","100644","84fd32ca804d52daf5e7c744db2afd834c28c9b2","e12409ff0e416bf9b68e516dc105cb841dd23454","O"],
+  ["A","supabase/migrations/20261010172126_consumer_demo_draft_confirmation.sql","100644","208192ed93678b792acfef3d84c50bf1e5738c0b",null,"O"]
+].map(e=>Object.freeze(e)))});
 export const TABLES = ['owner_authority_state','authority_events','operation_receipts','detail_grants'];
 export const VERSION = 'consumer-retention-owner-2026-10-03-v1';
 export const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -69,10 +112,13 @@ export async function cluster(bin,rec) {
 }
 export async function baseline(cl,rec,{legacy=false}={}){
   const files=fs.readdirSync(path.join(ROOT,'supabase/migrations')).filter(n=>n.endsWith('.sql')).sort();
-  // Exact successor recognition (R0-B-CAP): either the original 143-file inventory, or exactly that inventory plus the one pinned capture migration as the final file.
-  const successor=files.length===144&&files.at(-1)===CAPTURE_SUCCESSOR&&sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',CAPTURE_SUCCESSOR)))===CAPTURE_SUCCESSOR_SHA256;
-  if(!(files.length===143&&files.at(-1)===MIGRATION)&&!(successor&&files.at(-2)===MIGRATION))throw Error('MIGRATION_INVENTORY');
-  const predecessors=files.filter(n=>n!==MIGRATION&&n!==CAPTURE_SUCCESSOR);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
+  // Exact successor recognition: the original 143-file inventory (the retention migration is file 143), followed by an EXACT ORDERED tail of pinned forward migrations. No tail file is assumed to be last:
+  // the accepted tails are [], [capture], [capture, ENT0] and [capture, ENT0, origin demo migration]; the demo migration sorts after ENT0. Each tail file is pinned by sha256.
+  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256};
+  const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION]];
+  const tail=tails.find(t=>files.length===143+t.length&&files.slice(143).join('|')===t.join('|')&&t.every(n=>sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))===tailPins[n]));
+  if(!tail||files[142]!==MIGRATION)throw Error('MIGRATION_INVENTORY');
+  const predecessors=files.slice(0,142);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
   const db=await cl.connect('postgres','postgres');
   for(const n of predecessors){
     if(legacy&&n==='20260930174028_consumer_pc2_onboarding_consent_foundation.sql'){
@@ -401,7 +447,88 @@ export const F1F2_SUCCESSOR=Object.freeze({base:'b014b1367bee78fd2375e9648633ab5
 // git: (args) => stdout of a git command run at the tree under test. Returns {state:'capture'|'recovery'|'corrective'|
 // 'd1d2'|'f1f2'|'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record), 'corrective' (exact record with the
 // corrected guard) or 'd1d2' (exact record with the six D1/D2 overrides) or 'f1f2' (that record with the F-1/F-2 overrides) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
+// Wrapper: the three ENT0 files and the ent0 record bind each other all-or-nothing (files without the record, the record without files, or inexact files are invalid).
 export function recoverySuccessorState(git){
+  // Origin successor (all-or-nothing, identity binding only): when all 26 of its paths are at the recorded bytes, its 5 recovery paths and 5 PC-2 paths are judged against the recorded successor bytes and its 16 other paths are exempt.
+  const dm=demoFilesState(git);
+  if(dm.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:dm.violations};
+  const demo=dm.state==='record';
+  const r=recoverySuccessorStateCore(git,demo),ef=ent0FilesState(git),pc=pc2FilesState(git,demo);
+  if(ef.present&&(!ef.exact||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:[...ef.violations,...(r.state!=='ent0'?['ent0-files:without-ent0-record']:[])]};
+  if(!ef.present&&r.state==='ent0')return {state:'invalid',exempt:false,paths:r.paths,violations:['ent0-record:files-absent']};
+  // PC-2 consent-document successor (all-or-nothing): either none of its ten paths moved from the accepted base or all ten are at the exact recorded mode/blob. Only then are its paths exempt, and only together with an exempt recovery state.
+  if(pc.state==='invalid')return {state:'invalid',exempt:false,paths:r.paths,violations:pc.violations};
+  if(demo&&(r.state!=='ent0'||pc.state!=='record'))return {state:'invalid',exempt:false,paths:r.paths,violations:['demo-record:requires-ent0-state-and-pc2-record']};
+  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[])],pc2:'record',demo:demo?'record':'base'};}
+  return {...r,pc2:'base',demo:'base'};
+}
+// PC-2 consent-document successor (7ed55fc "Fix consent document read states and record inactive PC2 deployment"): the ten paths below, relative to the accepted retention base 90c8d66.
+// Entries: [status, path, mode, blob at the record, blob at the accepted base or null when added]. Binding is one-way: this file binds their bytes; none of them records this file's hash.
+export const PC2A_SUCCESSOR=Object.freeze({base:'90c8d660bc125bc029f20e8665ab074b0d568997',commit:'7ed55fc23e193b73dc7af7ed5c907f773866e5a9',entries:Object.freeze([
+  ['M','apps/mobile/app/consent-document.tsx','100644','688b232716e460c1843cf22d7fecb7a2586f5f51','e6bde25fb60bc770a26fc4f2ae30d4e800ea10d9'],
+  ['M','apps/mobile/app/login.tsx','100644','791680071656310a4cb1afc55a9777e9801a6e06','bf13a1c7fe92587e3c134209b26fca64c2836d0b'],
+  ['M','apps/mobile/features/consumer-onboarding/ConsumerOnboardingProvider.tsx','100644','a5f8d5a8eb93fce439d38c7561f6f55d79b27be5','dee7aa767c3bb2fa857ea02780abf1aeee35acd1'],
+  ['A','apps/mobile/features/consumer-onboarding/DocumentStatusNotice.tsx','100644','17f9bed0c7bca1f539b1737fb3b92b17772486f6',null],
+  ['M','apps/mobile/features/consumer-onboarding/OnboardingScreen.tsx','100644','23b25db56209c4b2dff9da4f57256136f65998d7','c1dfb0a0eeda6dc0ea7ff869a443a175f6488a35'],
+  ['M','apps/mobile/features/consumer-onboarding/controller.ts','100644','cf5d63fcafdf1c831e27892e0c631012cff6f5a2','d43339dfdb132ecbea10cc60a9f462265b641a52'],
+  ['M','apps/mobile/features/consumer-onboarding/copy.ts','100644','3b7a67e0c9e73b8d49e947ec21d3db1945dc4fcd','e7037fd36d9e9e2de396913e937c7e53e157cd1c'],
+  ['M','apps/mobile/features/consumer-onboarding/types.ts','100644','5fb95b2c7d3eb7adaa2289de6c59202b45862c02','b5f4d31da449c36a6ec579d4e40961a15af8443e'],
+  ['A','docs/pc2-development-inactive-deployment-20261010.md','100644','88bdf7fcdec1afdfa6b8007f05326682124c88c4',null],
+  ['A','scripts/pc2-document-read-status-smoke.mjs','100644','a0d65a421c09e13eabd9e0710742b9b0454c0cb4',null]
+].map(e=>Object.freeze(e)))});
+export function pc2FilesState(git,demo=false){
+  const S=PC2A_SUCCESSOR,paths=S.entries.map(e=>e[1]);
+  if(S.entries.length!==10||new Set(paths).size!==10)throw Error('PC2A_RECORD_SHAPE');
+  // With the origin successor recorded, five of these ten paths are judged against the successor bytes (their PC-2 record bytes were superseded there); the other five keep the PC-2 record bytes.
+  const sup=new Map(demo?DEMO_SUCCESSOR.entries.filter(e=>e[5]==='P').map(e=>[e[1],e[3]]):[]);
+  if(demo&&(sup.size!==5||![...sup.keys()].every(p=>paths.includes(p))))throw Error('DEMO_PC2_OVERLAP_SHAPE');
+  const rows=out=>out.trim().split('\n').filter(Boolean);
+  const index=new Map();for(const l of rows(git(['ls-files','--stage','--',...paths]))){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));const hashed=present.length?rows(git(['hash-object','--',...present])):[];
+  const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
+  const one=p=>{const i=index.get(p);return i&&i.length===1&&i[0].stage==='0'?i[0]:null;};
+  const atRecord=([,p,mode,blob0])=>{const blob=sup.get(p)??blob0;const i=one(p);return !!i&&i.mode===mode&&i.blob===blob&&worktree.get(p)===blob;};
+  const atBase=([,p,mode,,baseBlob])=>{if(baseBlob===null)return !index.has(p)&&!worktree.has(p);const i=one(p);return !!i&&i.mode===mode&&i.blob===baseBlob&&worktree.get(p)===baseBlob;};
+  const rec=S.entries.map(atRecord),base=S.entries.map(atBase);
+  if(rec.every(Boolean))return {state:'record',paths,violations:[]};
+  if(base.every(Boolean))return {state:'base',paths,violations:[]};
+  return {state:'invalid',paths,violations:S.entries.flatMap((e,k)=>rec[k]||base[k]?[]:[e[1]+':pc2-successor-mismatch'])};
+}
+// Origin successor files (all 26 paths of DEMO_SUCCESSOR; mode/blob in index and worktree). 'record' = all 26 at the recorded bytes; 'base' = the 16 'other' paths exactly as at 7ed55fc (the 10 overlap paths are then
+// judged by the recovery and PC-2 layers); anything else is invalid (partial/mismatch). Returns {state, paths, otherPaths, violations}.
+export function demoFilesState(git){
+  const S=DEMO_SUCCESSOR,paths=S.entries.map(e=>e[1]);
+  const layer=l=>S.entries.filter(e=>e[5]===l);
+  if(S.entries.length!==26||new Set(paths).size!==26||layer('R').length!==5||layer('P').length!==5||layer('O').length!==16||!paths.includes('supabase/migrations/'+DEMO_MIGRATION))throw Error('DEMO_RECORD_SHAPE');
+  const others=layer('O'),otherPaths=others.map(e=>e[1]);
+  const rows=out=>out.trim().split('\n').filter(Boolean);
+  const index=new Map();for(const l of rows(git(['ls-files','--stage','--',...paths]))){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));const hashed=present.length?rows(git(['hash-object','--',...present])):[];
+  const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
+  const one=p=>{const i=index.get(p);return i&&i.length===1&&i[0].stage==='0'?i[0]:null;};
+  const atRecord=([,p,mode,blob])=>{const i=one(p);return !!i&&i.mode===mode&&i.blob===blob&&worktree.get(p)===blob;};
+  const atFrom=([,p,mode,,from])=>{if(from===null)return !index.has(p)&&!worktree.has(p);const i=one(p);return !!i&&i.mode===mode&&i.blob===from&&worktree.get(p)===from;};
+  const rec=S.entries.map(atRecord),from=others.map(atFrom);
+  if(rec.every(Boolean))return {state:'record',paths,otherPaths,violations:[]};
+  if(from.every(Boolean))return {state:'base',paths,otherPaths,violations:[]};
+  return {state:'invalid',paths,otherPaths,violations:S.entries.flatMap(e=>rec[S.entries.indexOf(e)]||(e[5]==='O'&&from[others.indexOf(e)])?[]:[e[1]+':demo-successor-mismatch'])};
+}
+// R0-B-ENT0: the recovery guard is corrected (successor-aware inventory/migration checks); every other recovery path keeps the f1f2 bytes.
+export const ENT0_RECOVERY_OVERRIDES=Object.freeze({
+  'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','cfd5cd19573deabc22616686fc606238827c6bd3'])
+});
+// All-or-nothing, byte-exact check of the three ENT0 files (mode/blob in index and worktree). Returns {present,exact,violations}.
+export function ent0FilesState(git){
+  const paths=Object.keys(ENT0_FILES);
+  const index=new Map();for(const l of git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean)){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));
+  if(present.length===0&&index.size===0)return {present:false,exact:true,violations:[]};
+  const hashed=present.length?git(['hash-object','--',...present]).trim().split('\n').filter(Boolean):[];
+  const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
+  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=ENT0_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
+  return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':ent0-mismatch')};
+}
+function recoverySuccessorStateCore(git,demo=false){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
   const overrides=CORRECTIVE_SUCCESSOR.overrides;
@@ -424,17 +551,25 @@ export function recoverySuccessorState(git){
   const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
   const atD1D2=e=>d1d2[e[1]]?atRecord([e[0],e[1],...d1d2[e[1]]]):atCorrective(e);
   const atF1F2=e=>f1f2[e[1]]?atRecord([e[0],e[1],...f1f2[e[1]]]):atD1D2(e);
-  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),fix=S.entries.map(atD1D2),f12=S.entries.map(atF1F2),cap=S.entries.map(atCapture);
+  const ent0o=ENT0_RECOVERY_OVERRIDES;
+  if(Object.keys(ent0o).length!==1||!Object.keys(ent0o).every(p=>paths.includes(p)))throw Error('ENT0_RECORD_SHAPE');
+  const atENT0=e=>ent0o[e[1]]?atRecord([e[0],e[1],...ent0o[e[1]]]):atF1F2(e);
+  // Origin successor: only when its 26-path record is exact (demo===true) do five recovery paths take the successor bytes; every other recovery path keeps its ENT0-chain bytes.
+  const demoOv=Object.fromEntries(DEMO_SUCCESSOR.entries.filter(e=>e[5]==='R').map(e=>[e[1],[e[2],e[3]]]));
+  if(Object.keys(demoOv).length!==5||!Object.keys(demoOv).every(p=>paths.includes(p)))throw Error('DEMO_RECOVERY_OVERLAP_SHAPE');
+  const atDEMO=e=>demoOv[e[1]]?atRecord([e[0],e[1],...demoOv[e[1]]]):atENT0(e);
+  const rec=S.entries.map(atRecord),cor=S.entries.map(atCorrective),fix=S.entries.map(atD1D2),f12=S.entries.map(atF1F2),en0=S.entries.map(demo?atDEMO:atENT0),cap=S.entries.map(atCapture);
   if(rec.every(Boolean))return {state:'recovery',exempt:true,paths,violations:[]};
   if(cor.every(Boolean))return {state:'corrective',exempt:true,paths,violations:[]};
   if(fix.every(Boolean))return {state:'d1d2',exempt:true,paths,violations:[]};
   if(f12.every(Boolean))return {state:'f1f2',exempt:true,paths,violations:[]};
+  if(en0.every(Boolean)){const ef=ent0FilesState(git);return ef.exact?{state:'ent0',exempt:true,paths,violations:[]}:{state:'invalid',exempt:false,paths,violations:ef.violations};}
   if(cap.every(Boolean))return {state:'capture',exempt:false,paths,violations:[]};
-  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]||fix[k]||f12[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
+  return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]||fix[k]||f12[k]||en0[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
 }
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};
-  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md'];
+  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md',...Object.keys(ENT0_FILES)];
   // The accepted R0-A tree remains the frozen reference even after the additive commit.
   const baseline='3b1957e8dc459db6fdaa06bec873c1acc632ae9a';const entries=git(['ls-tree','-r',baseline]).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return {path:p,mode,blob};});
   const index=new Map(git(['ls-files','--stage']).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');return [p,{mode,blob,stage}];}));

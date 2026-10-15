@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   ROOT, MIGRATION, CAPTURE_SUCCESSOR, CAPTURE_SUCCESSOR_SHA256, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK,
-  recoverySuccessorState
+  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION
 } from './consumer-retention-persistence-smoke.mjs';
 import { activateDisposableFixture } from './pc2-consumer-onboarding-fixtures.mjs';
 
@@ -754,6 +754,9 @@ export function frozenProof() {
   // a capture-state or invalid tree keeps every check below for them. The capture state itself is unchanged.
   const successor = recoverySuccessorState(git);
   const exempt = new Set(successor.exempt ? successor.paths : []);
+  // R0-B-ENT0: the three ENT0 files are admitted ONLY in the exact 'ent0' state (byte-pinned by the persistence smoke); in any other state they stay violations.
+  const ent0Paths = successor.state === 'ent0' ? Object.keys(ENT0_FILES) : [];
+  for (const p of ent0Paths) exempt.add(p);
   const violations = [...successor.violations];
   for (const e of entries) {
     if (ALLOWED_PATHS.includes(e.path) || exempt.has(e.path)) continue;
@@ -761,11 +764,11 @@ export function frozenProof() {
     if (!i || i.mode !== e.mode || i.blob !== e.blob || i.stage !== '0') violations.push(e.path + ':index');
   }
   for (const p of git(['diff', BASELINE_COMMIT, '--name-only']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':tracked');
-  for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p)) violations.push(p + ':untracked');
+  for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !ent0Paths.includes(p)) violations.push(p + ':untracked');
   const added = [...index.keys()].filter(p => !entries.some(e => e.path === p));
   for (const p of added) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':added');
   const wt = ALLOWED_PATHS.filter(p => fs.existsSync(path.join(ROOT, p)));
-  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, violations: successor.violations } };
+  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, demo: successor.demo ?? null, violations: successor.violations } };
 }
 export function inventoryProof() {
   const dir = path.join(ROOT, 'supabase/migrations');
@@ -773,13 +776,16 @@ export function inventoryProof() {
   const baselineFiles = git(['ls-tree', '--name-only', BASELINE_COMMIT, 'supabase/migrations/']).trim().split('\n').map(p => path.basename(p)).sort();
   const changed = baselineFiles.filter(n => sha(fs.readFileSync(path.join(dir, n))) !== sha(spawnBlob(`supabase/migrations/${n}`)));
   const newest = files.at(-1);
-  return { migrationCount: files.length, baselineCount: baselineFiles.length, last: newest, newPaths: files.filter(n => !baselineFiles.includes(n)), changedBaselineMigrations: changed, timestampLaterThanAll: files.filter(n => n !== CAPTURE_MIGRATION).every(n => n < CAPTURE_MIGRATION), captureSha256: sha(fs.readFileSync(path.join(dir, CAPTURE_MIGRATION))), pinnedByPersistenceSmoke: CAPTURE_SUCCESSOR_SHA256 };
+  return { migrationCount: files.length, baselineCount: baselineFiles.length, last: newest, newPaths: files.filter(n => !baselineFiles.includes(n)), changedBaselineMigrations: changed, timestampLaterThanAll: files.filter(n => n !== CAPTURE_MIGRATION && n !== ENT0_MIGRATION && n !== DEMO_MIGRATION).every(n => n < CAPTURE_MIGRATION), captureSha256: sha(fs.readFileSync(path.join(dir, CAPTURE_MIGRATION))), pinnedByPersistenceSmoke: CAPTURE_SUCCESSOR_SHA256 };
 }
 function spawnBlob(p) { const r = child.spawnSync('git', ['show', `${BASELINE_COMMIT}:${p}`], { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, maxBuffer: 64e6 }); if (r.status) throw Error('GIT_BLOB ' + p); return r.stdout; }
 Object.assign(GATES, {
   async F01_FROZEN_SCOPE_AND_INVENTORY() {
     const frozen = frozenProof(), inv = inventoryProof();
-    return R(frozen.violations.length === 0 && frozen.trackedAtBaseline === 3345 && inv.migrationCount === 144 && inv.baselineCount === 143 && inv.changedBaselineMigrations.length === 0 && same(inv.newPaths, [CAPTURE_MIGRATION]) && inv.timestampLaterThanAll && inv.captureSha256 === CAPTURE_SUCCESSOR_SHA256, { frozen, inv });
+    const ent0 = frozen.recoverySuccessor.state === 'ent0', demo = ent0 && frozen.recoverySuccessor.demo === 'record';
+    // Exact ORDERED new-migration tail (sorted by name; no file is assumed last): capture, then ENT0 (20261010010000), then — only with the origin successor — the demo migration (20261010172126).
+    const tail = demo ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION] : ent0 ? [CAPTURE_MIGRATION, ENT0_MIGRATION] : [CAPTURE_MIGRATION];
+    return R(frozen.violations.length === 0 && frozen.trackedAtBaseline === 3345 && inv.migrationCount === 143 + tail.length && inv.baselineCount === 143 && inv.changedBaselineMigrations.length === 0 && same(inv.newPaths, tail) && inv.timestampLaterThanAll && inv.captureSha256 === CAPTURE_SUCCESSOR_SHA256, { frozen, inv, tail });
   }
 });
 

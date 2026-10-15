@@ -69,6 +69,56 @@ export const VALIDATION_SUCCESSOR = Object.freeze([
   "scripts/consumer-retention-persistence-smoke.mjs"
 ]);
 
+// R0-B-ENT0 (Owner-approved 2026-10-09): the entitlement-ledger successor adds exactly these four paths on top of the recovery inventory (the two retention
+// validators above are modified as well). Bound here by PATH only and all-or-nothing; the validators pin their bytes, and nothing here records a validator hash.
+export const ENT0_PATHS = Object.freeze([
+  "supabase/migrations/20261010010000_consumer_retention_entitlement_authority.sql",
+  "scripts/consumer-retention-entitlement-smoke.mjs",
+  "scripts/consumer-retention-entitlement-mutations.mjs",
+  "docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md"
+]);
+
+// PC-2 consent-document successor (7ed55fc; recorded in the persistence smoke as an identity binding of the observed bytes, not as a statement that it was accepted): exactly these ten paths on top of the recovery inventory. Bound here by PATH only and all-or-nothing;
+// the persistence smoke pins their bytes, and nothing here records a validator hash. None of them is a recovery path. Two of them legitimately contain the demo host / URL scheme and are excluded from the brand check only.
+export const PC2_PATHS = Object.freeze([
+  "apps/mobile/app/consent-document.tsx",
+  "apps/mobile/app/login.tsx",
+  "apps/mobile/features/consumer-onboarding/ConsumerOnboardingProvider.tsx",
+  "apps/mobile/features/consumer-onboarding/DocumentStatusNotice.tsx",
+  "apps/mobile/features/consumer-onboarding/OnboardingScreen.tsx",
+  "apps/mobile/features/consumer-onboarding/controller.ts",
+  "apps/mobile/features/consumer-onboarding/copy.ts",
+  "apps/mobile/features/consumer-onboarding/types.ts",
+  "docs/pc2-development-inactive-deployment-20261010.md",
+  "scripts/pc2-document-read-status-smoke.mjs"
+]);
+export const PC2_BRAND_EXEMPT = Object.freeze(["docs/pc2-development-inactive-deployment-20261010.md", "scripts/pc2-document-read-status-smoke.mjs"]);
+
+// Origin successor (7ed55fc -> ad53f5e, four commits on origin/main; recorded in the persistence smoke as an identity binding of the observed bytes, not as a statement that it was reviewed or accepted): 26 paths in all.
+// Five of them are recovery-inventory paths and five are PC-2 paths (both groups are already covered above); exactly the 16 below are new to the inventory, and ONE of them is a forward migration that sorts AFTER the ENT0
+// migration. Bound here by PATH only and all-or-nothing, and only together with the ENT0 and PC-2 successors; the persistence smoke pins their bytes and nothing here records a validator hash.
+export const DEMO_PATHS = Object.freeze([
+  "apps/mobile/app.json",
+  "apps/mobile/app/_layout.tsx",
+  "apps/mobile/app/account-password.tsx",
+  "apps/mobile/app/index.tsx",
+  "apps/mobile/app/me.tsx",
+  "apps/mobile/features/consumer-auth/EmailOtpForm.tsx",
+  "apps/mobile/features/consumer-auth/adapters/supabaseConsumerAuthAdapter.ts",
+  "apps/mobile/features/consumer-auth/emailOtpController.ts",
+  "apps/mobile/features/consumer-auth/ports.ts",
+  "apps/mobile/features/consumer-auth/supabaseAuthContracts.ts",
+  "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts",
+  "apps/mobile/features/consumer-onboarding/demoEnvironment.ts",
+  "apps/mobile/metro.config.js",
+  "scripts/demo-draft-confirmation-smoke.mjs",
+  "scripts/start-mobile.mjs",
+  "supabase/migrations/20261010172126_consumer_demo_draft_confirmation.sql"
+]);
+export const DEMO_MIGRATION_PATH = DEMO_PATHS[DEMO_PATHS.length - 1];
+// Two of them legitimately contain the existing Development demo host name (haocu-demo.vercel.app) and are excluded from the brand check only, and only while the record is exact.
+export const DEMO_BRAND_EXEMPT = Object.freeze(["apps/mobile/features/consumer-onboarding/demoEnvironment.ts", "scripts/demo-draft-confirmation-smoke.mjs"]);
+
 const RT0 = "apps/mobile/features/consumer-runtime";
 const changedFromBaseline = () => {
   const tracked = git(["diff", "--name-only", BASELINE]).stdout.split("\n").filter(Boolean);
@@ -77,12 +127,27 @@ const changedFromBaseline = () => {
 };
 const changed = changedFromBaseline();
 const validationSuccessor = changed.filter((p) => VALIDATION_SUCCESSOR.includes(p));
-const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p));
+const ent0Changed = changed.filter((p) => ENT0_PATHS.includes(p));
+const pc2Changed = changed.filter((p) => PC2_PATHS.includes(p));
+const pc2Exact = pc2Changed.length === 0 || (pc2Changed.length === PC2_PATHS.length && PC2_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))));
+const demoChanged = changed.filter((p) => DEMO_PATHS.includes(p));
+const demoActive = demoChanged.length > 0;
+const demoExact = demoChanged.length === 0 || (demoChanged.length === DEMO_PATHS.length && DEMO_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ENT0_PATHS.every((p) => changed.includes(p)) && pc2Changed.length === PC2_PATHS.length);
+const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p));
 const validationSuccessorExact = validationSuccessor.length === 0 || (validationSuccessor.length === VALIDATION_SUCCESSOR.length && validationSuccessor.every((p) => fs.existsSync(path.join(ROOT, p))));
 record("candidate inventory is exact (27 distinct recovery paths: 21 modified + 6 added, plus either none or exactly both authorized retention validators; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(recoveryChanged) === JSON.stringify([...INVENTORY].sort()) && validationSuccessorExact, { extra: recoveryChanged.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !recoveryChanged.includes(p)), validationSuccessor });
-record("server paths: 0 (supabase/** byte-identical, modes unchanged)", git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.trim() === "" && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.trim() === "");
+const ent0Migration = ENT0_PATHS[0];
+const ent0Active = ent0Changed.length > 0;
+const supabaseChanged = changed.filter((p) => p.startsWith("supabase/"));
+// Permitted forward migrations, in sort order: ENT0 (20261010010000) and — only with the exact origin successor — the demo migration (20261010172126), which sorts AFTER it. ENT0 is not assumed to be last.
+const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : [])].sort();
+const notForward = (p) => p && !forwardMigrations.includes(p);
+record("server paths: 0 (supabase/** byte-identical, modes unchanged; the only permitted exceptions are the single R0-B-ENT0 forward migration and, only with the exact origin successor, the single demo forward migration)", JSON.stringify(supabaseChanged) === JSON.stringify(forwardMigrations) && git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.split("\n").filter(notForward).length === 0 && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.split("\n").filter((l) => l.trim() && !forwardMigrations.some((m) => l.includes(m))).length === 0, supabaseChanged);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));
-record("all 144 migrations present and byte-identical to the baseline", migrations.length === 144 && git(["diff", "--quiet", BASELINE, "--", "supabase/migrations"]).status === 0);
+record("all 144 migrations present and byte-identical to the baseline (plus, only with the recorded successors, the additional forward migrations in exact sort order: ENT0 then, with the origin successor, the demo migration)", migrations.length === 144 + forwardMigrations.length && forwardMigrations.every((m) => migrations.includes(path.basename(m))) && JSON.stringify(migrations.sort().slice(144)) === JSON.stringify(forwardMigrations.map((m) => path.basename(m))) && git(["diff", "--quiet", BASELINE, "--", "supabase/migrations", ...forwardMigrations.map((m) => `:(exclude)${m}`)]).status === 0);
+record("R0-B-ENT0 successor is all-or-nothing (the four ENT0 paths and both retention validators are all present, or none of the four is; no recovery path is touched by it)", ent0Changed.length === 0 || (ent0Changed.length === ENT0_PATHS.length && ENT0_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && validationSuccessor.length === VALIDATION_SUCCESSOR.length), { ent0Changed });
+record("PC-2 consent-document successor is all-or-nothing (the ten recorded paths are all present, or none of the ten is; no recovery path is touched by it)", pc2Exact && pc2Changed.every((p) => !INVENTORY.includes(p)), pc2Changed);
+record("origin successor is all-or-nothing (the sixteen recorded new paths are all present, or none is; only together with the ENT0 and PC-2 successors; none of the sixteen is an inventory, ENT0 or PC-2 path)", demoExact && DEMO_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p)), demoChanged);
 record("dependencies and lockfiles unchanged", git(["diff", "--quiet", BASELINE, "--", "package.json", "package-lock.json", "apps/mobile/package.json"]).status === 0);
 record("no other path outside the inventory differs in bytes or mode (frozen proof input)", git(["diff", BASELINE, "--summary"]).stdout.split("\n").filter((l) => /mode change/.test(l)).length === 0);
 
@@ -98,7 +163,7 @@ record("c5-b2 smoke: only the two new production modules were added to its modul
 const r5Removed = removedLines(c5r5);
 record("c5-r5 smoke: only the two fake {save,load,clear} store fixtures were replaced by the real store over a map (no assertion removed or added)", r5Removed.length === 10 && r5Removed.every((l) => /operationStore: \{|save: async|load: async|clear: async|^-\s+\},$/.test(l)) && !addedLines(c5r5).some((l) => /expect\(/.test(l)) && addedLines(c5r5).filter((l) => /ConsumerMealIdentificationFinalizationOperationStore\)\(/.test(l)).length === 2, { removed: r5Removed, added: addedLines(c5r5) });
 record("the approved hook path is byte-identical to the baseline (preserved, not modified)", git(["diff", "--quiet", BASELINE, "--", "apps/mobile/features/analysis/useMealPhotoFinalization.ts"]).status === 0);
-const added = changed.filter((p) => fs.existsSync(path.join(ROOT, p)) && !/^scripts\/consumer-meal-save-recovery-(smoke|guard)\.mjs$/.test(p)).flatMap((p) => {
+const added = changed.filter((p) => fs.existsSync(path.join(ROOT, p)) && !/^scripts\/consumer-meal-save-recovery-(smoke|guard)\.mjs$/.test(p) && !(pc2Exact && PC2_BRAND_EXEMPT.includes(p)) && !(demoExact && DEMO_BRAND_EXEMPT.includes(p))).flatMap((p) => {
   const diff = git(["diff", "-U0", BASELINE, "--", p]).stdout;
   return diff ? diff.split("\n").filter((l) => l.startsWith("+") && !l.startsWith("+++")) : read(p).split("\n");
 });
