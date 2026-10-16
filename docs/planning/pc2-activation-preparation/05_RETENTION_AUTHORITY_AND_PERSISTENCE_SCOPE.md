@@ -1303,3 +1303,59 @@ X01／X02 在驗收時存活的原因是**沒有任何 gate 在恰好的註冊�
 - **successor 記錄（兩筆，皆為逐位元釘住、全有或全無）**：(1) PC-2 consent-document successor（`7ed55fc`，10 條路徑）；(2) origin successor（`7ed55fc`→`ad53f5e`，26 條路徑，其中 1 個 forward migration）。兩者僅記錄**被觀察到的已提交 bytes 的身分**，**不**表示該 successor 已被審查或接受；其批准與驗收證據缺口列於外部整合方案。**不放寬任何產品 bytes、不使用 blanket allowlist。**
 - **migration 排序**：新增的 forward migrations 依檔名排序為 capture（`20261006030000`）、ENT0（`20261010010000`）、origin demo（`20261010172126`）。**ENT0 不是最後一個**；validators 以「精確有序尾端＋逐檔 sha256」判斷（`[]`、`[capture]`、`[capture, ENT0]`、`[capture, ENT0, demo]`），不假設任何一個為最後。上文歷史記載的「145 檔、`[capture, ENT0]`」為 `7ed55fc` 基底狀態；在 origin 基底為 146 檔、`[capture, ENT0, demo]`。
 - 本整合不改變 accepted R3 的任何 SQL 行為；ENT1、producer、registry sealing、Hosted、pooler、standby、牆鐘回撥與大規模鎖數仍未驗證。
+
+## 18. R0-B-ENT1-A：Paid／trial acquisition receipt（inactive）— authorized local implementation record（2026-10-16）
+
+### 18.1 授權、Owner 澄清與 exact scope
+
+- **授權**：Owner 批准 `ENT1_SCOPE_REVIEW_V2.md` 的八檔最小包，接受 R-1／R-2／R-3，並加上限定（優先適用）：(R-1) 本包使用新 schema `retention_acquisition`；既有 foundation（`retention_internal`）不改、不刪、不新增寫入，其永久廢棄或未來遷移政策**未**被批准。(R-2) 本包只保存可信 **Paid／trial** acquisition receipt；Free、unknown 與未完成的判斷**不產生 receipt**；不做 Free 最終化、升級延長或最終 grant。沿用 AP-2：有足夠可信 Paid／trial 正向證據即使 coverage 不完整仍可形成 receipt；沒有足夠正向證據且 coverage 不完整為 pending；ENT0 解析為 Free 本包仍 pending；**不得新增 coverage 作為 Paid 的必要條件**。(R-3) 只批准下列兩條授予 sealed acquisition owner 的最小讀取接縫；不新增 runtime EXECUTE、角色 membership、SET／ADMIN 路徑或 BYPASSRLS。
+- **Exact 8 paths**（相對 `ad53f5e` 基底上的 `8e61ff58`）：`supabase/migrations/20261017010000_consumer_retention_acquisition_record.sql`（新增）、`scripts/consumer-retention-acquisition-smoke.mjs`（新增）、`scripts/consumer-retention-acquisition-mutations.mjs`（新增）、本文件（只追加 §18；§1–§17 位元組保留）、`scripts/consumer-retention-persistence-smoke.mjs`、`scripts/consumer-retention-capture-smoke.mjs`、`scripts/consumer-retention-entitlement-smoke.mjs`（僅 F01 的有序尾端）、`scripts/consumer-meal-save-recovery-guard.mjs`（四個 validator 的 successor 相容性調整，不刪任何 assertion）。既有 capture、ENT0、foundation migration 位元組不變。
+
+### 18.2 產品契約（IMPLEMENTED_AND_EVIDENCED；local only）
+
+- **Receipt 是「取得證據」，不是已啟用的最終保存 grant**：它記錄「這一筆餐點在其 T0，owner 的權益屬 Paid 等級（basis＝`paid_subscription` 或 `trial`）」，並由此確定性地導出 `retained_until＝T0＋4320 elapsed hours`（毫秒精確，不用 calendar day）。**不得**用作 UI 顯示、到期判斷或 purge 授權；有效 grant 仍需 R0-A `create` 所要求的 core／rights／protection／material 同瞬事實（rights／protection 尚無 producer）。
+- **每個餐點資源至多一列、整列不可變**（`resource_id` 為 PK 並 FK 到 T0 anchor，`ON DELETE CASCADE`）。表只能表示 `acquisition_tier='paid'`：Free、unknown、permanent、effective 旗標**無法被表示**。UPDATE 一律以 `23514 ACQ_RECEIPT_IMMUTABLE` 拒絕（不縮短、不重設、不改 tier／basis）。
+- **來源**：T0、owner、`capture_context` 一律由 server 端的 `retention_capture.detail_capture_anchors` 讀取（函式只收 `p_resource_id`）；`capture_context` 必須是 `authenticated_actor`。權益只由 ENT0 `entitlement_state_at(owner, T0)` **單次**呼叫取得；receipt 的 fact ids、sampled_at、basis、policy 與 coverage revision 全部取自**同一個**回傳 jsonb（完整保存於 `entitlement_evidence`，並由 CHECK／trigger 與各欄位互相綁定）。不讀 `subscription_entitlements`、JWT、caller 值或「目前」會員狀態。
+- **結果**：`recorded`（新寫入）、`replayed`（回傳既有列，**不重新取樣、不重設期限**）、`pending`（不寫入任何列）。pending 原因：`NO_ANCHOR`、`CAPTURE_CONTEXT_UNTRUSTED`、`FREE_PROVISIONAL_NOT_FINAL`，以及 ENT0 的 unknown 原因（`NO_REQUIRED_PRODUCER`、`COVERAGE_SHORT`、`INSTANT_IN_FUTURE`、`REGISTRY_LOCK_TIMEOUT`、`OWNER_LOCK_TIMEOUT`）和本函式的 `ACQ_LOCK_TIMEOUT`。任何 timeout 都是 pending，不是錯誤、不是 Free。
+- **髒交易拒絕（由函式強制，不是文件要求）**：呼叫者的交易**已被指派 transaction id**（`pg_current_xact_id_if_assigned() IS NOT NULL`，即已寫過任何東西——包含先前一次會寫入的 resolve、producer 的 admit／advance、registry 變更、暫存表）→ `ACQ_DIRTY_TRANSACTION`（`25000`），且不寫入。這避免把呼叫者自己未提交的資料當成證據，也使「registry 寫入後再解析」的兩個 SHARE 死結形態無法開始。保守性：位於已回滾 savepoint 之後的呼叫同樣被拒（transaction id 仍被指派）；只讀取的 replay 不指派 id，可在同一交易內重複。僅接受 READ COMMITTED（`ACQ_ISOLATION_UNSUPPORTED`，`0A000`）。
+- **鎖**：先取 per-resource advisory 鎖（獨立 key 族，producer 從不取它），再讀既有 receipt（replay 不碰 registry 鎖），最後才呼叫 `entitlement_state_at`（registry SHARE → per-owner 共享鎖）。解析器**只取共享鎖、從不呼叫 admit／advance**，因此 Owner D-1 的「共享→排他升級」`40P01` 不適用於它；本包**不**把任何新的 `40P01` 歸為已接受（P18 對同 owner 的 producer 與解析器交錯實測為 0 個鎖錯誤）。
+
+### 18.3 實際 authority、ACL 與兩條讀取接縫
+
+- 新 schema `retention_acquisition`、sealed owner `consumer_retention_acquisition_owner`（NOLOGIN、NOINHERIT、無 superuser／createrole／bypassrls、無成員）、一張表、三個函式（`SECURITY DEFINER` 的 `resolve_detail_acquisition(uuid)`、`SECURITY INVOKER` 的 `validate_receipt()` 與 `reject_receipt_update()`）、兩個 trigger；表 ENABLE＋FORCE RLS，僅 owner 的 SELECT／INSERT policy（無 UPDATE／DELETE policy）。沿用 F2／G1／G2／builder→owner 交接。**`resolve_detail_acquisition` 不授予任何角色 EXECUTE**，本 migration 不註冊 producer、不寫 receipt、不回填。
+- **R-3 接縫（`CREATE POLICY acquisition_owner_select … FOR SELECT TO consumer_retention_acquisition_owner USING (true)` 於 anchors；`GRANT USAGE ON SCHEMA retention_capture`；`GRANT SELECT ON retention_capture.detail_capture_anchors`；`GRANT USAGE ON SCHEMA retention_entitlement`；`GRANT EXECUTE ON FUNCTION retention_entitlement.entitlement_state_at(uuid, timestamptz)`）**，皆只給 sealed acquisition owner。未授予 `REFERENCES`（FK 由 superuser 建立，cascade 以 P11 實測可行）。G2 比對「新物件以外的 scope digest 不變」，其中**僅排除這五個接縫屬性**，並另外斷言它們的確切值（每個接縫物件除自己的 owner 外恰有一個 grantee、一個不可再授權的權限；anchors 恰有兩條 policy）。
+- **actor 要求（與 foundation／capture／ENT0 不同，已揭露）**：這兩條接縫是對 capture／ENT0 owner 所擁有物件的 GRANT／POLICY，只有 native superuser 能執行；因此本 migration 的 actor 檢查要求 **native superuser**（db owner＋CREATEROLE 的非 superuser 被 `RETENTION_DDL_ACTOR_NOT_AUTHORIZED` 拒絕，N07a）。Hosted 的等價 actor 無法套用，且本 migration 與其他 R0-B 系列一樣拒絕任何平台 marker；Hosted 套用另案。
+- **管理者邊界（不宣稱保密）**：superuser／能停用 trigger 或設定 `session_replication_role=replica` 的身分，仍可寫入自洽的 receipt、更新或刪除；sealed owner 可 TRUNCATE（NOLOGIN、無成員）。本包只防止 runtime 與一般呼叫路徑。
+
+### 18.4 receipt、ENT0 fact 與最終保存 grant 的區別
+
+| | ENT0 fact | Acquisition receipt（本包） | 最終保存 grant（尚不存在） |
+|---|---|---|---|
+| 意義 | producer 斷言 owner 在 `[from, until)` 屬 paid／trial | 這筆餐點在它的 T0 屬 Paid 等級，並導出 `T0＋4320h` | 依 R0-A 的保存、顯示與到期狀態 |
+| 綁定 | owner＋namespace＋upstream id，不綁餐點 | resource＋owner＋anchor T0 | resource＋全部資格事實＋revision |
+| 含 Free | 否 | 否（結構上不可能） | 是（需 ENT-R 封存） |
+| 需要 rights／protection／core／material | 否 | 否 | 是 |
+| 授權刪除／顯示／到期 | 否 | 否 | 顯示與到期判斷屬其後的包；purge 仍是另案 |
+
+晚到事實以有效區間判斷：T0 之後才開始的事實不使舊餐點變 Paid；涵蓋 T0 的事實若晚到，只有在該 producer 的 coverage 尚未越過其 `valid_from` 時 ENT0 才接受，解析器先得 unknown（pending、零寫入），事實到達後**重試**得到 Paid（P08）。已證明 Free 的 coverage 之後，涵蓋 T0 的晚到事實被 ENT0 拒絕（`ENT_EVENT_BELOW_COVERAGE`），結果維持 pending／provisional Free，不被翻轉。**「沒有 receipt」只表示 pending／unknown：不是 Free、不是 Free14 期限、也不是永久。**
+
+### 18.5 inactive 邊界與誠實揭露
+
+- **尚無 production 呼叫路徑**：沒有 worker、cron、webhook、Client 或存餐 trigger 呼叫此函式（P14 驗證 repository 與資料庫內沒有任何引用、`meal_records` 的 trigger 集合不變、真實存檔後 receipt 數為 0）。ENT0 producer registry 為空且沒有任何角色可以 EXECUTE 解析器；測試用的 producer 與 caller 角色只存在於拋棄式資料庫。**因此不能宣稱 production 已在回傳 pending，也不能宣稱任何餐點已取得真實的建立時權益。**
+- 本機 disposable PostgreSQL 17.6 驗證；未連 Hosted、未部署、未 push；法律 **DRAFT／NOT ACTIVE**；Retention 仍 inactive。
+- 仍未驗證／不宣稱：producer、registry 封存（ENT-R）、Free 最終化與升級延長（ENT1-B）、rights／protection／core／material 的同瞬事實、顯示與到期、purge、Hosted 套用與亂序（U2 未批准）、pooler、standby、牆鐘回撥、大規模鎖數、ENT0 與 demo 的動態並發、四個 origin successor commit 的產品正確性（G1–G6 維持）。已知限制：receipt 內的 fact id 無法由本包對 ENT0 事實表二次驗證（沒有被批准的存取），只能與同次解析的完整回傳 jsonb 互相綁定。
+
+### 18.6 Gates、mutation 與 successor 綁定
+
+- **新 smoke**：`consumer-retention-acquisition-smoke.mjs`（18 positive、9 negative、2 supplementary；`TK_GATES` 只接受完整 id，沿用 ENT0 的選擇契約）。**新 mutations**：`consumer-retention-acquisition-mutations.mjs`（48 個對真實 migration SQL 的單點缺陷，每個預先指定 detector 與類別：gate／guard／green；digest 提前拒絕、setup 錯誤不算行為偵測）。
+- **successor 綁定（單向，無 self-hash）**：persistence smoke 釘住 ENT1-A migration 的 sha256 與三個新檔的 mode／blob，以及在 ENT1-A 狀態下被重新綁定的兩個檔（ENT0 smoke、recovery guard）；ENT1-A 三檔只 import helper；沒有任何檔案記錄 persistence smoke 或自身的 hash。有序尾端 `[capture, ENT0, demo, ENT1-A]`，ENT1-A **只**與 origin successor 和 ENT0 狀態一起被接受（全有或全無）；前一個狀態（無 ENT1-A）仍被接受。
+- 結果（fresh）與證據、未驗證清單記載於 repository 外的施工報告（不改寫本文件）。
+
+### 18.7 Gates 與結果（施工者自測；evidence 在 repository 外 `D:\ent1a-impl-20261016\`；**不是 acceptance，等待獨立驗收**）
+
+全部於 disposable PostgreSQL 17.6（loopback、fsync=off、template＝142 檔 baseline＋foundation＋capture；每個 gate 一個獨立資料庫並已套用 ENT0）執行：
+- **ACQ smoke 29／29**＝18 positive＋9 negative＋2 supplementary：P01–P09（Paid／trial／重疊、同次解析證據對獨立 oracle、replay 不重新取樣且不被開著的 registry 寫入阻塞、降級不縮短、T0 半開邊界、晚到事實、AP-2 coverage 組合）；P10–P18（真實 capture anchor 與 `no_actor_claim`、刪餐／刪帳 cascade、**精確 post-state 與有效權限矩陣**、**既有物件 catalog 差異恰為五個批准接縫屬性**、存檔不接線、八並行、rollback／故障注入／三種 timeout、刪餐與解析雙向交錯、producer 與解析交錯且 0 個鎖錯誤）；N01–N09（runtime 角色與 sealed owner 的實際權限、receipt 不可變、24 種直接偽造插入（另加 1 項自洽對照列，證明變體是因各自的原因被拒）各因自己的原因被拒、pending 矩陣零寫入、不讀目前會員／JWT／caller 值、髒交易拒絕〔9 種情境〕、migration 前置條件拒絕〔N07，26 個案例〕、rollback 與併發漂移〔N08，14 個案例〕、解析器來源與鎖序白名單）；F01、F02。
+- **ACQ mutations 48／48 符合預先宣告**：43 個行為偵測、4 個 migration 自身 guard（Z39–Z42，不計為行為偵測）、1 個等價 green control（Z48）。僅被 `ACQ_POST_STATE_MISMATCH` 拒絕的 mutant 以觀測 digest 重新固定後安裝，再由指名 gate 判定；digest 拒絕與行為偵測分開記錄。已揭露：Z29（略過本函式的 isolation 檢查）只靠錯誤身分區分，因 ENT0 的 `state_at` 以另一段文字拒絕同樣的 isolation（行為重疊）。
+- Successor／binding controls **34／34**（接受：候選 tree、無 ENT1-A 的前一狀態；拒絕：位元組、模式、改名、排序、額外檔、缺檔、origin／PC-2 successor 部分還原、validators 被還原或交換等 32 項）。
+- Regression（同一最終 tree）：recovery smoke＋PG 40／40；recovery guard 88／88（87＋1 項 ENT1-A all-or-nothing）；capture smoke 28／28；capture mutations 24／24；persistence smoke 83／83（IF14、N16 於新狀態）；persistence mutations 127／127；ENT0 smoke F01／F02／F03 3／3（ENT0 migration 位元組不變，ENT0 的 105 個 mutation 與其餘行為 gate 沿用 R3 驗收，未重跑）；完整鏈 probe（147 檔，hosted-like **本機 stub**）6／6。
+- 差分與其餘細節、fresh／reused／unverified 清單見外部施工報告。

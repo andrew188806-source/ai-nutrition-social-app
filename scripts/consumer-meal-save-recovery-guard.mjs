@@ -78,6 +78,14 @@ export const ENT0_PATHS = Object.freeze([
   "docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md"
 ]);
 
+// R0-B-ENT1-A (Owner-approved 2026-10-16): the inactive acquisition-receipt successor adds exactly these three paths (the ENT0 smoke, the persistence/capture smokes and Doc 05 are modified as well and are already covered above). Bound here by PATH
+// only and all-or-nothing, and only together with the ENT0 and origin successors; the persistence smoke pins their bytes and nothing here records a validator hash.
+export const ACQ_PATHS = Object.freeze([
+  "supabase/migrations/20261017010000_consumer_retention_acquisition_record.sql",
+  "scripts/consumer-retention-acquisition-smoke.mjs",
+  "scripts/consumer-retention-acquisition-mutations.mjs"
+]);
+
 // PC-2 consent-document successor (7ed55fc; recorded in the persistence smoke as an identity binding of the observed bytes, not as a statement that it was accepted): exactly these ten paths on top of the recovery inventory. Bound here by PATH only and all-or-nothing;
 // the persistence smoke pins their bytes, and nothing here records a validator hash. None of them is a recovery path. Two of them legitimately contain the demo host / URL scheme and are excluded from the brand check only.
 export const PC2_PATHS = Object.freeze([
@@ -132,20 +140,23 @@ const pc2Changed = changed.filter((p) => PC2_PATHS.includes(p));
 const pc2Exact = pc2Changed.length === 0 || (pc2Changed.length === PC2_PATHS.length && PC2_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))));
 const demoChanged = changed.filter((p) => DEMO_PATHS.includes(p));
 const demoActive = demoChanged.length > 0;
+const acqChanged = changed.filter((p) => ACQ_PATHS.includes(p));
+const acqActive = acqChanged.length > 0;
 const demoExact = demoChanged.length === 0 || (demoChanged.length === DEMO_PATHS.length && DEMO_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ENT0_PATHS.every((p) => changed.includes(p)) && pc2Changed.length === PC2_PATHS.length);
-const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p));
+const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p));
 const validationSuccessorExact = validationSuccessor.length === 0 || (validationSuccessor.length === VALIDATION_SUCCESSOR.length && validationSuccessor.every((p) => fs.existsSync(path.join(ROOT, p))));
 record("candidate inventory is exact (27 distinct recovery paths: 21 modified + 6 added, plus either none or exactly both authorized retention validators; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(recoveryChanged) === JSON.stringify([...INVENTORY].sort()) && validationSuccessorExact, { extra: recoveryChanged.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !recoveryChanged.includes(p)), validationSuccessor });
 const ent0Migration = ENT0_PATHS[0];
 const ent0Active = ent0Changed.length > 0;
 const supabaseChanged = changed.filter((p) => p.startsWith("supabase/"));
 // Permitted forward migrations, in sort order: ENT0 (20261010010000) and — only with the exact origin successor — the demo migration (20261010172126), which sorts AFTER it. ENT0 is not assumed to be last.
-const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : [])].sort();
+const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : []), ...(acqActive ? [ACQ_PATHS[0]] : [])].sort();
 const notForward = (p) => p && !forwardMigrations.includes(p);
 record("server paths: 0 (supabase/** byte-identical, modes unchanged; the only permitted exceptions are the single R0-B-ENT0 forward migration and, only with the exact origin successor, the single demo forward migration)", JSON.stringify(supabaseChanged) === JSON.stringify(forwardMigrations) && git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.split("\n").filter(notForward).length === 0 && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.split("\n").filter((l) => l.trim() && !forwardMigrations.some((m) => l.includes(m))).length === 0, supabaseChanged);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));
 record("all 144 migrations present and byte-identical to the baseline (plus, only with the recorded successors, the additional forward migrations in exact sort order: ENT0 then, with the origin successor, the demo migration)", migrations.length === 144 + forwardMigrations.length && forwardMigrations.every((m) => migrations.includes(path.basename(m))) && JSON.stringify(migrations.sort().slice(144)) === JSON.stringify(forwardMigrations.map((m) => path.basename(m))) && git(["diff", "--quiet", BASELINE, "--", "supabase/migrations", ...forwardMigrations.map((m) => `:(exclude)${m}`)]).status === 0);
 record("R0-B-ENT0 successor is all-or-nothing (the four ENT0 paths and both retention validators are all present, or none of the four is; no recovery path is touched by it)", ent0Changed.length === 0 || (ent0Changed.length === ENT0_PATHS.length && ENT0_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && validationSuccessor.length === VALIDATION_SUCCESSOR.length), { ent0Changed });
+record("R0-B-ENT1-A successor is all-or-nothing (the three ENT1-A paths are all present, or none is; only together with the ENT0 successor and the exact origin successor; none of them is an inventory, ENT0, PC-2 or origin path)", acqChanged.length === 0 || (acqChanged.length === ACQ_PATHS.length && ACQ_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ent0Changed.length === ENT0_PATHS.length && demoActive && demoExact && ACQ_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p))), { acqChanged });
 record("PC-2 consent-document successor is all-or-nothing (the ten recorded paths are all present, or none of the ten is; no recovery path is touched by it)", pc2Exact && pc2Changed.every((p) => !INVENTORY.includes(p)), pc2Changed);
 record("origin successor is all-or-nothing (the sixteen recorded new paths are all present, or none is; only together with the ENT0 and PC-2 successors; none of the sixteen is an inventory, ENT0 or PC-2 path)", demoExact && DEMO_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p)), demoChanged);
 record("dependencies and lockfiles unchanged", git(["diff", "--quiet", BASELINE, "--", "package.json", "package-lock.json", "apps/mobile/package.json"]).status === 0);
