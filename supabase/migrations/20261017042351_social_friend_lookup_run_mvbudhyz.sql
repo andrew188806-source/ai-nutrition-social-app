@@ -151,4 +151,3 @@ set local role postgres;
 revoke social_friend_lookup_authority from postgres granted by postgres;
 comment on schema friend_internal is 'Local social candidate; exact opt-in friend discovery. No REST exposure. Retention integration review required before activation.';
 commit;
-

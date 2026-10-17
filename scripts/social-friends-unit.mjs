@@ -27,4 +27,3 @@ check("late actor response discarded",await pending===null);
 let reject;const staleError=new SocialFriendsController({execute:()=>new Promise((_,r)=>reject=r)}),failed=staleError.execute("a",{operation:"settings"});staleError.invalidate();reject(Error("late"));
 check("late actor error discarded",await failed===null);
 console.log(JSON.stringify({suite:"social-friends-unit",status:"PASS",checks:checks.length,network:false,postgres:false,authProviderVerified:false}));
-

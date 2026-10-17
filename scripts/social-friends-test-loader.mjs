@@ -18,4 +18,3 @@ export function load(file){
  };
  new Function("require","module","exports",code)(localRequire,module,module.exports);return module.exports;
 }
-
