@@ -38,6 +38,9 @@ begin
 end $f$;
 revoke all on function social_internal.send_phone_search_invite(uuid,uuid)
  from public,anon,authenticated,authenticator,service_role,social_runtime_executor;
+-- Comment while postgres still owns the function; it cannot comment after the owner change.
+comment on function social_internal.send_phone_search_invite(uuid,uuid) is
+ 'Owner F2 phone-search new-invite check serialized with toggle. Pending/accepted replay preserves state; code/ordinary channel uses unchanged canonical send. No permanent ref revocation.';
 grant meal_buddy_relationship_authority to postgres with inherit false,set true;
 grant create on schema social_internal to meal_buddy_relationship_authority;
 alter function social_internal.send_phone_search_invite(uuid,uuid) owner to meal_buddy_relationship_authority;
@@ -46,6 +49,4 @@ set local role meal_buddy_relationship_authority;
 grant execute on function social_internal.send_phone_search_invite(uuid,uuid) to social_runtime_executor;
 set local role postgres;
 revoke meal_buddy_relationship_authority from postgres granted by postgres;
-comment on function social_internal.send_phone_search_invite(uuid,uuid) is
- 'Owner F2 phone-search new-invite check serialized with toggle. Pending/accepted replay preserves state; code/ordinary channel uses unchanged canonical send. No permanent ref revocation.';
 commit;
