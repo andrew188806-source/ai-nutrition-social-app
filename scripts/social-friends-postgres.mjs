@@ -248,6 +248,12 @@ try{
  check("F2 existing code lookup opt-out behavior unchanged",(await lookup(A,dCode,"code")).body.status==="not_found");
  const repeatedDenied=await Promise.all([relation(A,{operation:"send",candidateRef:phoneRef}),relation(A,{operation:"send",candidateRef:phoneRef})]);
  check("F2 duplicate new sends stay rejected while OFF",repeatedDenied.every(isDenied)&&beforeOffRace===await sideEffects());
+ // Source-verification failure must not degrade into the ordinary send path (which would ignore OFF).
+ const relationCount=async()=>(await db.query("select count(*)::text n from public.meal_buddy_relationships")).rows[0].n;
+ const tamperedRef=phoneRef.slice(0,-4)+(phoneRef.endsWith("AAAA")?"BBBB":"AAAA"),truncatedRef=phoneRef.slice(0,Math.floor(phoneRef.length/2));
+ const beforeTamper=[await sideEffects(),await relationCount()];
+ const tamperResults=await Promise.all([relation(A,{operation:"send",candidateRef:tamperedRef}),relation(A,{operation:"send",candidateRef:truncatedRef}),relation(B,{operation:"send",candidateRef:phoneRef})]);
+ check("F2 tampered, truncated or other-actor phone ref cannot fall back to ordinary send while OFF",tamperResults.every(r=>r.status!==200)&&beforeTamper[0]===await sideEffects()&&beforeTamper[1]===await relationCount(),tamperResults.map(r=>r.status));
  // Code-origin and other-channel references keep their pre-existing canonical send semantics.
  const codeSent=await relation(A,{operation:"send",candidateRef:codeRef});
  check("F2 previously issued code reference still uses unchanged channel while OFF",codeSent.status===200&&codeSent.body.relationships[0].state==="outgoing_pending");
