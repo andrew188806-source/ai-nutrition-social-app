@@ -151,7 +151,7 @@ try{
  check("concurrent probes cannot overshoot 10 per minute",burst.filter(r=>r.body.status==="not_found").length===10&&burst.filter(r=>r.body.status==="rate_limited").length===2);
  await db.query("update friend_internal.lookup_budget set minute_start=now()-interval '2 minutes',day_count=50 where user_id=$1",[A]);
  check("daily cap cannot be bypassed by minute expiry",(await lookup(A,"invalid")).body.status==="rate_limited");
- await db.query("update friend_internal.lookup_budget set day_start=current_date-1 where user_id=$1",[A]);
+ await db.query("update friend_internal.lookup_budget set day_start=(now() at time zone 'UTC')::date-1 where user_id=$1",[A]);
  check("budget recovers after window reset",(await lookup(A,"invalid")).body.status==="not_found");
  await reset();
  const valid=(await lookup(A,"0912345678")).body.candidate.candidateRef;
