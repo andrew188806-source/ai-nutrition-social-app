@@ -18,7 +18,7 @@ const check=(name,pass,detail=null)=>{checks.push({name,pass:!!pass,detail});con
 const expectDenied=async fn=>{try{await fn();return false;}catch(e){return e.code==="42501";}};
 const connect=async user=>{const c=new Client({host:"127.0.0.1",port,user,database:"postgres",connectionTimeoutMillis:10000});c.on("error",()=>{});await c.connect();connections.add(c);return c;};
 const close=async c=>{await c.end();connections.delete(c);};
-const uuid=n=>"00000000-0000-4000-8000-"+String(n).padStart(12,"0"),A=uuid(101),B=uuid(102),C=uuid(103),LEGACY=uuid(104);
+const uuid=n=>"00000000-0000-4000-8000-"+String(n).padStart(12,"0"),A=uuid(101),B=uuid(102),C=uuid(103),LEGACY=uuid(104),D=uuid(105);
 const direct=async(role,actor,sql,args=[])=>{const c=await connect(role==="authenticated"?"authenticator":"social_test_executor");try{await c.query("begin");await c.query("select set_config('request.jwt.claim.sub',$1,true)",[actor??""]);await c.query("set local role "+role);await c.query("set local statement_timeout='10s'");const r=await c.query(sql,args);await c.query("commit");return r.rows;}catch(e){await c.query("rollback");throw e;}finally{await close(c);}};
 const txClass=load(path.join(root,"supabase/functions/_shared/social-runtime-transport/executorTransactionTransport.ts")).SocialRuntimeExecutorTransport;
 const transport=()=>new txClass({withTransaction:async operation=>{
@@ -44,7 +44,9 @@ try{
  const source=fs.readFileSync(path.join(root,"scripts/restaurant-owner-branch-temporal-ra-2h-p1-postgres-apply.mjs"),"utf8"),marker="const BOOTSTRAP = `",start=source.indexOf(marker)+marker.length;
  assert.ok(start>=marker.length);await su.query(source.slice(start,source.indexOf("\n`;",start)));
  // Match real Supabase Auth schema fields absent from this repository's small legacy test stub.
- await su.query("alter table auth.users add column phone text unique,add column phone_confirmed_at timestamptz,add column banned_until timestamptz,add column deleted_at timestamptz;create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id));grant select on auth.sessions to postgres;");
+ await su.query("alter table auth.users add column phone text unique,add column phone_confirmed_at timestamptz,add column banned_until timestamptz,add column deleted_at timestamptz,add column email_confirmed_at timestamptz,add column is_anonymous boolean not null default false;create table auth.sessions(id uuid primary key,user_id uuid references auth.users(id));grant select on auth.sessions to postgres;");
+ // Standard Auth claims function required by the accepted Demo predecessor; no claims are fabricated.
+ await su.query(`create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb) $$;`);
  db=await connect("postgres");
  const migrations=fs.readdirSync(path.join(root,"supabase/migrations")).filter(n=>n.endsWith(".sql")).sort(),social=migrations.filter(n=>n.includes("_social_friend_lookup_run_mvbudhyz.sql"));assert.equal(social.length,1);
  for(const name of migrations.filter(n=>n!==social[0])){
@@ -52,7 +54,7 @@ try{
    await su.query("insert into auth.users(id,email) values($1,'legacy@synthetic.invalid')",[LEGACY]);
    await db.query("insert into public.consumer_profiles(user_id,profile_id,display_name,anonymous_display_name,mascot_avatar_key) values($1,'synthetic-legacy-social','Legacy','Legacy','BG')",[LEGACY]);
   }
-  const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record/.test(name)?su:db;
+  const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_demo_draft_confirmation/.test(name)?su:db;
   try{await installer.query(fs.readFileSync(path.join(root,"supabase/migrations",name),"utf8"));}catch(e){throw Error("BASE_MIGRATION "+name+" "+e.code+" "+e.message);}
  }
  const before=await fingerprint();await db.query(fs.readFileSync(path.join(root,"supabase/migrations",social[0]),"utf8"));
@@ -68,7 +70,7 @@ try{
  await direct("authenticated",LEGACY,"select public.opt_in_authenticated_social_participation()");
  check("legacy implicit compatibility does not authorize new search",(await settings(LEGACY)).status===403);
  await activateDisposableFixture(db);
- for(const [id,name]of [[A,"Alice"],[B,"Bob"],[C,"Cara"]]){
+ for(const [id,name]of [[A,"Alice"],[B,"Bob"],[C,"Cara"],[D,"Dana"]]){
   await su.query("insert into auth.users(id,email) values($1,$2)",[id,id+"@synthetic.invalid"]);
   await direct("authenticated",id,"select public.complete_authenticated_consumer_account_onboarding($1,$2,true,true,true,$3)",[FIXTURE_BUNDLE.bundleVersion,JSON.stringify(presented()),name]);
   await direct("authenticated",id,"select public.attest_authenticated_social_adult(true)");
@@ -186,6 +188,34 @@ try{
  await db.query("update public.consumer_profiles set status='active' where user_id=$1",[C]);
  await su.query("delete from auth.users where id=$1",[C]);
  check("Auth deletion cascades new settings and rate rows",(await db.query("select (select count(*) from friend_internal.lookup_settings where user_id=$1)+(select count(*) from friend_internal.lookup_budget where user_id=$1) n",[C])).rows[0].n==="0");
+ // F2 characterization only: the existing contract does not specify whether search opt-out
+ // revokes already-issued candidate references. Do not assert either outcome as product PASS.
+ await reset();
+ const dSettings=await settings(D,true),dCode=dSettings.body.settings.inviteCode;
+ const preOptOut=await lookup(A,dCode,"code");
+ check("F2 observation setup uses a real eligible searched target",preOptOut.status===200&&preOptOut.body.status==="found");
+ await settings(D,false);
+ const postOptOutLookup=await lookup(A,dCode,"code");
+ check("F2 known contract: fresh lookup after opt-out is unavailable",postOptOutLookup.status===200&&postOptOutLookup.body.status==="not_found");
+ const retainedRefSend=await relation(A,{operation:"send",candidateRef:preOptOut.body.candidate.candidateRef});
+ check("F2 characterization reaches a valid relationship response, not setup/server failure",[200,400].includes(retainedRefSend.status));
+ const pairState=async()=>(await db.query("select state,invited_by_user_id::text from public.meal_buddy_relationships where user_low_id=$1 and user_high_id=$2",[A,D])).rows;
+ const priorBlock=await pairState();
+ await direct("authenticated",D,"select public.create_authenticated_social_block($1)",[A]);
+ const blockedRefSend=await relation(A,{operation:"send",candidateRef:preOptOut.body.candidate.candidateRef});
+ const afterBlock=await pairState();
+ check("F2 safety control: old reference does not bypass current block",blockedRefSend.status===400&&blockedRefSend.body.error?.code==="invalid_request");
+ check("F2 safety control: block does not cancel/delete existing invitation",JSON.stringify(priorBlock)===JSON.stringify(afterBlock));
+ fs.writeFileSync(path.join(out,"search-optout-reference-observation.json"),JSON.stringify({
+  classification:"OBSERVATION_WITH_CONTRACT_GAP",
+  specification:"No new send-time searchable rule selected; no F2 acceptance PASS or vulnerability conclusion.",
+  candidateRefTtlMs:load(path.join(root,"supabase/functions/_shared/social-candidate-ref/policy.ts")).SOCIAL_CANDIDATE_REF_TTL_MS,
+  newLookupAfterOptOut:{httpStatus:postOptOutLookup.status,status:postOptOutLookup.body.status},
+  sendUsingPreviouslyIssuedReference:{httpStatus:retainedRefSend.status,state:retainedRefSend.body.relationships?.[0]?.state??null,errorCode:retainedRefSend.body.error?.code??null},
+  pairRowsBeforeBlock:priorBlock,pairRowsAfterBlock:afterBlock,
+  sendAfterBlock:{httpStatus:blockedRefSend.status,errorCode:blockedRefSend.body.error?.code??null},
+  providerAuth:"SYNTHETIC_INJECTION",database:"REAL_LOCAL_PG17",hosted:false
+ },null,2));
  check("retention/shared qualifications remain byte-identical after full flow",before===await fingerprint());
  fs.writeFileSync(path.join(out,"migration-inputs.json"),JSON.stringify(migrations.map(name=>({name,sha256:createHash("sha256").update(fs.readFileSync(path.join(root,"supabase/migrations",name))).digest("hex")})),null,2));
 }catch(e){failed={message:e.message,stack:e.stack};console.error(e.stack);process.exitCode=1;}
