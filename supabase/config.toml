@@ -76,3 +76,6 @@ verify_jwt = false
 # GEO-1C: authenticated request-scoped current-location narrowing for next-meal candidates. Actor
 # identity is verified again through auth.getUser(); precise coordinates are neither logged nor stored.
 verify_jwt = true
+
+[functions.social-friends]
+verify_jwt = true
