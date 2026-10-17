@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -90,10 +90,10 @@ type RecommendationGroup = {
 const recommendationStorageKey = "haocu.mealBuddy.recommendationGroups.v1";
 
 function parseMealBuddySection(section?: string): MealBuddySection {
-  if (section === "friends" || section === "gatherings" || section === "tables" || section === "cards") {
+  if (section === "discover" || section === "friends" || section === "gatherings" || section === "tables" || section === "cards") {
     return section;
   }
-  return "discover";
+  return "friends";
 }
 
 function getVisibleMatchedFriends(invites: ReturnType<typeof getMealBuddyInvites>): MatchedFriend[] {
@@ -404,6 +404,7 @@ export default function MealBuddyHomeScreen() {
 
       {activeSection !== "discover" && activeSection !== "cards" ? (
         <View style={styles.snowChipRow}>
+          <Chip label="新增好友" onPress={() => router.push("/social-friends")} />
           <Chip label="飯友" active={activeSection === "friends" && friendInitialTab !== "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("matched"); }} />
           {!isRealCandidateMode ? <Chip label="聊天" active={activeSection === "friends" && friendInitialTab === "chats"} onPress={() => { setActiveSection("friends"); setFriendInitialTab("chats"); setFocusedChatId(""); setFocusedChatName(""); }} /> : null}
           <Chip label="飯局" active={activeSection === "gatherings" || activeSection === "tables"} onPress={() => setActiveSection("gatherings")} />
