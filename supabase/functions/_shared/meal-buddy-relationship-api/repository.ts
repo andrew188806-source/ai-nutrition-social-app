@@ -10,6 +10,13 @@ import type {
   MealBuddyRelationshipState
 } from "./types.ts";
 
+const BIND_ACTOR = defineSocialRuntimeExecutorStatement<{ actor_context: string }>`
+  select pg_catalog.set_config('request.jwt.claim.sub', $1::text, true) as actor_context
+`;
+const SEND_PHONE_SEARCH = defineSocialRuntimeExecutorStatement<InternalMealBuddyRelationshipDatabaseRow>`
+  select relation_id::text, counterpart_user_id::text, relative_state
+  from social_internal.send_phone_search_invite($1::uuid, $2::uuid)
+`;
 const SEND = defineSocialRuntimeExecutorStatement<InternalMealBuddyRelationshipDatabaseRow>`
   select relation_id::text, counterpart_user_id::text, relative_state
   from social_internal.send_meal_buddy_invite($1::uuid, $2::uuid)
@@ -41,6 +48,7 @@ const PROFILE_BATCH_SIZE = 10;
 
 export interface MealBuddyRelationshipRepository {
   send(actorUserId: string, targetUserId: string): Promise<readonly InternalMealBuddyRelationshipRow[]>;
+  sendPhoneSearch(actorUserId: string, targetUserId: string): Promise<readonly InternalMealBuddyRelationshipRow[]>;
   read(actorUserId: string, targetUserId: string): Promise<readonly InternalMealBuddyRelationshipRow[]>;
   list(actorUserId: string): Promise<readonly InternalMealBuddyRelationshipRow[]>;
   resolve(actorUserId: string, relationId: string, action: "accept" | "decline" | "cancel"):
@@ -51,6 +59,7 @@ export interface MealBuddyRelationshipRepository {
 export class ExecutorMealBuddyRelationshipRepository implements MealBuddyRelationshipRepository {
   constructor(private readonly transport: SocialRuntimeExecutorTransport) {}
   send(actor: string, target: string) { return this.query(actor, SEND, [actor, target]); }
+  sendPhoneSearch(actor: string, target: string) { return this.query(actor, SEND_PHONE_SEARCH, [actor, target], true); }
   read(actor: string, target: string) { return this.query(actor, READ, [actor, target]); }
   list(actor: string) { return this.query(actor, LIST, [actor]); }
   resolve(actor: string, relation: string, action: "accept" | "decline" | "cancel") {
@@ -60,9 +69,11 @@ export class ExecutorMealBuddyRelationshipRepository implements MealBuddyRelatio
   private async query(
     actorUserId: string,
     statement: SocialRuntimeExecutorStatement<InternalMealBuddyRelationshipDatabaseRow>,
-    parameters: readonly unknown[]
+    parameters: readonly unknown[],
+    bindActor = false
   ): Promise<readonly InternalMealBuddyRelationshipRow[]> {
     return await this.transport.withTransaction(async (transaction) => {
+      if (bindActor) await transaction.query(BIND_ACTOR, [actorUserId]);
       const rows = await transaction.query(statement, parameters);
       const relationships = rows.map(parseRelationshipRow);
       if (relationships.length === 0) return Object.freeze([]);

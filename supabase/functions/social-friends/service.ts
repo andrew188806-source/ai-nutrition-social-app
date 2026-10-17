@@ -1,4 +1,5 @@
 import { defineSocialRuntimeExecutorStatement, type SocialRuntimeExecutorTransport } from "../_shared/social-runtime-transport/executorTransactionTransport.ts";
+import { sealPhoneSearchCandidateRef } from "../_shared/phone-search-candidate-ref.ts";
 import type { SocialCandidateRefCipher } from "../_shared/social-candidate-ref/types.ts";
 const BIND_ACTOR = defineSocialRuntimeExecutorStatement<{
     actor_context: string;
@@ -44,7 +45,7 @@ export class SocialFriendsService {
             throw Error("friend_lookup_cardinality");
         const row = rows[0];
         if (row.status === "found" && row.candidate_user_id && row.display_name && row.mascot_avatar_key)
-            return { policyVersion: "social-friends-v1", status: "found", candidate: { candidateRef: await this.cipher.seal(actor, row.candidate_user_id, now), displayName: row.display_name, mascotAvatarKey: row.mascot_avatar_key } };
+            return { policyVersion: "social-friends-v1", status: "found", candidate: { candidateRef: request.kind === "phone" ? await sealPhoneSearchCandidateRef(this.cipher, actor, row.candidate_user_id, now) : await this.cipher.seal(actor, row.candidate_user_id, now), displayName: row.display_name, mascotAvatarKey: row.mascot_avatar_key } };
         if (row.status !== "not_found" && row.status !== "rate_limited")
             throw Error("friend_lookup_shape");
         return { policyVersion: "social-friends-v1", status: row.status };
