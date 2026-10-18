@@ -9,7 +9,7 @@ import child from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
-  ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, ENT0_MIGRATION_SHA256, DEMO_MIGRATION, ACQ_MIGRATION, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK
+  ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, ENT0_MIGRATION_SHA256, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK
 } from './consumer-retention-persistence-smoke.mjs';
 import { act, frozenProof, inventoryProof, options } from './consumer-retention-capture-smoke.mjs';
 
@@ -1513,7 +1513,8 @@ GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const sourceSha = sha(fs.readFileSync(path.join(ROOT, 'supabase/migrations', ENT0_MIGRATION)));
   // Exact ORDERED new-migration tail; ENT0 is not assumed to be last. With the origin successor recorded (persistence smoke, byte-pinned) the demo migration (20261010172126) sorts after ENT0 (20261010010000).
   // With the exact ENT1-A record (persistence smoke, byte-pinned, only together with the origin successor) the ENT1-A migration (20261017010000) sorts after the demo migration.
-  const tail = frozen.recoverySuccessor.acq === 'record' ? [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION] : frozen.recoverySuccessor.demo === 'record' ? [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION] : [CAPTURE_SUCCESSOR, ENT0_MIGRATION];
+  // With the exact ENT-R record (persistence smoke, byte-pinned, only on top of the ENT1-A record) the ENT-R migration (20261018010000) sorts after the ENT1-A migration.
+  const tail = frozen.recoverySuccessor.seal === 'record' ? [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION] : frozen.recoverySuccessor.acq === 'record' ? [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION] : frozen.recoverySuccessor.demo === 'record' ? [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION] : [CAPTURE_SUCCESSOR, ENT0_MIGRATION];
   return R(frozen.violations.length === 0 && frozen.recoverySuccessor.state === 'ent0' && inv.migrationCount === 143 + tail.length && same(inv.newPaths, tail) && inv.changedBaselineMigrations.length === 0 && sourceSha === ENT0_MIGRATION_SHA256, { frozen, inv, tail, sourceSha, pinned: ENT0_MIGRATION_SHA256 });
 };
 

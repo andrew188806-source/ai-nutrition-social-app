@@ -8,7 +8,7 @@ import path from 'node:path';
 import child from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION as PINNED_ACQ_MIGRATION, ACQ_MIGRATION_SHA256, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
+import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION as PINNED_ACQ_MIGRATION, ACQ_MIGRATION_SHA256, SEAL_MIGRATION, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
 import { act, frozenProof, inventoryProof, options, ELIGIBLE } from './consumer-retention-capture-smoke.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
 
@@ -907,7 +907,8 @@ GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const sourceSha = sha(fs.readFileSync(path.join(ROOT, 'supabase/migrations', ACQ_MIGRATION)));
   const own = /IS DISTINCT FROM '([0-9a-f]{64})'/.exec(acqSource())?.[1];
   // Exact ORDERED new-migration tail: capture, ENT0, the origin demo migration, then the ENT1-A migration (20261017010000). No file is assumed last except by this exact order.
-  const tail = [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION];
+  // With the exact ENT-R record (persistence smoke, byte-pinned) the ENT-R migration (20261018010000) sorts after the ENT1-A migration; the ENT1-A record itself is required in both states.
+  const tail = frozen.recoverySuccessor.seal === 'record' ? [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION] : [CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION];
   return R(frozen.violations.length === 0 && frozen.recoverySuccessor.state === 'ent0' && frozen.recoverySuccessor.demo === 'record' && frozen.recoverySuccessor.acq === 'record'
     && inv.migrationCount === 143 + tail.length && inv.baselineCount === 143 && same(inv.newPaths, tail) && inv.changedBaselineMigrations.length === 0 && inv.timestampLaterThanAll
     && sourceSha === ACQ_MIGRATION_SHA256 && own === ACQ_POST_DIGEST, { frozen, inv, tail, sourceSha, pinned: ACQ_MIGRATION_SHA256, postDigest: own });

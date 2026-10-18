@@ -1384,3 +1384,59 @@ X01／X02 在驗收時存活的原因是**沒有任何 gate 在恰好的註冊�
 **未於本次更正的驗收觀測**（皆不影響判定，列出以免被掩蓋）：`READ UNCOMMITTED` 亦被 `ACQ_ISOLATION_UNSUPPORTED` 拒絕（fail-closed）；`PREPARE TRANSACTION` 的 caller 會持有 resource 鎖與 registry SHARE 鎖直到結束（目前沒有 caller）；`pg_read_all_data`／`pg_write_all_data` 對新表有 PostgreSQL 內建角色的天然資料權限，其成員資格受 migration G1 守衛約束。施工報告（repository 外）中的過度說法以另一份外部更正紀錄處理，不改寫原報告。
 
 **部署前置條件（再次列明）**：另案 deployment-actor 相容方案與驗收；Hosted 套用與 actor（未驗證）；可信 producer 與 registry 登記（ENT-F）；registry 封存（ENT-R，ENT1-B 的前提）；受控 worker 與另案授予的 EXECUTE；rights／protection／core／material。
+
+## 19. R0-B-ENT-R：Registry integrity seal（inactive）— retention-line local construction record（2026-10-17；**施工者自測，不是 acceptance**）
+
+### 19.1 授權、設計來源與 exact scope
+
+- **來源**：§17.7 AP-5 與 §17.8（registry 完整性封存及必要來源契約完成前，ENT1 不得把 provisional `free` 當作最終完整事實）；Owner R-2（Free 最終化與升級延長移到 seal 之後，§18.1）；`ENT1_SCOPE_REVIEW_V2.md` §12 第 3 項（ENT-R：單調、僅 operator 寫入的「必要 producer 集合完整自 E 起」宣告）。ENT1-A、ENT0-R3 的既有本機驗收不重開；Owner D-ACT 的範圍不變（只限本機、inactive、native superuser 安裝；不改既有 R0-B 管理 actor 契約；不批准 membership／SET／ADMIN／BYPASSRLS、Hosted 或正式環境；正式部署前須另案完成 deployment-actor 相容方案與驗收）。
+- **誠實揭露**：本包的施工授權來自 2026-10-17 的 retention 施工指示（本機、inactive、不落地原 main）。ENT-R 的**具體設計**——operator attestation、單一 epoch 鏈、以 ENT0 resolver 作為 registry 鎖與取樣原語、以 `attestation_ref` 做冪等——是施工者依 AP-5 與上列來源所作的設計選擇，**不是 Owner 逐字批准的規格**；需 Owner 決定的事項列於 §19.7。
+- **Exact 9 paths**（相對 `ec534c3d`）：`supabase/migrations/20261018010000_consumer_retention_registry_seal.sql`（新增）、`scripts/consumer-retention-seal-smoke.mjs`（新增）、`scripts/consumer-retention-seal-mutations.mjs`（新增）、本文件（只追加 §19；§1–§18 位元組保留）、`scripts/consumer-retention-persistence-smoke.mjs`、`scripts/consumer-retention-capture-smoke.mjs`、`scripts/consumer-retention-entitlement-smoke.mjs`（僅 F01 的有序尾端）、`scripts/consumer-retention-acquisition-smoke.mjs`（僅 F01 的有序尾端）、`scripts/consumer-meal-save-recovery-guard.mjs`（successor 相容性調整，不刪任何 assertion）。既有 capture、ENT0、demo、ENT1-A、foundation migration 位元組不變。
+
+### 19.2 契約（IMPLEMENTED_AND_EVIDENCED；local only）
+
+- **一筆 seal 是什麼**：一筆 operator 宣告「ENT0 registry 的**必要 producer 集合**（`registered_at ≤ t < retired_at`）在 `[epoch_from, sealed_through]` 內每個瞬間 `t` 都已定案且完整」。表只能表示這件事：沒有 owner、沒有 coverage、沒有 tier、沒有 grant、沒有 Free／unknown 旗標。**它是宣告（attestation），不是證明**：資料庫無從得知現實世界的付款／試用來源是否都已註冊；那份證據是 ENT-F 必要來源契約（Owner，尚不存在）。
+- **它不是什麼**：不是 coverage（逐 owner×namespace 的 `covered_through` 仍只能由 producer 推進）、不是 Free 最終化（Free 仍須 ENT0 的 `free` 答案**且**未來 ENT1-B 的消費端條件）、不是保存 grant、不授權顯示或 purge、不改變任何 ENT0 答案——`entitlement_state_at` **不讀** seal，因此沒有任何既有答案會改變（P07 以前後逐值相等證明）。空 registry 不能被 seal（`SEAL_REGISTRY_EMPTY`），**一個「沒有 producer」的 seal 不被接受為完整性宣告**。
+- **`sealed_through` 如何取得（為何成立）**：`record_registry_seal(epoch_from, attestation_ref)` 以**已驗收的 ENT0 `entitlement_state_at`（dummy owner、epoch 瞬間）**作為「registry 鎖＋取樣時鐘」原語：該呼叫先等待任何仍開著的 registry 寫入，在持有 registry SHARE 鎖之下取樣時鐘，那個取樣就是 `sealed_through`。ENT0 的 registry 守衛把此後每一筆 registry 寫入的有效時間蓋章為「寫入者在其自己的鎖下所讀時鐘的下一個整毫秒」，因此此後沒有任何 producer 能在 `≤ sealed_through` 的任何瞬間成為（或不再是）必要。證明邊界：伺服器牆鐘不向後跳；不含 superuser／資料表擁有者的刻意操作（`session_replication_role=replica`、停用 trigger、TRUNCATE、直接改 catalog）；備援、pooler 未驗證。
+- **鏈與延伸**：單一 epoch——第一筆決定 `epoch_from`，之後每筆必須相同（`SEAL_EPOCH_MISMATCH`／row trigger `SEAL_CHAIN_BROKEN`）；`sealed_through` 與 `sealed_at` 嚴格單調、`producer_count` 不減、`seal_seq` 無縫隙。**延伸時函式重算「前一筆 sealed_through 以前的 registry 歷史」的摘要**（每個 producer 的 namespace、role、registered_at，以及**僅在已生效時**才顯示的 retired_at；排程於未來的退休顯示為 open），與前一筆儲存的摘要不同即 `SEAL_REGISTRY_HISTORY_CHANGED`（例外，不寫入）。新增 producer 或排程未來退休不會改變已封存歷史的摘要。摘要由資料庫計算，呼叫者不能提供。沒有撤銷、縮短、更正或換 epoch 的路徑（§19.7）。
+- **冪等**：`attestation_ref`（唯一、非空、≤500 字元）。同 ref 同 epoch 重送回 `replayed` 的原列，**不取 registry 鎖、不重新取樣**；同 ref 不同 epoch 為 `SEAL_ATTESTATION_CONFLICT`（`23505`）。
+- **pending（回傳、不寫任何列）vs 例外**：`REGISTRY_LOCK_TIMEOUT`／`OWNER_LOCK_TIMEOUT`（來自 ENT0 resolver，每次等待約 2 秒）、`SEAL_LOCK_TIMEOUT`（鏈鎖，2 秒）、`SEAL_REGISTRY_EMPTY`、`SEAL_NOT_ADVANCED`（本次取樣不晚於前一筆 `sealed_through`）→ `{outcome:'pending', reason, seal:null}`。參數錯誤（`22023 SEAL_INVALID_ARGUMENT`、`SEAL_EPOCH_IN_FUTURE`）、非 READ COMMITTED（`0A000 SEAL_ISOLATION_UNSUPPORTED`）、已寫入的交易（`25000 SEAL_DIRTY_TRANSACTION`，含同交易的 registry 寫入或先前的 seal；這使「registry 寫入後再 seal」的兩個 SHARE 死結形態無法開始）、epoch 不符、歷史被改、同 ref 衝突 → 例外。唯讀交易可呼叫但寫入時 `25006`。
+- **鎖**：先取鏈的 advisory 鎖（獨立 key 族，ENT0 producer 從不取它），再經 ENT0 resolver 取 registry SHARE 與 dummy owner 的 per-namespace 共享鎖，最後讀 registry 與寫入；從不要求排他升級，因此 ENT0-R3 D-1 的 `40P01` 形態不適用於 seal；**開著的 seal 交易持有 registry SHARE 至交易結束，會讓 registry 寫入者等待（P12 實測）——operator 的 seal 交易應保持短**。
+- **`registry_seal_covers(instant)`**：唯讀；回報最新一筆 seal 的 `[epoch_from, sealed_through]` 是否涵蓋該瞬間（含兩端；`NO_SEAL`／`BEFORE_EPOCH`／`AFTER_SEALED_THROUGH`）；不讀 registry、不取鎖。**`registry_seal_covers` 與重送（replay）都不重新查 registry**：特權竄改已封存歷史之後，二者仍回舊的 attestation；只有新的延伸會重算舊範圍的摘要並以 `SEAL_REGISTRY_HISTORY_CHANGED` 拒絕。未來 ENT1-B 的消費契約因此**不得**把 `covers=true` 或 `sealed_by` 非空視為「現實來源完整」或「當前 registry 仍完整」；必須分開處理 ENT-R attestation、ENT-F 必要來源與可信事件證據、逐 owner×namespace 的 coverage，以及 seal 的有效／漂移判斷。
+
+### 19.3 實際 authority、ACL 與四條讀取接縫
+
+- 新 schema `retention_seal`、sealed owner `consumer_retention_seal_owner`（NOLOGIN、NOINHERIT、無 superuser／createrole／bypassrls、無成員）、一張表 `registry_seals`（ENABLE＋FORCE RLS，僅 owner 的 SELECT／INSERT policy，無 UPDATE／DELETE policy）、六個函式（`SECURITY DEFINER`：`record_registry_seal`〔VOLATILE、`lock_timeout=2s`〕、`registry_seal_covers`〔STABLE〕；`SECURITY INVOKER`：`registry_digest_through`、`seal_json`、`validate_seal`、`reject_seal_change`）、兩個 trigger。沿用 G1／G2／builder→owner 交接；**actor 檢查為 `rolsuper` only（與 ENT1-A 相同，不沿用 F2；D-ACT 範圍）**。**本 migration 不對任何 runtime 角色、PUBLIC 或非 superuser DB owner 授予任何 schema USAGE／函式 EXECUTE／表權限**（sealed owner 無成員、NOLOGIN，沒有可達的 membership／SET／ADMIN 路徑）；函式 owner（sealed seal owner）本身持有其函式的 EXECUTE，native superuser 不需新增授權即可直接建立 seal——因此正確說法是「沒有 runtime／PUBLIC 授權且 owner 不可達」，不是「任何角色都不能執行」。表初始為空；repository、trigger、worker、meal-save 路徑皆不呼叫。
+- **ENT0 物件上的四條接縫（僅授給 sealed seal owner）**：`CREATE POLICY seal_owner_select ON retention_entitlement.producers FOR SELECT TO consumer_retention_seal_owner USING (true)`；`GRANT USAGE ON SCHEMA retention_entitlement`；`GRANT SELECT ON retention_entitlement.producers`；`GRANT EXECUTE ON FUNCTION retention_entitlement.entitlement_state_at(uuid, timestamptz)`。ENT1-A 對 capture／ENT0 的既有接縫維持原狀（G1 在任何 DDL 前斷言它們恰為驗收狀態；G2 斷言新的精確值：entitlement schema 恰有 acquisition owner 與 seal owner 兩個 USAGE 受權者、registry 恰有 seal owner 的 SELECT、resolver 恰有兩個 EXECUTE 受權者、registry 恰有兩條 policy）。為何用 resolver 而不直接 `LOCK TABLE`：對 `producers` 取 SHARE 需要 UPDATE／DELETE／TRUNCATE（或 PG17 的 MAINTAIN）權限，遠大於所需的讀取接縫，且 MAINTAIN 不存在於較舊的 PostgreSQL。
+- 管理者邊界（不宣稱保密）：superuser／能停用 trigger 或設定 `session_replication_role=replica` 的身分可寫入自洽的 seal、更新或刪除；sealed owner 可 TRUNCATE（NOLOGIN、無成員）。本包只防止 runtime 與一般呼叫路徑。
+
+### 19.4 inactive 邊界與不宣稱
+
+- 沒有 producer、沒有任何真實 receipt／seal、沒有呼叫路徑；**不能宣稱 registry 已完整，也不能宣稱任何 Free 已可最終化**。seal 沒有消費者：ENT1-B 尚不存在。
+- 本機 disposable PostgreSQL 17.6 驗證；未連 Hosted、未部署、未 push；法律 **DRAFT／NOT ACTIVE**；Retention 仍 inactive。
+- 仍未驗證／不宣稱：其他非 superuser 的套用安排與任何 Hosted actor、standby、pooler、牆鐘回撥、`PREPARE TRANSACTION` 持鎖的運維影響、大規模鎖數、`ENT0 < demo` 亂序（U2）、真實 producer、ENT-F 必要來源契約、ENT1-B、顯示、purge。
+
+### 19.5 Gates、mutation 與 successor 綁定（C3 corrective；原 R1、Z64 與 C1-a 已由獨立驗收關閉）
+
+**施工者定向自測，不是獨立驗收**。本輪交付與輸出：`D:/tastkind-parallel-20261017/retention/run-20261019-entr-c3-cla01`。原 R1（八個 partial-predecessor cases／Z63、Z65 偵測）、Z64 直接缺陷與 C1-a（error 缺漏／無效觀察）已由獨立驗收關閉（`retention-acceptance/run-20261018-entrc2acc-06bf4d8b0c/ACCEPTANCE_REPORT_C2.md`），不重新開啟；C2 的 F03 十四列、N06 baseline 計算（launch snapshot ＋ 精確外部 delta）與 71 項 53／9／3／6／0 分類同樣不重新爭論。本輪只處理該驗收留下的唯一項目 C1-b：**必要辨識欄位缺漏時分類器改走一般觀察路徑而跳過 N06 provenance 驗證**。正常 production migration 與所有既有 predecessor migration bytes 完全不變。A＝契約／功能；B＝`NEW_UNAUTHORIZED_REGRESSION`；B＝0 不代替 A。
+
+- **C1-b 修正（案例種類由呼叫端／可信 case spec 決定，不由待驗列的欄位決定）**：`deriveApplicationClass(observations, kind)` 的第二個引數（`'N05'` 或 `'N06'`，由呼叫端依其所判定的 gate 提供）為**必要**；缺漏、undefined、null、未知字串、大小寫不符、物件一律拒絕，**沒有任何依列內容猜測的降級**。分類前，每一列（不論 pass 與否）都先驗證 case identity：N05 列須有 N05／META 標籤與 `expectPrefix`，且不得帶任何 N06 並發欄位；N06 列的標籤必須是可信常數 `N06_DRIFT_EXPECT`（並發 drift 案例，且列的 `expect` 必須等於該案例的可信預期拒絕）或 `N06_FAULT_LABELS`（非並發 fault 案例，不得帶並發欄位）；其他標籤拒絕。**對 N06 並發 drift 案例，baseline provenance 驗證無條件執行**：`paused === true`、完整的 `baseline`（phase、`launchObjects`、`externalDelta.objects`／`catalog` 的 added／changed／removed、`overlap`）、`externalDeltaSize` 必須是整數且等於所記錄 delta 的實際大小、不得有舊式 `baselinePhase` 標記、`overlap` 必須為空、預期物件集合必須等於 launch ＋ 外部 delta。任何必要欄位缺漏、無效或互相矛盾，直接拒絕分類，不降級、不 fallback。標籤集合與預期拒絕在產生這些列的 gate 內另有一致性檢查（`SETUP_N06_DRIFT_LABELS`、`SETUP_N06_FAULT_LABELS`）。
+- **原反例前／後**：獨立驗收者的兩個反例（刪除 `paused`、`baseline`、`externalDeltaSize`、`label` 後原判 behavioural；再把 post-state 當 baseline、衍生欄位改零差異後原判 message-overlap）與其餘 48 個探針（四個辨識欄位的 15 種子集、baseline 各子結構缺漏／無效值、標籤缺漏／無效／他種案例／改標為 fault、case-kind 缺漏或無效、N06 列當 N05、error 缺漏／空物件／字串）在未修版本（C2 `11065c4e`）共 50 個探針中 **22 個未被拒絕**（含兩個原反例）；在修正版 **50／50 符合預期**（拒絕該拒絕的，並正確分類兩個有效列：migration 自己的殘留仍為 behavioural，合法外部 drift 的乾淨拒絕仍為 message-overlap）。輸出：`out/repro-before/repro.json`、`out/repro-after/repro.json`。
+- **控制不會退出並發驗證路徑**：F03 由 14 列增為 16 列：新增真實 N06 fault 列收據與 `META-n06-case-kind-and-provenance-mandatory`（21 項，皆為真實 receipt 的修改副本）。此外對分類器做 12 個單點弱化（略過 drift 的 provenance、只在列含 `paused` 時驗證、不驗 `externalDeltaSize`、case-kind 預設為 N05、略過 identity、未知標籤當 drift、不比對可信預期拒絕、fault 列可帶並發欄位、N05 列可帶 N06 欄位、移除 launch＋delta 比對、不要求 paused、不要求 phase），這些內建檢查**全部偵測**（第一次只偵測 10／12，缺口是「無 kind 引數的 N05 列」與「provenance 俱全但 baseline 吞掉新增物件」兩種探針；補上後 12／12，首次輸出以此文字保留）。輸出：`out/classifier-mutants/result.json`。
+- **已關閉的 error 觀察驗證未被繞過**：C2 的 24 項 error 契約檢查原樣保留且通過；N06 列的 error 缺漏／空物件／字串亦被拒絕（上述探針與 F03 內建檢查）。
+- **新實跑與沿用分開**：PG 新跑——F03 16／16、正常 N06 15 案（baseline 行為）、mutation harness 的 Z61、Z62（N06 為主 gate，各 15 案）與 Z64（N05 為主 gate，39 案）；harness 現以 gate 種類傳入 kind。Z61／Z62／Z64 的分類不變（behavioural／behavioural／message-overlap）。非 PG——C2 作者新 PG 儲存的真實觀察 16 組（Z61 15 案、Z62 15 案、Z64 39 案、正常 N06、own-role、F03 各列）以交付版與 C3 分類器重放，**16 組分類逐一相同、無一被拒**。其餘 mutants 的 gate、SQL 與證據來源不變，沿用 71 項 53 gate-behavioural／9 message-overlap／3 structural／6 migration-guard／0 green。
+- **舊觀察的適用限制（不補造欄位）**：C1 時期儲存的舊 Z61 五個失敗列、Z62 三個失敗列缺少 provenance，C2 與 C3 皆拒絕分類，**不得當作 C3 分類器的相容性證據**；原 C2 文字「119 筆舊觀察逐一相同」更正為：以最終分類器重放，13 組（111 列）得到原組別分類、上述 2 組因缺 provenance 被拒；新 baseline 的正確性由 C2／C3 新跑的 Z61、Z62 各 15 案與 F03 支持。另：分類器簽名已改為需要第二引數，任何外部 driver（例如獨立驗收者或作者過去的探測腳本）若以單一引數呼叫將被拒絕，必須傳入 case kind。
+- **套件範圍**：未重跑 23 gates、71 全套、static296／PG38 歷史差分；兩側無 checks、setup 中止、skip、先前 static131／PG7 及較早 140 支未執行範圍仍未驗證，不宣稱 parity。N06 fault 列的 baseline（migration 啟動前立即取得的快照）仍無獨立記錄的 provenance，這是已知範圍界線，不在本輪修正內。分類器只重算物件側 launch＋delta，不從完整 catalog 原始快照重新推導 catalog baseline（C2 已揭露）。
+- **歷史不改寫**：原 Z63 首輪 FAIL（`run-20261017-entr-01/out/mut3`）、Z58 R1 首輪 13 pass／1 FAIL、Z64 獨立反例、C1 兩項獨立 blocker、C2 獨立驗收的 C1-b 反例與其證據、舊候選 `89eb2139`／`1ce5b322`／`a7c28023`／`11065c4e` 與其交付均保留，不改寫、不 amend。
+
+### 19.6 successor 綁定
+
+persistence smoke 釘住 ENT-R migration 的 sha256 與三個新檔，以及在 ENT-R 狀態下被重新綁定的三個檔（ENT1-A smoke、ENT0 smoke、recovery guard）的 mode／blob；有序尾端 `[capture, ENT0, demo, ENT1-A, ENT-R]`，ENT-R **只**與完整的 ENT1-A、ENT0 與 origin successor 一起被接受（全有或全無）；前一個狀態（無 ENT-R）的位元組要求不變。綁定單向：沒有任何檔案記錄 persistence smoke 或自身的 hash。
+
+### 19.7 需要 Owner 決定、無法由既定契約推出的事項
+
+1. 誰以什麼程序簽發 seal（operator 身分、雙人覆核）以及「每個現實權益來源都已有 producer」的證據標準——取決於 ENT-F 必要來源契約，而它取決於付款渠道、試用起算事件與 webhook 契約。
+2. 撤銷／更正／新 epoch 的政策：目前刻意沒有任何自動路徑；是否允許以及如何處理已被依賴的 seal。
+3. 在任何真實 producer 存在前是否允許 seal（本包拒絕空 registry，且不接受 placeholder producer 作為替代）。
+4. ENT1-B 如何組合 seal 範圍、coverage 與升級延長形成最終 grant。
+5. deployment-actor 相容方案（D-ACT 前置條件，未改變）。

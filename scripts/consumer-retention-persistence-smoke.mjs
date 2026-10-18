@@ -41,6 +41,26 @@ export const ACQ_ENT0_OVERRIDES = Object.freeze({
 export const ACQ_RECOVERY_OVERRIDES = Object.freeze({
   'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', 'ad73119dc66c8f467d18180161d5e8b4314862c5'])
 });
+// R0-B-ENT-R (retention line, 2026-10-17; authorization to construct a candidate, NOT an acceptance): ONE more forward migration (inactive registry integrity seal), sorted AFTER the ENT1-A migration. Recognized only together with the
+// exact ENT1-A record and everything it requires, all-or-nothing. Binding is one-way: this file pins the migration's sha256 and the exact mode/blob of the three new ENT-R files and of the three files the ENT-R state re-binds
+// (the ENT1-A smoke and the ENT0 smoke, whose F01 ordered tails gained one entry, and the recovery guard); none of them records this file's hash, and the new smoke/mutation scripts only import helpers from it (code import, no hash).
+export const SEAL_MIGRATION = '20261018010000_consumer_retention_registry_seal.sql';
+export const SEAL_MIGRATION_SHA256 = 'c97ab695480163b7774ef437715aa1e57386810ff6ad4f3727cd11d8935d60b1';
+export const SEAL_FILES = Object.freeze({
+  ['supabase/migrations/' + SEAL_MIGRATION]: Object.freeze(['100644', '32914d1c868b37b2bcadef4c6061a09e5edc7db4']),
+  'scripts/consumer-retention-seal-smoke.mjs': Object.freeze(['100644', '06a14665767dada93716d18d8a341e105e44e829']),
+  'scripts/consumer-retention-seal-mutations.mjs': Object.freeze(['100644', '5b8d152d64934ea08d1b95cf518d0b22a9ef8d75'])
+});
+// In the ENT-R state the ENT1-A smoke and the ENT0 smoke are the versions whose F01 knows the ENT-R tail, and the recovery guard is the successor-aware version that also accepts the ENT-R paths.
+export const SEAL_ACQ_OVERRIDES = Object.freeze({
+  'scripts/consumer-retention-acquisition-smoke.mjs': Object.freeze(['100644', '7569adbc1cdbceb6be065c7065e0bca10888f67b'])
+});
+export const SEAL_ENT0_OVERRIDES = Object.freeze({
+  'scripts/consumer-retention-entitlement-smoke.mjs': Object.freeze(['100644', '94d73f993fc5e421bdfc129d0b45da5ae9c8596e'])
+});
+export const SEAL_RECOVERY_OVERRIDES = Object.freeze({
+  'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '7fb729ed5cbe815ea9ddaa0fd311b543c3a584e6'])
+});
 // Origin successor (commits 862f4b9..ad53f5e on origin/main, 7ed55fc -> ad53f5e): ONE more forward migration, which sorts AFTER the ENT0 migration, plus 25 other paths (5 recovery, 5 PC-2, 16 other).
 // This is an IDENTITY binding of the observed committed bytes only. It does NOT record that the successor was reviewed or accepted. Binding is one-way: this file pins their bytes; none of them
 // records this file's hash. All-or-nothing, and recognized only together with the 'ent0' recovery state and the PC-2 record. Entries: [status, path, mode, blob at ad53f5e, blob at 7ed55fc or null, layer].
@@ -132,8 +152,8 @@ export async function baseline(cl,rec,{legacy=false}={}){
   // Exact successor recognition: the original 143-file inventory (the retention migration is file 143), followed by an EXACT ORDERED tail of pinned forward migrations. No tail file is assumed to be last:
   // the accepted tails are [], [capture], [capture, ENT0], [capture, ENT0, origin demo migration] and [capture, ENT0, origin demo migration, ENT1-A]; the demo migration sorts after ENT0 and the ENT1-A migration after the demo
   // migration. Each tail file is pinned by sha256.
-  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256};
-  const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION]];
+  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256};
+  const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,SEAL_MIGRATION]];
   const tail=tails.find(t=>files.length===143+t.length&&files.slice(143).join('|')===t.join('|')&&t.every(n=>sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))===tailPins[n]));
   if(!tail||files[142]!==MIGRATION)throw Error('MIGRATION_INVENTORY');
   const predecessors=files.slice(0,142);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
@@ -472,17 +492,21 @@ export function recoverySuccessorState(git){
   if(dm.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:dm.violations};
   const demo=dm.state==='record';
   // R0-B-ENT1-A: its three files (all-or-nothing, byte-exact) are recognized only together with the ent0 state AND the exact origin successor; the guard and ENT0 smoke are then judged against their ENT1-A bytes.
-  const af=acqFilesState(git),acq=af.present;
+  // R0-B-ENT-R: its three files (all-or-nothing, byte-exact) are recognized only together with the exact ENT1-A record; the ENT1-A smoke, ENT0 smoke and guard are then judged against their ENT-R bytes.
+  const sf=sealFilesState(git),seal=sf.present;
+  if(seal&&!sf.exact)return {state:'invalid',exempt:false,paths:[],violations:sf.violations};
+  const af=acqFilesState(git,seal),acq=af.present;
   if(acq&&!af.exact)return {state:'invalid',exempt:false,paths:[],violations:af.violations};
-  const r=recoverySuccessorStateCore(git,demo,acq),ef=ent0FilesState(git,acq),pc=pc2FilesState(git,demo);
+  if(seal&&!acq)return {state:'invalid',exempt:false,paths:[],violations:['seal-files:requires-acq-record']};
+  const r=recoverySuccessorStateCore(git,demo,acq,seal),ef=ent0FilesState(git,acq,seal),pc=pc2FilesState(git,demo);
   if(acq&&(!demo||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:['acq-files:requires-ent0-state-and-origin-successor']};
   if(ef.present&&(!ef.exact||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:[...ef.violations,...(r.state!=='ent0'?['ent0-files:without-ent0-record']:[])]};
   if(!ef.present&&r.state==='ent0')return {state:'invalid',exempt:false,paths:r.paths,violations:['ent0-record:files-absent']};
   // PC-2 consent-document successor (all-or-nothing): either none of its ten paths moved from the accepted base or all ten are at the exact recorded mode/blob. Only then are its paths exempt, and only together with an exempt recovery state.
   if(pc.state==='invalid')return {state:'invalid',exempt:false,paths:r.paths,violations:pc.violations};
   if(demo&&(r.state!=='ent0'||pc.state!=='record'))return {state:'invalid',exempt:false,paths:r.paths,violations:['demo-record:requires-ent0-state-and-pc2-record']};
-  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[])],pc2:'record',demo:demo?'record':'base',acq:acq?'record':'base'};}
-  return {...r,pc2:'base',demo:'base',acq:'base'};
+  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[])],pc2:'record',demo:demo?'record':'base',acq:acq?'record':'base',seal:seal?'record':'base'};}
+  return {...r,pc2:'base',demo:'base',acq:'base',seal:'base'};
 }
 // PC-2 consent-document successor (7ed55fc "Fix consent document read states and record inactive PC2 deployment"): the ten paths below, relative to the accepted retention base 90c8d66.
 // Entries: [status, path, mode, blob at the record, blob at the accepted base or null when added]. Binding is one-way: this file binds their bytes; none of them records this file's hash.
@@ -540,9 +564,9 @@ export const ENT0_RECOVERY_OVERRIDES=Object.freeze({
   'scripts/consumer-meal-save-recovery-guard.mjs':Object.freeze(['100644','cfd5cd19573deabc22616686fc606238827c6bd3'])
 });
 // All-or-nothing, byte-exact check of the three ENT0 files (mode/blob in index and worktree). Returns {present,exact,violations}.
-export function ent0FilesState(git,acq=false){
+export function ent0FilesState(git,acq=false,seal=false){
   const paths=Object.keys(ENT0_FILES);
-  const want=p=>acq&&ACQ_ENT0_OVERRIDES[p]?ACQ_ENT0_OVERRIDES[p]:ENT0_FILES[p];
+  const want=p=>seal&&SEAL_ENT0_OVERRIDES[p]?SEAL_ENT0_OVERRIDES[p]:acq&&ACQ_ENT0_OVERRIDES[p]?ACQ_ENT0_OVERRIDES[p]:ENT0_FILES[p];
   const index=new Map();for(const l of git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean)){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
   const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));
   if(present.length===0&&index.size===0)return {present:false,exact:true,violations:[]};
@@ -552,17 +576,29 @@ export function ent0FilesState(git,acq=false){
   return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':ent0-mismatch')};
 }
 // All-or-nothing, byte-exact check of the three ENT1-A files (mode/blob in index and worktree). Returns {present,exact,violations}.
-export function acqFilesState(git){
+export function acqFilesState(git,seal=false){
   const paths=Object.keys(ACQ_FILES);
+  const want=p=>seal&&SEAL_ACQ_OVERRIDES[p]?SEAL_ACQ_OVERRIDES[p]:ACQ_FILES[p];
   const index=new Map();for(const l of git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean)){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
   const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));
   if(present.length===0&&index.size===0)return {present:false,exact:true,violations:[]};
   const hashed=present.length?git(['hash-object','--',...present]).trim().split('\n').filter(Boolean):[];
   const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
-  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=ACQ_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
+  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=want(p);return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
   return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':acq-mismatch')};
 }
-function recoverySuccessorStateCore(git,demo=false,acq=false){
+// All-or-nothing, byte-exact check of the three ENT-R files (mode/blob in index and worktree). Returns {present,exact,violations}.
+export function sealFilesState(git){
+  const paths=Object.keys(SEAL_FILES);
+  const index=new Map();for(const l of git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean)){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));
+  if(present.length===0&&index.size===0)return {present:false,exact:true,violations:[]};
+  const hashed=present.length?git(['hash-object','--',...present]).trim().split('\n').filter(Boolean):[];
+  const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
+  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=SEAL_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
+  return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':seal-mismatch')};
+}
+function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
   const overrides=CORRECTIVE_SUCCESSOR.overrides;
@@ -585,7 +621,7 @@ function recoverySuccessorStateCore(git,demo=false,acq=false){
   const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
   const atD1D2=e=>d1d2[e[1]]?atRecord([e[0],e[1],...d1d2[e[1]]]):atCorrective(e);
   const atF1F2=e=>f1f2[e[1]]?atRecord([e[0],e[1],...f1f2[e[1]]]):atD1D2(e);
-  const ent0o=acq?ACQ_RECOVERY_OVERRIDES:ENT0_RECOVERY_OVERRIDES;
+  const ent0o=seal?SEAL_RECOVERY_OVERRIDES:acq?ACQ_RECOVERY_OVERRIDES:ENT0_RECOVERY_OVERRIDES;
   if(Object.keys(ent0o).length!==1||!Object.keys(ent0o).every(p=>paths.includes(p)))throw Error('ENT0_RECORD_SHAPE');
   const atENT0=e=>ent0o[e[1]]?atRecord([e[0],e[1],...ent0o[e[1]]]):atF1F2(e);
   // Origin successor: only when its 26-path record is exact (demo===true) do five recovery paths take the successor bytes; every other recovery path keeps its ENT0-chain bytes.
@@ -597,13 +633,13 @@ function recoverySuccessorStateCore(git,demo=false,acq=false){
   if(cor.every(Boolean))return {state:'corrective',exempt:true,paths,violations:[]};
   if(fix.every(Boolean))return {state:'d1d2',exempt:true,paths,violations:[]};
   if(f12.every(Boolean))return {state:'f1f2',exempt:true,paths,violations:[]};
-  if(en0.every(Boolean)){const ef=ent0FilesState(git,acq);return ef.exact?{state:'ent0',exempt:true,paths,violations:[]}:{state:'invalid',exempt:false,paths,violations:ef.violations};}
+  if(en0.every(Boolean)){const ef=ent0FilesState(git,acq,seal);return ef.exact?{state:'ent0',exempt:true,paths,violations:[]}:{state:'invalid',exempt:false,paths,violations:ef.violations};}
   if(cap.every(Boolean))return {state:'capture',exempt:false,paths,violations:[]};
   return {state:'invalid',exempt:false,paths,violations:S.entries.flatMap((e,k)=>rec[k]||cor[k]||fix[k]||f12[k]||en0[k]?[]:[`${e[1]}:recovery-successor-${cap[k]?'partial':'mismatch'}`])};
 }
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};
-  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md',...Object.keys(ENT0_FILES),...Object.keys(ACQ_FILES)];
+  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md',...Object.keys(ENT0_FILES),...Object.keys(ACQ_FILES),...Object.keys(SEAL_FILES)];
   // The accepted R0-A tree remains the frozen reference even after the additive commit.
   const baseline='3b1957e8dc459db6fdaa06bec873c1acc632ae9a';const entries=git(['ls-tree','-r',baseline]).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return {path:p,mode,blob};});
   const index=new Map(git(['ls-files','--stage']).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');return [p,{mode,blob,stage}];}));
