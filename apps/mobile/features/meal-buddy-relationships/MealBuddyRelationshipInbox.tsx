@@ -37,6 +37,13 @@ function bandsFor(relationships: readonly MealBuddyRelationshipItem[]): readonly
     relationships.filter((relationship) => relationship.state === state);
   return Object.freeze([
     Object.freeze({
+      key: "accepted" as const,
+      title: copy.acceptedGroupTitle,
+      subtitle: copy.acceptedGroupSubtitle,
+      emptyLabel: copy.emptyAccepted,
+      items: withState("accepted")
+    }),
+    Object.freeze({
       key: "incoming_pending" as const,
       title: copy.incomingGroupTitle,
       subtitle: null,
@@ -49,13 +56,6 @@ function bandsFor(relationships: readonly MealBuddyRelationshipItem[]): readonly
       subtitle: null,
       emptyLabel: copy.emptyOutgoing,
       items: withState("outgoing_pending")
-    }),
-    Object.freeze({
-      key: "accepted" as const,
-      title: copy.acceptedGroupTitle,
-      subtitle: copy.acceptedGroupSubtitle,
-      emptyLabel: copy.emptyAccepted,
-      items: withState("accepted")
     })
   ]);
 }
