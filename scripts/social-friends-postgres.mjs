@@ -49,12 +49,14 @@ try{
  await su.query(`create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb) $$;`);
  db=await connect("postgres");
  const migrations=fs.readdirSync(path.join(root,"supabase/migrations")).filter(n=>n.endsWith(".sql")).sort(),social=migrations.filter(n=>n.includes("_social_friend_lookup_run_mvbudhyz.sql")||n.includes("_social_phone_invite_f2_c4_mvckab05.sql"));assert.equal(social.length,2);
- for(const name of migrations.filter(n=>!social.includes(n))){
+ // Integration: apply in exact sorted order. Migrations that sort before the first social file now; those after the second social file (the ENT-R seal) after the F2 upgrade step below.
+ const preSocial=migrations.filter(n=>n<social[0]),postSocial=migrations.filter(n=>n>social[1]);assert.equal(preSocial.length+postSocial.length+2,migrations.length);
+ for(const name of preSocial){
   if(name==="20260930174028_consumer_pc2_onboarding_consent_foundation.sql"){
    await su.query("insert into auth.users(id,email) values($1,'legacy@synthetic.invalid')",[LEGACY]);
    await db.query("insert into public.consumer_profiles(user_id,profile_id,display_name,anonymous_display_name,mascot_avatar_key) values($1,'synthetic-legacy-social','Legacy','Legacy','BG')",[LEGACY]);
   }
-  const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record/.test(name)?su:db;
+  const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_retention_registry_seal/.test(name)?su:db;
   try{await installer.query(fs.readFileSync(path.join(root,"supabase/migrations",name),"utf8"));}catch(e){throw Error("BASE_MIGRATION "+name+" "+e.code+" "+e.message);}
  }
  const before=await fingerprint();await db.query(fs.readFileSync(path.join(root,"supabase/migrations",social[0]),"utf8"));
@@ -91,6 +93,9 @@ try{
  await settings(D,false);
  const oldPendingRef=(await relation(D,{operation:"list"})).body.relationships.find(r=>r.state==="incoming_pending"&&r.counterpart.displayName==="Ella");
  check("F2 upgrade: pre-migration pending invite remains acceptable after OFF",(await relation(D,{operation:"accept",relationshipRef:oldPendingRef.relationshipRef})).status===200);
+ for(const name of postSocial){const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_retention_registry_seal/.test(name)?su:db;try{await installer.query(fs.readFileSync(path.join(root,"supabase/migrations",name),"utf8"));}catch(e){throw Error("POST_SOCIAL_MIGRATION "+name+" "+e.code+" "+e.message);}}
+ check("migrations sorted after the social files (retention seal) apply on top of the populated social state",true,{postSocial});
+ const beforeFlow=await fingerprint();
  check("F2 upgrade: pre-migration friend remains accepted after OFF",(await relation(F,{operation:"list"})).body.relationships.some(r=>r.state==="accepted"&&r.counterpart.displayName==="Dana"));
  check("fresh full predecessor and two social migrations applied",true,{count:migrations.length,migrations:social});
  check("F3 Demo schema has canonical postgres ownership",(await db.query("select pg_get_userbyid(nspowner) owner from pg_namespace where nspname='consumer_demo_internal'")).rows[0].owner==="postgres");
@@ -309,7 +314,7 @@ try{
  check("F2 sender can cancel existing invitation while OFF",(await relation(A,{operation:"cancel",relationshipRef:lastSend.body.relationships[0].relationshipRef})).status===200);
  fs.writeFileSync(path.join(out,"f2-contract-results.json"),JSON.stringify({contract:"OWNER_F2_20261017",checks:checks.filter(c=>c.name.startsWith("F2")),raceBarriers:waits,decisionPoint:"pair/safety locks -> classify pending/accepted replay vs create/reinvite -> target setting lock -> fresh setting read -> unchanged canonical send -> commit",phoneDomain:"server-authenticated AES-GCM AAD, ordinary scr1 protocol unchanged",permanentRevocationAdded:false,codeAndOtherChannelsChanged:false,providerAuth:"SYNTHETIC_INJECTION",database:"REAL_LOCAL_PG17",hosted:false},null,2));
 
- check("retention/shared qualifications remain byte-identical after full flow",before===await fingerprint());
+ check("retention/shared qualifications remain byte-identical after full flow",beforeFlow===await fingerprint());
  fs.writeFileSync(path.join(out,"migration-inputs.json"),JSON.stringify(migrations.map(name=>({name,sha256:createHash("sha256").update(fs.readFileSync(path.join(root,"supabase/migrations",name))).digest("hex")})),null,2));
 }catch(e){failed={message:e.message,stack:e.stack};console.error(e.stack);process.exitCode=1;}
 finally{

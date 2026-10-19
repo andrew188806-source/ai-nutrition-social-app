@@ -138,7 +138,35 @@ check("39 list accepts no graph target or scope", request.includes('operation ==
 check("40 actions accept only actor-bound mbr1 reference", request.includes("MEAL_BUDDY_RELATIONSHIP_REF_PREFIX") && types.includes('relationshipRef: string'));
 check("41 query and authority headers fail closed", request.includes('url.search !== ""') && request.includes("x-target-user-id") && request.includes("x-relation-id"));
 check("42 response exposes only policy version, opaque ref, relative state and the sanctioned minimal counterpart summary", /MealBuddyRelationshipItem = Readonly<\{\s*relationshipRef: string;\s*state: MealBuddyRelationshipState;\s*counterpart: MealBuddyRelationshipCounterpart;\s*\}>/.test(types) && /MealBuddyRelationshipCounterpart = Readonly<\{\s*displayName: string;\s*mascotAvatarKey: string;\s*\}>/.test(types) && !/targetId|counterpartId|relationId|publicBio|willingToChat|email|phone/.test(types));
-check("43 service opens scr1 server-side before send/read", service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId"));
+// Social C4 (F2) successor of the relationship-api pair (integration, 2026-10-19). The ORIGINAL assertion below stays as one accepted form; the successor is a second, exact form: a structural check
+// AND the exact sha256 of the two accepted C4 files. The same structural functions are exercised by negative controls (43-N*, 62-N*) on mutated copies of the real sources.
+const SOCIAL_C4_SERVICE_SHA256 = "7de9a0243105014c37ab66c457f2d4e697748b5815bf69d0ac9c063c00f22ea2";
+const SOCIAL_C4_REPOSITORY_SHA256 = "76e5879243475d88c47a236427612b353d1a53bbc7c656fa6731d7f73d97a831";
+const occurrences = (text, needle) => text.split(needle).length - 1;
+function socialServiceStructure(text) {
+  const open = "const { claims, phoneSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);";
+  return occurrences(text, 'import { openInviteCandidateRef } from "../phone-search-candidate-ref.ts";') === 1
+    && occurrences(text, open) === 1 && !text.includes("candidateCipher.open(")
+    && occurrences(text, "this.repository.sendPhoneSearch(actorUserId, claims.candidateUserId)") === 1
+    && occurrences(text, "this.repository.send(actorUserId, claims.candidateUserId)") === 1
+    && occurrences(text, "this.repository.read(actorUserId, claims.candidateUserId)") === 1
+    && occurrences(text, "phoneSearch") === 2 && !/request\.(phoneSearch|source|origin|kind|channel)/.test(text)
+    && occurrences(text, "claims.candidateUserId") === 3;
+}
+function socialRepositoryStructure(text) {
+  const names = [...text.matchAll(/^const (\w+) = defineSocialRuntimeExecutorStatement/gm)].map((m) => m[1]).sort();
+  return JSON.stringify(names) === JSON.stringify(["BIND_ACTOR", "LIST", "PROJECT_COUNTERPARTS", "READ", "RESOLVE", "SEND", "SEND_PHONE_SEARCH", "UNFRIEND"])
+    && occurrences(text, "defineSocialRuntimeExecutorStatement") === 9
+    && occurrences(text, "social_internal.send_phone_search_invite($1::uuid, $2::uuid)") === 1
+    && occurrences(text, "social_internal.send_meal_buddy_invite($1::uuid, $2::uuid)") === 1 && text.includes("social_internal.end_meal_buddy_relationship")
+    && occurrences(text, "pg_catalog.set_config('request.jwt.claim.sub', $1::text, true)") === 1
+    && occurrences(text, "send(actor: string, target: string) { return this.query(actor, SEND, [actor, target]); }") === 1
+    && occurrences(text, "sendPhoneSearch(actor: string, target: string) { return this.query(actor, SEND_PHONE_SEARCH, [actor, target], true); }") === 1
+    && occurrences(text, "if (bindActor) await transaction.query(BIND_ACTOR, [actorUserId]);") === 1
+    && occurrences(text, "BIND_ACTOR") === 2 && occurrences(text, "SEND_PHONE_SEARCH") === 2 && occurrences(text, "[actor, target], true)") === 1;
+}
+check("43 service opens scr1 server-side before send/read", (service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId"))
+  || (socialServiceStructure(service) && sha256(Buffer.from(service, "utf8")) === SOCIAL_C4_SERVICE_SHA256));
 check("44 service opens mbr1 server-side before action", service.includes("relationshipCipher.open(actorUserId, request.relationshipRef, now)") && service.includes("claims.relationId"));
 check("45 service seals every internal relation id, discards counterpart UUID and emits only the composed public summary", service.includes("relationshipCipher.seal(actorUserId, row.relation_id, now)") && service.includes("counterpart: row.counterpart") && !service.includes("counterpart_user_id:"));
 check("46 cardinality failures do not fabricate state", service.includes("meal_buddy_relationship_cardinality_invalid") && service.includes("meal_buddy_relationship_action_unavailable"));
@@ -177,7 +205,24 @@ check("62 repository calls only the four frozen relationship functions plus the 
   // SR-2K-B adds exactly one more: the canonical unfriend. Seven statements are acceptable ONLY when
   // the seventh is that function, so an unnamed extra statement still fails.
   || ((repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 7
-    && repository.includes("social_internal.end_meal_buddy_relationship"))));
+    && repository.includes("social_internal.end_meal_buddy_relationship"))
+  // Social C4 (F2): exactly two more NAMED statements (BIND_ACTOR only for the phone path, SEND_PHONE_SEARCH), recognised only by exact structure and the exact accepted bytes.
+  || (socialRepositoryStructure(repository) && sha256(Buffer.from(repository, "utf8")) === SOCIAL_C4_REPOSITORY_SHA256)));
+// Negative controls of the successor forms: each mutates the REAL source in memory and must turn the structural check false; the pristine copies must be accepted.
+const neg = (name, condition) => check(name, condition);
+neg("43-N0 control: the pristine service is accepted by the successor structure", socialServiceStructure(service) || (service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId")));
+if (socialServiceStructure(service)) {
+  neg("43-N1 removing the server-side unseal (target taken from the request) is rejected", !socialServiceStructure(service.replace("const { claims, phoneSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);", "const claims = { candidateUserId: request.candidateRef }; const phoneSearch = false;")));
+  neg("43-N2 unsealing for another actor is rejected", !socialServiceStructure(service.replace("openInviteCandidateRef(this.candidateCipher, actorUserId,", "openInviteCandidateRef(this.candidateCipher, request.actorUserId,")));
+  neg("43-N3 deriving the phone-search flag from the request is rejected", !socialServiceStructure(service.replace("const { claims, phoneSearch } =", "const { claims } =").replace("? phoneSearch", "? request.phoneSearch")));
+  neg("43-N4 any byte change of the accepted service is rejected by the exact pin", sha256(Buffer.from(service + " ", "utf8")) !== SOCIAL_C4_SERVICE_SHA256);
+  neg("62-N0 control: the pristine repository is accepted by the successor structure", socialRepositoryStructure(repository));
+  neg("62-N1 an extra unnamed statement is rejected", !socialRepositoryStructure(repository.replace("const SEND = defineSocialRuntimeExecutorStatement", "const EXTRA = defineSocialRuntimeExecutorStatement<{ x: string }>`select 1`;\nconst SEND = defineSocialRuntimeExecutorStatement")));
+  neg("62-N2 the ordinary send binding the actor is rejected", !socialRepositoryStructure(repository.replace("send(actor: string, target: string) { return this.query(actor, SEND, [actor, target]); }", "send(actor: string, target: string) { return this.query(actor, SEND, [actor, target], true); }")));
+  neg("62-N3 the phone path calling the ordinary send function is rejected", !socialRepositoryStructure(repository.replace("this.query(actor, SEND_PHONE_SEARCH, [actor, target], true)", "this.query(actor, SEND, [actor, target], true)")));
+  neg("62-N4 an unconditional actor binding is rejected", !socialRepositoryStructure(repository.replace("if (bindActor) await transaction.query(BIND_ACTOR, [actorUserId]);", "await transaction.query(BIND_ACTOR, [actorUserId]);")));
+  neg("62-N5 any byte change of the accepted repository is rejected by the exact pin", sha256(Buffer.from(repository + " ", "utf8")) !== SOCIAL_C4_REPOSITORY_SHA256);
+}
 
 console.log(JSON.stringify({ suite: "meal-buddy-relationship-sr2i-a-guard", lifecycle: lifecycle.phase, total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, canonicalManifestSha256: manifest.aggregateSha256, migrationSha256: sha256(fs.readFileSync(path.join(root, SR2IA_MIGRATION))), networkUsed: false, databaseUsed: false, credentialsUsed: false, developmentTouched: false, productionTouched: false }, null, 2));
 if (failures.length) process.exitCode = 1;

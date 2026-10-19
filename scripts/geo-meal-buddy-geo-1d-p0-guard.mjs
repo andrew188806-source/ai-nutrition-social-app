@@ -143,11 +143,35 @@ check("Meal Context authority bytes remain frozen",
     "supabase/functions/_shared/meal-buddy-context"]).length === 0);
 check("P0 activates no GEO narrowing or location UI",
   !/narrow_branch_candidates|within_radius|distance_meters|useConsumerLocation/.test(migration + runtime));
+// Social C4 (F2) successor (integration, 2026-10-19): the invite relationship-api directory may differ from the GEO-1D-P0 baseline ONLY by exactly the two accepted C4 files at their exact sha256; the chat-api and social-exposure
+// directories stay byte-frozen. The original assertion (all three directories identical) stays as the other accepted form. The decision function is exercised by negative controls below.
+const REL_DIR = "supabase/functions/_shared/meal-buddy-relationship-api";
+const SOCIAL_C4_RELATIONSHIP_PINS = Object.freeze({
+  [REL_DIR + "/repository.ts"]: "76e5879243475d88c47a236427612b353d1a53bbc7c656fa6731d7f73d97a831",
+  [REL_DIR + "/service.ts"]: "7de9a0243105014c37ab66c457f2d4e697748b5815bf69d0ac9c063c00f22ea2"
+});
+const shaOfFile = (file) => crypto.createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex");
+function relationshipFreezeDecision(relationshipChanged, chatChanged, exposureChanged, shaOf) {
+  if (chatChanged.length || exposureChanged.length) return false;
+  if (relationshipChanged.length === 0) return true;
+  const want = Object.keys(SOCIAL_C4_RELATIONSHIP_PINS).sort();
+  return JSON.stringify([...relationshipChanged].sort()) === JSON.stringify(want) && want.every((file) => shaOf(file) === SOCIAL_C4_RELATIONSHIP_PINS[file]);
+}
+const relationshipDiff = lines(git(["diff", "--name-only", GEO1DP0_BASELINE, "--", REL_DIR]));
+const chatDiff = lines(git(["diff", "--name-only", GEO1DP0_BASELINE, "--", "supabase/functions/_shared/meal-buddy-chat-api"]));
+const exposureDiff = lines(git(["diff", "--name-only", GEO1DP0_BASELINE, "--", "supabase/functions/_shared/social-exposure"]));
 check("invite relationship chat and exposure bytes remain frozen",
-  git(["diff", "--name-only", GEO1DP0_BASELINE, "--",
-    "supabase/functions/_shared/meal-buddy-relationship-api",
-    "supabase/functions/_shared/meal-buddy-chat-api",
-    "supabase/functions/_shared/social-exposure"]).length === 0);
+  (relationshipDiff.length === 0 && chatDiff.length === 0 && exposureDiff.length === 0) || relationshipFreezeDecision(relationshipDiff, chatDiff, exposureDiff, shaOfFile));
+{
+  const pins = Object.keys(SOCIAL_C4_RELATIONSHIP_PINS), good = (file) => SOCIAL_C4_RELATIONSHIP_PINS[file];
+  check("25-N0 control: exactly the two accepted C4 files at their pinned bytes are accepted", relationshipFreezeDecision(pins, [], [], good));
+  check("25-N1 a third file changed in the relationship-api directory is rejected", !relationshipFreezeDecision([...pins, REL_DIR + "/types.ts"], [], [], good));
+  check("25-N2 one accepted file with changed bytes is rejected", !relationshipFreezeDecision(pins, [], [], (file) => file.endsWith("/service.ts") ? "0".repeat(64) : good(file)));
+  check("25-N3 only one of the two accepted files changed is rejected", !relationshipFreezeDecision([pins[0]], [], [], good));
+  check("25-N4 a changed chat-api file is rejected even with the accepted pair", !relationshipFreezeDecision(pins, ["supabase/functions/_shared/meal-buddy-chat-api/service.ts"], [], good));
+  check("25-N5 a changed social-exposure file is rejected even with the accepted pair", !relationshipFreezeDecision(pins, [], ["supabase/functions/_shared/social-exposure/index.ts"], good));
+  check("25-N6 an unchanged tree stays accepted (original form)", relationshipFreezeDecision([], [], [], good));
+}
 check("all dedicated commands are exact", GEO1DP0_NPM_KEYS.every((key) =>
   packageJson.scripts?.[key]?.includes("geo-meal-buddy-geo-1d-p0")));
 check("manifest bytes contain no secrets CRLF BOM NUL or replacement character", GEO1DP0_PATHS.every((file) => {

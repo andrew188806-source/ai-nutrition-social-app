@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   ROOT, MIGRATION, CAPTURE_SUCCESSOR, CAPTURE_SUCCESSOR_SHA256, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK,
-  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_FILES, ACQ_MIGRATION, SEAL_FILES, SEAL_MIGRATION
+  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_FILES, ACQ_MIGRATION, SEAL_FILES, SEAL_MIGRATION, SOCIAL_FILES, SOCIAL_MIGRATIONS, withSocialTail
 } from './consumer-retention-persistence-smoke.mjs';
 import { activateDisposableFixture } from './pc2-consumer-onboarding-fixtures.mjs';
 
@@ -763,6 +763,9 @@ export function frozenProof() {
   // R0-B-ENT-R: its three files are admitted ONLY in the exact ENT-R record (all-or-nothing, on top of the ENT1-A record; byte-pinned by the persistence smoke).
   const sealPaths = successor.state === 'ent0' && successor.acq === 'record' && successor.seal === 'record' ? Object.keys(SEAL_FILES) : [];
   for (const p of sealPaths) exempt.add(p);
+  // Social C4 (F2/F3) integration: its 24 paths (22 candidate paths and the two social guards edited by the integration) are admitted ONLY in the exact integrated record (all-or-nothing, on top of the ENT-R record; byte-pinned by the persistence smoke). Six of them exist at the frozen baseline with other bytes.
+  const socialPaths = successor.state === 'ent0' && successor.acq === 'record' && successor.seal === 'record' && successor.social === 'record' ? Object.keys(SOCIAL_FILES) : [];
+  for (const p of socialPaths) exempt.add(p);
   const violations = [...successor.violations];
   for (const e of entries) {
     if (ALLOWED_PATHS.includes(e.path) || exempt.has(e.path)) continue;
@@ -770,11 +773,11 @@ export function frozenProof() {
     if (!i || i.mode !== e.mode || i.blob !== e.blob || i.stage !== '0') violations.push(e.path + ':index');
   }
   for (const p of git(['diff', BASELINE_COMMIT, '--name-only']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':tracked');
-  for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !ent0Paths.includes(p) && !acqPaths.includes(p) && !sealPaths.includes(p)) violations.push(p + ':untracked');
+  for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !ent0Paths.includes(p) && !acqPaths.includes(p) && !sealPaths.includes(p) && !socialPaths.includes(p)) violations.push(p + ':untracked');
   const added = [...index.keys()].filter(p => !entries.some(e => e.path === p));
   for (const p of added) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':added');
   const wt = ALLOWED_PATHS.filter(p => fs.existsSync(path.join(ROOT, p)));
-  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, demo: successor.demo ?? null, acq: successor.acq ?? null, seal: successor.seal ?? null, violations: successor.violations } };
+  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, demo: successor.demo ?? null, acq: successor.acq ?? null, seal: successor.seal ?? null, social: successor.social ?? null, violations: successor.violations } };
 }
 export function inventoryProof() {
   const dir = path.join(ROOT, 'supabase/migrations');
@@ -782,7 +785,7 @@ export function inventoryProof() {
   const baselineFiles = git(['ls-tree', '--name-only', BASELINE_COMMIT, 'supabase/migrations/']).trim().split('\n').map(p => path.basename(p)).sort();
   const changed = baselineFiles.filter(n => sha(fs.readFileSync(path.join(dir, n))) !== sha(spawnBlob(`supabase/migrations/${n}`)));
   const newest = files.at(-1);
-  return { migrationCount: files.length, baselineCount: baselineFiles.length, last: newest, newPaths: files.filter(n => !baselineFiles.includes(n)), changedBaselineMigrations: changed, timestampLaterThanAll: files.filter(n => n !== CAPTURE_MIGRATION && n !== ENT0_MIGRATION && n !== DEMO_MIGRATION && n !== ACQ_MIGRATION && n !== SEAL_MIGRATION).every(n => n < CAPTURE_MIGRATION), captureSha256: sha(fs.readFileSync(path.join(dir, CAPTURE_MIGRATION))), pinnedByPersistenceSmoke: CAPTURE_SUCCESSOR_SHA256 };
+  return { migrationCount: files.length, baselineCount: baselineFiles.length, last: newest, newPaths: files.filter(n => !baselineFiles.includes(n)), changedBaselineMigrations: changed, timestampLaterThanAll: files.filter(n => n !== CAPTURE_MIGRATION && n !== ENT0_MIGRATION && n !== DEMO_MIGRATION && n !== ACQ_MIGRATION && n !== SEAL_MIGRATION && !SOCIAL_MIGRATIONS.includes(n)).every(n => n < CAPTURE_MIGRATION), captureSha256: sha(fs.readFileSync(path.join(dir, CAPTURE_MIGRATION))), pinnedByPersistenceSmoke: CAPTURE_SUCCESSOR_SHA256 };
 }
 function spawnBlob(p) { const r = child.spawnSync('git', ['show', `${BASELINE_COMMIT}:${p}`], { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, maxBuffer: 64e6 }); if (r.status) throw Error('GIT_BLOB ' + p); return r.stdout; }
 Object.assign(GATES, {
@@ -793,7 +796,9 @@ Object.assign(GATES, {
     const acq = demo && frozen.recoverySuccessor.acq === 'record';
     const seal = acq && frozen.recoverySuccessor.seal === 'record';
     // then — only with the exact ENT-R record — the ENT-R migration (20261018010000).
-    const tail = seal ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION] : acq ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION] : demo ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION] : ent0 ? [CAPTURE_MIGRATION, ENT0_MIGRATION] : [CAPTURE_MIGRATION];
+    // With the exact social integration record (on top of the ENT-R record) the two social migrations (20261017042351, 20261017154025) sort between the ENT1-A migration and the ENT-R migration.
+    const tail0 = seal ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION] : acq ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION] : demo ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION] : ent0 ? [CAPTURE_MIGRATION, ENT0_MIGRATION] : [CAPTURE_MIGRATION];
+    const tail = withSocialTail(tail0, seal && frozen.recoverySuccessor.social === 'record');
     return R(frozen.violations.length === 0 && frozen.trackedAtBaseline === 3345 && inv.migrationCount === 143 + tail.length && inv.baselineCount === 143 && inv.changedBaselineMigrations.length === 0 && same(inv.newPaths, tail) && inv.timestampLaterThanAll && inv.captureSha256 === CAPTURE_SUCCESSOR_SHA256, { frozen, inv, tail });
   }
 });

@@ -94,6 +94,36 @@ export const SEAL_PATHS = Object.freeze([
   "scripts/consumer-retention-seal-mutations.mjs"
 ]);
 
+// Social C4 (F2/F3) integration (integration line, 2026-10-19; integration of two locally accepted candidates, not an acceptance of the combination): exactly these 24 paths (the 22 social candidate paths and the two social guards the integration edits) on top of the recovery inventory and the ENT-R successor. The 23rd path the social candidate
+// modifies, the runtime composition, is already an INVENTORY path. Bound here by PATH only and all-or-nothing, and only together with the complete ENT-R, ENT1-A, ENT0 and origin successors; the persistence smoke pins their bytes and nothing here records a validator hash.
+export const SOCIAL_PATHS = Object.freeze([
+  "apps/mobile/app/meal-buddies.tsx",
+  "apps/mobile/app/social-friends.tsx",
+  "apps/mobile/app/social.tsx",
+  "apps/mobile/features/meal-buddy-chat/MealBuddyChatScreen.tsx",
+  "apps/mobile/features/social-friends/DinnerReadiness.tsx",
+  "apps/mobile/features/social-friends/SocialFriendsScreen.tsx",
+  "apps/mobile/features/social-friends/controller.ts",
+  "apps/mobile/features/social-friends/repository.ts",
+  "docs/social-owner-f2-c4.md",
+  "scripts/geo-meal-buddy-geo-1d-p0-guard.mjs",
+  "scripts/meal-buddy-relationship-sr2i-a-guard.mjs",
+  "scripts/social-f2-unit.mjs",
+  "scripts/social-friends-postgres.mjs",
+  "scripts/social-friends-test-loader.mjs",
+  "scripts/social-friends-unit.mjs",
+  "supabase/config.toml",
+  "supabase/functions/_shared/meal-buddy-relationship-api/repository.ts",
+  "supabase/functions/_shared/meal-buddy-relationship-api/service.ts",
+  "supabase/functions/_shared/phone-search-candidate-ref.ts",
+  "supabase/functions/social-friends/handler.ts",
+  "supabase/functions/social-friends/index.ts",
+  "supabase/functions/social-friends/service.ts",
+  "supabase/migrations/20261017042351_social_friend_lookup_run_mvbudhyz.sql",
+  "supabase/migrations/20261017154025_social_phone_invite_f2_c4_mvckab05.sql"
+]);
+export const SOCIAL_MIGRATION_PATHS = Object.freeze(["supabase/migrations/20261017042351_social_friend_lookup_run_mvbudhyz.sql","supabase/migrations/20261017154025_social_phone_invite_f2_c4_mvckab05.sql"]);
+
 // PC-2 consent-document successor (7ed55fc; recorded in the persistence smoke as an identity binding of the observed bytes, not as a statement that it was accepted): exactly these ten paths on top of the recovery inventory. Bound here by PATH only and all-or-nothing;
 // the persistence smoke pins their bytes, and nothing here records a validator hash. None of them is a recovery path. Two of them legitimately contain the demo host / URL scheme and are excluded from the brand check only.
 export const PC2_PATHS = Object.freeze([
@@ -152,22 +182,28 @@ const acqChanged = changed.filter((p) => ACQ_PATHS.includes(p));
 const acqActive = acqChanged.length > 0;
 const sealChanged = changed.filter((p) => SEAL_PATHS.includes(p));
 const sealActive = sealChanged.length > 0;
+const socialChanged = changed.filter((p) => SOCIAL_PATHS.includes(p));
+const socialActive = socialChanged.length > 0;
 const demoExact = demoChanged.length === 0 || (demoChanged.length === DEMO_PATHS.length && DEMO_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ENT0_PATHS.every((p) => changed.includes(p)) && pc2Changed.length === PC2_PATHS.length);
-const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p));
+const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p));
 const validationSuccessorExact = validationSuccessor.length === 0 || (validationSuccessor.length === VALIDATION_SUCCESSOR.length && validationSuccessor.every((p) => fs.existsSync(path.join(ROOT, p))));
 record("candidate inventory is exact (27 distinct recovery paths: 21 modified + 6 added, plus either none or exactly both authorized retention validators; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(recoveryChanged) === JSON.stringify([...INVENTORY].sort()) && validationSuccessorExact, { extra: recoveryChanged.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !recoveryChanged.includes(p)), validationSuccessor });
 const ent0Migration = ENT0_PATHS[0];
 const ent0Active = ent0Changed.length > 0;
 const supabaseChanged = changed.filter((p) => p.startsWith("supabase/"));
 // Permitted forward migrations, in sort order: ENT0 (20261010010000) and — only with the exact origin successor — the demo migration (20261010172126), which sorts AFTER it. ENT0 is not assumed to be last.
-const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : []), ...(acqActive ? [ACQ_PATHS[0]] : []), ...(sealActive ? [SEAL_PATHS[0]] : [])].sort();
-const notForward = (p) => p && !forwardMigrations.includes(p);
-record("server paths: 0 (supabase/** byte-identical, modes unchanged; the only permitted exceptions are the single R0-B-ENT0 forward migration and, only with the exact origin successor, the single demo forward migration)", JSON.stringify(supabaseChanged) === JSON.stringify(forwardMigrations) && git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.split("\n").filter(notForward).length === 0 && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.split("\n").filter((l) => l.trim() && !forwardMigrations.some((m) => l.includes(m))).length === 0, supabaseChanged);
+const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : []), ...(acqActive ? [ACQ_PATHS[0]] : []), ...(sealActive ? [SEAL_PATHS[0]] : []), ...(socialActive ? SOCIAL_MIGRATION_PATHS : [])].sort();
+// The social integration also changes server paths that are not migrations (the social-friends function, the relationship-api pair, the phone-ref module, config.toml): exactly these and only together with the exact social record.
+const socialServerPaths = socialActive ? SOCIAL_PATHS.filter((p) => p.startsWith("supabase/") && !SOCIAL_MIGRATION_PATHS.includes(p)) : [];
+const permittedServer = [...forwardMigrations, ...socialServerPaths].sort();
+const notForward = (p) => p && !permittedServer.includes(p);
+record("server paths: 0 (supabase/** byte-identical, modes unchanged; the only permitted exceptions are the single R0-B-ENT0 forward migration and, only with the exact origin successor, the single demo forward migration)", JSON.stringify(supabaseChanged) === JSON.stringify(permittedServer) && git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.split("\n").filter(notForward).length === 0 && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.split("\n").filter((l) => l.trim() && !permittedServer.some((m) => l.includes(m))).length === 0, supabaseChanged);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));
 record("all 144 migrations present and byte-identical to the baseline (plus, only with the recorded successors, the additional forward migrations in exact sort order: ENT0 then, with the origin successor, the demo migration)", migrations.length === 144 + forwardMigrations.length && forwardMigrations.every((m) => migrations.includes(path.basename(m))) && JSON.stringify(migrations.sort().slice(144)) === JSON.stringify(forwardMigrations.map((m) => path.basename(m))) && git(["diff", "--quiet", BASELINE, "--", "supabase/migrations", ...forwardMigrations.map((m) => `:(exclude)${m}`)]).status === 0);
 record("R0-B-ENT0 successor is all-or-nothing (the four ENT0 paths and both retention validators are all present, or none of the four is; no recovery path is touched by it)", ent0Changed.length === 0 || (ent0Changed.length === ENT0_PATHS.length && ENT0_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && validationSuccessor.length === VALIDATION_SUCCESSOR.length), { ent0Changed });
 record("R0-B-ENT1-A successor is all-or-nothing (the three ENT1-A paths are all present, or none is; only together with the ENT0 successor and the exact origin successor; none of them is an inventory, ENT0, PC-2 or origin path)", acqChanged.length === 0 || (acqChanged.length === ACQ_PATHS.length && ACQ_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ent0Changed.length === ENT0_PATHS.length && demoActive && demoExact && ACQ_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p))), { acqChanged });
 record("R0-B-ENT-R successor is all-or-nothing (the three ENT-R paths are all present, or none is; only together with the complete ENT1-A, ENT0 and origin successors; none of them is an inventory, ENT0, ENT1-A, PC-2 or origin path)", sealChanged.length === 0 || (sealChanged.length === SEAL_PATHS.length && SEAL_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && acqChanged.length === ACQ_PATHS.length && ent0Changed.length === ENT0_PATHS.length && demoActive && demoExact && SEAL_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p))), { sealChanged });
+record("Social C4 integration successor is all-or-nothing (the 24 social/integration paths are all present, or none is; only together with the complete ENT-R, ENT1-A, ENT0 and origin successors; none of them is an inventory, ENT0, ENT1-A, ENT-R, PC-2 or origin path; the runtime composition it also modifies is an inventory path)", socialChanged.length === 0 || (socialChanged.length === SOCIAL_PATHS.length && SOCIAL_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && sealChanged.length === SEAL_PATHS.length && acqChanged.length === ACQ_PATHS.length && ent0Changed.length === ENT0_PATHS.length && demoActive && demoExact && SOCIAL_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p)) && changed.includes("apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts")), { socialChanged });
 record("PC-2 consent-document successor is all-or-nothing (the ten recorded paths are all present, or none of the ten is; no recovery path is touched by it)", pc2Exact && pc2Changed.every((p) => !INVENTORY.includes(p)), pc2Changed);
 record("origin successor is all-or-nothing (the sixteen recorded new paths are all present, or none is; only together with the ENT0 and PC-2 successors; none of the sixteen is an inventory, ENT0 or PC-2 path)", demoExact && DEMO_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p)), demoChanged);
 record("dependencies and lockfiles unchanged", git(["diff", "--quiet", BASELINE, "--", "package.json", "package-lock.json", "apps/mobile/package.json"]).status === 0);
