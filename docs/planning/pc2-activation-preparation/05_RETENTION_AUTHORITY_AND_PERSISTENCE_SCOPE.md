@@ -1440,3 +1440,33 @@ persistence smoke 釘住 ENT-R migration 的 sha256 與三個新檔，以及在 
 3. 在任何真實 producer 存在前是否允許 seal（本包拒絕空 registry，且不接受 placeholder producer 作為替代）。
 4. ENT1-B 如何組合 seal 範圍、coverage 與升級延長形成最終 grant。
 5. deployment-actor 相容方案（D-ACT 前置條件，未改變）。
+
+## 20. 社交 C4（F2/F3）整合紀錄（integration line，2026-10-19；**施工者自測與整合凍結，不是 acceptance**）
+
+本節只記錄把兩個各自已通過本機獨立驗收的候選合併為一個隔離整合候選所做的 validator 綁定。它不改變 §1–§19 的任何契約，不是 Hosted／部署／啟用文件，也不是兩線合併後的獨立驗收結論。
+
+### 20.1 來源與整合方式
+- 共同 base `ec534c3d8ccf57c8fc00122e6ffa8babe4a900d5`（tree `5eeff172f1c3412ffa52eaa583d0dcef6f9c7406`）。
+- ENT-R C3：commit `cfdbfe4a6fb4184a5ecfce7fcaad6787a072213f`／tree `8e627677e3ff8cd07028b2560cf67f13390042e0`（獨立驗收：本機 inactive A 接受、B 有界為 0）。
+- 社交 C4：commit `49002767411569dab350f8946632e40bf6b40720`／tree `a684ff3366a79bee0fc87e1c96e26bbe2e1537aa`（獨立驗收：僅 F2／F3 本機定向範圍；S2 PARTIAL、S3 未啟用）。
+- 兩者相對 base 的路徑集合完全不相交（retention 9 檔、社交 23 檔），整合是無衝突的 `git merge --no-ff`，不含任何手動編輯；其後的 validator 綁定是獨立 commit。migration 共 150 個：base 147＋社交 `20261017042351`、`20261017154025`＋ENT-R `20261018010000`，依檔名排序 ENT1-A `20261017010000` < 社交 < ENT-R。
+- 任何既有 migration 的 bytes 皆未改（含兩個社交 migration 與 ENT-R migration）。
+
+### 20.2 Combined successor（persistence smoke 內的 SOCIAL 紀錄）
+沿用 ENT0／ENT1-A／ENT-R 同一機制：一份 all-or-nothing、byte-exact（index 與 worktree 的 mode／blob）的固定紀錄，單向綁定（紀錄 validator 所釘的檔案，這些檔案不記錄 persistence smoke 的 hash）。
+- `SOCIAL_FILES` 24 路徑：社交候選 22 路徑（含兩個 migration，sha256 `75f34ab2a48eae4b93d395782524332032873a5be717575c48b43e7722404c5f`、`b4b1601a814b97705b893011d68d06aa76c3727d4c7f17e89b1d72b441a93600`），加上整合為處理 guard 紅燈而修改的兩個社交 guard（SR2I-A、GEO-1D-P0）。社交候選的第 23 個路徑 `consumerRuntimeComposition.ts` 同時是 meal-save recovery 清單與 origin successor 的路徑，因此以覆寫方式釘在 `SOCIAL_COMPOSITION`，不重複列入。只有 `scripts/social-friends-postgres.mjs` 的 bytes 與已接受的 C4 不同（改為依排序套用 150 個 migration，並以套用 retention 後的 fingerprint 為準；其餘 assertion 一字未刪，`SOCIAL_C4_SOURCE` 記錄 C4 原 blob）。
+- 重新綁定四個 validator 的整合版本：ENT-R smoke、ENT1-A smoke、ENT0 smoke（只有 F01 的有序 migration tail 與 import 改變）、meal-save recovery guard（新增 SOCIAL_PATHS all-or-nothing gate；允許的 supabase 路徑與 forward migrations 精確擴充）。capture smoke 與 persistence smoke 本身不被釘，維持原有界線（由外部審查、diff 與控制綁定）。
+- 有序 tail 只在精確的整合狀態出現：`[capture, ENT0, demo, ENT1-A, social 20261017042351, social 20261017154025, ENT-R]`（總數 143＋7＝150）；缺少社交紀錄、缺少 ENT-R 紀錄、額外或錯序 migration、混用任一 validator 的前一版本，都使狀態判定為 invalid。
+- 沒有使用 blanket allowlist、自我或循環 hash，也沒有放寬或刪除任何 assertion。
+
+### 20.3 社交 guard 紅燈的處理
+- SR2I-A gate 43／62 與 GEO-1D-P0 gate 25：原斷言保留為其中一種被接受的形式；另加第二種「精確 successor 形式」＝結構檢查（解封只在 server 端、以驗證後 actor 解封、phone 旗標只取自解封結果；repository 恰為八個具名 statement，actor 綁定僅在 phone 路徑；relationship-api 目錄只允許相對 GEO-1D-P0 baseline 的 repository.ts／service.ts 兩檔，且 chat-api／social-exposure 凍結）加上兩檔的精確 sha256。每種形式都有直接對真實原始碼做記憶體突變的負向控制（移除解封、錯誤 actor、旗標取自 request、多一個未具名 statement、一般 send 綁 actor、phone 路徑改呼叫一般 send、無條件綁定、第三檔改動、bytes 改動、單檔改動、chat／exposure 改動），皆須被拒絕。
+- recovery guard 三個 gate（inventory、server paths、migration 序列）：以整合後的實際清單重建，gate 名稱不變。
+- 2z-b2-a、2z-b2-b、2z-b3-b、2z-b3-d 四支 guard 在 base 即全面紅燈；本整合沒有修改它們，其失敗訊息內嵌的最新 migration 名稱與 HEAD 資訊隨之改變，不是新增 gate。
+- 這些 successor 形式只認可本次整合的精確 bytes；其他任何變動仍使原 frozen detector 轉紅。
+
+### 20.4 與 retention 的實際交集
+社交 migration 與 retention schema 沒有共同物件：社交新增物件全在 `friend_internal`／`social_internal`，對既有物件僅新增社交 authority 角色的 ACL（`public.consumer_profiles` 的五個欄位 SELECT、`public`／`social_internal` 的 USAGE、`may_evaluate_candidate` 的 EXECUTE）。runtime／社交角色對 `retention_*` 沒有任何權限，retention 角色對社交 schema 沒有任何權限，兩個角色家族之間沒有 membership 邊。`apps/mobile` 的 runtime composition 只增加社交 friends 的 bind／clear，與 meal-save recovery、retention 無引用。沒有新增 purge、final grant 或權益啟用路徑；ENT-R seal 仍為 operator attestation，無 production 呼叫路徑。
+
+### 20.5 驗證與未驗證
+實際執行的驗證、沿用的證據與其適用依據、未驗證與未啟用範圍，記錄在整合交付的報告（repository 外），不在此重複。啟用前提不變：確認目標環境不存在無來源的舊 phone 搜尋憑證（IO-10，未連 Hosted、尚未驗證）。
