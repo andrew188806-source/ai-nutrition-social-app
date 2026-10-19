@@ -1,3 +1,4 @@
+import { openInviteCandidateRef } from "../phone-search-candidate-ref.ts";
 import type { MealBuddyRelationshipRefCipher } from "../meal-buddy-relationship-ref/crypto.ts";
 import type { SocialCandidateRefCipher } from "../social-candidate-ref/types.ts";
 import type { MealBuddyRelationshipRepository } from "./repository.ts";
@@ -18,9 +19,11 @@ export class MealBuddyRelationshipService {
   async execute(actorUserId: string, request: MealBuddyRelationshipRequest, now: Date): Promise<MealBuddyRelationshipResponse> {
     let rows: readonly InternalMealBuddyRelationshipRow[];
     if (request.operation === "send" || request.operation === "read") {
-      const claims = await this.candidateCipher.open(actorUserId, request.candidateRef, now);
+      const { claims, phoneSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);
       rows = request.operation === "send"
-        ? await this.repository.send(actorUserId, claims.candidateUserId)
+        ? phoneSearch
+          ? await this.repository.sendPhoneSearch(actorUserId, claims.candidateUserId)
+          : await this.repository.send(actorUserId, claims.candidateUserId)
         : await this.repository.read(actorUserId, claims.candidateUserId);
     } else if (request.operation === "accept" || request.operation === "decline"
       || request.operation === "cancel" || request.operation === "unfriend") {

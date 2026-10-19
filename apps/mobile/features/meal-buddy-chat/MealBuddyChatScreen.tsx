@@ -1,3 +1,4 @@
+import { DinnerReadiness } from "../social-friends/DinnerReadiness";
 import { useState } from "react";
 import {
   ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View
@@ -57,6 +58,7 @@ export function MealBuddyChatScreen({ controller, onBack }: { controller: Contro
           </Card>
         ) : (
           <>
+            <DinnerReadiness />
             <ScrollView
               style={styles.list}
               contentContainerStyle={styles.listContent}

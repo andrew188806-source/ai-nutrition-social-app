@@ -1,3 +1,4 @@
+import { bindSocialFriendsRuntime, clearSocialFriendsRuntime, type FriendClient } from "../social-friends/repository";
 import { isConsumerDemoClientAllowed } from "../consumer-onboarding/demoEnvironment";
 import { ConsumerOnboardingController } from "../consumer-onboarding/controller";
 import { configuredConsumerAuthRedirect } from "../consumer-onboarding/authRedirect";
@@ -408,6 +409,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   clearMealBuddyCardCreateRuntimeDependencies();
   clearMealBuddyCandidateRuntimeDependencies();
   clearMealBuddyRelationshipRuntimeDependencies();
+  clearSocialFriendsRuntime();
   clearMealBuddyChatRuntimeDependencies();
   clearMealBuddyPushRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
@@ -519,6 +521,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
           authPort,
           client: client as unknown as SupabaseMealBuddyCardCreateClientLike
         });
+        bindSocialFriendsRuntime(authPort, client as unknown as FriendClient);
         bindMealBuddyRelationshipRuntimeDependencies({
           authPort,
           client: client as unknown as SupabaseMealBuddyRelationshipClientLike
