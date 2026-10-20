@@ -56,7 +56,7 @@ try{
    await su.query("insert into auth.users(id,email) values($1,'legacy@synthetic.invalid')",[LEGACY]);
    await db.query("insert into public.consumer_profiles(user_id,profile_id,display_name,anonymous_display_name,mascot_avatar_key) values($1,'synthetic-legacy-social','Legacy','Legacy','BG')",[LEGACY]);
   }
-  const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_retention_registry_seal/.test(name)?su:db;
+  const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_retention_registry_seal|consumer_retention_billing_fact_ingest/.test(name)?su:db;
   try{await installer.query(fs.readFileSync(path.join(root,"supabase/migrations",name),"utf8"));}catch(e){throw Error("BASE_MIGRATION "+name+" "+e.code+" "+e.message);}
  }
  const before=await fingerprint();await db.query(fs.readFileSync(path.join(root,"supabase/migrations",social[0]),"utf8"));
@@ -93,7 +93,7 @@ try{
  await settings(D,false);
  const oldPendingRef=(await relation(D,{operation:"list"})).body.relationships.find(r=>r.state==="incoming_pending"&&r.counterpart.displayName==="Ella");
  check("F2 upgrade: pre-migration pending invite remains acceptable after OFF",(await relation(D,{operation:"accept",relationshipRef:oldPendingRef.relationshipRef})).status===200);
- for(const name of postSocial){const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_retention_registry_seal/.test(name)?su:db;try{await installer.query(fs.readFileSync(path.join(root,"supabase/migrations",name),"utf8"));}catch(e){throw Error("POST_SOCIAL_MIGRATION "+name+" "+e.code+" "+e.message);}}
+ for(const name of postSocial){const installer=/consumer_retention_entitlement_authority|consumer_retention_acquisition_record|consumer_retention_registry_seal|consumer_retention_billing_fact_ingest/.test(name)?su:db;try{await installer.query(fs.readFileSync(path.join(root,"supabase/migrations",name),"utf8"));}catch(e){throw Error("POST_SOCIAL_MIGRATION "+name+" "+e.code+" "+e.message);}}
  check("migrations sorted after the social files (retention seal) apply on top of the populated social state",true,{postSocial});
  const beforeFlow=await fingerprint();
  check("F2 upgrade: pre-migration friend remains accepted after OFF",(await relation(F,{operation:"list"})).body.relationships.some(r=>r.state==="accepted"&&r.counterpart.displayName==="Dana"));

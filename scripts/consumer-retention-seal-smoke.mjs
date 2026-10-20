@@ -8,7 +8,7 @@ import path from 'node:path';
 import child from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION as PINNED_SEAL_MIGRATION, SEAL_MIGRATION_SHA256, withSocialTail, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
+import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION as PINNED_SEAL_MIGRATION, SEAL_MIGRATION_SHA256, BILLING_MIGRATION, withSocialTail, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
 import { act, frozenProof, inventoryProof, options, ELIGIBLE } from './consumer-retention-capture-smoke.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
 import { acqApply, acqSource } from './consumer-retention-acquisition-smoke.mjs';
@@ -1189,7 +1189,7 @@ GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const own = /IS DISTINCT FROM '([0-9a-f]{64})'/.exec(sealSource())?.[1];
   // Exact ORDERED new-migration tail: capture, ENT0, the origin demo migration, ENT1-A (20261017010000), then the ENT-R migration (20261018010000). No file is assumed last except by this exact order.
   // With the exact social integration record (persistence smoke, byte-pinned) the two social migrations sort between the ENT1-A migration and the ENT-R migration.
-  const tail = withSocialTail([CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION], frozen.recoverySuccessor.social === 'record');
+  const tail = [...withSocialTail([CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION], frozen.recoverySuccessor.social === 'record'), ...(frozen.recoverySuccessor.social === 'record' && frozen.recoverySuccessor.billing === 'record' ? [BILLING_MIGRATION] : [])]; // ENT-F1 (20261021010000) sorts after this migration
   return R(frozen.violations.length === 0 && frozen.recoverySuccessor.state === 'ent0' && frozen.recoverySuccessor.demo === 'record' && frozen.recoverySuccessor.acq === 'record' && frozen.recoverySuccessor.seal === 'record'
     && inv.migrationCount === 143 + tail.length && inv.baselineCount === 143 && same(inv.newPaths, tail) && inv.changedBaselineMigrations.length === 0 && inv.timestampLaterThanAll
     && sourceSha === SEAL_MIGRATION_SHA256 && own === SEAL_POST_DIGEST, { frozen, inv, tail, sourceSha, pinned: SEAL_MIGRATION_SHA256, postDigest: own });
