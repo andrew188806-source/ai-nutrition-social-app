@@ -99,6 +99,12 @@ export const SOCIAL_FILES = Object.freeze({
   "supabase/migrations/20261017042351_social_friend_lookup_run_mvbudhyz.sql": Object.freeze(["100644", "02e9ed9e3d86b0573b472e53dc111e8185859c42"]),
   "supabase/migrations/20261017154025_social_phone_invite_f2_c4_mvckab05.sql": Object.freeze(["100644", "00cac87a6ed8fa7368c0b949cf1edb6e8fda3565"])
 });
+// S2-FF1: exact accepted UI identity, never a membership/retention behavior change.
+// One-way: this trust root pins Inbox and recovery guard; neither pins this file.
+export const S2FF1_FILES = Object.freeze({ 'apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx': Object.freeze(['100644', '776314fa24c9838457d658e7dc64487b86848a22']) });
+export const S2FF1_BASE_BLOB = '5b1b3886b1650b13b0830ae1e30a84aa4374f212';
+export const S2FF1_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '22fe670ebfd632c98a60d1c218bf842c114174d6']) });
+
 export const SOCIAL_COMPOSITION_PATH = "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts";
 export const SOCIAL_COMPOSITION = Object.freeze(['100644', "456532a6cb8cc98d58cbd43e860603d893e06a68"]);
 // In the integrated state the ENT-R smoke, the ENT1-A smoke and the ENT0 smoke are the versions whose F01 knows the social migrations in the ordered tail, and the recovery guard is the version that also accepts the social paths.
@@ -538,10 +544,27 @@ export const F1F2_SUCCESSOR=Object.freeze({base:'b014b1367bee78fd2375e9648633ab5
 // 'd1d2'|'f1f2'|'invalid', exempt, paths, violations}. Only 'recovery' (exact 52ae695 record), 'corrective' (exact record with the
 // corrected guard) or 'd1d2' (exact record with the six D1/D2 overrides) or 'f1f2' (that record with the F-1/F-2 overrides) set exempt, which lets callers skip their baseline comparison for the 27 paths; 'capture' keeps it.
 // Wrapper: the three ENT0 files and the ent0 record bind each other all-or-nothing (files without the record, the record without files, or inexact files are invalid).
+// Cleanly refuses missing/renamed/mode/conflict/worktree drift; no hash-object on absent files.
+export function s2ff1FilesState(git){
+  const paths=Object.keys(S2FF1_FILES);
+  if(paths.length!==1||paths[0]!=='apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx')return {state:'invalid',paths:[],violations:['s2ff1:record-shape']};
+  const p=paths[0],rows=git(['ls-files','--stage','--',p]).trim().split('\n').filter(Boolean);
+  const fields=rows.length===1?rows[0].split('\t')[0].split(' '):[];
+  const present=fs.existsSync(path.join(ROOT,p));
+  const blob=present?git(['hash-object','--',p]).trim():null;
+  const at=want=>fields.length===3&&fields[0]==='100644'&&fields[1]===want&&fields[2]==='0'&&blob===want;
+  if(at(S2FF1_FILES[p][1]))return {state:'record',paths,violations:[]};
+  if(at(S2FF1_BASE_BLOB))return {state:'base',paths:[],violations:[]};
+  return {state:'invalid',paths:[],violations:[p+':s2ff1-mismatch']};
+}
+
 export function recoverySuccessorState(git){
+  const s2=s2ff1FilesState(git),s2ff1=s2.state==='record';
+  if(s2.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:s2.violations};
   // Origin successor (all-or-nothing, identity binding only): when all 26 of its paths are at the recorded bytes, its 5 recovery paths and 5 PC-2 paths are judged against the recorded successor bytes and its 16 other paths are exempt.
   const sc=socialFilesState(git),social=sc.present;
   if(social&&!sc.exact)return {state:'invalid',exempt:false,paths:[],violations:sc.violations};
+  if(s2ff1&&!social)return {state:'invalid',exempt:false,paths:[],violations:['s2ff1:requires-social-record']};
   const dm=demoFilesState(git,social);
   if(dm.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:dm.violations};
   const demo=dm.state==='record';
@@ -553,14 +576,14 @@ export function recoverySuccessorState(git){
   const af=acqFilesState(git,seal,social),acq=af.present;
   if(acq&&!af.exact)return {state:'invalid',exempt:false,paths:[],violations:af.violations};
   if(seal&&!acq)return {state:'invalid',exempt:false,paths:[],violations:['seal-files:requires-acq-record']};
-  const r=recoverySuccessorStateCore(git,demo,acq,seal,social),ef=ent0FilesState(git,acq,seal,social),pc=pc2FilesState(git,demo);
+  const r=recoverySuccessorStateCore(git,demo,acq,seal,social,s2ff1),ef=ent0FilesState(git,acq,seal,social),pc=pc2FilesState(git,demo);
   if(acq&&(!demo||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:['acq-files:requires-ent0-state-and-origin-successor']};
   if(ef.present&&(!ef.exact||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:[...ef.violations,...(r.state!=='ent0'?['ent0-files:without-ent0-record']:[])]};
   if(!ef.present&&r.state==='ent0')return {state:'invalid',exempt:false,paths:r.paths,violations:['ent0-record:files-absent']};
   // PC-2 consent-document successor (all-or-nothing): either none of its ten paths moved from the accepted base or all ten are at the exact recorded mode/blob. Only then are its paths exempt, and only together with an exempt recovery state.
   if(pc.state==='invalid')return {state:'invalid',exempt:false,paths:r.paths,violations:pc.violations};
   if(demo&&(r.state!=='ent0'||pc.state!=='record'))return {state:'invalid',exempt:false,paths:r.paths,violations:['demo-record:requires-ent0-state-and-pc2-record']};
-  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[])],pc2:'record',demo:demo?'record':'base',acq:acq?'record':'base',seal:seal?'record':'base',social:social?'record':'base'};}
+  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[]),...(s2ff1?s2.paths:[])],s2ff1:s2ff1?'record':'base',pc2:'record',demo:demo?'record':'base',acq:acq?'record':'base',seal:seal?'record':'base',social:social?'record':'base'};}
   return {...r,pc2:'base',demo:'base',acq:'base',seal:'base',social:'base'};
 }
 // PC-2 consent-document successor (7ed55fc "Fix consent document read states and record inactive PC2 deployment"): the ten paths below, relative to the accepted retention base 90c8d66.
@@ -666,7 +689,7 @@ export function socialFilesState(git){
   const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=SOCIAL_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
   return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':social-mismatch')};
 }
-function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=false){
+function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=false,s2ff1=false){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
   const overrides=CORRECTIVE_SUCCESSOR.overrides;
@@ -689,7 +712,7 @@ function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=f
   const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
   const atD1D2=e=>d1d2[e[1]]?atRecord([e[0],e[1],...d1d2[e[1]]]):atCorrective(e);
   const atF1F2=e=>f1f2[e[1]]?atRecord([e[0],e[1],...f1f2[e[1]]]):atD1D2(e);
-  const ent0o=social?SOCIAL_RECOVERY_OVERRIDES:seal?SEAL_RECOVERY_OVERRIDES:acq?ACQ_RECOVERY_OVERRIDES:ENT0_RECOVERY_OVERRIDES;
+  const ent0o=s2ff1?S2FF1_RECOVERY_OVERRIDES:social?SOCIAL_RECOVERY_OVERRIDES:seal?SEAL_RECOVERY_OVERRIDES:acq?ACQ_RECOVERY_OVERRIDES:ENT0_RECOVERY_OVERRIDES;
   if(Object.keys(ent0o).length!==1||!Object.keys(ent0o).every(p=>paths.includes(p)))throw Error('ENT0_RECORD_SHAPE');
   const atENT0=e=>ent0o[e[1]]?atRecord([e[0],e[1],...ent0o[e[1]]]):atF1F2(e);
   // Origin successor: only when its 26-path record is exact (demo===true) do five recovery paths take the successor bytes; every other recovery path keeps its ENT0-chain bytes.
