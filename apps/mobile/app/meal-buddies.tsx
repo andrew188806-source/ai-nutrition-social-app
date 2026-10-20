@@ -393,7 +393,7 @@ export default function MealBuddyHomeScreen() {
         body="升級後可查看更多飯友、完整社群卡與更多每日推薦額度。"
         secondaryActionLabel="切換付費版"
         title="想看更多飯友嗎？"
-        visible={showFreeQuotaModal}
+        visible={!isRealCandidateMode && showFreeQuotaModal}
         onClose={() => setShowFreeQuotaModal(false)}
         onSecondaryAction={() => {
           setShowFreeQuotaModal(false);
@@ -722,6 +722,10 @@ function DiscoverSection({
     }
     const usage = cardType === "restaurant" ? cardUsage.restaurant : cardUsage.general;
     if (usage.count >= usage.limit) {
+      if (isRealCandidateMode) {
+        setCardQuotaMessage("目前飯友卡數量已達上限，請先整理既有卡片再繼續。");
+        return;
+      }
       if (isPremium) {
         setCardQuotaMessage("目前飯友卡數量已達上限，系統會保留最新且最相關的卡片。");
       } else {
@@ -958,6 +962,11 @@ function DiscoverSection({
         }}
       />
 
+      {isRealCandidateMode ? (
+        <SnowCard tone="primary">
+          <SnowSectionHeader title="飯友公開身份" subtitle="目前探索提供公開顯示名稱與平台吉祥物。" />
+        </SnowCard>
+      ) : (
       <SnowCard tone="primary">
         <SnowSectionHeader title="匿名卡 vs 真人卡" subtitle="飯友卡會依身份顯示不同的頭像與資訊，配對前可以先了解差異。" />
         <View style={styles.compareRow}>
@@ -986,6 +995,7 @@ function DiscoverSection({
           </View>
         ) : null}
       </SnowCard>
+      )}
     </>
   );
 }

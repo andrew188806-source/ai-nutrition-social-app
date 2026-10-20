@@ -563,11 +563,11 @@ export function s2ff1FilesState(git){
   return {state:'invalid',paths:[],violations:[p+':s2ff1-mismatch']};
 }
 
-// S2-ID1: exact secondary-entry and platform-mascot UI successor. Both paths already belong to the existing SOCIAL/FF2 inventory; no PATH or detector expansion.
-export const S2ID1_FILES = Object.freeze({"apps/mobile/app/social.tsx":["100644","4f3b803b587b68cbcfc4d1505febbf56972a2f36"],"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","bc4b3de465465e839fb300b8e8746a47a30a0736"]});
+// S2-ID1: exact secondary-entry and platform-mascot UI successor. All three paths already belong to the existing SOCIAL/FF2 inventory; no PATH or detector expansion.
+export const S2ID1_FILES = Object.freeze({"apps/mobile/app/social.tsx":["100644","4f3b803b587b68cbcfc4d1505febbf56972a2f36"],"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","bc4b3de465465e839fb300b8e8746a47a30a0736"],"apps/mobile/app/meal-buddies.tsx":["100644","2652dba8fe2e4baa82b1f1fbeaaf416a22e1d35d"]});
 export function s2id1FilesState(git){
   const paths=Object.keys(S2ID1_FILES);
-  if(JSON.stringify(paths)!==JSON.stringify(["apps/mobile/app/social.tsx","apps/mobile/features/social-friends/SocialFriendsScreen.tsx"]))return {state:'invalid',paths:[],violations:['s2id1:record-shape']};
+  if(JSON.stringify(paths)!==JSON.stringify(["apps/mobile/app/social.tsx","apps/mobile/features/social-friends/SocialFriendsScreen.tsx","apps/mobile/app/meal-buddies.tsx"]))return {state:'invalid',paths:[],violations:['s2id1:record-shape']};
   const rows=git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean);
   const index=new Map();for(const row of rows){const [m,p]=row.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
   const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p))),hashes=present.length?git(['hash-object','--',...present]).trim().split('\n'):[];
