@@ -198,6 +198,11 @@ const gatheringRecords = {
 };
 
 export default function MealBuddyHomeScreen() {
+  const consumerRuntime = useConsumerRuntime();
+  return <MealBuddyHomeSession key={`${consumerRuntime.mode}:${consumerRuntime.state.actorKey}:${consumerRuntime.state.actorGeneration}`} />;
+}
+
+function MealBuddyHomeSession() {
   const router = useRouter();
   const consumerRuntime = useConsumerRuntime();
   const params = useLocalSearchParams<{
@@ -416,7 +421,6 @@ export default function MealBuddyHomeScreen() {
 
       {activeSection === "discover" || activeSection === "cards" ? (
         <DiscoverSection
-          key={`${consumerRuntime.mode}:${consumerRuntime.state.actorKey}:${consumerRuntime.state.actorGeneration}`}
           hideRecommendations={activeSection === "cards"}
           activeCards={activeCards}
           cardUsage={isRealCandidateMode ? canonicalCardUsage : cardUsage}
