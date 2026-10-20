@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Card, colors } from "../../components/DemoUi";
 import { PlaceholderScreen } from "../../components/PlaceholderScreen";
 import { useConsumerRuntime } from "../consumer-runtime";
 import { MealBuddyRelationshipPanel } from "../meal-buddy-relationships/MealBuddyRelationshipPanel";
 import { useMealBuddyRelationshipProfile } from "../meal-buddy-relationships/useMealBuddyRelationshipProfile";
+import { resolveSocialCandidateMascot } from "../social-candidates/mascotAdapter";
+import { getMascotSource } from "../../theme/components";
 import { SocialFriendsController } from "./controller";
 import { getSocialFriendsRepository, type FriendCandidate, type FriendRequest, type FriendSettings } from "./repository";
 
@@ -28,7 +30,10 @@ function FoundFriend({ actor, generation, candidate }: { actor: string; generati
         if (!seen.current) { seen.current = true; return; } // Initial context already loads once.
         void retry.current();
     }, []));
+    const mascot = resolveSocialCandidateMascot(candidate.mascotAvatarKey);
+    const mascotSource = getMascotSource(mascot.mascotId);
     return <View>
+        {mascotSource ? <Image source={mascotSource} accessible={false} resizeMode="contain" style={{ width: 48, height: 48 }} /> : null}
         <Text>{candidate.displayName}</Text>
         <MealBuddyRelationshipPanel controller={relationship} onOpenChat={relationshipRef => {
             router.push({ pathname: "/meal-buddy-chat/[relationshipRef]", params: { relationshipRef } });
