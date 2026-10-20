@@ -416,6 +416,7 @@ export default function MealBuddyHomeScreen() {
 
       {activeSection === "discover" || activeSection === "cards" ? (
         <DiscoverSection
+          key={`${consumerRuntime.mode}:${consumerRuntime.state.actorKey}:${consumerRuntime.state.actorGeneration}`}
           hideRecommendations={activeSection === "cards"}
           activeCards={activeCards}
           cardUsage={isRealCandidateMode ? canonicalCardUsage : cardUsage}
@@ -733,6 +734,10 @@ function DiscoverSection({
       }
       return;
     }
+      if (isRealCandidateMode) {
+        setCardQuotaMessage("請先從餐點推薦建立飯友卡，再回來選用。");
+        return;
+      }
     setFormTarget({ cardType, mode: "create" });
   }
 
@@ -758,6 +763,12 @@ function DiscoverSection({
       await realCandidates.loadSourceCards();
       return;
     }
+
+    // Live cards require the canonical recommendation request; never write the demo store.
+      if (isRealCandidateMode) {
+        setCardQuotaMessage("請先從餐點推薦建立飯友卡，再回來選用。");
+        return;
+      }
 
     if (formTarget?.mode === "edit" && formTarget.card) {
       deleteMealBuddyCard(formTarget.card);
