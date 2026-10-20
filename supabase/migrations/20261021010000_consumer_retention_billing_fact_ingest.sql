@@ -288,6 +288,8 @@ END $$;
 CREATE TRIGGER link_guard BEFORE UPDATE ON retention_billing.identity_links
  FOR EACH ROW EXECUTE FUNCTION retention_billing.guard_link_update();
 -- An inbox item keeps what the adapter asserted; a terminal state never changes; attempts only grow; an item never returns to received.
+-- The one thing a finished item does accept is the clearing of its owner reference (owner_user_id: not NULL -> NULL, every other column unchanged): that is exactly what deleting the owner does through ON DELETE SET NULL,
+-- and it must keep working after a successful ingest. Nothing else about a finished item may change, and a reference is never set or re-pointed.
 CREATE FUNCTION retention_billing.guard_inbox_update() RETURNS trigger
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 BEGIN
@@ -298,6 +300,10 @@ BEGIN
   RAISE EXCEPTION 'BILLING_ITEM_IMMUTABLE' USING ERRCODE='23514';
  END IF;
  IF OLD.state NOT IN ('received','retry_pending','mapping_pending') THEN
+  IF OLD.owner_user_id IS NOT NULL AND NEW.owner_user_id IS NULL AND NEW.state = OLD.state AND NEW.reason IS NOT DISTINCT FROM OLD.reason AND NEW.attempts = OLD.attempts
+     AND NEW.last_error IS NOT DISTINCT FROM OLD.last_error AND NEW.processed_at IS NOT DISTINCT FROM OLD.processed_at AND NEW.outcome IS NOT DISTINCT FROM OLD.outcome THEN
+   RETURN NEW;
+  END IF;
   RAISE EXCEPTION 'BILLING_ITEM_TERMINAL' USING ERRCODE='23514';
  END IF;
  IF (NEW.state = 'received' AND OLD.state <> 'received') OR NEW.attempts < OLD.attempts THEN
@@ -441,7 +447,7 @@ $$;
 -- Process ONE named inbox item in the caller's transaction (one owner per transaction: a transaction that has already written anything is refused). The subject lock, the ENT0 admit and the segment rows share this
 -- transaction, so any failure, timeout or abort leaves no segment, no ledger fact and no state change; nothing is ever half done. Lock order: inbox item row, subject advisory lock, then ENT0 (registry SHARE, owner lock).
 -- Outcomes: not_found, busy (row locked by another worker), already_final (terminal), disabled, unknown_namespace, retry (lock timeout, nothing changed), blocked (the producer is not authorized for the namespace, nothing
--- changed), mapping_pending, admitted, already_asserted, before_registration, recorded_only, dismissed, quarantined. Quarantine and dismissal keep their reason and (for quarantine) append evidence. Transient errors
+-- changed: the item, the evidence, the segments, the ledger AND a pending purchase intent stay exactly as they were), mapping_pending, admitted, already_asserted, before_registration, recorded_only, dismissed, quarantined. Quarantine and dismissal keep their reason and (for quarantine) append evidence. Transient errors
 -- (deadlock, cancellation...) are NOT caught: they roll back and propagate.
 CREATE FUNCTION retention_billing.process_item(p_item_id uuid)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' SET lock_timeout = '2s' AS $$
@@ -465,6 +471,7 @@ DECLARE
  v_final text;
  v_why text;
  v_blocked boolean := false;
+ v_activate boolean := false;
  v_msg text;
  v_sqlstate text;
  v_chain_max timestamptz;
@@ -531,7 +538,8 @@ BEGIN
     ELSIF v_link.expires_at <= v_now THEN
      v_final := 'mapping_pending'; v_why := 'intent_expired';
     ELSE
-     UPDATE retention_billing.identity_links SET state = 'active', subject_ref = v_item.subject_ref, activated_at = v_now WHERE link_id = v_link.link_id;
+     -- the pending intent is only NOTED here (its row stays locked FOR UPDATE); it becomes active after the blocked check below, so a blocked result leaves it pending
+     v_activate := true;
      v_owner := v_link.owner_user_id;
     END IF;
    ELSE
@@ -603,6 +611,9 @@ BEGIN
 
   IF v_blocked THEN
    RETURN pg_catalog.jsonb_build_object('outcome', 'blocked', 'reason', 'ENT_PRODUCER_NOT_AUTHORIZED', 'item_id', v_item.item_id);
+  END IF;
+  IF v_activate THEN
+   UPDATE retention_billing.identity_links SET state = 'active', subject_ref = v_item.subject_ref, activated_at = v_now WHERE link_id = v_link.link_id;
   END IF;
   IF v_final = 'quarantined' THEN
    INSERT INTO retention_billing.evidence_log (item_id, namespace, kind, detail)
@@ -789,8 +800,8 @@ SELECT pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.json
  (SELECT pg_catalog.count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_roles r ON r.oid = p.proowner WHERE r.rolname = 'consumer_retention_billing_owner' AND p.pronamespace <> pg_catalog.to_regnamespace('retention_billing'))
 )::text, 'UTF8')), 'hex')
  );
- IF v_post IS DISTINCT FROM 'fde427d0118ca68125b58572de8e9f4263e27ba57d81fae2c7b3f614b0229ad8' THEN
-  RAISE EXCEPTION 'BILLING_POST_STATE_MISMATCH expected=fde427d0118ca68125b58572de8e9f4263e27ba57d81fae2c7b3f614b0229ad8 observed=%', v_post USING ERRCODE='42501';
+ IF v_post IS DISTINCT FROM '9c40129e4c282c7b30872b7487642902bdbf7a27cf6f23f1e23c0a81a2bb2699' THEN
+  RAISE EXCEPTION 'BILLING_POST_STATE_MISMATCH expected=9c40129e4c282c7b30872b7487642902bdbf7a27cf6f23f1e23c0a81a2bb2699 observed=%', v_post USING ERRCODE='42501';
  END IF;
  PERFORM pg_catalog.set_config('search_path', v_path, true);
 END $billing_g2$;

@@ -20,7 +20,7 @@ export const BILLING_MIGRATION = PINNED_BILLING_MIGRATION; // 20261021010000_con
 export const BILLING_SCHEMA = 'retention_billing';
 export const BILLING_OWNER = 'consumer_retention_billing_owner';
 export const BILLING_BUILDER = 'consumer_retention_billing_builder';
-export const BILLING_POST_DIGEST = 'fde427d0118ca68125b58572de8e9f4263e27ba57d81fae2c7b3f614b0229ad8';
+export const BILLING_POST_DIGEST = '9c40129e4c282c7b30872b7487642902bdbf7a27cf6f23f1e23c0a81a2bb2699';
 export const billingSource = () => fs.readFileSync(path.join(ROOT, 'supabase/migrations', BILLING_MIGRATION), 'utf8');
 
 const R = (pass, observed) => ({ pass: !!pass, observed });
@@ -83,6 +83,7 @@ export function billingFresh(cl, label, fn, { apply = true, billing = billingSou
     const s = await sealApply(ctx, sealSource());
     if (s.error) throw Error('SETUP_SEAL_APPLY ' + JSON.stringify(s.error));
     ctx.billingSource = billing;
+    ctx.cl = cl;
     ctx.items0 = await catalogItems(ctx);
     if (apply) {
       ctx.billing = await billingApply(ctx, billing);
@@ -436,7 +437,8 @@ export async function sequenceCases(ctx) {
     await feedAll(ctx, ns, [obs(ns, 's11', 'S11-d1', 'paid_period', atMs(0), atMs(30))]); await drain(ctx, W.producer);
     const adv = await entAdvance(cov.c, o, ns, at(40));
     const led0 = await ledgerRows(ctx, o);
-    const direct = await entAdmit(cov.c, o, ns, led0[0].upstream_event_id, 'paid', isoMs(led0[0].valid_from), isoMs(led0[0].valid_until));
+    const f0 = led0[0]; // no ledger fact (a changed pipeline) is an explicit failed observation below, never a thrown gate
+    const direct = f0 ? await entAdmit(cov.c, o, ns, f0.upstream_event_id, 'paid', isoMs(f0.valid_from), isoMs(f0.valid_until)) : { ok: false, code: null, message: 'no ledger fact to replay' };
     await feedAll(ctx, ns, [obs(ns, 's11', 'S11-d2', 'paid_period', atMs(0), atMs(30)), obs(ns, 's11', 'S11-late', 'paid_period', atMs(35), atMs(45))]); await drain(ctx, W.producer);
     const d2 = await itemOf(ctx, 's11', 'S11-d2'), late = await itemOf(ctx, 's11', 'S11-late'); const led = await ledgerRows(ctx, o); const segs = await segRows(ctx, 'subject_ref=$1', ['s11']); const ev = await evidenceRows(ctx, 'item_id=$1', [late.item_id]);
     const covRow = (await q(ctx, `select covered_through, revision from ${ENT}.entitlement_coverage where owner_user_id=$1`, [o]))[0];
@@ -488,7 +490,7 @@ export async function sequenceCases(ctx) {
     await ctx.g.query(ctx.su, `delete from ${B}.fact_segments where subject_ref='s15'`);
     await feedAll(ctx, ns, [obs(ns, 's15', 'S15-d3', 'paid_period', atMs(0), atMs(40))]); await drain(ctx, W.producer);
     const led3 = await ledgerRows(ctx, o); const st = await stateAt(ctx, o, at(35));
-    rec('S15 segments lost against a surviving ledger', it2.state === 'admitted' && it2.outcome.segments[0].ledger === 'replayed' && led2.length === 1 && seg2.length === 1 && led3.length === 2 && st.state === 'paid', { ledger: it2.outcome.segments[0].ledger, led2: led2.length, led3: led3.length });
+    rec('S15 segments lost against a surviving ledger', it2?.state === 'admitted' && it2?.outcome?.segments?.[0]?.ledger === 'replayed' && led2.length === 1 && seg2.length === 1 && led3.length === 2 && st.state === 'paid', { state: it2?.state ?? null, ledger: it2?.outcome?.segments?.[0]?.ledger ?? null, led2: led2.length, led3: led3.length });
   }
   return cases;
 }
@@ -683,13 +685,30 @@ Object.assign(GATES, {
     const sumC = await drain(ctx, W.producer);
     const afterC = { item: (await inboxRows(ctx, 'item_id=$1', [id]))[0], ...(await rowsFor(ctx, o, 'tmo')) };
     // (d) a failed-attempt record can never reopen or alter a finished item
-    const noop = await pgTransport(W.producer.c).transaction(tx => tx.recordAttempt(id, 'LATE'));
+    // (settled, so that a changed record_attempt is an explicit failed observation and never a thrown gate)
+    const noopR = await settle(pgTransport(W.producer.c).transaction(tx => tx.recordAttempt(id, 'LATE')));
+    const noop = noopR.ok ? noopR.v : { outcome: 'error', code: noopR.code, message: noopR.message };
     const afterD = (await inboxRows(ctx, 'item_id=$1', [id]))[0];
-    const ok = sumA.stoppedBecause === 'busy_or_retry' && waitedA >= 1800 && afterA.item.state === 'retry_pending' && afterA.item.attempts === 1 && afterA.item.last_error === 'LOCK_TIMEOUT' && afterA.led === 0 && afterA.segs === 0
+    // (e) the SUBJECT advisory-lock wait is bounded by the function-level lock_timeout (2 s), not by the caller: a second item of one subject, while the first is still in flight, answers retry/LOCK_TIMEOUT
+    //     after about 2 s although the caller's statement_timeout (3.5 s) is longer; nothing is written, and the same item completes once the first transaction has committed.
+    const eO = await makeUser(ctx, 62); await activeLink(ctx, ns, eO, 'tmo_sl');
+    await feedAll(ctx, ns, [obs(ns, 'tmo_sl', 'TS-A', 'paid_period', atMs(0), atMs(30)), obs(ns, 'tmo_sl', 'TS-B', 'paid_period', atMs(10), atMs(40))]);
+    const eIds = (await inboxRows(ctx, 'subject_ref=$1', ['tmo_sl'])).map(r => r.item_id);
+    const cE = await ctx.open(W.producer.role); await cE.query('set statement_timeout = 3500');
+    await W.producer.c.query('begin');
+    const e1 = await settleRb(W.producer.c, W.producer.c.query(`select ${B}.process_item($1::uuid) s`, [eIds[0]]).then(r => r.rows[0].s));
+    const tE = Date.now(); const e2 = await settle(cE.query(`select ${B}.process_item($1::uuid) s`, [eIds[1]]).then(r => r.rows[0].s)); const waitedE = Date.now() - tE;
+    const midE = { item: (await inboxRows(ctx, 'item_id=$1', [eIds[1]]))[0], segs: (await segRows(ctx, 'subject_ref=$1', ['tmo_sl'])).length, led: (await ledgerRows(ctx, eO)).length };
+    await W.producer.c.query('commit').catch(() => {});
+    const e3 = await settle(cE.query(`select ${B}.process_item($1::uuid) s`, [eIds[1]]).then(r => r.rows[0].s));
+    const endE = { segs: (await segRows(ctx, 'subject_ref=$1', ['tmo_sl'])).map(s => [Date.parse(s.seg_start), Date.parse(s.seg_end)]), led: (await ledgerRows(ctx, eO)).length };
+    const eOk = e1.ok && e1.v.outcome === 'admitted' && e2.ok && e2.v.outcome === 'retry' && e2.v.reason === 'LOCK_TIMEOUT' && waitedE >= 1800 && waitedE < 3300
+      && midE.item.state === 'received' && midE.item.attempts === 0 && midE.segs === 0 && midE.led === 0 && e3.ok && e3.v.outcome === 'admitted' && same(endE.segs, [[atMs(0), atMs(30)], [atMs(30), atMs(40)]]) && endE.led === 2;
+    const ok = eOk && sumA.stoppedBecause === 'busy_or_retry' && waitedA >= 1800 && afterA.item.state === 'retry_pending' && afterA.item.attempts === 1 && afterA.item.last_error === 'LOCK_TIMEOUT' && afterA.led === 0 && afterA.segs === 0
       && sumB.stoppedBecause === 'transient_failure' && afterB.item.state === 'retry_pending' && afterB.item.attempts === 2 && /^transient:57014/.test(afterB.item.last_error) && afterB.led === 0 && afterB.segs === 0
       && sumC.processed === 1 && afterC.item.state === 'admitted' && afterC.led === 1 && afterC.segs === 1
       && noop.outcome === 'noop' && afterD.state === 'admitted' && afterD.attempts === 2;
-    return R(ok, { sumA, waitedA, afterA: { ...afterA, item: pickItem(afterA.item) }, sumB, afterB: { ...afterB, item: pickItem(afterB.item) }, sumC, afterC: { ...afterC, item: pickItem(afterC.item) }, noop });
+    return R(ok, { sumA, waitedA, afterA: { ...afterA, item: pickItem(afterA.item) }, sumB, afterB: { ...afterB, item: pickItem(afterB.item) }, sumC, afterC: { ...afterC, item: pickItem(afterC.item) }, noop, e: { first: e1.ok ? e1.v.outcome : e1.code, second: e2.ok ? [e2.v.outcome, e2.v.reason] : [e2.code, e2.message], waitedE, midE: { item: pickItem(midE.item), segs: midE.segs, led: midE.led }, third: e3.ok ? e3.v.outcome : e3.code, endE } });
   },
 
   async P12_INJECTED_DATABASE_FAILURES_AND_AN_OWNER_DELETION_RACE_LEAVE_NO_PARTIAL_STATE(ctx) {
@@ -1223,6 +1242,130 @@ export async function migrationRollbackAndDrift(cl, installSource = billingSourc
   return R(out.every(o => o.pass), out);
 }
 // <<END:migr>>
+// ---- first independent acceptance (2026-10-21): owner deletion after successful ingest, blocked = nothing changed for pending intents, harness classification -------------------------------
+const INBOX_COLS = 'item_id, namespace, delivery_id, subject_ref, payload_digest, kind, period_start, period_end, signed_at, environment, binding_hash, reason_code, received_at, state, reason, attempts, last_error, processed_at, outcome';
+async function ownerDeletionControl(ctx, n) {
+  const u = await makeUser(ctx, n);
+  await makeRole(ctx, 'base_prod', [`grant usage on schema ${ENT} to base_prod`, `grant execute on function ${ENT_FN.admit} to base_prod`]);
+  await regWrite(ctx, `insert into ${ENT}.producers(namespace, role_name, registered_at) values ('base.sandbox','base_prod',$1::timestamptz)`, [at(-400)]);
+  const pc = await ctx.open('base_prod');
+  const admitted = await entAdmit(pc, u, 'base.sandbox', 'k-' + n, 'paid', at(0), at(30));
+  const ledgerBefore = (await ledgerRows(ctx, u)).length;
+  const d = await settle(ctx.g.query(ctx.su, 'delete from auth.users where id=$1', [u]));
+  return { admitted: admitted.ok, ledgerBefore, deleted: d.ok ? 'deleted' : [d.code, d.message], left: { users: await count(ctx, 'auth.users', `id='${u}'`), led: (await ledgerRows(ctx, u)).length } };
+}
+const ownerDeletionControlOk = c => c.admitted && c.ledgerBefore === 1 && c.deleted === 'deleted' && c.left.users === 0 && c.left.led === 0;Object.assign(GATES, {
+  async P14_OWNER_DELETION_AFTER_SUCCESSFUL_INGEST_KEEPS_THE_EXISTING_DELETE_SEMANTICS_AND_THE_ROW_RULES(ctx) {
+    const ns = 'store.sandbox';
+    const W = await nsSetup(ctx, ns);
+    const cov = await makeCoverageRole(ctx, W.producer);
+    const o = await makeUser(ctx, 151);
+    for (const s of ['od1', 'od2', 'od3']) await activeLink(ctx, ns, o, s);
+    // items of one owner that end in every terminal state: admitted, already_asserted, before_registration, quarantined WITH the owner reference (below coverage), recorded_only, dismissed
+    await feedAll(ctx, ns, [obs(ns, 'od1', 'OD-1', 'paid_period', atMs(0), atMs(30)), obs(ns, 'od1', 'OD-2', 'paid_period', atMs(5), atMs(20)), obs(ns, 'od2', 'OD-3', 'paid_period', atMs(-500), atMs(-450)), obs(ns, 'od3', 'OD-4', 'paid_period', atMs(0), atMs(30))]);
+    await drain(ctx, W.producer, 40);
+    const adv = await entAdvance(cov.c, o, ns, at(40));
+    await feedAll(ctx, ns, [obs(ns, 'od3', 'OD-5', 'paid_period', atMs(35), atMs(45)), obs(ns, 'od1', 'OD-6', 'revocation', null, null), obs(ns, 'od2', 'OD-7', 'non_entitling', null, null, { reasonCode: 'price_change_notice' })]);
+    await drain(ctx, W.producer, 40);
+    const rowsOf = () => q(ctx, `select ${INBOX_COLS}, owner_user_id from ${B}.inbox where subject_ref like 'od%' order by delivery_id`);
+    const rowsBefore = await rowsOf();
+    const snap = async () => ({ users: await count(ctx, 'auth.users', `id='${o}'`), segs: await count(ctx, `${B}.fact_segments`, `owner_user_id='${o}'`), led: (await ledgerRows(ctx, o)).length, links: await count(ctx, `${B}.identity_links`, `owner_user_id='${o}'`), ev: await count(ctx, `${B}.evidence_log`) });
+    const before = { states: Object.fromEntries(rowsBefore.map(r => [r.delivery_id, r.state])), withOwner: rowsBefore.filter(r => r.owner_user_id).map(r => r.delivery_id), ...(await snap()), advanced: adv.ok };
+    const del = await settle(ctx.g.query(ctx.su, 'delete from auth.users where id=$1', [o]));
+    const rowsAfter = await rowsOf();
+    const strip = rows => rows.map(r => { const { owner_user_id, ...rest } = r; return JSON.stringify(rest); });
+    const after = { ...(await snap()), ownerRefsNull: rowsAfter.length === rowsBefore.length && rowsAfter.every(r => r.owner_user_id === null), otherColumnsUnchanged: same(strip(rowsBefore), strip(rowsAfter)) };
+    const deleteOk = del.ok && same(before.states, { 'OD-1': 'admitted', 'OD-2': 'already_asserted', 'OD-3': 'before_registration', 'OD-4': 'admitted', 'OD-5': 'quarantined', 'OD-6': 'recorded_only', 'OD-7': 'dismissed' })
+      && same(before.withOwner, ['OD-1', 'OD-2', 'OD-3', 'OD-4', 'OD-5']) && before.users === 1 && before.segs === 2 && before.led === 2 && before.links === 3 && before.ev === 1
+      && after.users === 0 && after.segs === 0 && after.led === 0 && after.links === 0 && after.ev === 1 && after.ownerRefsNull && after.otherColumnsUnchanged;
+    // row rules stay strict: the ONLY change a finished item accepts is clearing its owner reference (what ON DELETE SET NULL does)
+    const o2 = await makeUser(ctx, 152), o3 = await makeUser(ctx, 153); await activeLink(ctx, ns, o2, 'od9');
+    await feedAll(ctx, ns, [obs(ns, 'od9', 'OD-9', 'paid_period', atMs(0), atMs(10))]); await drain(ctx, W.producer, 10);
+    const t = (await inboxRows(ctx, 'subject_ref=$1', ['od9']))[0];
+    const upd = (set, id = t.item_id) => attempt(ctx, `update ${B}.inbox set ${set} where item_id='${id}'`);
+    const refused = r => !r.ok && r.code === '23514' && /BILLING_ITEM_TERMINAL/.test(r.message);
+    const gone = rowsAfter.find(r => r.delivery_id === 'OD-6'); // a finished item whose owner reference is already NULL
+    const controls = {
+      clearOwnerOnly: await upd('owner_user_id = null'),
+      clearOwnerAndAttempts: await upd('owner_user_id = null, attempts = attempts + 1'),
+      clearOwnerAndState: await upd("owner_user_id = null, state = 'quarantined'"),
+      clearOwnerAndReason: await upd("owner_user_id = null, reason = 'x'"),
+      clearOwnerAndOutcome: await upd("owner_user_id = null, outcome = '{}'::jsonb"),
+      clearOwnerAndProcessedAt: await upd("owner_user_id = null, processed_at = processed_at + interval '1 second'"),
+      clearOwnerAndLastError: await upd("owner_user_id = null, last_error = 'x'"),
+      reassignOwner: await upd(`owner_user_id = '${o3}'`),
+      stateOnly: await upd("state = 'quarantined'"),
+      noopOnClearedItem: await upd('owner_user_id = null', gone.item_id),
+      setOwnerOnClearedItem: await upd(`owner_user_id = '${o3}'`, gone.item_id)
+    };
+    const rulesOk = controls.clearOwnerOnly.ok && ['clearOwnerAndAttempts', 'clearOwnerAndState', 'clearOwnerAndReason', 'clearOwnerAndOutcome', 'clearOwnerAndProcessedAt', 'clearOwnerAndLastError', 'reassignOwner', 'stateOnly', 'noopOnClearedItem', 'setOwnerOnClearedItem'].every(k => refused(controls[k]));
+    return R(deleteOk && rulesOk, { before, delete: del.ok ? 'deleted' : [del.code, del.message], after, controls: Object.fromEntries(Object.entries(controls).map(([k, v]) => [k, v.ok ? 'accepted' : [v.code, v.message.slice(0, 60)]])) });
+  },
+
+  async P15_BLOCKED_MEANS_NOTHING_CHANGED_INCLUDING_A_PENDING_PURCHASE_INTENT(ctx) {
+    const ns = 'pend.sandbox';
+    await configure(ctx, ns);
+    const role = 'bill_p_pend'; await makeRole(ctx, role, grantFns(role, ['next', 'process', 'attempt'])); // a producer role that ENT0 does NOT know yet
+    const owner = await makeUser(ctx, 171);
+    const ing = ctx.ingress ?? (ctx.ingress = await makeIngress(ctx));
+    const bind = sha256hex('binding:pend:1');
+    const intent = await pgTransport(ing.c).transaction(tx => tx.createLinkIntent(ns, owner, bind, Date.now() + 3600000));
+    const fed = await feedAll(ctx, ns, [obs(ns, 'new-subject', 'PD-1', 'paid_period', atMs(0), atMs(30), { bindingHash: bind })]);
+    const snap = async () => ({
+      links: await q(ctx, `select link_id, namespace, owner_user_id, state, binding_hash, subject_ref, expires_at, created_at, activated_at from ${B}.identity_links where namespace=$1`, [ns]),
+      items: await q(ctx, `select ${INBOX_COLS}, owner_user_id from ${B}.inbox where namespace=$1`, [ns]),
+      ev: await count(ctx, `${B}.evidence_log`, `namespace='${ns}'`), segs: await count(ctx, `${B}.fact_segments`, `namespace='${ns}'`), led: (await ledgerRows(ctx, owner)).length
+    });
+    const before = await snap();
+    const pc = await ctx.open(role);
+    const id = before.items[0]?.item_id;
+    const r1 = await settle(pgTransport(pc).transaction(tx => tx.processItem(id))); const mid1 = await snap();
+    const r2 = await settle(pgTransport(pc).transaction(tx => tx.processItem(id))); const mid2 = await snap();
+    // the operator registers the producer afterwards (a different, explicit act): the SAME item completes and only now does the intent activate
+    await regWrite(ctx, `insert into ${ENT}.producers(namespace, role_name, registered_at) values ($1,$2,$3::timestamptz)`, [ns, role, at(-400)]);
+    const r3 = await settle(pgTransport(pc).transaction(tx => tx.processItem(id))); const end = await snap();
+    const ok = intent.outcome === 'created' && fed[0].outcome === 'received' && before.links.length === 1 && before.links[0].state === 'pending' && before.links[0].subject_ref === null && before.links[0].activated_at === null
+      && r1.ok && r1.v.outcome === 'blocked' && r1.v.reason === 'ENT_PRODUCER_NOT_AUTHORIZED' && same(mid1, before) && r2.ok && r2.v.outcome === 'blocked' && same(mid2, before)
+      && r3.ok && r3.v.outcome === 'admitted' && end.links[0].state === 'active' && end.links[0].subject_ref === 'new-subject' && end.links[0].activated_at !== null && end.items[0].state === 'admitted' && end.items[0].owner_user_id === owner && end.led === 1 && end.segs === 1;
+    return R(ok, { intent: intent.outcome, fed: fed[0].outcome, blocked: [r1.ok ? [r1.v.outcome, r1.v.reason] : [r1.code, r1.message], r2.ok ? r2.v.outcome : r2.code], before: { link: before.links[0]?.state, subject: before.links[0]?.subject_ref }, unchangedAfterBlocked: [same(mid1, before), same(mid2, before)], mid1Link: mid1.links[0], after: { third: r3.ok ? r3.v.outcome : [r3.code, r3.message], link: end.links[0]?.state, subject: end.links[0]?.subject_ref, item: end.items[0]?.state, led: end.led, segs: end.segs } });
+  },
+
+  // The same ENT0 owner deletion (a fact written by the registered producer, then the owner removed) on the chain WITHOUT this migration (P16) and on the identical chain WITH it applied (P17): this migration must not change what deleting an owner does.
+  async P16_OWNER_DELETION_CONTROL_ON_THE_CHAIN_WITHOUT_THIS_MIGRATION(ctx) {
+    const noBilling = (await q(ctx, `select to_regnamespace('${B}') is null n`))[0].n;
+    const c = await ownerDeletionControl(ctx, 181);
+    return R(noBilling && ownerDeletionControlOk(c), { noBilling, control: c });
+  },
+
+  async P17_OWNER_DELETION_CONTROL_ON_THE_IDENTICAL_CHAIN_WITH_THIS_MIGRATION(ctx) {
+    const hasBilling = (await q(ctx, `select to_regnamespace('${B}') is not null n`))[0].n;
+    const c = await ownerDeletionControl(ctx, 182);
+    return R(hasBilling && ownerDeletionControlOk(c), { hasBilling, control: c });
+  }});
+// A gate that THROWS is never a detector: infrastructure / connection / timeout / initialisation errors make the whole run BLOCKED, any other unexpected exception is an UNVERIFIED crash (recorded, not a detection).
+// Only a gate that returns pass:false with an explicit observation is an explicit failure and may be counted as detection.
+const INFRA_ERROR = /timeout expired|connection timeout|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|Connection terminated|terminating connection|the database system is|too many clients|cannot connect|initdb|pg_ctl|postmaster|spawnSync|GATE_WATCHDOG_TIMEOUT|^SETUP_/i;
+export const classifyGateError = e => { const message = String(e?.message ?? e); return { kind: INFRA_ERROR.test(message) ? 'setup' : 'crash', message }; };
+export async function runDetector(fn, id = '?') {
+  try { const r = await fn(); return { pass: !!r?.pass, observed: r?.observed, crashed: false }; }
+  catch (e) {
+    const c = classifyGateError(e);
+    if (c.kind === 'setup') throw Error('SETUP_GATE ' + id + ' ' + c.message.slice(0, 200));
+    return { pass: false, observed: { gateCrashed: c.message.slice(0, 300) }, crashed: true };
+  }
+}
+export const isExplicitFailure = r => !!r && r.pass === false && r.crashed !== true && r.observed !== undefined && !(r.observed && typeof r.observed === 'object' && 'gateCrashed' in r.observed);
+GATES.F03_HARNESS_SETUP_AND_CRASH_ARE_NEVER_A_DETECTOR = async () => {
+  const thrown = async message => { try { return { threw: false, v: await runDetector(async () => { throw Error(message); }, 'x') }; } catch (e) { return { threw: true, message: e.message }; } };
+  const setupCases = ['timeout expired', 'connect ECONNREFUSED 127.0.0.1:5432', 'read ETIMEDOUT', 'Connection terminated unexpectedly', 'SETUP_fake', 'GATE_WATCHDOG_TIMEOUT fake', 'spawnSync initdb.exe ETIMEDOUT'];
+  const crashCases = ["Cannot read properties of undefined (reading 'upstream_event_id')", 'BILLING_ITEM_TERMINAL', 'canceling statement due to statement timeout'];
+  const setup = []; for (const m of setupCases) setup.push([m, await thrown(m)]);
+  const crash = []; for (const m of crashCases) crash.push([m, await thrown(m)]);
+  const okRun = await runDetector(async () => R(true, { valid: true }), 'p'), failRun = await runDetector(async () => R(false, { expected: 1, actual: 2 }), 'f'), bareFail = await runDetector(async () => ({ pass: false }), 'b');
+  const pass = setup.every(([, x]) => x.threw && /^SETUP_GATE /.test(x.message)) && crash.every(([, x]) => !x.threw && x.v.crashed === true && x.v.pass === false && !isExplicitFailure(x.v))
+    && okRun.pass && !okRun.crashed && !isExplicitFailure(okRun) && isExplicitFailure(failRun) && !isExplicitFailure(bareFail);
+  return R(pass, { setup: setup.map(([m, x]) => [m, x.threw ? 'BLOCKED' : 'wrongly absorbed']), crash: crash.map(([m, x]) => [m, x.threw ? 'wrongly thrown' : x.v.crashed ? 'crash(not a detector)' : 'wrong']), okRun: okRun.pass, explicit: isExplicitFailure(failRun), bareFailIsExplicit: isExplicitFailure(bareFail) });
+};
 GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const frozen = frozenProof(), inv = inventoryProof();
   const source = billingSource();
@@ -1257,14 +1400,16 @@ GATES.F02_GATE_SELECTION_CONTRACT = async () => {
   return R(rows.every(r => r.ok) && refused && exact, o);
 };export const POSITIVE_IDS = Object.keys(GATES).filter(k => /^P\d\d_/.test(k)).sort();
 export const NEGATIVE_IDS = ['N01_DIRECT_ACCESS_IS_REFUSED_FORGED_ROWS_ARE_REJECTED_AND_ROW_LEVEL_RULES_HOLD', 'N02_MIGRATION_PRECONDITIONS_FAIL_CLOSED', 'N03_MIGRATION_ROLLBACK_AND_CONCURRENT_DRIFT'];
-export const SUPPLEMENTARY_IDS = ['F01_FROZEN_SCOPE_AND_INVENTORY', 'F02_GATE_SELECTION_CONTRACT'];
+export const SUPPLEMENTARY_IDS = ['F01_FROZEN_SCOPE_AND_INVENTORY', 'F02_GATE_SELECTION_CONTRACT', 'F03_HARNESS_SETUP_AND_CRASH_ARE_NEVER_A_DETECTOR'];
 export const ALL_GATE_IDS = [...POSITIVE_IDS, ...NEGATIVE_IDS, ...SUPPLEMENTARY_IDS];
+// gates that apply the migration themselves (a before/after comparison in ONE database)
+const NO_APPLY = new Set(['P16_OWNER_DELETION_CONTROL_ON_THE_CHAIN_WITHOUT_THIS_MIGRATION']);
 export async function runGate(cl, id, source = billingSource()) {
   if (PURE_IDS.has(id)) return GATES[id]();
   if (id === 'N02_MIGRATION_PRECONDITIONS_FAIL_CLOSED') return migrationRefusals(cl, source);
   if (id === 'N03_MIGRATION_ROLLBACK_AND_CONCURRENT_DRIFT') return migrationRollbackAndDrift(cl, source);
   if (id.startsWith('F0')) return GATES[id]();
-  return billingFresh(cl, id, ctx => GATES[id](ctx), { billing: source });
+  return billingFresh(cl, id, ctx => GATES[id](ctx), { billing: source, apply: !NO_APPLY.has(id) });
 }
 export async function runSmoke({ bin, out, selected = ALL_GATE_IDS }) {
   const rec = recorder(out);

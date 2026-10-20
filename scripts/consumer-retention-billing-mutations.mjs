@@ -4,7 +4,8 @@
 //   guard : the migration's own guard must refuse the raw mutant (recorded as a guard, never as behavioural detection)
 //   green : an observably equivalent mutant (defence in depth): every listed detector must stay green
 // A mutant whose only rejection is the exact post-state digest (BILLING_POST_STATE_MISMATCH) is re-pinned with the observed digest and then judged by its gate; the digest refusal is recorded separately.
-// A gate that THROWS on a mutant is a failed gate (the unmodified migration is first run through every detector: none throws there); a SETUP error (database, apply, fixture) is BLOCKED, never a detection.
+// A gate that THROWS is never a detector (first independent acceptance, E02): connection / initdb / timeout-expired / watchdog errors make the WHOLE run BLOCKED (exit 2), any other unexpected exception is recorded as a CRASH and does not count as detection;
+// only a gate that returns pass:false with an explicit observation counts. Refusal controls (N02/N03) record WHY they failed (case label, expected reason, observed error) so a refusal for another reason is not mistaken for proof that a guard is needed.
 // TypeScript mutants are applied to a temporary copy of the production modules and judged by the pure gate P13.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -12,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROOT, BILLING_MIGRATION, recorder, sha } from './consumer-retention-persistence-smoke.mjs';
 import { entCluster } from './consumer-retention-entitlement-smoke.mjs';
-import { billingSource, billingFresh, billingApply, runGate, ALL_GATE_IDS, options, setSourceRoot, pureChecks } from './consumer-retention-billing-smoke.mjs';
+import { billingSource, billingFresh, billingApply, runGate, ALL_GATE_IDS, options, setSourceRoot, pureChecks, runDetector, isExplicitFailure } from './consumer-retention-billing-smoke.mjs';
 
 const once = (s, a, b) => { if (s.split(a).length !== 2) throw Error('MUTATION_ANCHOR_NOT_UNIQUE ' + a.slice(0, 90)); return s.replace(a, () => b); };
 const G = id => { const m = ALL_GATE_IDS.filter(x => x.startsWith(id + '_')); if (m.length !== 1) throw Error('UNKNOWN_GATE ' + id); return m[0]; };
@@ -54,13 +55,14 @@ export const SPECS = [
   ['Y23_EVERY_ERROR_IS_SWALLOWED', 'an unexpected error (injected failure, deadlock) is turned into a quarantine instead of propagating', s => once(s, 'ELSE\n        RAISE;\n       END IF;', "ELSE\n        v_final := 'quarantined'; v_why := 'swallowed';\n       END IF;"), G('P12'), [G('P06')]],
   ['Y24_OWNER_ABSENT_NOT_HANDLED', 'a deleted owner is not recognised', s => once(s, "ELSIF v_sqlstate = '23503' THEN", 'ELSIF false THEN'), G('P12'), []],
   ['Y25_RECORD_ATTEMPT_REOPENS_FINAL_ITEMS', 'a failed-attempt record is applied to any item', s => once(s, "WHERE item_id = p_item_id AND state IN ('received','retry_pending','mapping_pending');\n GET DIAGNOSTICS", 'WHERE item_id = p_item_id;\n GET DIAGNOSTICS'), G('P04'), []],
-  ['Y26_PROCESS_LOCK_TIMEOUT_REMOVED', 'process_item has no function-level lock_timeout (equivalent: the ledger call bounds its own wait)', s => once(s, PI_HEAD, PI_HEAD.replace(" SET lock_timeout = '2s'", '')), G('P04'), [G('P05')], { expect: 'green' }],
+  // NOT equivalent (first independent acceptance, E01): without the function-level lock_timeout the wait for the SUBJECT advisory lock is bounded only by the caller (57014 after the caller's statement_timeout instead of retry/LOCK_TIMEOUT after 2 s). P04 part (e) is the behavioural detector; the raw G2 digest refusal is recorded separately and is not this detection.
+  ['Y26_PROCESS_LOCK_TIMEOUT_REMOVED', 'process_item has no function-level lock_timeout: the subject advisory-lock wait is no longer bounded at 2 s (retry/LOCK_TIMEOUT becomes a caller-side 57014)', s => once(s, PI_HEAD, PI_HEAD.replace(" SET lock_timeout = '2s'", '')), G('P04'), [G('P05')]],
   // ---- ingress ----
   ['Y27_CONFLICT_TREATED_AS_DUPLICATE', 'a repeated delivery id with other content is silently accepted', s => once(s, 'IF v_existing.payload_digest = p_payload_digest THEN', 'IF true THEN'), G('P02'), [G('P09')]],
   ['Y28_INGRESS_IGNORES_THE_SWITCH', 'a disabled namespace still receives deliveries', s => once(s, "IF NOT v_cfg.enabled THEN\n  RETURN pg_catalog.jsonb_build_object('outcome', 'disabled', 'item_id', NULL);", "IF false THEN\n  RETURN pg_catalog.jsonb_build_object('outcome', 'disabled', 'item_id', NULL);"), G('P09'), []],
   ['Y29_PERIOD_PRECISION_CHECK_REMOVED', 'the function accepts sub-millisecond period bounds (only the table check remains)', s => once(s, "OR pg_catalog.date_trunc('milliseconds', p_period_start) <> p_period_start OR pg_catalog.date_trunc('milliseconds', p_period_end) <> p_period_end", 'OR false'), G('P11'), []],
   // ---- row-level rules ----
-  ['Y30_TERMINAL_GUARD_REMOVED', 'a final inbox item can be changed', s => once(s, "IF OLD.state NOT IN ('received','retry_pending','mapping_pending') THEN\n  RAISE EXCEPTION 'BILLING_ITEM_TERMINAL'", "IF false THEN\n  RAISE EXCEPTION 'BILLING_ITEM_TERMINAL'"), G('N01'), []],
+  ['Y30_TERMINAL_GUARD_REMOVED', 'a final inbox item can be changed', s => once(s, "IF OLD.state NOT IN ('received','retry_pending','mapping_pending') THEN", 'IF false THEN'), G('N01'), [G('P14')]],
   ['Y31_KIND_IMMUTABILITY_REMOVED', 'the asserted kind of an inbox item can be rewritten', s => once(s, 'OR NEW.kind IS DISTINCT FROM OLD.kind ', 'OR false '), G('N01'), []],
   ['Y32_ATTEMPTS_MAY_DECREASE', 'the attempt counter can go down', s => once(s, 'OR NEW.attempts < OLD.attempts', 'OR false'), G('N01'), []],
   ['Y33_SEGMENT_GUARD_REMOVED', 'overlapping or changed segments are accepted', s => once(s, 'CREATE TRIGGER segment_guard BEFORE INSERT OR UPDATE ON retention_billing.fact_segments\n FOR EACH ROW EXECUTE FUNCTION retention_billing.guard_segment();', ''), G('N01'), [G('P05')]],
@@ -76,11 +78,19 @@ export const SPECS = [
   ['Y42_SCHEMA_SEAM_GRANTED_TO_PUBLIC', 'the entitlement schema seam is granted to PUBLIC', s => once(s, SCHEMA_SEAM, 'GRANT USAGE ON SCHEMA retention_entitlement TO PUBLIC;'), G('P08'), [], { expect: 'guard' }],
   ['Y43_BUILDER_ROLE_KEPT', 'the disposable builder role is not dropped (the own residue guard refuses)', s => once(s, AFTER_BUILDER_DROP, '-- builder kept'), G('P08'), [], { expect: 'guard' }],
   // ---- migration guards ----
-  ['Y44_SUPERUSER_REQUIREMENT_REMOVED', 'a non-superuser actor is accepted', s => once(s, 'AND r.rolcanlogin AND r.rolsuper', 'AND r.rolcanlogin'), G('N02'), []],
+  // N02 refuses a non-superuser actor with an exact expected prefix; with this guard removed the actor is still refused (42501, permission denied) but NOT with the expected reason. That reason mismatch is the observation; it does not show that the mutant installs.
+  ['Y44_SUPERUSER_REQUIREMENT_REMOVED', 'the superuser requirement of the actor guard is removed (the refusal changes reason: expected RETENTION_DDL_ACTOR_NOT_AUTHORIZED, observed 42501)', s => once(s, 'AND r.rolcanlogin AND r.rolsuper', 'AND r.rolcanlogin'), G('N02'), []],
   ['Y45_PREDECESSOR_DRIFT_REFUSAL_REMOVED', 'the pre-apply predecessor drift refusal is removed', s => once(s, "RAISE EXCEPTION 'BILLING_PREDECESSOR_DRIFT' USING ERRCODE='42501';", 'NULL;'), G('N02'), []],
   ['Y46_PLATFORM_MARKER_REFUSAL_REMOVED', 'the platform marker refusal is removed', s => once(s, "RAISE EXCEPTION 'BILLING_PLATFORM_APPLY_NOT_AUTHORIZED %', pg_catalog.array_to_string(v_markers, ',') USING ERRCODE='42501';", 'NULL;'), G('N02'), []],
   ['Y47_G2_SCOPE_COMPARISON_REMOVED', 'the post-apply scope comparison is removed', s => once(s, "IF v_scope IS DISTINCT FROM pg_catalog.current_setting('tastkind.billing_scope_digest') THEN", "IF false AND v_scope IS DISTINCT FROM pg_catalog.current_setting('tastkind.billing_scope_digest') THEN"), G('N03'), []],
-  ['Y48_G2_SEAM_CHECK_REMOVED', 'the exact seam-state refusal is removed', s => once(s, "RAISE EXCEPTION 'BILLING_SEAM_STATE_MISMATCH' USING ERRCODE='42501';", 'NULL;'), G('N03'), []]
+  ['Y48_G2_SEAM_CHECK_REMOVED', 'the exact seam-state refusal is removed', s => once(s, "RAISE EXCEPTION 'BILLING_SEAM_STATE_MISMATCH' USING ERRCODE='42501';", 'NULL;'), G('N03'), []],
+  // ---- first independent acceptance fixes: owner reference clearing on finished items (A01) and link activation after the blocked check (A02) ----
+  ['Y49_OWNER_CLEARING_ALLOWS_ANY_OTHER_CHANGE', 'a finished item whose owner reference is cleared may change any other column', s => once(s, "AND NEW.state = OLD.state AND NEW.reason IS NOT DISTINCT FROM OLD.reason AND NEW.attempts = OLD.attempts\n     AND NEW.last_error IS NOT DISTINCT FROM OLD.last_error AND NEW.processed_at IS NOT DISTINCT FROM OLD.processed_at AND NEW.outcome IS NOT DISTINCT FROM OLD.outcome THEN", 'THEN'), G('P14'), []],
+  ['Y50_OWNER_CLEARING_REFUSED_AGAIN', 'the owner reference of a finished item cannot be cleared (owner deletion is blocked again)', s => once(s, 'IF OLD.owner_user_id IS NOT NULL AND NEW.owner_user_id IS NULL AND NEW.state = OLD.state', 'IF false AND NEW.state = OLD.state'), G('P14'), []],
+  ['Y51_OWNER_REFERENCE_MAY_BE_REPOINTED', 'a finished item accepts any change of its owner reference (set or re-pointed), not only clearing', s => once(s, 'IF OLD.owner_user_id IS NOT NULL AND NEW.owner_user_id IS NULL AND NEW.state = OLD.state', 'IF NEW.state = OLD.state'), G('P14'), []],
+  ['Y52_LINK_ACTIVATED_BEFORE_THE_ADMIT', 'the pending intent is activated immediately (before the admit), so a blocked result keeps the activation', s => once(s, 'v_activate := true;', "UPDATE retention_billing.identity_links SET state = 'active', subject_ref = v_item.subject_ref, activated_at = v_now WHERE link_id = v_link.link_id;"), G('P15'), []],
+  ['Y53_BLOCKED_RESULT_STILL_ACTIVATES_THE_LINK', 'the blocked branch activates the pending intent before returning', s => once(s, "IF v_blocked THEN\n   RETURN pg_catalog.jsonb_build_object('outcome', 'blocked'", "IF v_blocked THEN\n   IF v_activate THEN UPDATE retention_billing.identity_links SET state = 'active', subject_ref = v_item.subject_ref, activated_at = v_now WHERE link_id = v_link.link_id; END IF;\n   RETURN pg_catalog.jsonb_build_object('outcome', 'blocked'"), G('P15'), []],
+  ['Y54_PENDING_INTENT_NEVER_ACTIVATES', 'a pending intent is never activated after a successful processing', s => once(s, 'IF v_activate THEN', 'IF false THEN'), G('P15'), [G('P10')]]
 ];
 
 // ---- production TypeScript mutants (judged by the pure gate P13 on a temporary copy of the modules) -------------------------------------------------------------------------------
@@ -106,10 +116,9 @@ export const TS_SPECS = [
 ];
 
 const GATE_WATCHDOG_MS = 900000;
-const guarded = async (cl, id, source) => {
-  try { return await Promise.race([runGate(cl, id, source), new Promise((_, rej) => setTimeout(() => rej(Error('GATE_WATCHDOG_TIMEOUT ' + id)), GATE_WATCHDOG_MS).unref())]); }
-  catch (e) { if (/^(SETUP_|GATE_WATCHDOG_TIMEOUT)/.test(e.message)) throw e; return { pass: false, observed: { gateThrew: String(e.message).slice(0, 300) } }; }
-};
+const guarded = (cl, id, source) => Promise.race([runDetector(() => runGate(cl, id, source), id), new Promise((_, rej) => setTimeout(() => rej(Error('SETUP_GATE_WATCHDOG_TIMEOUT ' + id)), GATE_WATCHDOG_MS).unref())]);
+// What a failing refusal/negative-control gate actually observed: the failing cases with expected reason and observed error (so the reason of a refusal is auditable).
+const failingCases = observed => (Array.isArray(observed) ? observed : []).filter(c => c && c.pass === false).slice(0, 6).map(c => ({ label: c.label ?? c.name ?? null, expectPrefix: c.expectPrefix ?? c.expect ?? null, error: c.error ?? null, stateUnchanged: c.stateUnchanged ?? null }));
 function copyTree(from, to) { fs.mkdirSync(to, { recursive: true }); for (const e of fs.readdirSync(from, { withFileTypes: true })) { const a = path.join(from, e.name), b = path.join(to, e.name); if (e.isDirectory()) copyTree(a, b); else fs.copyFileSync(a, b); } }
 async function tsMutant(id, rel, mutate) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'billing-ts-'));
@@ -118,8 +127,8 @@ async function tsMutant(id, rel, mutate) {
     const f = path.join(tmp, rel); const text = fs.readFileSync(f, 'utf8'); const m = mutate(text); if (m === text) throw Error('MUTATION_NOT_APPLIED ' + id);
     fs.writeFileSync(f, m);
     setSourceRoot(tmp);
-    let rows; try { rows = await pureChecks(); } catch (e) { rows = [{ name: 'pure checks threw', pass: false, observed: String(e.message).slice(0, 200) }]; }
-    return rows.filter(r => !r.pass).map(r => r.name);
+    let rows; try { rows = await pureChecks(); } catch (e) { return { failedChecks: [], crashed: String(e.message).slice(0, 200) }; } // a thrown pure-check run is a crash, not a detection
+    return { failedChecks: rows.filter(r => !r.pass).map(r => r.name), crashed: null };
   } finally { setSourceRoot(null); try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp cleanup only */ } }
 }
 export async function runMutations({ bin, out, only }) {
@@ -137,7 +146,7 @@ export async function runMutations({ bin, out, only }) {
     const sqlRun = SPECS.filter(([id]) => !only || only.includes(id));
     const detectors = [...new Set(sqlRun.flatMap(([, , , p, more]) => [p, ...more]))];
     const control = [];
-    for (const id of detectors) { const r = await guarded(cl, id, normal); control.push({ id, pass: r.pass }); }
+    for (const id of detectors) { const r = await guarded(cl, id, normal); control.push({ id, pass: r.pass && !r.crashed, crashed: r.crashed }); }
     rec.write('control.json', control);
     if (!control.every(c => c.pass)) throw Error('NORMAL_SETUP_DETECTOR_FAILED ' + control.filter(c => !c.pass).map(c => c.id).join(','));
     for (const [id, defect, mutate, primary, more, opts = {}] of sqlRun) {
@@ -153,26 +162,28 @@ export async function runMutations({ bin, out, only }) {
       else if (probe.error && /^(BILLING_|RETENTION_)/.test(probe.error.message)) g2 = { rejected: probe.error.message.split(' ')[0], raw: true };
       else if (probe.error) throw Error('MUTANT_UNEXPECTED_APPLY_ERROR ' + id + ' ' + probe.error.message);
       fs.writeFileSync(path.join(dir, 'installed-mutant.sql'), installed);
-      const failed = []; const passedGates = []; const evaluated = [];
+      const failed = []; const passedGates = []; const crashedGates = []; const evaluated = []; const observations = {};
       const guardOnly = g2?.raw === true;
       if (!guardOnly || [G('N02'), G('N03')].includes(primary)) {
         for (const gate of [primary, ...more]) {
           const r = await guarded(cl, gate, installed);
-          evaluated.push(gate); (r.pass ? passedGates : failed).push(gate);
-          fs.writeFileSync(path.join(dir, `gate-${gate}.json`), JSON.stringify({ gate, pass: r.pass, observed: r.observed }, null, 2));
+          evaluated.push(gate); (r.crashed ? crashedGates : r.pass ? passedGates : isExplicitFailure(r) ? failed : crashedGates).push(gate);
+          observations[gate] = failingCases(r.observed);
+          fs.writeFileSync(path.join(dir, `gate-${gate}.json`), JSON.stringify({ gate, pass: r.pass, crashed: r.crashed, explicitFailure: isExplicitFailure(r), observed: r.observed }, null, 2));
         }
       }
       const detectedByGate = failed.includes(primary);
       const detectedByGuard = g2 !== null; // any refusal by the migration's own guards or its exact post-state digest (recorded as a guard, never as behavioural detection)
-      const pass = expect === 'gate' ? detectedByGate : expect === 'guard' ? detectedByGuard : (!guardOnly && failed.length === 0);
-      const result = { id, kind: 'sql', defect, expect, primary, rawMutantSha256: sha(raw), installedMutantSha256: sha(installed), normalSha256: sha(normal), rawApply: probe.error ?? 'applied', g2, evaluated, failedGates: failed, passedGates, detectedByGate, detectedByGuard, rebased: installed !== raw, pass };
+      const primaryCrashed = crashedGates.includes(primary);
+      const pass = expect === 'gate' ? detectedByGate && !primaryCrashed : expect === 'guard' ? detectedByGuard : (!guardOnly && failed.length === 0 && crashedGates.length === 0);
+      const result = { id, kind: 'sql', defect, expect, primary, rawMutantSha256: sha(raw), installedMutantSha256: sha(installed), normalSha256: sha(normal), rawApply: probe.error ?? 'applied', g2, evaluated, failedGates: failed, passedGates, crashedGates, primaryCrashed, failingObservations: observations, detectedByGate, detectedByGuard, rebased: installed !== raw, pass };
       fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));
       results.push(result); rec.write('check-' + id + '.json', { id, pass, observed: result }); console.log('CHECK ' + id + ' ' + (pass ? 'PASS' : 'FAIL')); if (!pass) survivors.push(id);
     }
     for (const [id, defect, rel, mutate] of TS_SPECS.filter(([id]) => !only || only.includes(id))) {
-      const failedChecks = await tsMutant(id, rel, mutate);
-      const pass = failedChecks.length > 0;
-      const result = { id, kind: 'ts', defect, expect: 'gate', primary: G('P13'), failedChecks, pass };
+      const t = await tsMutant(id, rel, mutate);
+      const pass = t.failedChecks.length > 0 && !t.crashed;
+      const result = { id, kind: 'ts', defect, expect: 'gate', primary: G('P13'), failedChecks: t.failedChecks, crashed: t.crashed, pass };
       results.push(result); rec.write('check-' + id + '.json', { id, pass, observed: result }); console.log('CHECK ' + id + ' ' + (pass ? 'PASS' : 'FAIL')); if (!pass) survivors.push(id);
     }
     if (survivors.length) { const err = Error('SURVIVING_MUTANTS ' + survivors.join(',')); err.behavior = true; throw err; }

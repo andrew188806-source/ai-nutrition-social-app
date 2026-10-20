@@ -1505,3 +1505,9 @@ Owner 一次核定 G1～G4 後建立的垂直切片：signed 合成 delivery →
 - 原 ENT-F1 候選 `38f0cb14`（base `526c014c`）保持原樣；本節對應的整合候選是以 `ea9da931`（tree `978eccb0`，Social S2-FF2）為 base 的 `git merge`，產品、migration、billing 函式庫、smoke 與 mutations 的 bytes 與 `38f0cb14` 逐檔相同（merge 時這些路徑沒有衝突）。
 - 只有兩個檔案在兩線都被修改，因而需要依實際內容整合（不整檔覆蓋任一方）：`scripts/consumer-meal-save-recovery-guard.mjs`（保留 S2-FF2 的 `S2FF2_PATHS`／record，與 ENT-F1 的 `BILLING_PATHS`／record；ENT-F1 record 另要求 S2-FF2 三個流程路徑存在）與 `scripts/consumer-retention-persistence-smoke.mjs`。
 - persistence 鏈改為 `social → S2-FF1 → S2-FF2 → ENT-F1`：`billing` 現在要求 S2-FF1 與 S2-FF2 record（缺任一者為 invalid）；social 檔案狀態依 `(billing 覆寫) || (S2-FF2 blob) || (社交基準)` 逐檔判定；recovery guard 的 blob 覆寫以最高層為準（ENT-F1 > S2-FF2 > S2-FF1 > …），ENT-F1 層釘的是合併後的 guard blob。其餘 ENT-F1 的覆寫（ENT-R／ENT1-A／ENT0 smoke、social-friends-postgres）所涉檔案在 S2-FF2 沒有被改動，blob 沿用。沒有 blanket allowlist、沒有自我或循環 hash。
+### 21.8 首次獨立驗收後的修正（retention line，2026-10-21；作者修正自測，不是 acceptance）
+- 基準：本修正以 main `cbadc92c`（Social S2-ID1 已本機落地；遠端 push 尚待 Owner）為 base；persistence 信任根的鏈為 `social → S2-FF1 → S2-FF2 → S2-ID1 → ENT-F1`，ENT-F1 要求 S2-ID1 record。
+- **A01（owner 刪除）**：`inbox.owner_user_id` 為 `ON DELETE SET NULL`。結案的 inbox 列只接受一種變更——**把 owner 引用由非 NULL 清為 NULL，且其他每一欄位（state、reason、attempts、last_error、processed_at、outcome 與所有不可變欄位）不變**；這正是 FK 動作。其他任何對結案列的變更仍是 `BILLING_ITEM_TERMINAL`；引用不能被設定或改指向。owner 的 segments／ENT0 facts／links 照舊 CASCADE 清除；inbox 列保留但不再引用 owner。§21.3 的「無部分成功」不因此放寬。
+- **A02（blocked）**：`blocked` 的意思是 **nothing changed**，包含 pending purchase intent。pending intent 的活化延後到 blocked 判定之後才執行（link 列仍在同一 `FOR UPDATE` 之下，鎖序不變）；producer 後來被登記時，同一 item 成功 admit 並在那時活化。
+- **驗證證據的更正**：先前「65/65 突變」不再作為完整偵測結論（Y26 被錯列等價；setup 逾時被算成 detector；少數 gate 以崩潰代替明示觀察）。mutation harness 現在把連線／初始化／逾時視為整個 run `BLOCKED`、把其他非預期例外視為不計入的崩潰，只有明示 `pass:false` 觀察才算偵測。詳見交付的 ERRATA。
+- 不改任何 Owner 政策、權限 seam、producer／resolver 分離、Hosted 狀態（Hosted binding 維持 UNVERIFIED）。

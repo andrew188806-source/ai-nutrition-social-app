@@ -79,9 +79,9 @@ export const BILLING_FILES = Object.freeze({
   'supabase/functions/_shared/billing-ingest/process.ts': Object.freeze(['100644', 'c15d841d7b7c4afe0c0363c0135966374affc9cb']),
   'supabase/functions/_shared/billing-ingest/receive.ts': Object.freeze(['100644', '51c36035ad96fe533975679a085de080ff8acc0a']),
   'supabase/functions/_shared/billing-ingest/types.ts': Object.freeze(['100644', '421db4c7b637cd0b7a8a78611d0d76fe0fbdc6e9']),
-  'supabase/migrations/20261021010000_consumer_retention_billing_fact_ingest.sql': Object.freeze(['100644', '7c7a361c9e6006376814d004a3162c7932412032']),
-  'scripts/consumer-retention-billing-smoke.mjs': Object.freeze(['100644', '81610774d63c0f574d6df35b23e168bf4b7034b5']),
-  'scripts/consumer-retention-billing-mutations.mjs': Object.freeze(['100644', '0cdf7d59032e0518849110192c3452e1ed4e3d82'])
+  'supabase/migrations/20261021010000_consumer_retention_billing_fact_ingest.sql': Object.freeze(['100644', 'e6b25776e22c818567fef2a611c3858370738ab1']),
+  'scripts/consumer-retention-billing-smoke.mjs': Object.freeze(['100644', '6c2637617da573b905ff8b955d9d56e53be17334']),
+  'scripts/consumer-retention-billing-mutations.mjs': Object.freeze(['100644', '9863ab14c9f1c97c23fe3d4e43034f1b1ce454bf'])
 });
 // In the ENT-F1 state the ENT-R smoke, the ENT1-A smoke and the ENT0 smoke are the versions whose F01 knows the ENT-F1 migration in the ordered tail, the recovery guard is the version that also accepts the ENT-F1 paths, and the
 // social integration harness is the version that applies the superuser-only ENT-F1 migration as a superuser.
@@ -91,7 +91,7 @@ export const BILLING_ENT0_OVERRIDES = Object.freeze({ 'scripts/consumer-retentio
 export const BILLING_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '2a52d4901960deba37a0af9addcc3956f7e6422d']) });
 export const BILLING_SOCIAL_OVERRIDES = Object.freeze({ 'scripts/social-friends-postgres.mjs': Object.freeze(['100644', 'e3338f449c8acdf011a1939fd93772181063d917']) });
 // <<END-BILLING-PINS>>
-export const BILLING_MIGRATION_SHA256 = 'cfbc77c08fd5690b7b17de71d31effc81ce1314c091a2600381b8176d3191ac2';
+export const BILLING_MIGRATION_SHA256 = '46157615eca4effea5cc86e698d0ea1dc15a898ca50efc03c7db7f74b55fe17f';
 // Social C4 (F2/F3) INTEGRATION (integration line, 2026-10-19; authorization to integrate two locally accepted candidates, NOT an acceptance of the combination): social candidate 49002767411569dab350f8946632e40bf6b40720
 // (tree a684ff3366a79bee0fc87e1c96e26bbe2e1537aa, base ec534c3d) merged with ENT-R C3 cfdbfe4a (tree 8e627677). Two forward migrations sort between the ENT1-A and the ENT-R migration. Recognized only together with the exact ENT-R
 // record (and everything it requires), all-or-nothing. Binding is one-way: this file pins the exact mode/blob of the 24 paths below (the 22 social candidate paths plus the two social guards the integration edits: SR2I-A gates 43/62 and GEO-1D-P0 gate 25; the 23rd social candidate path, consumerRuntimeComposition.ts, is a recovery-inventory path and is pinned
