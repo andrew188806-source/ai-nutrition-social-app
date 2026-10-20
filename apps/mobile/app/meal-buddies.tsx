@@ -199,10 +199,13 @@ const gatheringRecords = {
 
 export default function MealBuddyHomeScreen() {
   const consumerRuntime = useConsumerRuntime();
-  return <MealBuddyHomeSession key={`${consumerRuntime.mode}:${consumerRuntime.state.actorKey}:${consumerRuntime.state.actorGeneration}`} />;
+  const sessionKey = `${consumerRuntime.mode}:${consumerRuntime.state.actorKey}:${consumerRuntime.state.actorGeneration}`;
+  const currentSession = useRef(sessionKey);
+  currentSession.current = sessionKey;
+  return <MealBuddyHomeSession key={sessionKey} isCurrentSession={() => currentSession.current === sessionKey} />;
 }
 
-function MealBuddyHomeSession() {
+function MealBuddyHomeSession({ isCurrentSession }: { isCurrentSession: () => boolean }) {
   const router = useRouter();
   const consumerRuntime = useConsumerRuntime();
   const params = useLocalSearchParams<{
@@ -299,8 +302,8 @@ function MealBuddyHomeSession() {
     consumerRuntime.state.actorGeneration
   );
   const canonicalCardUsage = ownQuota.state.phase === "ready" ? toCardUsage(ownQuota.state.quota) : null;
-  const chats = getMealBuddyChats().filter((chat) => chat.threadType !== "group" && !chat.tableId);
-  const invites = getMealBuddyInvites().filter((invite) => invite.type !== "table");
+  const chats = consumerRuntime.mode === "mock" ? getMealBuddyChats().filter((chat) => chat.threadType !== "group" && !chat.tableId) : [];
+  const invites = consumerRuntime.mode === "mock" ? getMealBuddyInvites().filter((invite) => invite.type !== "table") : [];
   const matchedFriends = getVisibleMatchedFriends(invites);
   const openCommunityProfile = (profileId?: string) => {
     if (profileId) {
@@ -543,11 +546,13 @@ function MealBuddyHomeSession() {
         )
       ) : null}
       {activeSection === "gatherings" ? (
-        <GatheringsSection
+        consumerRuntime.mode === "mock" ? <GatheringsSection
           acceptedInvite={acceptedMealInvite}
+          isCurrentSession={isCurrentSession}
           invites={invites}
-          onOpenProfile={openCommunityProfile}
+          onOpenProfile={(profileId) => { if (isCurrentSession()) openCommunityProfile(profileId); }}
           onAcceptInvite={(invite) => {
+            if (!isCurrentSession()) return;
             acceptMealBuddyInvite(invite);
             const updatedInvite = getMealBuddyInvites().find((item) => item.id === invite.id) ?? invite;
             setSocialVersion((version) => version + 1);
@@ -555,10 +560,12 @@ function MealBuddyHomeSession() {
             setActiveSection("friends");
           }}
           onDeclineInvite={(invite) => {
+            if (!isCurrentSession()) return;
             declineMealBuddyInvite(invite);
             setSocialVersion((version) => version + 1);
           }}
           onOpenChat={(record) => {
+            if (!isCurrentSession()) return;
             let targetChat;
             if (record.source === "group_table" || record.tableId) return;
             targetChat = createOrOpenMealSessionChat({
@@ -574,7 +581,15 @@ function MealBuddyHomeSession() {
             setFriendInitialTab("chats");
             setActiveSection("friends");
           }}
-        />
+        /> : (
+          <Card>
+            <SectionTitle title="飯局功能尚未提供" subtitle="目前尚未接上真實飯局資料與接受服務。" />
+            <Text style={styles.message}>這不是查無飯局；目前無法讀取活動或接受飯局邀請。好友邀請與既有聊天室仍可從「飯友」使用。</Text>
+            <Pressable style={styles.secondaryButton} onPress={goToMatchedBuddies}>
+              <Text style={styles.secondaryButtonText}>返回好友與邀請</Text>
+            </Pressable>
+          </Card>
+        )
       ) : null}
       {activeSection === "tables" ? (
         <GroupTableDeferred fromRestaurant={Boolean(params.restaurantName)} />
@@ -1795,6 +1810,7 @@ function FriendCommunityCard({ friend, isPremium, onBack }: { friend: MatchedFri
 type GatheringTab = "ongoing" | "inviting" | "ended";
 function GatheringsSection({
   acceptedInvite,
+  isCurrentSession,
   invites,
   onAcceptInvite,
   onDeclineInvite,
@@ -1802,6 +1818,7 @@ function GatheringsSection({
   onOpenProfile
 }: {
   acceptedInvite: ReturnType<typeof getMealBuddyInvites>[number] | null;
+  isCurrentSession: () => boolean;
   invites: ReturnType<typeof getMealBuddyInvites>;
   onAcceptInvite: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
   onDeclineInvite: (invite: ReturnType<typeof getMealBuddyInvites>[number]) => void;
@@ -1831,6 +1848,7 @@ function GatheringsSection({
 
   return (
     <>
+      <Text style={styles.limitHint}>DEMO 示範飯局：以下為模擬資料，接受、拒絕與取消只更新本帳號的本機示範，不會送出真實邀請。</Text>
       <View style={styles.snowChipRow}>
         {([
           { id: "ongoing", label: "進行中" },
@@ -1931,6 +1949,7 @@ function GatheringsSection({
         record={cancelTarget}
         onClose={() => setCancelTarget(null)}
         onSubmit={(record, reason) => {
+          if (!isCurrentSession()) return;
           const isGroupTable = record.source === "group_table" || record.people.includes("4");
           addMealBuddyChatSystemMessage({
             chatUserName: isGroupTable ? undefined : record.participantProfileId,
