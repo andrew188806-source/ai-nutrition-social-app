@@ -94,7 +94,7 @@ export function SocialFriendsScreen() {
             {actor && current?.candidate ? <FoundFriend key={`${actor}:${generation}:${current.candidate.candidateRef}`} actor={actor} generation={generation} candidate={current.candidate} /> : null}
         </Card>
         <Card>{current?.busy ? <ActivityIndicator /> : null}<Text accessibilityLiveRegion="polite">{current?.message ?? "正在切換帳號"}</Text>
-            {button("回到好友清單", () => router.replace({ pathname: "/meal-buddies", params: { section: "friends" } }))}
+            {button("回到好友清單", () => router.dismissTo({ pathname: "/meal-buddies", params: { section: "friends" } }))}
         </Card>
     </PlaceholderScreen>;
 }

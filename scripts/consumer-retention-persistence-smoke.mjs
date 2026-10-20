@@ -106,7 +106,7 @@ export const S2FF1_BASE_BLOB = '5b1b3886b1650b13b0830ae1e30a84aa4374f212';
 export const S2FF1_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '22fe670ebfd632c98a60d1c218bf842c114174d6']) });
 
 // S2-FF2: exact flow-only successor; trust root -> leaf production/guard blobs, no reverse hash.
-export const S2FF2_FILES = Object.freeze({"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","0c372cc79f31554219584df4be57e7531272f9ef"],"apps/mobile/features/social-friends/controller.ts":["100644","9cf39645100a789196114f9e4e8f3561f4d14154"],"apps/mobile/features/meal-buddy-relationships/controller.ts":["100644","3b1ab58386a5393cbb3b61b92d91eff4f3cc67d1"]});
+export const S2FF2_FILES = Object.freeze({"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","f562c4ae84d49d3f79ec67665d7ed9594116f158"],"apps/mobile/features/social-friends/controller.ts":["100644","9cf39645100a789196114f9e4e8f3561f4d14154"],"apps/mobile/features/meal-buddy-relationships/controller.ts":["100644","3b1ab58386a5393cbb3b61b92d91eff4f3cc67d1"]});
 export const S2FF2_BASE_FILES = Object.freeze({"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","cbdbe21971e9d41f12f4ec6ce72b2f47fcf80201"],"apps/mobile/features/social-friends/controller.ts":["100644","905ea75b82b9964d101e2ac1e908147eaf6f79c2"],"apps/mobile/features/meal-buddy-relationships/controller.ts":["100644","316cd33807a3ffd3fc60ce14b2a657415528a2f1"]});
 export const S2FF2_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644','2134d588639eed577219c84bc28305f1401b02c3']) });
 
