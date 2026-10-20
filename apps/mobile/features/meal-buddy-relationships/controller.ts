@@ -234,6 +234,12 @@ export class MealBuddyRelationshipInboxController {
       : previous;
     const reconciliation = await this.repository.list();
     if (!this.isCurrent(request)) return false;
+    // A confirmed mutation is not proof that the full list was read. Hide stale actionable rows
+    // until an explicit retry obtains canonical list truth, including after an uncertain failure.
+    if (!reconciliation.ok) {
+      this.update(Object.freeze({ phase: "load_failed", errorCode: reconciliation.errorCode }));
+      return result.ok;
+    }
     this.update(Object.freeze({
       phase: "ready",
       relationships: reconciliation.ok ? reconciliation.value.relationships : canonicalMutation,

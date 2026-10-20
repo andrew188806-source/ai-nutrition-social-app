@@ -105,6 +105,11 @@ export const S2FF1_FILES = Object.freeze({ 'apps/mobile/features/meal-buddy-rela
 export const S2FF1_BASE_BLOB = '5b1b3886b1650b13b0830ae1e30a84aa4374f212';
 export const S2FF1_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '22fe670ebfd632c98a60d1c218bf842c114174d6']) });
 
+// S2-FF2: exact flow-only successor; trust root -> leaf production/guard blobs, no reverse hash.
+export const S2FF2_FILES = Object.freeze({"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","0c372cc79f31554219584df4be57e7531272f9ef"],"apps/mobile/features/social-friends/controller.ts":["100644","9cf39645100a789196114f9e4e8f3561f4d14154"],"apps/mobile/features/meal-buddy-relationships/controller.ts":["100644","3b1ab58386a5393cbb3b61b92d91eff4f3cc67d1"]});
+export const S2FF2_BASE_FILES = Object.freeze({"apps/mobile/features/social-friends/SocialFriendsScreen.tsx":["100644","cbdbe21971e9d41f12f4ec6ce72b2f47fcf80201"],"apps/mobile/features/social-friends/controller.ts":["100644","905ea75b82b9964d101e2ac1e908147eaf6f79c2"],"apps/mobile/features/meal-buddy-relationships/controller.ts":["100644","316cd33807a3ffd3fc60ce14b2a657415528a2f1"]});
+export const S2FF2_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644','2134d588639eed577219c84bc28305f1401b02c3']) });
+
 export const SOCIAL_COMPOSITION_PATH = "apps/mobile/features/consumer-runtime/consumerRuntimeComposition.ts";
 export const SOCIAL_COMPOSITION = Object.freeze(['100644', "456532a6cb8cc98d58cbd43e860603d893e06a68"]);
 // In the integrated state the ENT-R smoke, the ENT1-A smoke and the ENT0 smoke are the versions whose F01 knows the social migrations in the ordered tail, and the recovery guard is the version that also accepts the social paths.
@@ -558,11 +563,28 @@ export function s2ff1FilesState(git){
   return {state:'invalid',paths:[],violations:[p+':s2ff1-mismatch']};
 }
 
+export function s2ff2FilesState(git){
+  const paths=Object.keys(S2FF2_FILES),basePaths=Object.keys(S2FF2_BASE_FILES);
+  if(paths.length!==3||JSON.stringify(paths)!==JSON.stringify(basePaths))return {state:'invalid',paths:[],violations:['s2ff2:record-shape']};
+  const rows=git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean);
+  const index=new Map();for(const row of rows){const [m,p]=row.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));
+  const hashes=present.length?git(['hash-object','--',...present]).trim().split('\n'):[];
+  const wt=new Map(present.map((p,i)=>[p,hashes[i]]));
+  const at=(p,record)=>{const entries=index.get(p),[mode,blob]=record[p];return entries?.length===1&&entries[0].stage==='0'&&entries[0].mode===mode&&entries[0].blob===blob&&wt.get(p)===blob;};
+  if(paths.every(p=>at(p,S2FF2_FILES)))return {state:'record',paths,violations:[]};
+  if(paths.every(p=>at(p,S2FF2_BASE_FILES)))return {state:'base',paths:[],violations:[]};
+  return {state:'invalid',paths:[],violations:['s2ff2:partial-or-mismatch']};
+}
+
 export function recoverySuccessorState(git){
+  const ff2=s2ff2FilesState(git),s2ff2=ff2.state==='record';
+  if(ff2.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:ff2.violations};
   const s2=s2ff1FilesState(git),s2ff1=s2.state==='record';
   if(s2.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:s2.violations};
   // Origin successor (all-or-nothing, identity binding only): when all 26 of its paths are at the recorded bytes, its 5 recovery paths and 5 PC-2 paths are judged against the recorded successor bytes and its 16 other paths are exempt.
-  const sc=socialFilesState(git),social=sc.present;
+  if(s2ff2&&!s2ff1)return {state:'invalid',exempt:false,paths:[],violations:['s2ff2:requires-s2ff1-record']};
+  const sc=socialFilesState(git,s2ff2),social=sc.present;
   if(social&&!sc.exact)return {state:'invalid',exempt:false,paths:[],violations:sc.violations};
   if(s2ff1&&!social)return {state:'invalid',exempt:false,paths:[],violations:['s2ff1:requires-social-record']};
   const dm=demoFilesState(git,social);
@@ -576,14 +598,14 @@ export function recoverySuccessorState(git){
   const af=acqFilesState(git,seal,social),acq=af.present;
   if(acq&&!af.exact)return {state:'invalid',exempt:false,paths:[],violations:af.violations};
   if(seal&&!acq)return {state:'invalid',exempt:false,paths:[],violations:['seal-files:requires-acq-record']};
-  const r=recoverySuccessorStateCore(git,demo,acq,seal,social,s2ff1),ef=ent0FilesState(git,acq,seal,social),pc=pc2FilesState(git,demo);
+  const r=recoverySuccessorStateCore(git,demo,acq,seal,social,s2ff1,s2ff2),ef=ent0FilesState(git,acq,seal,social),pc=pc2FilesState(git,demo);
   if(acq&&(!demo||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:['acq-files:requires-ent0-state-and-origin-successor']};
   if(ef.present&&(!ef.exact||r.state!=='ent0'))return {state:'invalid',exempt:false,paths:r.paths,violations:[...ef.violations,...(r.state!=='ent0'?['ent0-files:without-ent0-record']:[])]};
   if(!ef.present&&r.state==='ent0')return {state:'invalid',exempt:false,paths:r.paths,violations:['ent0-record:files-absent']};
   // PC-2 consent-document successor (all-or-nothing): either none of its ten paths moved from the accepted base or all ten are at the exact recorded mode/blob. Only then are its paths exempt, and only together with an exempt recovery state.
   if(pc.state==='invalid')return {state:'invalid',exempt:false,paths:r.paths,violations:pc.violations};
   if(demo&&(r.state!=='ent0'||pc.state!=='record'))return {state:'invalid',exempt:false,paths:r.paths,violations:['demo-record:requires-ent0-state-and-pc2-record']};
-  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[]),...(s2ff1?s2.paths:[])],s2ff1:s2ff1?'record':'base',pc2:'record',demo:demo?'record':'base',acq:acq?'record':'base',seal:seal?'record':'base',social:social?'record':'base'};}
+  if(pc.state==='record'){if(!r.exempt)return {state:'invalid',exempt:false,paths:r.paths,violations:['pc2-record:without-exempt-recovery-state']};return {...r,paths:[...r.paths,...pc.paths,...(demo?dm.otherPaths:[]),...(s2ff1?s2.paths:[]),...(s2ff2?ff2.paths:[])],s2ff2:s2ff2?'record':'base',s2ff1:s2ff1?'record':'base',pc2:'record',demo:demo?'record':'base',acq:acq?'record':'base',seal:seal?'record':'base',social:social?'record':'base'};}
   return {...r,pc2:'base',demo:'base',acq:'base',seal:'base',social:'base'};
 }
 // PC-2 consent-document successor (7ed55fc "Fix consent document read states and record inactive PC2 deployment"): the ten paths below, relative to the accepted retention base 90c8d66.
@@ -678,7 +700,7 @@ export function sealFilesState(git,social=false){
   return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':seal-mismatch')};
 }
 // All-or-nothing, byte-exact check of the 24 social/integration paths (mode/blob in index and worktree). Returns {present,exact,violations}. The 23rd social path (the runtime composition) is judged by the recovery layer.
-export function socialFilesState(git){
+export function socialFilesState(git,s2ff2=false){
   const paths=Object.keys(SOCIAL_FILES);
   if(paths.length!==24||new Set(paths).size!==24||SOCIAL_MIGRATIONS.some(m=>!paths.includes('supabase/migrations/'+m)))throw Error('SOCIAL_RECORD_SHAPE');
   const index=new Map();for(const l of git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean)){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
@@ -686,10 +708,10 @@ export function socialFilesState(git){
   if(present.length===0&&index.size===0)return {present:false,exact:true,violations:[]};
   const hashed=present.length?git(['hash-object','--',...present]).trim().split('\n').filter(Boolean):[];
   const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
-  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=SOCIAL_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
+  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=s2ff2&&S2FF2_FILES[p]?S2FF2_FILES[p]:SOCIAL_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
   return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':social-mismatch')};
 }
-function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=false,s2ff1=false){
+function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=false,s2ff1=false,s2ff2=false){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
   const overrides=CORRECTIVE_SUCCESSOR.overrides;
@@ -712,7 +734,7 @@ function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=f
   const atCorrective=e=>overrides[e[1]]?atRecord([e[0],e[1],...overrides[e[1]]]):atRecord(e);
   const atD1D2=e=>d1d2[e[1]]?atRecord([e[0],e[1],...d1d2[e[1]]]):atCorrective(e);
   const atF1F2=e=>f1f2[e[1]]?atRecord([e[0],e[1],...f1f2[e[1]]]):atD1D2(e);
-  const ent0o=s2ff1?S2FF1_RECOVERY_OVERRIDES:social?SOCIAL_RECOVERY_OVERRIDES:seal?SEAL_RECOVERY_OVERRIDES:acq?ACQ_RECOVERY_OVERRIDES:ENT0_RECOVERY_OVERRIDES;
+  const ent0o=s2ff2?S2FF2_RECOVERY_OVERRIDES:s2ff1?S2FF1_RECOVERY_OVERRIDES:social?SOCIAL_RECOVERY_OVERRIDES:seal?SEAL_RECOVERY_OVERRIDES:acq?ACQ_RECOVERY_OVERRIDES:ENT0_RECOVERY_OVERRIDES;
   if(Object.keys(ent0o).length!==1||!Object.keys(ent0o).every(p=>paths.includes(p)))throw Error('ENT0_RECORD_SHAPE');
   const atENT0=e=>ent0o[e[1]]?atRecord([e[0],e[1],...ent0o[e[1]]]):atF1F2(e);
   // Origin successor: only when its 26-path record is exact (demo===true) do five recovery paths take the successor bytes; every other recovery path keeps its ENT0-chain bytes.
