@@ -93,6 +93,12 @@ export const ACT2_FILES=Object.freeze({
     "base": "cafdb5f1623837a842de234f1750caee0bc884a4",
     "baseMode": "100644"
   },
+  "scripts/meal-buddy-relationship-sr2i-b-smoke.mjs": {
+    "mode": "100644",
+    "blob": "d9d78ae0d2fa021d9d053371d5674ebb4c4ec611",
+    "base": "ebb8689a0daf62bcb4153d64de8b751c849f72f9",
+    "baseMode": "100644"
+  },
   "scripts/s2-act2-host.mjs": {
     "mode": "100644",
     "blob": "ef7be12ae5145062668325c79aad9a33a6a9c87c",

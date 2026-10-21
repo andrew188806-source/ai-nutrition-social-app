@@ -211,6 +211,9 @@ const driver = {
   async withTransaction(operation) {
     return await operation({
       async queryObject(text, parameters) {
+        // ACT2 binds the verified actor and reuses a source-aware authority projection. This is
+        // a synthetic driver boundary; the real SQL/role path is separately covered by ACT2 PG.
+        if (text.includes("set_config('request.jwt.claim.sub'")) return [{actor_context:parameters[0]}];
         if (text.includes("list_meal_buddy_relationships")) {
           if (parameters[0] !== backendActorA) return [];
           return counterpartIds.map((counterpart_user_id, index) => ({
@@ -219,11 +222,11 @@ const driver = {
             relative_state: index % 3 === 0 ? "incoming_pending" : index % 3 === 1 ? "outgoing_pending" : "accepted"
           }));
         }
-        if (text.includes("project_exposed_social_profiles")) {
+        if (text.includes("project_exposed_social_profiles") || text.includes("stranger_internal.project_counterparts")) {
           const ids = parameters[1]; projectionCalls.push(Object.freeze([...ids]));
           return ids.flatMap((id, exposure_ordinal) => {
             const profile = backendProfiles.get(id);
-            return profile ? [{ exposure_ordinal, ...profile }] : [];
+            return profile ? [{ exposure_ordinal, ...profile, ...(text.includes("stranger_internal.project_counterparts")?{anonymous:false}:{}) }] : [];
           });
         }
         throw new Error("unexpected_statement");
