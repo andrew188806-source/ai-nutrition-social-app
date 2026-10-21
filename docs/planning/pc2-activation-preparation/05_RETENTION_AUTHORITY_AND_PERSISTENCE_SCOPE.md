@@ -1470,3 +1470,47 @@ persistence smoke 釘住 ENT-R migration 的 sha256 與三個新檔，以及在 
 
 ### 20.5 驗證與未驗證
 實際執行的驗證、沿用的證據與其適用依據、未驗證與未啟用範圍，記錄在整合交付的報告（repository 外），不在此重複。啟用前提不變：確認目標環境不存在無來源的舊 phone 搜尋憑證（IO-10，未連 Hosted、尚未驗證）。
+
+## 21. ENT-F1：Paid／trial 事實攝入核心（inactive，本機；retention line，2026-10-20；**施工者自測與凍結，不是 acceptance**）
+
+Owner 一次核定 G1～G4 後建立的垂直切片：signed 合成 delivery → inbox → owner 對應 → segment 計算 → 同一 transaction 的 `admit_entitlement_event` → `entitlement_state_at` 與 ENT1-A receipt 由**分離角色**驗證。它不改變 §1–§20 的任何契約，不選 payment provider，沒有 endpoint、沒有 production 呼叫路徑、不啟用任何 entitlement。
+
+### 21.1 三層身分（互不混用）
+- **Delivery**：inbox 唯一鍵 `(namespace, delivery_id, subject_ref)`；同 key 同內容＝重複（`duplicate`），同 key 不同內容＝`delivery_conflict`（409，內容不覆寫）。
+- **Observation**：來源斷言的一個期間（kind、period、environment、signed_at）；以 payload digest 綁定，只是證據，不是 ledger 事實。
+- **Ledger segment**：每個 `(namespace, subject, class)` 已斷言區間集合 `A`，對新 observation 區間 `I` 只送出 `I \ A`；fact key＝`hash32(namespace|subject):class:startMs:endMs`，`source_sequence` 固定為 NULL（它在 ENT0 digest 內）。區間扣除不吞掉來源差異：縮短、延伸、間隙都留下 relation／evidence，不橋接、不推論。
+
+### 21.2 不發明政策
+- 只有 `paid_period`、`trial_period` 產生 ledger 事實；`revocation` 只記錄（`recorded_only`），`non_entitling` 結案為 `dismissed`；其他 kind（含 grace、refund、chargeback、billing retry、paused）、environment 不符、過長期間、缺期間，一律 `quarantined` 並保留 evidence。沒有任何 grace／refund／Paid／trial 轉換預設；這些提案仍是 Owner 決策（見 prep 包 OWNER_DECISIONS）。
+- registration 之前的區間在 `namespace_config.registered_at` 裁切；整段在 registration 之前＝`before_registration`；ENT0 的 below-coverage／conflict 是 incident，不重試、不轉成成功。
+
+### 21.3 同交易與 ack 順序
+- `process_item` 一個 transaction 只處理一個 item（`BILLING_DIRTY_TRANSACTION`），先取 subject 級 advisory lock、`FOR UPDATE SKIP LOCKED` 取 item，再於同一 transaction 內寫 segment、呼叫 admit、更新 item；任何失敗、timeout、abort 或被殺的 backend 都不留部分成功；失敗次數另交易以 `record_attempt` 記錄（只作用於未結案 item，attempts 不減）。
+- receive handler 只在資料庫 commit 後回 200；資料庫失敗＝503（供應端重送）、契約違反＝500；簽章／大小／namespace 先於任何資料庫呼叫。錯誤分類 default 是 `unclassified`＋可重試＋永不 terminal；`retry`、`busy`、`blocked`、`mapping_pending` 不是 final outcome。
+
+### 21.4 權限（精確 seam，兩個）
+- 新 billing owner（`consumer_retention_billing_owner`，NOLOGIN）對 `retention_entitlement` 只取得 schema `USAGE` 與 `admit_entitlement_event(uuid, text, text, text, timestamptz, timestamptz, bigint)` 的 `EXECUTE`；**沒有** `advance_entitlement_coverage`、`entitlement_state_at`、resolver 或任何表權限。producer 角色（`pg_has_role(session_user, …)` 身分）對 `retention_billing` 的 definer 函式有 EXECUTE，對 ENT0／ENT1-A 完全沒有；resolve／acquisition 與 write 角色維持分離。
+- runtime 角色（anon、authenticated、service_role）與 PUBLIC 對 `retention_billing` 無任何權限，也沒有 membership 或 SET 路徑到 owner；`retention_billing` 表為 FORCE RLS、owner-only policy；evidence 不可變、segment 不可重疊或改寫。
+- 既有 grant 與 detector 保留；除這兩個 seam 外，migration 前後的 catalog 差異為零（以排除新 schema 的 catalog item 比對，EXPECTED_DELTA 只含 `retention_entitlement` schema ACL 與 admit 函式 ACL）。
+
+### 21.5 Migration 與 successor
+- `20261021010000_consumer_retention_billing_fact_ingest.sql`：僅 superuser 本機 apply（actor guard、management boundary、G1 predecessor 狀態精確性、G2 scope digest 與精確 seam 值、釘死的 post-state digest），builder→owner 角色交接，結束時 builder 被丟棄；fresh apply 為 inactive：不註冊 producer、不設定 namespace、不寫任何資料。Hosted compatibility、runtime superuser 不在授權內，也未驗證。
+- validator 綁定沿用 ENT0／ENT1-A／ENT-R 同機制：persistence smoke 內一份 all-or-nothing、byte-exact 的 `billing` 紀錄（14 路徑＋覆寫的前序 validator 版本），有序 migration tail 為 `[capture, ENT0, demo, ENT1-A, social×2, ENT-R, ENT-F1]`；沒有 blanket allowlist、沒有自我或循環 hash。
+
+### 21.6 驗證邊界與未驗證
+- 40P01／55P03 的結論**只限實際執行的 lock schedule**，並附三個會產生 40P01 的 reverse control；不宣稱涵蓋其他 schedule。
+- 所有測試用 producer、registry 註冊、namespace 設定、receipt 與事實只存在於拋棄式測試資料庫；本輪沒有操作 Production，實際 schema 未驗證；沒有 Hosted、沒有外部 adapter、沒有 reconciliation／coverage advance、沒有真實 seal、沒有 ENT1-B／final grant／顯示／purge。
+- 實際執行的自測、沿用的證據與未驗證清單在交付報告（repository 外）；作者自測不等於獨立驗收。
+### 21.7 整合於 ea9da931（S2-FF2）之後的綁定（retention line，2026-10-21；作者自測，不是 acceptance）
+- 原 ENT-F1 候選 `38f0cb14`（base `526c014c`）保持原樣；本節對應的整合候選是以 `ea9da931`（tree `978eccb0`，Social S2-FF2）為 base 的 `git merge`，產品、migration、billing 函式庫、smoke 與 mutations 的 bytes 與 `38f0cb14` 逐檔相同（merge 時這些路徑沒有衝突）。
+- 只有兩個檔案在兩線都被修改，因而需要依實際內容整合（不整檔覆蓋任一方）：`scripts/consumer-meal-save-recovery-guard.mjs`（保留 S2-FF2 的 `S2FF2_PATHS`／record，與 ENT-F1 的 `BILLING_PATHS`／record；ENT-F1 record 另要求 S2-FF2 三個流程路徑存在）與 `scripts/consumer-retention-persistence-smoke.mjs`。
+- persistence 鏈改為 `social → S2-FF1 → S2-FF2 → ENT-F1`：`billing` 現在要求 S2-FF1 與 S2-FF2 record（缺任一者為 invalid）；social 檔案狀態依 `(billing 覆寫) || (S2-FF2 blob) || (社交基準)` 逐檔判定；recovery guard 的 blob 覆寫以最高層為準（ENT-F1 > S2-FF2 > S2-FF1 > …），ENT-F1 層釘的是合併後的 guard blob。其餘 ENT-F1 的覆寫（ENT-R／ENT1-A／ENT0 smoke、social-friends-postgres）所涉檔案在 S2-FF2 沒有被改動，blob 沿用。沒有 blanket allowlist、沒有自我或循環 hash。
+### 21.8 首次獨立驗收後的修正（retention line，2026-10-21；作者修正自測，不是 acceptance）
+- 基準：本修正以 main `cbadc92c`（Social S2-ID1 已本機落地；遠端 push 尚待 Owner）為 base；persistence 信任根的鏈為 `social → S2-FF1 → S2-FF2 → S2-ID1 → ENT-F1`，ENT-F1 要求 S2-ID1 record。
+- **A01（owner 刪除）**：`inbox.owner_user_id` 為 `ON DELETE SET NULL`。結案的 inbox 列只接受一種變更——**把 owner 引用由非 NULL 清為 NULL，且其他每一欄位（state、reason、attempts、last_error、processed_at、outcome 與所有不可變欄位）不變**；這正是 FK 動作。其他任何對結案列的變更仍是 `BILLING_ITEM_TERMINAL`；引用不能被設定或改指向。owner 的 segments／ENT0 facts／links 照舊 CASCADE 清除；inbox 列保留但不再引用 owner。§21.3 的「無部分成功」不因此放寬。
+- **A02（blocked）**：`blocked` 的意思是 **nothing changed**，包含 pending purchase intent。pending intent 的活化延後到 blocked 判定之後才執行（link 列仍在同一 `FOR UPDATE` 之下，鎖序不變）；producer 後來被登記時，同一 item 成功 admit 並在那時活化。
+- **驗證證據的更正**：先前「65/65 突變」不再作為完整偵測結論（Y26 被錯列等價；setup 逾時被算成 detector；少數 gate 以崩潰代替明示觀察）。mutation harness 現在把連線／初始化／逾時視為整個 run `BLOCKED`、把其他非預期例外視為不計入的崩潰，只有明示 `pass:false` 觀察才算偵測。詳見交付的 ERRATA。
+- 不改任何 Owner 政策、權限 seam、producer／resolver 分離、Hosted 狀態（Hosted binding 維持 UNVERIFIED）。
+### 21.9 與 Social S2-ACT1 的整合（retention line，2026-10-21；作者整合自測，不是 acceptance）
+- 基準：main `014acf7b6f48eb018b1e603f793d1613df8fc832`（tree `44e93f2d…`，Social S2-ACT1 已本機落地且由 Owner 手動 push）。已接受的 ENT-F1 候選 `f27800a687b08b7feb3b241959d75a9be9965cd3`（tree `7ce53b68…`）與 ACT1 的共同祖先為 `cbadc92c`；整合為一個 `git merge --no-ff`，兩條歷史完整保留。
+- ACT1 只改 `apps/mobile/app/meal-buddies.tsx` 與 persistence smoke；ENT-F1 的 migration、11 個 billing TS 產品檔、billing smoke／mutations 與 ACT1 的 UI bytes 皆未改動。兩線只在 persistence smoke 相交：鏈為 `social → S2-FF1 → S2-FF2 → S2-ID1 → S2-ACT1 → ENT-F1`，ENT-F1 record 要求 S2-FF1、S2-FF2、S2-ID1、S2-ACT1 四者 record；social 檔案逐檔優先序為 `billing 覆寫 ‖ S2-ACT1 ‖ S2-ID1 ‖ S2-FF2 ‖ 社交基準`。沒有 blanket allowlist、沒有自我或循環 hash，Hosted binding 維持 UNVERIFIED。
