@@ -1514,3 +1514,30 @@ Owner 一次核定 G1～G4 後建立的垂直切片：signed 合成 delivery →
 ### 21.9 與 Social S2-ACT1 的整合（retention line，2026-10-21；作者整合自測，不是 acceptance）
 - 基準：main `014acf7b6f48eb018b1e603f793d1613df8fc832`（tree `44e93f2d…`，Social S2-ACT1 已本機落地且由 Owner 手動 push）。已接受的 ENT-F1 候選 `f27800a687b08b7feb3b241959d75a9be9965cd3`（tree `7ce53b68…`）與 ACT1 的共同祖先為 `cbadc92c`；整合為一個 `git merge --no-ff`，兩條歷史完整保留。
 - ACT1 只改 `apps/mobile/app/meal-buddies.tsx` 與 persistence smoke；ENT-F1 的 migration、11 個 billing TS 產品檔、billing smoke／mutations 與 ACT1 的 UI bytes 皆未改動。兩線只在 persistence smoke 相交：鏈為 `social → S2-FF1 → S2-FF2 → S2-ID1 → S2-ACT1 → ENT-F1`，ENT-F1 record 要求 S2-FF1、S2-FF2、S2-ID1、S2-ACT1 四者 record；social 檔案逐檔優先序為 `billing 覆寫 ‖ S2-ACT1 ‖ S2-ID1 ‖ S2-FF2 ‖ 社交基準`。沒有 blanket allowlist、沒有自我或循環 hash，Hosted binding 維持 UNVERIFIED。- 更正（§21.8 與先前報告的過時敘述）：Social S2-ID1 與 S2-ACT1 **均已由 Owner 手動 push**，§21.8「遠端 push 尚待 Owner」已過時（已提交的 §21.8 文字不改寫）。本候選的 Hosted binding 仍為 UNVERIFIED；不納入 S2-ACT2-PREP 或其他外線工作。
+
+## 22. ENT-F2：billing 進入點與產品端 SQL transport（預設停用；retention line，2026-10-21；**施工者自測與凍結，不是 acceptance**）
+
+Owner 於 2026-10-21 授權的本機 inactive 包（對應 ENT-F prep 計畫的 F-C，不選 ENT-W）。它補上 ENT-F1 之後兩個**尚未實作**（不是「尚未驗證」）的缺口：(G-1) `BillingTransport` 的真實 SQL 實作原本只存在於 billing smoke 內的測試端；(G-2) 沒有任何 Edge 進入點。**不改變 §1–§21 的任何契約**；沒有 migration、沒有 `supabase/config.toml` 變更、沒有新角色或 GRANT、沒有提供者、沒有 producer、沒有 namespace 設定、沒有 EXECUTE 授予；完成後仍然沒有任何事實被攝入。
+
+### 22.1 產品面（16 個路徑，ENT-F2 record）
+- `supabase/functions/_shared/billing-transport/{executor,sql,config,http,denoPostgresBillingTransport}.ts`：driver 埠（`BillingDriver`：BEGIN、callback、COMMIT 在同一連線；callback 失敗 ROLLBACK 並原樣丟出；COMMIT 階段的任何失敗丟 `BillingCommitPhaseError`）、五個 `retention_billing.*` 函式的 SQL 常數與參數對應、環境變數名稱與驗證、HTTP 小工具、Deno/Postgres.js 薄包裝。
+- `supabase/functions/billing-webhook/`、`billing-link/`、`billing-process/`（各 `config.ts`、`handler.ts`、`index.ts`）。
+- `scripts/consumer-retention-billing-edge-smoke.mjs`、`scripts/consumer-retention-billing-edge-mutations.mjs`。
+- successor 調整（不刪任何 assertion）：recovery guard（新增 ENT-F2 路徑集合與 all-or-nothing record）、persistence smoke（ENT-F2 record 層，要求 ENT-F1 record）、capture smoke 的 frozen proof（admit ENT-F2 的 16 個路徑）。ENT-F1 的 14 個受保護路徑、所有 migration、既有 16 個函式目錄、Mobile 與 shared 的 bytes 均未改。
+
+### 22.2 契約
+- **預設停用，且在動用任何資源之前拒絕**：每個進入點先載入設定；開關不是**恰好** `true`、或任何必要值缺失／不合法，一律 `503`，**在讀取 request body、呼叫 Auth／Verifier、建立資料庫連線之前**結束，日誌為零。沒有任何預設值（開關、namespace、payload 上限、purchase intent 有效期都沒有）。匯入 `index.ts` 不讀環境、不建立連線、不建立平台 client。
+- **安全性由 handler 本身成立**，不依賴 `verify_jwt` 的平台預設；`config.toml` 未改**不等於**已證明部署後入口不可到達（該預設未驗證）。
+- **webhook**：正式組合**沒有 adapter**（`adapter: null`，物件凍結），因此永遠回 `503` 且不讀 body；沒有任何環境開關、header 或程式路徑可在執行期選 Verifier。合成 Verifier 只存在於測試檔，只能由測試注入 `processBillingWebhookRequest`。原始 bytes 逐 byte 交給 Verifier；body 大小限制作用在**實際串流讀取**（沿 ENT-F1 `receiveDelivery`），Content-Length 只是提早拒絕。
+- **link**：只信平台 `auth.getUser()` 的 userId；任何 body 內容、owner header 都不被採用；body 另有 256 bytes 的實際讀取上限。**登入驗證不是外部付款 subject 的所有權證明**：本端點只建立伺服器發出、雜湊儲存的 purchase intent；提供者綁定機制（X5）未決，本包不發明。未套用 consumer eligibility（PC-2）閘：若需要是後續決定。
+- **process**：共享密鑰（`x-billing-process-secret`，常數時間比對，至少 32 字元），缺設定即 503。
+- **commit 確認遺失**：COMMIT 之後若沒有伺服器的確定答覆（連線中斷、重置、逾時），結果是 `BillingCommitOutcomeUnknownError`（`08006`、`commitOutcomeUnknown`、可重試），**不宣稱已 ROLLBACK 或零寫入，也絕不回成功 ack**；只有伺服器以非連線類 SQLSTATE 回覆 COMMIT 的錯誤才是確定中止並原樣丟出。對相同 delivery 重試由資料庫去重（`duplicate`）；process 對已提交的 item 重試只會找到它已結案（`next_candidate` 為空）。
+- **process 交易邊界**：一個 item 一個交易（沿 ENT-F1）。回應只計「已確認提交」的結果：`completed`（final outcome 數）、`committedOutcomes`（計數）、`failedTransactions`、`itemOutcomeUnknown`、`stoppedBecause` 與固定的 `note`；`status` 為 `ok`／`stopped`（blocked、busy／retry，HTTP 200）／`failed`／`unknown`（HTTP 503）。後續 item 失敗**不撤銷**前面已提交的 item，也不宣稱整批零副作用或整批成功；`blocked`、`quarantined`、`retry`、`mapping_pending` 沿用 ENT-F1 契約，不會被改寫成 `admitted`。回應與錯誤不含 id、payload、秘密。
+
+### 22.3 環境變數（只命名，不給值）
+`BILLING_INGEST_ENABLED`、`BILLING_NAMESPACE`、`BILLING_MAX_BODY_BYTES`、`BILLING_INGRESS_DB_URL`（webhook、link：只有 `ingest_delivery`／`create_link_intent` 的登入角色）、`BILLING_PRODUCER_DB_URL`（process：已登記的 ENT0 producer 登入角色，只有 `next_candidate`／`process_item`／`record_attempt`）、`BILLING_PROCESS_SECRET`、`BILLING_LINK_TTL_SECONDS`；平台提供 `SUPABASE_URL`、`SUPABASE_ANON_KEY`。**相對於授權指令的草案 `BILLING_DB_URL`，改為兩個 URL**：ENT-F1 的角色分離（ingress 與 producer 各自只有各自的函式）使單一角色違反最小權限。
+
+### 22.4 驗證邊界與未驗證
+- Node／PG 層：產品模組（含真實 `index.ts` 組合，Deno 與 npm 以 stub 注入）在 Node 內執行；SQL 層以**實際專用登入角色**對本機 disposable PostgreSQL 17.6 執行（`session_user` 即該角色，非 superuser）；故障以 TCP proxy 在協定訊息邊界精確注入（COMMIT 前、COMMIT 送出但未到達、COMMIT 已套用但回覆遺失）。fixture 角色只存在拋棄式資料庫。
+- **Deno 薄包裝未執行**（沒有 Deno runtime）：只做結構檢查，行為 UNVERIFIED。**平台**（`verify_jwt`、CORS、部署、Supavisor／pooler、TLS）未驗證。Hosted binding 維持 UNVERIFIED。
+- 不含：提供者、Verifier／Mapper 實作、對帳、coverage、registry／seal 啟用、ENT-W、ENT1-B、到期、purge。實際自測結果與未驗證清單在交付報告（repository 外）。
