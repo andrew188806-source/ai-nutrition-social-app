@@ -1166,7 +1166,7 @@ export async function runSmoke({bin,out,cli,evidence}){
 
 // S2-ACT2 one-way exact successor. This root pins the module; the module pins only leaves,
 // never this file or itself. Every original detector/record above is retained.
-export const ACT2_MODULE_BLOB='b7d90ab810826319cc9f4f7d1974331a417932ba';
+export const ACT2_MODULE_BLOB='eff463569ba2d6bba61216a8415723eb0cfcf353';
 export const ACT2_MIGRATION_SHA256='de050926c783289647345fc1e28369f6c7a9d72e422acdd847bddcd02bea2bcf';
 const ACT2_MODULE_PATH='scripts/s2-act2-exact-successor.mjs';
 export function checkedAct2State(git){

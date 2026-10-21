@@ -17,7 +17,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "apps/mobile/features/stranger-exposure/StrangerExposureSection.tsx": {
     "mode": "100644",
-    "blob": "a5affde689db9595ffc2b5aa693b08843e96a0aa",
+    "blob": "a4d5094c983a61b9f578eeb0e87308368a6530ec",
     "base": null,
     "baseMode": null
   },
@@ -29,7 +29,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "apps/mobile/features/stranger-exposure/repository.ts": {
     "mode": "100644",
-    "blob": "6dfa3612b56172dbb2d77c3358485d0781a50dd5",
+    "blob": "02e0cc79ec7cb6e540c47f86b22562775de87b71",
     "base": null,
     "baseMode": null
   },
@@ -89,7 +89,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "scripts/meal-buddy-relationship-sr2i-a-guard.mjs": {
     "mode": "100644",
-    "blob": "e8915d9ca006cba67c6bd8bc8b12e747a4761a1a",
+    "blob": "45d285dc47f8581310eba996c0305c201fd7a252",
     "base": "cafdb5f1623837a842de234f1750caee0bc884a4",
     "baseMode": "100644"
   },

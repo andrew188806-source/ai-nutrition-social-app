@@ -228,6 +228,26 @@ if (socialServiceStructure(service)) {
   neg("62-N4 an unconditional actor binding is rejected", !socialRepositoryStructure(repository.replace("if (bindActor) await transaction.query(BIND_ACTOR, [actorUserId]);", "await transaction.query(BIND_ACTOR, [actorUserId]);")));
   neg("62-N5 any byte change of the accepted repository is rejected by the exact pin", sha256(Buffer.from(repository + " ", "utf8")) !== SOCIAL_C4_REPOSITORY_SHA256);
 }
+// Exercise the untouched C4 detector/negative controls against its exact accepted predecessor.
+// New ACT2 routing is independently controlled below; these are predecessor detector tests only.
+if(act2Record.state==='record'&&!socialServiceStructure(service)){
+ const service=git(['show','9841a17532be0366d5ddf0ee94583f703c4d0b2d:supabase/functions/_shared/meal-buddy-relationship-api/service.ts']);
+ const repository=git(['show','9841a17532be0366d5ddf0ee94583f703c4d0b2d:supabase/functions/_shared/meal-buddy-relationship-api/repository.ts']);
+ neg('ACT2 predecessor source identity',sha256(Buffer.from(service))===SOCIAL_C4_SERVICE_SHA256&&sha256(Buffer.from(repository))===SOCIAL_C4_REPOSITORY_SHA256);
+if (socialServiceStructure(service)) {
+  neg("43-N1 removing the server-side unseal (target taken from the request) is rejected", !socialServiceStructure(service.replace("const { claims, phoneSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);", "const claims = { candidateUserId: request.candidateRef }; const phoneSearch = false;")));
+  neg("43-N2 unsealing for another actor is rejected", !socialServiceStructure(service.replace("openInviteCandidateRef(this.candidateCipher, actorUserId,", "openInviteCandidateRef(this.candidateCipher, request.actorUserId,")));
+  neg("43-N3 deriving the phone-search flag from the request is rejected", !socialServiceStructure(service.replace("const { claims, phoneSearch } =", "const { claims } =").replace("? phoneSearch", "? request.phoneSearch")));
+  neg("43-N4 any byte change of the accepted service is rejected by the exact pin", sha256(Buffer.from(service + " ", "utf8")) !== SOCIAL_C4_SERVICE_SHA256);
+  neg("62-N0 control: the pristine repository is accepted by the successor structure", socialRepositoryStructure(repository));
+  neg("62-N1 an extra unnamed statement is rejected", !socialRepositoryStructure(repository.replace("const SEND = defineSocialRuntimeExecutorStatement", "const EXTRA = defineSocialRuntimeExecutorStatement<{ x: string }>`select 1`;\nconst SEND = defineSocialRuntimeExecutorStatement")));
+  neg("62-N2 the ordinary send binding the actor is rejected", !socialRepositoryStructure(repository.replace("send(actor: string, target: string) { return this.query(actor, SEND, [actor, target]); }", "send(actor: string, target: string) { return this.query(actor, SEND, [actor, target], true); }")));
+  neg("62-N3 the phone path calling the ordinary send function is rejected", !socialRepositoryStructure(repository.replace("this.query(actor, SEND_PHONE_SEARCH, [actor, target], true)", "this.query(actor, SEND, [actor, target], true)")));
+  neg("62-N4 an unconditional actor binding is rejected", !socialRepositoryStructure(repository.replace("if (bindActor) await transaction.query(BIND_ACTOR, [actorUserId]);", "await transaction.query(BIND_ACTOR, [actorUserId]);")));
+  neg("62-N5 any byte change of the accepted repository is rejected by the exact pin", sha256(Buffer.from(repository + " ", "utf8")) !== SOCIAL_C4_REPOSITORY_SHA256);
+}
+}
+
 
 
 if(act2Record.state==='record'){

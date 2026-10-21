@@ -11,7 +11,7 @@ export function StrangerExposureSection({actorKey,actorGeneration,onFriends,onRe
  // Keyed child makes the first frame belong to this actor, before any effect runs.
  return <StrangerSession key={(actorKey??'signed-out')+':'+actorGeneration} actor={actorKey} onFriends={onFriends} onRecommend={onRecommend} geoOrigin={geoOrigin}/>;
 }
-function StrangerSession({actor,onFriends,onRecommend,geoOrigin}:{actor:string|null;onFriends:()=>void;onRecommend:()=>void}){
+function StrangerSession({actor,onFriends,onRecommend,geoOrigin}:{actor:string|null;onFriends:()=>void;onRecommend:()=>void;geoOrigin?:{latitude:number;longitude:number}|null}){
  const controller=useMemo(()=>new StrangerController(createStrangerRepository(),actor??''),[actor]);
  const [state,setState]=useState(()=>controller.getState());
  useEffect(()=>{controller.activate();const unsubscribe=controller.subscribe(setState);return ()=>{unsubscribe();controller.dispose();};},[controller,actor]);
@@ -43,6 +43,6 @@ function StrangerSession({actor,onFriends,onRecommend,geoOrigin}:{actor:string|n
    {state.identityBlocked?<Text>部分身份展示尚未提供；未使用替代照片或假資料。</Text>:null}
    {state.candidates?.map(card)}{state.profile?card(state.profile):null}
   </>:null}
-  {state.sent?<><Text>好友邀請狀態已由伺服器確認；請到好友清單查看。</Text><Button label="查看邀請與聊天" onPress={onFriends}/></>:null}
+  {state.sent?<><Text>好友邀請狀態已由伺服器確認；請到好友清單查看。</Text><Button label="查看邀請與聊天" onPress={()=>{if(controller.isActive())onFriends();}}/></>:null}
  </View>;
 }

@@ -1,5 +1,6 @@
 import type {ConsumerAuthPort} from '../consumer-auth';
 import {parseStrangerResponse,type StrangerRequest,type StrangerResponse} from '../../../../packages/shared/src/domain/stranger-exposure';
+import type {SupabaseMealBuddyClientLike} from '../meal-buddy-candidates/supabaseMealBuddyCandidateContracts';
 import {SupabaseMealBuddySourceCardRepository} from '../meal-buddy-candidates/adapters/supabaseMealBuddySourceCardRepository';
 export type StrangerClient={auth:{getSession():Promise<{data:{session:{access_token:string;user:{id:string}}|null};error:unknown}>};functions:{invoke(name:string,options:{body:unknown;headers:Record<string,string>;timeout:number}):Promise<{data:unknown;error:unknown}>}};
 export class StrangerRepository{
@@ -17,7 +18,8 @@ export class StrangerRepository{
   const valid=(request.operation==='read'||request.operation==='set')?'settings' in response:request.operation==='discover'?'candidates' in response:request.operation==='profile'?'profile' in response:'relationshipRef' in response;if(!valid)throw Error('invalid_server_response');return response;
  }
  async cards(actor:string){
-  const repository=new SupabaseMealBuddySourceCardRepository({authPort:this.auth,mealBuddyClient:{functions:{invoke:async(name,options)=>{try{return {data:await this.invoke(actor,name,options.body),error:null};}catch(error){return {data:null,error};}}}}});
+  const invoke:SupabaseMealBuddyClientLike['functions']['invoke']=async<T=unknown>(name:string,options:{body:unknown})=>{try{return {data:await this.invoke(actor,name,options.body) as T,error:null};}catch(error){return {data:null,error:{message:error instanceof Error?error.message:'request_failed'}};}};
+  const repository=new SupabaseMealBuddySourceCardRepository({authPort:this.auth,mealBuddyClient:{functions:{invoke}}});
   const result=await repository.listSourceCards();if(!result.ok)throw Error(result.error.code);return result.value;
  }
 }
