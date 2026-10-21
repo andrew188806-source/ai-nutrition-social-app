@@ -12,7 +12,6 @@ export function load(file){
  const code=ts.transpileModule(fs.readFileSync(file,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX},fileName:file}).outputText;
  const localRequire=name=>{
   if(name==="npm:@supabase/supabase-js@2")return {createClient:()=>{throw Error("provider_must_be_injected")}};
-  if(name==="@haocu/shared")return load(path.join(process.cwd(),"packages/shared/src/index.ts"));
   if(!name.startsWith("."))return require_(name);
   const base=path.resolve(path.dirname(file),name),resolved=[base,base+".ts",base+".tsx",path.join(base,"index.ts")].find(p=>fs.existsSync(p)&&fs.statSync(p).isFile());
   if(!resolved)throw Error("unresolved "+name+" from "+file);

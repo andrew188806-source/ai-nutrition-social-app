@@ -93,6 +93,18 @@ export const ACT2_FILES=Object.freeze({
     "base": "cafdb5f1623837a842de234f1750caee0bc884a4",
     "baseMode": "100644"
   },
+  "scripts/meal-buddy-relationship-sr2i-b-contract.mjs": {
+    "mode": "100644",
+    "blob": "6727847c1c3fc4a0efcf21ada7ebfaed12a7b68a",
+    "base": "ab2e4e67216d92fb85a1cb9eee6fd9da8b3bf011",
+    "baseMode": "100644"
+  },
+  "scripts/meal-buddy-relationship-sr2i-b-guard.mjs": {
+    "mode": "100644",
+    "blob": "94648819dd5cbb2764e620c5fdedd9f0818e2127",
+    "base": "c038579f39a268fae74ca95347b6c8ecc7789d6a",
+    "baseMode": "100644"
+  },
   "scripts/meal-buddy-relationship-sr2i-b-smoke.mjs": {
     "mode": "100644",
     "blob": "d9d78ae0d2fa021d9d053371d5674ebb4c4ec611",
@@ -101,7 +113,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "scripts/s2-act2-host.mjs": {
     "mode": "100644",
-    "blob": "ef7be12ae5145062668325c79aad9a33a6a9c87c",
+    "blob": "5735115e33d6c588cac9de25415debd4f0d59d50",
     "base": null,
     "baseMode": null
   },
@@ -113,7 +125,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "scripts/s2-act2-test-loader.mjs": {
     "mode": "100644",
-    "blob": "3b0d27655bcfd0d540701d51800121c84e48af10",
+    "blob": "c7c82ee8d2a9d25517f3597e98c21ccba5088293",
     "base": null,
     "baseMode": null
   },
@@ -209,7 +221,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "supabase/functions/_shared/social-profile/readProfileFacts.ts": {
     "mode": "100644",
-    "blob": "ff28ce359eff61542acc96bac43f5b92d91237b8",
+    "blob": "92906244f713a97a5842d759e3333848016803fd",
     "base": "d2f79949cd93dd6e4e50a6b7a6a0cbc62d00ebe9",
     "baseMode": "100644"
   },

@@ -24,8 +24,8 @@ function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(
  if(name==='react')return React;if(name==='react/jsx-runtime')return{jsx,jsxs:jsx,Fragment:'Fragment'};
  if(name==='react-native')return{...Object.fromEntries(['Text','TextInput','View','Pressable','ActivityIndicator','Image','Modal','ScrollView','RefreshControl'].map(s=>[s,s])),StyleSheet:{create:v=>v,absoluteFill:{}}};
  if(name==='expo-router')return Expo;if(name==='expo-linear-gradient')return{LinearGradient:'LinearGradient'};if(name==='react-native-svg')return{__esModule:true,default:'Svg',Circle:'Circle'};
- if(name==='@haocu/shared')return {...load(path.join(root,'packages/shared/src/domain/meal-buddy-candidate/validate.ts')),...load(path.join(root,'packages/shared/src/domain/stranger-exposure.ts'))};
- const ALIAS=[['@haocu/shared/','packages/shared/src/'],['@haocu/services/','packages/services/src/'],['@haocu/i18n/','lib/i18n/']];let aliased=null;for(const [a,b] of ALIAS)if(name.startsWith(a))aliased=path.join(root,b+name.slice(a.length));if(name==='@haocu/services')aliased=path.join(root,'packages/services/src');
+ if(name===JSON.parse(fs.readFileSync(path.join(root,'packages/shared/package.json'),'utf8')).name)return {...load(path.join(root,'packages/shared/src/domain/meal-buddy-candidate/validate.ts')),...load(path.join(root,'packages/shared/src/domain/stranger-exposure.ts'))};
+ const mappings=JSON.parse(fs.readFileSync(path.join(root,'tsconfig.base.json'),'utf8')).compilerOptions.paths;let aliased=null;for(const [alias,targets]of Object.entries(mappings)){const wildcard=alias.endsWith('*'),prefix=wildcard?alias.slice(0,-1):alias;if(wildcard?name.startsWith(prefix):name===prefix){aliased=path.join(root,targets[0].replace('*',name.slice(prefix.length)));break;}}
  let p=(aliased??path.resolve(path.dirname(file),name)).replaceAll('\\','/');
  if(/\.(png|jpg)$/.test(p))return{assetPath:path.relative(root,p).replaceAll('\\','/'),sha256:sha(fs.readFileSync(p))};
  if(p.endsWith('/consumer-runtime'))return{useConsumerRuntime:()=>runtime};

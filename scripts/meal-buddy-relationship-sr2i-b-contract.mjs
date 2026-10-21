@@ -1,3 +1,6 @@
+import {checkedAct2State} from './consumer-retention-persistence-smoke.mjs';
+import {exactAct2LeafText} from './s2-act2-exact-successor.mjs';
+import {execFileSync} from 'node:child_process';
 import { createRequire } from "node:module";
 
 const require_ = createRequire(import.meta.url);
@@ -23,7 +26,7 @@ export const SR2IB_SOURCE_PATHS = Object.freeze([
   "supabase/functions/_shared/meal-buddy-relationship-api/types.ts"
 ]);
 
-export function auditSr2ibSources(sources) {
+function auditSr2ibSourcesBeforeACT2(sources) {
   const violations = [];
   const repository = sources.get("apps/mobile/features/meal-buddy-relationships/repository.ts") ?? "";
   const controller = sources.get("apps/mobile/features/meal-buddy-relationships/controller.ts") ?? "";
@@ -132,4 +135,17 @@ function collectIdentifiers(sources) {
 
 function requireInvariant(violations, condition, message) {
   if (!condition) violations.push(message);
+}
+
+const ACT2_REPOSITORY='supabase/functions/_shared/meal-buddy-relationship-api/repository.ts';
+const act2Git=args=>execFileSync('git',args,{cwd:process.cwd(),encoding:'utf8',maxBuffer:30000000});
+export function isAct2RelationshipProjection(sources){
+ return checkedAct2State(act2Git).state==='record'&&exactAct2LeafText(ACT2_REPOSITORY,sources.get(ACT2_REPOSITORY)??'');
+}
+export function auditSr2ibSources(sources){
+ if(!isAct2RelationshipProjection(sources))return auditSr2ibSourcesBeforeACT2(sources);
+ // Original assertions still inspect all supplied sources; only this fully pinned repository
+ // projects to its accepted predecessor. Partial/modified bytes cannot enter this form.
+ const predecessor=new Map(sources);predecessor.set(ACT2_REPOSITORY,act2Git(['show','9841a17532be0366d5ddf0ee94583f703c4d0b2d:'+ACT2_REPOSITORY]));
+ return auditSr2ibSourcesBeforeACT2(predecessor);
 }

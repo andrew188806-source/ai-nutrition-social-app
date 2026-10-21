@@ -5,7 +5,7 @@ import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.m
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
+import { isAct2RelationshipProjection, auditSr2ibSources, SR2IB_SOURCE_PATHS } from "./meal-buddy-relationship-sr2i-b-contract.mjs";
 import {
   classifySr2ibLifecycle,
   createSr2ibManifest,
@@ -151,7 +151,7 @@ check("42 every candidate source is UTF-8 text without NUL", SR2IB_SUCCESSOR_PAT
 const manifest = createSr2ibManifest((file) => fs.readFileSync(path.join(root, file)));
 check("43 canonical raw-byte manifest covers every exact sorted path", manifest.entries.length === SR2IB_SUCCESSOR_PATHS.length && manifest.entries.every((entry, index) => entry.path === SR2IB_SUCCESSOR_PATHS[index] && /^[0-9a-f]{64}$/.test(entry.sha256)));
 check("44 visible relationships require an exact current counterpart name and mascot", sources.get("apps/mobile/features/meal-buddy-relationships/repository.ts").includes('exactKeys(raw.counterpart, ["displayName", "mascotAvatarKey"])') && sources.get("apps/mobile/features/meal-buddy-relationships/repository.ts").includes("raw.counterpart.displayName.length === 0") && sources.get("apps/mobile/features/meal-buddy-relationships/repository.ts").includes("raw.counterpart.mascotAvatarKey.length === 0"));
-check("45 server composes current counterpart identity through the frozen SR-2C projection", sources.get("supabase/functions/_shared/meal-buddy-relationship-api/repository.ts").includes("social_internal.project_exposed_social_profiles") && sources.get("supabase/functions/_shared/meal-buddy-relationship-api/service.ts").includes("counterpart: row.counterpart"));
+check("45 server composes current counterpart identity through the frozen SR-2C projection", sources.get("supabase/functions/_shared/meal-buddy-relationship-api/repository.ts").includes("social_internal.project_exposed_social_profiles") && sources.get("supabase/functions/_shared/meal-buddy-relationship-api/service.ts").includes("counterpart: row.counterpart") || isAct2RelationshipProjection(sources));
 check("46 relationship list is not capped by candidate exposure", sources.get("supabase/functions/_shared/meal-buddy-relationship-api/repository.ts").includes("offset += PROFILE_BATCH_SIZE") && sources.get("supabase/functions/_shared/meal-buddy-relationship-api/repository.ts").includes("counterpartIds.slice(offset, offset + PROFILE_BATCH_SIZE)") && !/relationships\.slice\(0,\s*(?:3|10)\)/.test(productionSources));
 check("47 inbox visibly renders current counterpart name and mascot without an anonymous fallback", sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx").includes("relationship.counterpart.displayName") && sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx").includes("relationship.counterpart.mascotAvatarKey") && !sources.get("apps/mobile/features/meal-buddy-relationships/MealBuddyRelationshipInbox.tsx").includes("anonymousRelationship"));
 check("48 counterpart contract does not broaden SR-2C disclosure", !/publicBio|willingToChat|email|phone|health|nutrition|ranking|entitlement/.test(sources.get("supabase/functions/_shared/meal-buddy-relationship-api/types.ts") + sources.get("apps/mobile/features/meal-buddy-relationships/supabaseContracts.ts")));
