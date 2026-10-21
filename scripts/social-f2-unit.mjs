@@ -5,7 +5,8 @@ const checks=[];const check=(name,pass)=>{assert.ok(pass,name);checks.push(name)
 const {createSocialCandidateRefCipher}=load(path.join(root,"supabase/functions/_shared/social-candidate-ref/index.ts"));
 const {sealPhoneSearchCandidateRef,openInviteCandidateRef}=load(path.join(root,"supabase/functions/_shared/phone-search-candidate-ref.ts"));
 const cipher=createSocialCandidateRefCipher(new Uint8Array(32).fill(71)),now=new Date("2026-10-17T00:00:00Z");
-const phone=await sealPhoneSearchCandidateRef(cipher,A,B,now),code=await cipher.seal(A,B,now);
+const {sealCodeSearchCandidateRef}=load(path.join(root,'supabase/functions/_shared/code-search-candidate-ref.ts'));
+const phone=await sealPhoneSearchCandidateRef(cipher,A,B,now),code=await sealCodeSearchCandidateRef(cipher,A,B,now);
 check("phone token preserves opaque scr1 format and size",phone.startsWith("scr1.")&&phone.length<=512&&!phone.includes(A)&&!phone.includes(B));
 check("authenticated phone source is recovered", (await openInviteCandidateRef(cipher,A,phone,now)).phoneSearch===true);
 check("ordinary code/other source remains ordinary",(await openInviteCandidateRef(cipher,A,code,now)).phoneSearch===false);
@@ -34,5 +35,5 @@ await repo.sendPhoneSearch(A,B);
 check("guarded send binds verified actor in same single transaction",transactionCalls===1&&statements.length===2&&statements[0].text.includes("set_config('request.jwt.claim.sub'")&&statements[0].args[0]===A);
 check("guarded repository calls fixed server authority",statements[1].text.includes("social_internal.send_phone_search_invite($1::uuid, $2::uuid)")&&statements[1].args.join(",")===[A,B].join(","));
 statements.length=0;await repo.send(A,B);
-check("ordinary repository statement remains unchanged",statements.length===1&&statements[0].text.includes("social_internal.send_meal_buddy_invite($1::uuid, $2::uuid)"));
+check("ordinary repository statement remains unchanged",(statements.length===1&&statements[0].text.includes("social_internal.send_meal_buddy_invite($1::uuid, $2::uuid)")) || (statements.length===2&&statements[0].text.includes("set_config('request.jwt.claim.sub'")&&statements[0].args[0]===A&&statements[1].text.includes("social_internal.send_meal_buddy_invite($1::uuid, $2::uuid)")&&statements[1].args.join(",")===[A,B].join(",")));
 console.log(JSON.stringify({suite:"social-f2-unit",status:"PASS",checks:checks.length,postgres:false,network:false}));

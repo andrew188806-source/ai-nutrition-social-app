@@ -28,7 +28,7 @@ export function createDefaultMealBuddyRelationshipDependencies(): MealBuddyRelat
 
 function clientUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : "";
-  return /ref_contract_violated|relationship_action_unavailable|RELATIONSHIP_TARGET_(INVALID|UNAVAILABLE)/.test(message);
+  return /ref_contract_violated|relationship_action_unavailable|STRANGER_REF_REFRESH_REQUIRED|RELATIONSHIP_TARGET_(INVALID|UNAVAILABLE)/.test(message);
 }
 
 export async function processMealBuddyRelationshipRequest(

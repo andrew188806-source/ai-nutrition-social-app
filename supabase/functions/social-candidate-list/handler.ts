@@ -94,6 +94,7 @@ export async function processSocialCandidateListRequest(
   );
   if (!authentication.ok) return buildSocialCandidateListError("authentication_required");
 
+  return new Response(JSON.stringify({error:{code:'stranger_exposure_context_required'}}),{status:409,headers:{'content-type':'application/json','cache-control':'no-store'}});
   // Exactly one request instant governs the Taste as-of window, entitlement resolution and both
   // candidate-reference timestamps. No caller-supplied clock exists.
   const requestInstant = new Date();

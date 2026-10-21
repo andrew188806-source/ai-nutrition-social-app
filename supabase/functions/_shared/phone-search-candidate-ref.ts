@@ -1,3 +1,4 @@
+import {codeActor} from './code-search-candidate-ref.ts';
 import type { SocialCandidateRefCipher, SocialCandidateRefClaims } from "./social-candidate-ref/types.ts";
 import { SOCIAL_CANDIDATE_REF_CONTRACT_ERROR } from "./social-candidate-ref/policy.ts";
 
@@ -13,11 +14,13 @@ export function sealPhoneSearchCandidateRef(
 
 export async function openInviteCandidateRef(
   cipher: SocialCandidateRefCipher, actor: string, token: string, now: Date
-): Promise<Readonly<{ claims: SocialCandidateRefClaims; phoneSearch: boolean }>> {
+): Promise<Readonly<{ claims: SocialCandidateRefClaims; phoneSearch: boolean; codeSearch?: boolean }>> {
   try {
     return Object.freeze({ claims: await cipher.open(actor, token, now), phoneSearch: false });
   } catch (error) {
     if (!(error instanceof Error) || error.message !== SOCIAL_CANDIDATE_REF_CONTRACT_ERROR) throw error;
   }
+  try { return Object.freeze({ claims: await cipher.open(codeActor(actor), token, now), phoneSearch: false, codeSearch: true }); }
+  catch(error){if (!(error instanceof Error) || error.message !== SOCIAL_CANDIDATE_REF_CONTRACT_ERROR) throw error;}
   return Object.freeze({ claims: await cipher.open(phoneActor(actor), token, now), phoneSearch: true });
 }

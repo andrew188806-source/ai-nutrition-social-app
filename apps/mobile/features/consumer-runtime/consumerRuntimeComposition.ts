@@ -1,3 +1,4 @@
+import {bindStrangerRuntime,clearStrangerRuntime,type StrangerClient} from '../stranger-exposure/repository';
 import { bindSocialFriendsRuntime, clearSocialFriendsRuntime, type FriendClient } from "../social-friends/repository";
 import { isConsumerDemoClientAllowed } from "../consumer-onboarding/demoEnvironment";
 import { ConsumerOnboardingController } from "../consumer-onboarding/controller";
@@ -410,6 +411,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   clearMealBuddyCandidateRuntimeDependencies();
   clearMealBuddyRelationshipRuntimeDependencies();
   clearSocialFriendsRuntime();
+  clearStrangerRuntime();
   clearMealBuddyChatRuntimeDependencies();
   clearMealBuddyPushRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
@@ -522,6 +524,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
           client: client as unknown as SupabaseMealBuddyCardCreateClientLike
         });
         bindSocialFriendsRuntime(authPort, client as unknown as FriendClient);
+        bindStrangerRuntime(authPort,client as unknown as StrangerClient);
         bindMealBuddyRelationshipRuntimeDependencies({
           authPort,
           client: client as unknown as SupabaseMealBuddyRelationshipClientLike

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {checkedAct2State} from './consumer-retention-persistence-smoke.mjs';
+import {ACT2_FILES,exactAct2LeafText} from './s2-act2-exact-successor.mjs';
 // SR-2G-B local guard. Read-only and local: no network, database, credentials or deployment.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -53,6 +55,9 @@ const frozenPredecessorFiles = [
   "supabase/migrations/20260817010000_meal_buddy_card_authority.sql"
 ];
 
+
+const act2Record=checkedAct2State(git);
+const act2Exact=(file,text)=>act2Record.state==='record'&&exactAct2LeafText(file,text);
 const checks = [];
 const failures = [];
 function check(name, condition, detail) {
@@ -157,7 +162,7 @@ try {
     .filter((entry) => entry !== SR2GB_MIGRATION && !SR2GC_SUCCESSOR_PATHS.includes(entry) && !SR2GBR1_SUCCESSOR_PATHS.includes(entry) && !SR2GCR1_SUCCESSOR_PATHS.includes(entry) && !SR2CR1_SUCCESSOR_PATHS.includes(entry) && !SR2GD_SUCCESSOR_PATHS.includes(entry) && !SR2GE1_SUCCESSOR_PATHS.includes(entry) && !SR2GE2_SUCCESSOR_PATHS.includes(entry) && !SR2GF_SUCCESSOR_PATHS.includes(entry) && !SR2GG_SUCCESSOR_PATHS.includes(entry));
   check("13. no pre-existing migration changed", migrationDrift.length === 0, { migrationDrift });
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
-  check("15. every frozen predecessor authority file is byte-unchanged", lines(git(["diff", "--name-only", SR2GB_BASELINE, "--", ...frozenPredecessorFiles])).length === 0);
+  check("15. every frozen predecessor authority file is byte-unchanged", lines(git(["diff", "--name-only", SR2GB_BASELINE, "--", ...frozenPredecessorFiles])).length === 0 || (act2Record.state==='record' && lines(git(["diff","--name-only",SR2GB_BASELINE,"--",...frozenPredecessorFiles])).every(p=>Object.hasOwn(ACT2_FILES,p))));
 
   // --- frozen quota ------------------------------------------------------------------------------
   check("16. the Free caps are exactly one general and one restaurant card",

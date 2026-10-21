@@ -9,7 +9,7 @@ import child from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION, BILLING_MIGRATION as PINNED_BILLING_MIGRATION, BILLING_MIGRATION_SHA256, withSocialTail, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
+import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION, BILLING_MIGRATION as PINNED_BILLING_MIGRATION, BILLING_MIGRATION_SHA256, withAct2Tail, withSocialTail, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
 import { act, frozenProof, inventoryProof, options } from './consumer-retention-capture-smoke.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
 import { acqApply, acqSource } from './consumer-retention-acquisition-smoke.mjs';
@@ -1372,7 +1372,7 @@ GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const sourceSha = sha(Buffer.from(source, 'utf8'));
   const own = /expected=([0-9a-f]{64}) observed=%/.exec(source)?.[1];
   // Exact ORDERED new-migration tail: capture, ENT0, the origin demo migration, ENT1-A, (social x2 with the exact social record), ENT-R, then this ENT-F1 migration (20261021010000). No file is assumed last except by this exact order.
-  const tail = [...withSocialTail([CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION], frozen.recoverySuccessor.social === 'record'), BILLING_MIGRATION];
+  const tail = withAct2Tail([...withSocialTail([CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION], frozen.recoverySuccessor.social === 'record'), BILLING_MIGRATION]);
   return R(frozen.violations.length === 0 && frozen.recoverySuccessor.state === 'ent0' && frozen.recoverySuccessor.demo === 'record' && frozen.recoverySuccessor.acq === 'record' && frozen.recoverySuccessor.seal === 'record' && frozen.recoverySuccessor.social === 'record' && frozen.recoverySuccessor.billing === 'record'
     && inv.migrationCount === 143 + tail.length && inv.baselineCount === 143 && same(inv.newPaths, tail) && inv.changedBaselineMigrations.length === 0 && inv.timestampLaterThanAll
     && sourceSha === BILLING_MIGRATION_SHA256 && own === BILLING_POST_DIGEST, { frozen, inv, tail, sourceSha, pinned: BILLING_MIGRATION_SHA256, postDigest: own });

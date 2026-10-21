@@ -1,3 +1,4 @@
+import type {SocialRuntimeReadPort} from '../social-runtime-transport/readPort.ts';
 // SR-2G-D executor reads. Two statements, both frozen primitives, neither re-implementing any rule.
 import { mealBuddyCandidateApiContractViolation } from "./policy.ts";
 import type {
@@ -8,8 +9,7 @@ import type {
   MealBuddySelectedCard
 } from "./types.ts";
 import {
-  defineSocialRuntimeExecutorStatement,
-  type SocialRuntimeExecutorTransport
+  defineSocialRuntimeExecutorStatement
 } from "../social-runtime-transport/executorTransactionTransport.ts";
 import type { SocialInterestRow } from "../social-interest/types.ts";
 import { MEAL_BUDDY_CONTEXT_STATES } from "../meal-buddy-context/types.ts";
@@ -63,7 +63,7 @@ const isNonEmptyString = (value: unknown): value is string => typeof value === "
 
 const CONTEXT_STATES = new Set<string>(MEAL_BUDDY_CONTEXT_STATES);
 
-function parseCard(row: MealBuddyCandidateCardRow): MealBuddySelectedCard {
+export function parseCard(row: MealBuddyCandidateCardRow): MealBuddySelectedCard {
   if (
     !isNonEmptyString(row.candidate_owner_user_id) || !isNonEmptyString(row.candidate_card_id) ||
     !isNonEmptyString(row.card_type) || !isNonEmptyString(row.intention_type) ||
@@ -93,7 +93,7 @@ function parseCard(row: MealBuddyCandidateCardRow): MealBuddySelectedCard {
 // so a second card for the same owner would mean the frozen guarantee had been violated: that is a
 // contract violation, never something this module resolves by picking a winner itself.
 export async function readMealBuddyCandidateCards(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   actorUserId: string,
   sourceCardId: string,
   authorityInstant: Date
@@ -119,7 +119,7 @@ export async function readMealBuddyCandidateCards(
 // accepts at most 200 ids, so larger complete pools are chunked inside one executor transaction;
 // there is no candidate cap and no alternate-card lookup. Missing rows remain explicitly unbound.
 export async function readMealBuddyCandidateBranchContexts(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   selectedCards: readonly MealBuddySelectedCard[]
 ): Promise<ReadonlyMap<string, MealBuddyCardBranchContext>> {
   if (!Array.isArray(selectedCards)) return mealBuddyCandidateApiContractViolation();
@@ -161,7 +161,7 @@ export async function readMealBuddyCandidateBranchContexts(
 // toward CLOSED would silently exclude a branch that was never proven closed, and coercing toward
 // OPEN/UNKNOWN would silently include one it should not.
 export async function readMealBuddyCandidateBranchTemporalStates(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   branchIds: readonly string[]
 ): Promise<ReadonlyMap<string, string>> {
   if (!Array.isArray(branchIds)) return mealBuddyCandidateApiContractViolation();
@@ -193,7 +193,7 @@ export async function readMealBuddyCandidateBranchTemporalStates(
 // Reads the CURRENT profile interests for exactly the exposed candidate owners. Nothing here reads a
 // Meal Buddy card, a snapshot, a Taste profile, a favorite or a meal record.
 export async function readExposedCandidateInterests(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   actorUserId: string,
   exposedOwnerUserIds: readonly string[]
 ): Promise<readonly SocialInterestRow[]> {

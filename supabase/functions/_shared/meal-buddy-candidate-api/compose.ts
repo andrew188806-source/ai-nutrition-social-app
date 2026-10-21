@@ -24,7 +24,7 @@ import { composeMealBuddyContextRanking } from "../meal-buddy-context/index.ts";
 import type { SocialRankingCandidateInput } from "../social-ranking/types.ts";
 import { applySocialExposure, resolveSocialEntitlement } from "../social-exposure/index.ts";
 import { projectPublicSocialProfiles, readExposedSocialProfileFacts } from "../social-profile/index.ts";
-import type { SocialRuntimeExecutorTransport } from "../social-runtime-transport/executorTransactionTransport.ts";
+import type { SocialRuntimeReadPort } from '../social-runtime-transport/readPort.ts';
 import type { SocialCandidateRefCipher } from "../social-candidate-ref/types.ts";
 import type { MealBuddyCardRefCipher } from "../meal-buddy-card-ref/types.ts";
 import { ExecutorGeoRepository, parseGeoQuery, parseGeoPoint, type GeoPoint } from "../geo-api/index.ts";
@@ -34,7 +34,7 @@ import {
 } from "../next-meal-geo-api/policy.ts";
 
 export type MealBuddyCandidateListComposition = Readonly<{
-  transport: SocialRuntimeExecutorTransport;
+  transport: SocialRuntimeReadPort;
   entitlementRowSource: MealBuddyCandidateEntitlementRowSource;
   candidateCipher: SocialCandidateRefCipher;
   cardCipher: MealBuddyCardRefCipher;
@@ -42,6 +42,7 @@ export type MealBuddyCandidateListComposition = Readonly<{
   sourceCardId: string;
   requestInstant: Date;
   geoOrigin?: GeoPoint | null;
+  readers?: Readonly<{ cards: typeof readMealBuddyCandidateCards; taste: (transport: SocialRuntimeReadPort, actor: string, selectedOwnerIds: readonly string[]) => ReturnType<typeof readSocialCandidateTasteSources> }>;
 }>;
 
 export type MealBuddyGeoApplicationStatus = "not_applied" | "applied" | "empty" | "fallback";
@@ -66,7 +67,7 @@ type MealBuddyCardBranchContextsResult =
   | Readonly<{ ok: false }>;
 
 async function applyMealBuddyGeoEligibility(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   selectedCards: readonly MealBuddySelectedCard[],
   geoOrigin: GeoPoint | null,
   contextsResult: MealBuddyCardBranchContextsResult
@@ -119,7 +120,7 @@ async function applyMealBuddyGeoEligibility(
 // "fallback"/unbound handling, per the RA-2H-P3 rule that malformed/unavailable temporal metadata
 // must never silently turn a branch into CLOSED.
 async function applyMealBuddyTemporalEligibility(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   selectedCards: readonly MealBuddySelectedCard[],
   contextsResult: MealBuddyCardBranchContextsResult
 ): Promise<MealBuddyTemporalApplication> {
@@ -143,11 +144,11 @@ async function applyMealBuddyTemporalEligibility(
   }
 }
 
-export async function composeMealBuddyCandidateList(
-  composition: MealBuddyCandidateListComposition
-): Promise<MealBuddyCandidateApiResponse> {
+export async function composeMealBuddyCandidateFacts(
+  composition: Omit<MealBuddyCandidateListComposition,'candidateCipher'|'cardCipher'>
+): Promise<Omit<import('./toCandidateDto.ts').MealBuddyCandidateDtoComposition,'candidateCipher'|'cardCipher'>|null> {
   const {
-    transport, entitlementRowSource, candidateCipher, cardCipher,
+    transport, entitlementRowSource,
     actorUserId, sourceCardId, requestInstant, geoOrigin = null
   } = composition;
   if (typeof actorUserId !== "string" || actorUserId.length === 0) {
@@ -169,10 +170,10 @@ export async function composeMealBuddyCandidateList(
   //    WHICH card represents an owner, and it still decides it exactly once, before any ranking.
   //    Hard eligibility is untouched: the labels ride along with the frozen pool, they do not filter
   //    it, so a legacy card with no context yields one uniform label and the frozen order stands.
-  const baseSelectedCards = await readMealBuddyCandidateCards(
+  const baseSelectedCards = await (composition.readers?.cards ?? readMealBuddyCandidateCards)(
     transport, actorUserId, sourceCardId, requestInstant
   );
-  if (baseSelectedCards.length === 0) return EMPTY;
+  if (baseSelectedCards.length === 0) return null;
 
   // The P0 branch binding is read once and shared by both GEO-1D and RA-2H-P3 below: both stages
   // need only the (restaurantId, branchId) each already-selected card is bound to, and reading it
@@ -190,14 +191,14 @@ export async function composeMealBuddyCandidateList(
   // selected card is never changed; only its P0 branch binding may allow that person to survive.
   const geoApplication = await applyMealBuddyGeoEligibility(transport, baseSelectedCards, geoOrigin, contextsResult);
   const afterGeo = geoApplication.cards;
-  if (afterGeo.length === 0) return EMPTY;
+  if (afterGeo.length === 0) return null;
 
   // RA-2H-P3 runs immediately after GEO-1D, over the surviving pool, before ranking and exposure. A
   // CLOSED branch's card cannot survive as a currently recommendable candidate; OPEN/UNKNOWN and any
   // unbound card are preserved unchanged.
   const temporalApplication = await applyMealBuddyTemporalEligibility(transport, afterGeo, contextsResult);
   const selectedCards = temporalApplication.cards;
-  if (selectedCards.length === 0) return EMPTY;
+  if (selectedCards.length === 0) return null;
 
   // The owner -> card binding, fixed here and never renegotiated. Ranking and exposure operate on
   // PERSON; the card each surviving person carries is looked up from this map, never reselected.
@@ -208,8 +209,8 @@ export async function composeMealBuddyCandidateList(
   // 2. Frozen SR-1D Taste sources for the actor and every authorized candidate. Restricted to the
   //    Meal Buddy pool: the compatible-card pool already composes authorized_candidates, so its
   //    owners are a subset of this set. No card field and no interest ever enters Taste.
-  const sources = await readSocialCandidateTasteSources(transport, actorUserId);
-  if (sources.actor === null) return EMPTY;
+  const sources = composition.readers ? await composition.readers.taste(transport, actorUserId, selectedCards.map(card=>card.ownerUserId)) : await readSocialCandidateTasteSources(transport, actorUserId);
+  if (sources.actor === null) return null;
 
   const asOf = buildSocialCandidateApiAsOf(requestInstant);
   const actorSnapshot = composeServerSnapshot(
@@ -255,8 +256,13 @@ export async function composeMealBuddyCandidateList(
   );
 
   // 7. SR-2D person refs, SR-2G-A candidate-purpose card refs, compact interest derivation and DTO.
-  return await toMealBuddyCandidateApiResponse({
+  return {
     actorUserId, exposure, projection, interestRows, cardByOwner,
-    candidateCipher, cardCipher, requestInstant
-  });
+    requestInstant
+  };
+}
+
+export async function composeMealBuddyCandidateList(composition:MealBuddyCandidateListComposition):Promise<MealBuddyCandidateApiResponse>{
+ const facts=await composeMealBuddyCandidateFacts(composition);
+ return facts===null?EMPTY:toMealBuddyCandidateApiResponse({...facts,candidateCipher:composition.candidateCipher,cardCipher:composition.cardCipher});
 }

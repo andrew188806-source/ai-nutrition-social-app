@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {checkedAct2State} from './consumer-retention-persistence-smoke.mjs';
+import {ACT2_FILES,exactAct2LeafText} from './s2-act2-exact-successor.mjs';
 // SR-2I-A lifecycle-aware local authority guard. Read-only: no network, database, credentials,
 // deployment or repository writes.
 import fs from "node:fs";
@@ -21,7 +23,10 @@ import { SR2KB_PATHS } from "./social-final-sr2k-b-successor-manifest.mjs";
 import { GEO1A_PATHS } from "./geo-shared-authority-geo-1a-successor-manifest.mjs";
 import { GEO1CP0_PATHS } from "./geo-coordinate-source-geo-1c-p0-successor-manifest.mjs";
 
-const root = process.cwd(); const checks = []; const failures = [];
+const root = process.cwd(); 
+const act2Record=checkedAct2State(git);
+const act2Exact=(file,text)=>act2Record.state==='record'&&exactAct2LeafText(file,text);
+const checks = []; const failures = [];
 function check(name, condition, detail) {
   const result = { name, pass: Boolean(condition), ...(detail === undefined ? {} : { detail }) };
   checks.push(result); if (!result.pass) failures.push(result);
@@ -166,7 +171,7 @@ function socialRepositoryStructure(text) {
     && occurrences(text, "BIND_ACTOR") === 2 && occurrences(text, "SEND_PHONE_SEARCH") === 2 && occurrences(text, "[actor, target], true)") === 1;
 }
 check("43 service opens scr1 server-side before send/read", (service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId"))
-  || (socialServiceStructure(service) && sha256(Buffer.from(service, "utf8")) === SOCIAL_C4_SERVICE_SHA256));
+  || (socialServiceStructure(service) && sha256(Buffer.from(service, "utf8")) === SOCIAL_C4_SERVICE_SHA256) || act2Exact('supabase/functions/_shared/meal-buddy-relationship-api/service.ts',service));
 check("44 service opens mbr1 server-side before action", service.includes("relationshipCipher.open(actorUserId, request.relationshipRef, now)") && service.includes("claims.relationId"));
 check("45 service seals every internal relation id, discards counterpart UUID and emits only the composed public summary", service.includes("relationshipCipher.seal(actorUserId, row.relation_id, now)") && service.includes("counterpart: row.counterpart") && !service.includes("counterpart_user_id:"));
 check("46 cardinality failures do not fabricate state", service.includes("meal_buddy_relationship_cardinality_invalid") && service.includes("meal_buddy_relationship_action_unavailable"));
@@ -207,10 +212,10 @@ check("62 repository calls only the four frozen relationship functions plus the 
   || ((repository.match(/defineSocialRuntimeExecutorStatement/g) ?? []).length === 7
     && repository.includes("social_internal.end_meal_buddy_relationship"))
   // Social C4 (F2): exactly two more NAMED statements (BIND_ACTOR only for the phone path, SEND_PHONE_SEARCH), recognised only by exact structure and the exact accepted bytes.
-  || (socialRepositoryStructure(repository) && sha256(Buffer.from(repository, "utf8")) === SOCIAL_C4_REPOSITORY_SHA256)));
+  || (socialRepositoryStructure(repository) && sha256(Buffer.from(repository, "utf8")) === SOCIAL_C4_REPOSITORY_SHA256)) || act2Exact('supabase/functions/_shared/meal-buddy-relationship-api/repository.ts',repository));
 // Negative controls of the successor forms: each mutates the REAL source in memory and must turn the structural check false; the pristine copies must be accepted.
 const neg = (name, condition) => check(name, condition);
-neg("43-N0 control: the pristine service is accepted by the successor structure", socialServiceStructure(service) || (service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId")));
+neg("43-N0 control: the pristine service is accepted by the successor structure", act2Exact('supabase/functions/_shared/meal-buddy-relationship-api/service.ts',service) || socialServiceStructure(service) || (service.includes("candidateCipher.open(actorUserId, request.candidateRef, now)") && service.includes("claims.candidateUserId")));
 if (socialServiceStructure(service)) {
   neg("43-N1 removing the server-side unseal (target taken from the request) is rejected", !socialServiceStructure(service.replace("const { claims, phoneSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);", "const claims = { candidateUserId: request.candidateRef }; const phoneSearch = false;")));
   neg("43-N2 unsealing for another actor is rejected", !socialServiceStructure(service.replace("openInviteCandidateRef(this.candidateCipher, actorUserId,", "openInviteCandidateRef(this.candidateCipher, request.actorUserId,")));
@@ -222,6 +227,17 @@ if (socialServiceStructure(service)) {
   neg("62-N3 the phone path calling the ordinary send function is rejected", !socialRepositoryStructure(repository.replace("this.query(actor, SEND_PHONE_SEARCH, [actor, target], true)", "this.query(actor, SEND, [actor, target], true)")));
   neg("62-N4 an unconditional actor binding is rejected", !socialRepositoryStructure(repository.replace("if (bindActor) await transaction.query(BIND_ACTOR, [actorUserId]);", "await transaction.query(BIND_ACTOR, [actorUserId]);")));
   neg("62-N5 any byte change of the accepted repository is rejected by the exact pin", sha256(Buffer.from(repository + " ", "utf8")) !== SOCIAL_C4_REPOSITORY_SHA256);
+}
+
+
+if(act2Record.state==='record'){
+{const mutant=service.replace("openInviteCandidateRef(this.candidateCipher, actorUserId,","openInviteCandidateRef(this.candidateCipher, request.actorUserId,");neg("ACT2-43-N1 actual source mutation rejected",mutant!==service&&!act2Exact("supabase/functions/_shared/meal-buddy-relationship-api/service.ts",mutant));}
+{const mutant=service.replace("? phoneSearch","? request.phoneSearch");neg("ACT2-43-N2 actual source mutation rejected",mutant!==service&&!act2Exact("supabase/functions/_shared/meal-buddy-relationship-api/service.ts",mutant));}
+{const mutant=service.replace("this.repository.legacyReplay!","this.repository.send");neg("ACT2-43-N3 actual source mutation rejected",mutant!==service&&!act2Exact("supabase/functions/_shared/meal-buddy-relationship-api/service.ts",mutant));}
+{const mutant=service.replace("this.repository.sendPhoneSearch","this.repository.send");neg("ACT2-43-N4 actual source mutation rejected",mutant!==service&&!act2Exact("supabase/functions/_shared/meal-buddy-relationship-api/service.ts",mutant));}
+{const mutant=repository.replace("await transaction.query(BIND_ACTOR, [actorUserId]);","/* actor context removed */");neg("ACT2-62-N1 actual source mutation rejected",mutant!==repository&&!act2Exact("supabase/functions/_shared/meal-buddy-relationship-api/repository.ts",mutant));}
+{const mutant=repository.replace("stranger_internal.project_counterparts","social_internal.project_exposed_social_profiles");neg("ACT2-62-N2 actual source mutation rejected",mutant!==repository&&!act2Exact("supabase/functions/_shared/meal-buddy-relationship-api/repository.ts",mutant));}
+neg('ACT2-62-N3 extra statement rejected',!act2Exact('supabase/functions/_shared/meal-buddy-relationship-api/repository.ts',repository+'\nconst EXTRA=defineSocialRuntimeExecutorStatement`select 1`;'));
 }
 
 console.log(JSON.stringify({ suite: "meal-buddy-relationship-sr2i-a-guard", lifecycle: lifecycle.phase, total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, canonicalManifestSha256: manifest.aggregateSha256, migrationSha256: sha256(fs.readFileSync(path.join(root, SR2IA_MIGRATION))), networkUsed: false, databaseUsed: false, credentialsUsed: false, developmentTouched: false, productionTouched: false }, null, 2));

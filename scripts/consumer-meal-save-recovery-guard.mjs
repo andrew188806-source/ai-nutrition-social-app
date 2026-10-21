@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {checkedAct2State} from './consumer-retention-persistence-smoke.mjs';
 // TastKind meal-save recovery guard: exact-inventory / frozen-proof / replaced-assertion static checks and the MUTATION
 // controls of the recovery gates (R-01 … R-38).
 //
@@ -196,6 +197,11 @@ const changedFromBaseline = () => {
   return [...new Set([...tracked, ...untracked])].sort();
 };
 const changed = changedFromBaseline();
+const act2State=checkedAct2State(args=>{const r=git(args);if(r.status)throw Error('ACT2_GIT_READ');return r.stdout;});
+const act2Paths=act2State.state==='record'?[...act2State.paths,'scripts/s2-act2-exact-successor.mjs']:[];
+record('S2-ACT2 successor: exact complete bytes/index/mode and one-way module binding',act2State.state!=='invalid',act2State);
+
+
 const validationSuccessor = changed.filter((p) => VALIDATION_SUCCESSOR.includes(p));
 const ent0Changed = changed.filter((p) => ENT0_PATHS.includes(p));
 const pc2Changed = changed.filter((p) => PC2_PATHS.includes(p));
@@ -213,19 +219,19 @@ const s2ff1Changed = changed.filter((p) => S2FF1_PATHS.includes(p));
 const billingChanged = changed.filter((p) => BILLING_PATHS.includes(p));
 const billingActive = billingChanged.length > 0;
 const demoExact = demoChanged.length === 0 || (demoChanged.length === DEMO_PATHS.length && DEMO_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ENT0_PATHS.every((p) => changed.includes(p)) && pc2Changed.length === PC2_PATHS.length);
-const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p) && !S2FF1_PATHS.includes(p) && !S2FF2_PATHS.includes(p) && !BILLING_PATHS.includes(p));
+const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p) && !S2FF1_PATHS.includes(p) && !S2FF2_PATHS.includes(p) && !BILLING_PATHS.includes(p) && !(act2Paths.includes(p) && !INVENTORY.includes(p)));
 const validationSuccessorExact = validationSuccessor.length === 0 || (validationSuccessor.length === VALIDATION_SUCCESSOR.length && validationSuccessor.every((p) => fs.existsSync(path.join(ROOT, p))));
 record("candidate inventory is exact (27 distinct recovery paths: 21 modified + 6 added, plus either none or exactly both authorized retention validators; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(recoveryChanged) === JSON.stringify([...INVENTORY].sort()) && validationSuccessorExact, { extra: recoveryChanged.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !recoveryChanged.includes(p)), validationSuccessor });
 const ent0Migration = ENT0_PATHS[0];
 const ent0Active = ent0Changed.length > 0;
 const supabaseChanged = changed.filter((p) => p.startsWith("supabase/"));
 // Permitted forward migrations, in sort order: ENT0 (20261010010000) and — only with the exact origin successor — the demo migration (20261010172126), which sorts AFTER it. ENT0 is not assumed to be last.
-const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : []), ...(acqActive ? [ACQ_PATHS[0]] : []), ...(sealActive ? [SEAL_PATHS[0]] : []), ...(socialActive ? SOCIAL_MIGRATION_PATHS : []), ...(billingActive ? [BILLING_PATHS.find((p) => p.startsWith("supabase/migrations/"))] : [])].sort();
+const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActive ? [DEMO_MIGRATION_PATH] : []), ...(acqActive ? [ACQ_PATHS[0]] : []), ...(sealActive ? [SEAL_PATHS[0]] : []), ...(socialActive ? SOCIAL_MIGRATION_PATHS : []), ...(billingActive ? [BILLING_PATHS.find((p) => p.startsWith("supabase/migrations/"))] : []),...act2Paths.filter(p=>p.startsWith('supabase/migrations/'))].sort();
 // The social integration also changes server paths that are not migrations (the social-friends function, the relationship-api pair, the phone-ref module, config.toml): exactly these and only together with the exact social record.
 const socialServerPaths = socialActive ? SOCIAL_PATHS.filter((p) => p.startsWith("supabase/") && !SOCIAL_MIGRATION_PATHS.includes(p)) : [];
 // ENT-F1 also adds pure/DI TypeScript libraries under supabase/functions/_shared (no function entrypoint, no config.toml change): exactly its recorded paths and only together with the exact ENT-F1 record.
 const billingServerPaths = billingActive ? BILLING_PATHS.filter((p) => p.startsWith("supabase/") && !p.startsWith("supabase/migrations/")) : [];
-const permittedServer = [...forwardMigrations, ...socialServerPaths, ...billingServerPaths].sort();
+const permittedServer = [...new Set([...forwardMigrations,...socialServerPaths,...billingServerPaths,...act2Paths.filter(p=>p.startsWith('supabase/'))])].sort();
 const notForward = (p) => p && !permittedServer.includes(p);
 record("server paths: 0 (supabase/** byte-identical, modes unchanged; the only permitted exceptions are the single R0-B-ENT0 forward migration and, only with the exact origin successor, the single demo forward migration)", JSON.stringify(supabaseChanged) === JSON.stringify(permittedServer) && git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.split("\n").filter(notForward).length === 0 && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.split("\n").filter((l) => l.trim() && !permittedServer.some((m) => l.includes(m))).length === 0, supabaseChanged);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));

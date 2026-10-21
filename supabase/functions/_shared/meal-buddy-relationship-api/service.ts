@@ -19,11 +19,12 @@ export class MealBuddyRelationshipService {
   async execute(actorUserId: string, request: MealBuddyRelationshipRequest, now: Date): Promise<MealBuddyRelationshipResponse> {
     let rows: readonly InternalMealBuddyRelationshipRow[];
     if (request.operation === "send" || request.operation === "read") {
-      const { claims, phoneSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);
+      const { claims, phoneSearch, codeSearch } = await openInviteCandidateRef(this.candidateCipher, actorUserId, request.candidateRef, now);
       rows = request.operation === "send"
         ? phoneSearch
           ? await this.repository.sendPhoneSearch(actorUserId, claims.candidateUserId)
-          : await this.repository.send(actorUserId, claims.candidateUserId)
+          : codeSearch ? await this.repository.send(actorUserId, claims.candidateUserId)
+          : await this.repository.legacyReplay!(actorUserId, claims.candidateUserId)
         : await this.repository.read(actorUserId, claims.candidateUserId);
     } else if (request.operation === "accept" || request.operation === "decline"
       || request.operation === "cancel" || request.operation === "unfriend") {

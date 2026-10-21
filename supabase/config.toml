@@ -79,3 +79,6 @@ verify_jwt = true
 
 [functions.social-friends]
 verify_jwt = true
+
+[functions.stranger-exposure]
+verify_jwt = true

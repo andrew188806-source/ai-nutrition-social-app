@@ -53,6 +53,7 @@ export async function processMealBuddyCandidateListRequest(
   if (!authentication.ok) return buildMealBuddyCandidateListError("authentication_required");
   const actorUserId = authentication.value.userId;
 
+  return new Response(JSON.stringify({error:{code:'stranger_exposure_context_required'}}),{status:409,headers:{'content-type':'application/json','cache-control':'no-store'}});
   // Exactly one request instant governs the source-reference expiry check, the pool authority
   // instant, the Taste as-of window, entitlement resolution and both minted references. There is no
   // caller-supplied clock anywhere.

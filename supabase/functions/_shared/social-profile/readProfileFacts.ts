@@ -1,11 +1,11 @@
+import type {SocialRuntimeReadPort} from '../social-runtime-transport/readPort.ts';
 import {
   SOCIAL_PROFILE_MAXIMUM_CANDIDATES,
   socialProfileContractViolation
 } from "./policy.ts";
 import type { SocialProfileFactRow } from "./types.ts";
 import {
-  defineSocialRuntimeExecutorStatement,
-  type SocialRuntimeExecutorTransport
+  defineSocialRuntimeExecutorStatement
 } from "../social-runtime-transport/executorTransactionTransport.ts";
 import type { SocialExposureResult } from "../social-exposure/types.ts";
 
@@ -19,7 +19,7 @@ const PROJECT_EXPOSED_SOCIAL_PROFILES = defineSocialRuntimeExecutorStatement<Soc
 // The candidate set is taken from the frozen SR-2B exposure result itself rather than a bare UUID
 // array, so an arbitrary caller-chosen target is not expressible at this boundary.
 export async function readExposedSocialProfileFacts(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   actorUserId: string,
   exposure: SocialExposureResult
 ): Promise<readonly SocialProfileFactRow[]> {

@@ -43,7 +43,7 @@ export type MealBuddyCandidateDtoComposition = Readonly<{
 // The public card context. A general card never presents a restaurant even when its author attached
 // one: a suggestion on a general card is not a settled venue, and V1 must not display it as one.
 // This is presentation narrowing only — the card itself, and its place in the result, are unchanged.
-function toCardDto(card: MealBuddySelectedCard): MealBuddyCandidateCardDto {
+export function toCardDto(card: MealBuddySelectedCard): MealBuddyCandidateCardDto {
   if (card.cardType === "restaurant" && (typeof card.restaurantId !== "string" || card.restaurantId.length === 0)) {
     // The database forbids a restaurant card without a restaurant, so this is a broken invariant
     // rather than an optional field: fail closed instead of emitting a degraded card.
@@ -64,7 +64,7 @@ function toCardDto(card: MealBuddySelectedCard): MealBuddyCandidateCardDto {
 // order and the three-visible limit are that module's authority; no hierarchy, catalog order or cap
 // is restated here. The complete fine-grained selections stay canonical in the profile authority and
 // deliberately never reach this DTO.
-function toInterestsDto(rows: readonly SocialInterestRow[]): MealBuddyCandidateInterestsDto {
+export function toInterestsDto(rows: readonly SocialInterestRow[]): MealBuddyCandidateInterestsDto {
   const compact = deriveCompactInterests(aggregateInterestCategories(collectProfileInterests(rows)));
   if (
     compact.publicInterests.visibleCategories.length > 3 ||

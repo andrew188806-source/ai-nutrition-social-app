@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {act2FilesState,act2PredecessorGit,ACT2_FILES,ACT2_MIGRATION} from './s2-act2-exact-successor.mjs';
 // Disposable PostgreSQL only. Candidate metadata never constitutes Consumer authority.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -246,8 +247,9 @@ export async function baseline(cl,rec,{legacy=false}={}){
   // Exact successor recognition: the original 143-file inventory (the retention migration is file 143), followed by an EXACT ORDERED tail of pinned forward migrations. No tail file is assumed to be last:
   // the accepted tails are [], [capture], [capture, ENT0], [capture, ENT0, origin demo migration] and [capture, ENT0, origin demo migration, ENT1-A]; the demo migration sorts after ENT0 and the ENT1-A migration after the demo
   // migration. Each tail file is pinned by sha256.
-  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256};
+  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256};
   const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION,BILLING_MIGRATION]];
+  if(isAct2Migration(ACT2_MIGRATION))tails.push([...tails.at(-1),ACT2_MIGRATION]);
   const tail=tails.find(t=>files.length===143+t.length&&files.slice(143).join('|')===t.join('|')&&t.every(n=>sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))===tailPins[n]));
   if(!tail||files[142]!==MIGRATION)throw Error('MIGRATION_INVENTORY');
   const predecessors=files.slice(0,142);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
@@ -637,7 +639,7 @@ export function s2ff2FilesState(git,s2id1=false){
   return {state:'invalid',paths:[],violations:['s2ff2:partial-or-mismatch']};
 }
 
-export function recoverySuccessorState(git){
+function recoverySuccessorStateBeforeACT2(git){
   const act1=s2act1FilesState(git),s2act1=act1.state==='record';
   if(act1.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:act1.violations};
   const id1=s2id1FilesState(git,s2act1),s2id1=id1.state==='record';
@@ -1160,4 +1162,30 @@ export async function runSmoke({bin,out,cli,evidence}){
     const binding=recorder(path.join(out,'binding-gates'));await bindingGates(bin,binding,{cli,evidence});if(!BINDING_GATE_IDS.every(id=>binding.checks.some(c=>c.id===id&&c.pass)))throw Error('BINDING_GATE_INVENTORY');frozen(rec);const successes=rec.checks.filter(c=>/^IF[0-9]{2}$/.test(c.id)),negativeChecks=rec.checks.filter(c=>/^N[0-9]{2}$/.test(c.id));if(successes.length!==14||negativeChecks.length!==16||[...successes,...negativeChecks].some(c=>!c.pass))throw Error('REQUIRED_GATE_INVENTORY');rec.write('result.json',{status:'PASS',exitCode:0,successes:successes.length,negatives:negativeChecks.length,bindingGates:BINDING_GATE_IDS.length,checks:rec.checks.map(c=>({id:c.id,pass:c.pass}))});return 0;
   }catch(e){const exitCode=classify(e);rec.write('result.json',{status:'BLOCKED',exitCode,error:e.message,stack:e.stack});console.error(e.stack);return exitCode;}finally{if(cl)await cl.stop();}
 }
+
+
+// S2-ACT2 one-way exact successor. This root pins the module; the module pins only leaves,
+// never this file or itself. Every original detector/record above is retained.
+export const ACT2_MODULE_BLOB='b7d90ab810826319cc9f4f7d1974331a417932ba';
+export const ACT2_MIGRATION_SHA256='de050926c783289647345fc1e28369f6c7a9d72e422acdd847bddcd02bea2bcf';
+const ACT2_MODULE_PATH='scripts/s2-act2-exact-successor.mjs';
+export function checkedAct2State(git){
+ const staged=git(['ls-files','--stage','--',ACT2_MODULE_PATH]).trim();
+ const wt=fs.existsSync(path.join(ROOT,ACT2_MODULE_PATH))?git(['hash-object','--',ACT2_MODULE_PATH]).trim():null;
+ if(staged!=='100644 '+ACT2_MODULE_BLOB+' 0\t'+ACT2_MODULE_PATH||wt!==ACT2_MODULE_BLOB)return {state:'invalid',paths:[],violations:['act2:module-binding']};
+ return act2FilesState(git,ROOT);
+}
+const act2RootGit=args=>{const r=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(r.status)throw Error('ACT2_GIT_READ');return r.stdout;};
+export function isAct2Migration(name){return name===ACT2_MIGRATION&&checkedAct2State(act2RootGit).state==='record';}
+export function recoverySuccessorState(git){
+ const act2=checkedAct2State(git);
+ if(act2.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:act2.violations};
+ if(act2.state==='base')return recoverySuccessorStateBeforeACT2(git);
+ const prior=recoverySuccessorStateBeforeACT2(act2PredecessorGit(git));
+ if(!prior.exempt||prior.social!=='record')return {state:'invalid',exempt:false,paths:[],violations:['act2:requires-accepted-predecessor',...prior.violations]};
+ return {...prior,act2:'record',paths:[...new Set([...prior.paths,...act2.paths,ACT2_MODULE_PATH])]};
+}
+
+export function withAct2Tail(tail){return isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;}
+
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){let code;try{code=await runSmoke(options());}catch(e){console.error(e.stack);code=2;}process.exitCode=code;}

@@ -1,3 +1,5 @@
+import {openInviteCandidateRef} from '../_shared/phone-search-candidate-ref.ts';
+import {ExecutorMealBuddyRelationshipRepository} from '../_shared/meal-buddy-relationship-api/repository.ts';
 import { authenticateCaller, type AuthOutcome } from "../_shared/auth/authenticateCaller.ts";
 import { composeMealBuddyCandidateProfile } from "../_shared/meal-buddy-candidate-profile-api/compose.ts";
 import {
@@ -47,17 +49,23 @@ export async function processMealBuddyCandidateProfileRequest(
 
   const requestInstant = dependencies.now?.() ?? new Date();
   let candidateUserId: string;
+  let knownLookupSource=false;
   try {
-    const claims = await createSocialCandidateRefCipher(config.value.candidateRefKey).open(
+    const opened = await openInviteCandidateRef(createSocialCandidateRefCipher(config.value.candidateRefKey),
       authentication.value.userId, parsed.value.candidateRef, requestInstant
     );
-    candidateUserId = claims.candidateUserId;
+    candidateUserId = opened.claims.candidateUserId;
+    knownLookupSource=opened.phoneSearch||opened.codeSearch===true;
   } catch {
     return buildMealBuddyCandidateProfileError("invalid_request");
   }
 
   const transport = dependencies.createTransport();
   try {
+    if(!knownLookupSource){
+      const existing=await new ExecutorMealBuddyRelationshipRepository(transport).read(authentication.value.userId,candidateUserId);
+      if(!existing.some(row=>['accepted','incoming_pending','outgoing_pending'].includes(row.relative_state)))return new Response(JSON.stringify({error:{code:'stranger_ref_refresh_required'}}),{status:409,headers:{'content-type':'application/json','cache-control':'no-store'}});
+    }
     const response = await composeMealBuddyCandidateProfile({
       transport,
       actorUserId: authentication.value.userId,
@@ -65,7 +73,13 @@ export async function processMealBuddyCandidateProfileRequest(
     });
     // No longer active/authorized/public and forged references share the same opaque result.
     if (response === null) return buildMealBuddyCandidateProfileError("invalid_request");
-    return new Response(JSON.stringify(response), {
+    let result=response;
+    if(!knownLookupSource){
+      const current=await new ExecutorMealBuddyRelationshipRepository(transport).read(authentication.value.userId,candidateUserId);
+      if(!current.some(row=>['accepted','incoming_pending','outgoing_pending'].includes(row.relative_state)))return buildMealBuddyCandidateProfileError('invalid_request');
+      if(current[0]?.strangerPending)result={...response,profile:{...response.profile,displayName:current[0].counterpart.displayName,publicBio:null}};
+    }
+    return new Response(JSON.stringify(result), {
       status: 200,
       headers: { "content-type": "application/json" }
     });

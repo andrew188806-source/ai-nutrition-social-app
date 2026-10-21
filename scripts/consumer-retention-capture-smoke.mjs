@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   ROOT, MIGRATION, CAPTURE_SUCCESSOR, CAPTURE_SUCCESSOR_SHA256, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK,
-  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_FILES, ACQ_MIGRATION, SEAL_FILES, SEAL_MIGRATION, SOCIAL_FILES, SOCIAL_MIGRATIONS, BILLING_FILES, BILLING_MIGRATION, withSocialTail
+  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_FILES, ACQ_MIGRATION, SEAL_FILES, SEAL_MIGRATION, SOCIAL_FILES, SOCIAL_MIGRATIONS, BILLING_FILES, BILLING_MIGRATION, isAct2Migration, withAct2Tail, withSocialTail
 } from './consumer-retention-persistence-smoke.mjs';
 import { activateDisposableFixture } from './pc2-consumer-onboarding-fixtures.mjs';
 
@@ -788,7 +788,7 @@ export function inventoryProof() {
   const baselineFiles = git(['ls-tree', '--name-only', BASELINE_COMMIT, 'supabase/migrations/']).trim().split('\n').map(p => path.basename(p)).sort();
   const changed = baselineFiles.filter(n => sha(fs.readFileSync(path.join(dir, n))) !== sha(spawnBlob(`supabase/migrations/${n}`)));
   const newest = files.at(-1);
-  return { migrationCount: files.length, baselineCount: baselineFiles.length, last: newest, newPaths: files.filter(n => !baselineFiles.includes(n)), changedBaselineMigrations: changed, timestampLaterThanAll: files.filter(n => n !== CAPTURE_MIGRATION && n !== ENT0_MIGRATION && n !== DEMO_MIGRATION && n !== ACQ_MIGRATION && n !== SEAL_MIGRATION && !SOCIAL_MIGRATIONS.includes(n) && n !== BILLING_MIGRATION).every(n => n < CAPTURE_MIGRATION), captureSha256: sha(fs.readFileSync(path.join(dir, CAPTURE_MIGRATION))), pinnedByPersistenceSmoke: CAPTURE_SUCCESSOR_SHA256 };
+  return { migrationCount: files.length, baselineCount: baselineFiles.length, last: newest, newPaths: files.filter(n => !baselineFiles.includes(n)), changedBaselineMigrations: changed, timestampLaterThanAll: files.filter(n => n !== CAPTURE_MIGRATION && n !== ENT0_MIGRATION && n !== DEMO_MIGRATION && n !== ACQ_MIGRATION && n !== SEAL_MIGRATION && !SOCIAL_MIGRATIONS.includes(n) && n !== BILLING_MIGRATION && !isAct2Migration(n)).every(n => n < CAPTURE_MIGRATION), captureSha256: sha(fs.readFileSync(path.join(dir, CAPTURE_MIGRATION))), pinnedByPersistenceSmoke: CAPTURE_SUCCESSOR_SHA256 };
 }
 function spawnBlob(p) { const r = child.spawnSync('git', ['show', `${BASELINE_COMMIT}:${p}`], { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, maxBuffer: 64e6 }); if (r.status) throw Error('GIT_BLOB ' + p); return r.stdout; }
 Object.assign(GATES, {
@@ -801,7 +801,7 @@ Object.assign(GATES, {
     // then — only with the exact ENT-R record — the ENT-R migration (20261018010000).
     // With the exact social integration record (on top of the ENT-R record) the two social migrations (20261017042351, 20261017154025) sort between the ENT1-A migration and the ENT-R migration.
     const tail0 = seal ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION, SEAL_MIGRATION] : acq ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION] : demo ? [CAPTURE_MIGRATION, ENT0_MIGRATION, DEMO_MIGRATION] : ent0 ? [CAPTURE_MIGRATION, ENT0_MIGRATION] : [CAPTURE_MIGRATION];
-    const tail = [...withSocialTail(tail0, seal && frozen.recoverySuccessor.social === 'record'), ...(seal && frozen.recoverySuccessor.social === 'record' && frozen.recoverySuccessor.billing === 'record' ? [BILLING_MIGRATION] : [])]; // the ENT-F1 migration (20261021010000) sorts after the ENT-R migration, only with the exact ENT-F1 record
+    const tail = withAct2Tail([...withSocialTail(tail0, seal && frozen.recoverySuccessor.social === 'record'), ...(seal && frozen.recoverySuccessor.social === 'record' && frozen.recoverySuccessor.billing === 'record' ? [BILLING_MIGRATION] : [])]); // the ENT-F1 migration (20261021010000) sorts after the ENT-R migration, only with the exact ENT-F1 record
     return R(frozen.violations.length === 0 && frozen.trackedAtBaseline === 3345 && inv.migrationCount === 143 + tail.length && inv.baselineCount === 143 && inv.changedBaselineMigrations.length === 0 && same(inv.newPaths, tail) && inv.timestampLaterThanAll && inv.captureSha256 === CAPTURE_SUCCESSOR_SHA256, { frozen, inv, tail });
   }
 });

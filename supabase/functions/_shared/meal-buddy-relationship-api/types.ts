@@ -35,10 +35,12 @@ export type InternalMealBuddyRelationshipDatabaseRow = Readonly<{
 
 export type InternalMealBuddyRelationshipCounterpartRow = Readonly<{
   exposure_ordinal: number;
+  anonymous: boolean;
   display_name: string;
   mascot_avatar_key: string;
 }>;
 
 export type InternalMealBuddyRelationshipRow = InternalMealBuddyRelationshipDatabaseRow & Readonly<{
+  strangerPending: boolean;
   counterpart: MealBuddyRelationshipCounterpart;
 }>;

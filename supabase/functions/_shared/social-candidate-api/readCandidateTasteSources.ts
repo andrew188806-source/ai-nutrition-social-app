@@ -1,3 +1,4 @@
+import type {SocialRuntimeReadPort} from '../social-runtime-transport/readPort.ts';
 import {
   SOCIAL_CANDIDATE_API_COMBINED_FAVORITES_LIMIT,
   SOCIAL_CANDIDATE_API_MEAL_LIMIT,
@@ -6,8 +7,7 @@ import {
 } from "./policy.ts";
 import type { SocialCandidateTasteSources, SocialCandidateTasteSubject } from "./types.ts";
 import {
-  defineSocialRuntimeExecutorStatement,
-  type SocialRuntimeExecutorTransport
+  defineSocialRuntimeExecutorStatement
 } from "../social-runtime-transport/executorTransactionTransport.ts";
 import type { ServerPairAsOf } from "../social-pair/serverPairComparison.ts";
 
@@ -32,7 +32,7 @@ function parseSubject(value: unknown): SocialCandidateTasteSubject {
 
 // Mirrors the frozen SR-1D payload invariants: the returned candidate set must equal the authorized
 // set exactly, with no duplicate and no candidate without an actor.
-function parsePayload(value: unknown): SocialCandidateTasteSources {
+export function parsePayload(value: unknown): SocialCandidateTasteSources {
   if (!isRecord(value) || !Array.isArray(value.authorized_candidate_user_ids) || !Array.isArray(value.candidates)) {
     return socialCandidateApiContractViolation();
   }
@@ -84,7 +84,7 @@ export function buildSocialCandidateApiAsOf(requestInstant: Date): ServerPairAsO
 }
 
 export async function readSocialCandidateTasteSources(
-  transport: SocialRuntimeExecutorTransport,
+  transport: SocialRuntimeReadPort,
   actorUserId: string
 ): Promise<SocialCandidateTasteSources> {
   if (typeof actorUserId !== "string" || actorUserId.length === 0) {

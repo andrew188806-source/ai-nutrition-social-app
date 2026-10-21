@@ -1,4 +1,5 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+﻿import {StrangerExposureSection} from "../features/stranger-exposure/StrangerExposureSection";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
@@ -422,7 +423,9 @@ function MealBuddyHomeSession({ isCurrentSession }: { isCurrentSession: () => bo
       {isRealCandidateMode && (activeSection === "discover" || activeSection === "cards")
         ? <ConsumerLocationPermissionCard controller={location} /> : null}
 
-      {activeSection === "discover" || activeSection === "cards" ? (
+      {isRealCandidateMode && (activeSection === "discover" || activeSection === "cards") ? <StrangerExposureSection actorKey={consumerRuntime.state.actorKey} actorGeneration={consumerRuntime.state.actorGeneration} geoOrigin={mealBuddyGeoContext} onFriends={()=>{setActiveSection("friends");void realRelationships.retry();}} onRecommend={()=>router.push("/(tabs)")} /> : null}
+
+      {!isRealCandidateMode && (activeSection === "discover" || activeSection === "cards") ? (
         <DiscoverSection
           hideRecommendations={activeSection === "cards"}
           activeCards={activeCards}

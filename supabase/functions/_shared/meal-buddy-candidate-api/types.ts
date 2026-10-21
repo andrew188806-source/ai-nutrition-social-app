@@ -98,6 +98,4 @@ export type MealBuddyCandidateApiResponse = Readonly<{
 
 // The entitlement row source is read on the caller's user-scoped client, exactly as SR-2D does, so
 // the executor connection never widens into subscription state.
-export type MealBuddyCandidateEntitlementRowSource = Readonly<{
-  readEntitlementRow: (actorUserId: string) => Promise<unknown>;
-}>;
+export type MealBuddyCandidateEntitlementRowSource = import('../social-exposure/types.ts').SocialEntitlementRowSource;

@@ -9,12 +9,12 @@ import {
   projectPublicSocialProfiles,
   readExposedSocialProfileFacts
 } from "../social-profile/index.ts";
-import type { SocialRuntimeExecutorTransport } from "../social-runtime-transport/executorTransactionTransport.ts";
+import type { SocialRuntimeReadPort } from '../social-runtime-transport/readPort.ts';
 import type { SocialExposureResult } from "../social-exposure/types.ts";
 import type { MealBuddyCandidateProfileApiResponse } from "./types.ts";
 
 export type MealBuddyCandidateProfileComposition = Readonly<{
-  transport: SocialRuntimeExecutorTransport;
+  transport: SocialRuntimeReadPort;
   actorUserId: string;
   candidateUserId: string;
 }>;

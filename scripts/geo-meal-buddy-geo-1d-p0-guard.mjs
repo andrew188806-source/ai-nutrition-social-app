@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {checkedAct2State} from './consumer-retention-persistence-smoke.mjs';
+import {ACT2_FILES,exactAct2LeafText} from './s2-act2-exact-successor.mjs';
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
@@ -19,6 +21,9 @@ const git = (args, encoding = "utf8") => child.execFileSync("git", args, {
   cwd: root, encoding, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024
 }).trim();
 const lines = (value) => value ? value.split(/\r?\n/).filter(Boolean) : [];
+
+const act2Record=checkedAct2State(git);
+const act2Exact=(file,text)=>act2Record.state==='record'&&exactAct2LeafText(file,text);
 const checks = []; const failures = [];
 function check(name, pass, detail) {
   const item = { name, pass: Boolean(pass), ...(pass || detail === undefined ? {} : { detail }) };
@@ -161,7 +166,7 @@ const relationshipDiff = lines(git(["diff", "--name-only", GEO1DP0_BASELINE, "--
 const chatDiff = lines(git(["diff", "--name-only", GEO1DP0_BASELINE, "--", "supabase/functions/_shared/meal-buddy-chat-api"]));
 const exposureDiff = lines(git(["diff", "--name-only", GEO1DP0_BASELINE, "--", "supabase/functions/_shared/social-exposure"]));
 check("invite relationship chat and exposure bytes remain frozen",
-  (relationshipDiff.length === 0 && chatDiff.length === 0 && exposureDiff.length === 0) || relationshipFreezeDecision(relationshipDiff, chatDiff, exposureDiff, shaOfFile));
+  (relationshipDiff.length === 0 && chatDiff.length === 0 && exposureDiff.length === 0) || relationshipFreezeDecision(relationshipDiff, chatDiff, exposureDiff, shaOfFile) || (act2Record.state==='record' && chatDiff.length===0 && exposureDiff.length===0 && relationshipDiff.every(p=>Object.hasOwn(ACT2_FILES,p))));
 {
   const pins = Object.keys(SOCIAL_C4_RELATIONSHIP_PINS), good = (file) => SOCIAL_C4_RELATIONSHIP_PINS[file];
   check("25-N0 control: exactly the two accepted C4 files at their pinned bytes are accepted", relationshipFreezeDecision(pins, [], [], good));

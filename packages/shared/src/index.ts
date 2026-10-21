@@ -11,3 +11,5 @@ export * from "./mock/phase45Nutrition";
 export * from "./mock/adminGovernance";
 export * from "./mock/externalDiningFlywheel";
 export * as RestaurantPlatformMock from "./mock/restaurant-platform";
+
+export * from './domain/stranger-exposure';

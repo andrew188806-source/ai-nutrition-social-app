@@ -1,3 +1,4 @@
+import type {SocialRuntimeReadPort} from '../social-runtime-transport/readPort.ts';
 // GEO-1A repository — the single server-side path to the canonical Geo authority.
 //
 // Every method here delegates to `geo_internal`. There is no distance arithmetic in this file, no
@@ -8,8 +9,7 @@
 // This is the module a future AI recommendation consumer and a future Social proximity consumer both
 // import. Neither will carry its own formula.
 import {
-  defineSocialRuntimeExecutorStatement,
-  type SocialRuntimeExecutorTransport
+  defineSocialRuntimeExecutorStatement
 } from "../social-runtime-transport/executorTransactionTransport.ts";
 import type {
   GeoDistance,
@@ -43,7 +43,7 @@ export interface GeoRepository {
 }
 
 export class ExecutorGeoRepository implements GeoRepository {
-  constructor(private readonly transport: SocialRuntimeExecutorTransport) {}
+  constructor(private readonly transport: SocialRuntimeReadPort) {}
 
   async narrowBranchCandidates(query: GeoQuery): Promise<readonly GeoNarrowedCandidate[]> {
     return await this.transport.withTransaction(async (tx) => {
