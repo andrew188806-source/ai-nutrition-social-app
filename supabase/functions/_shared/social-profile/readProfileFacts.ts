@@ -1,11 +1,11 @@
-import type { SocialRuntimeExecutorTransport } from "../social-runtime-transport/executorTransactionTransport.ts";
 import {
   SOCIAL_PROFILE_MAXIMUM_CANDIDATES,
   socialProfileContractViolation
 } from "./policy.ts";
 import type { SocialProfileFactRow } from "./types.ts";
 import {
-  defineSocialRuntimeExecutorStatement
+  defineSocialRuntimeExecutorStatement,
+  type SocialRuntimeExecutorTransport
 } from "../social-runtime-transport/executorTransactionTransport.ts";
 import type { SocialExposureResult } from "../social-exposure/types.ts";
 

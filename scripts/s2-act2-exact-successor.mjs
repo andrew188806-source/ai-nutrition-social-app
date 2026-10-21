@@ -221,7 +221,7 @@ export const ACT2_FILES=Object.freeze({
   },
   "supabase/functions/_shared/social-profile/readProfileFacts.ts": {
     "mode": "100644",
-    "blob": "92906244f713a97a5842d759e3333848016803fd",
+    "blob": "47461da6cb3ab688c157be2331a692df23ac0d48",
     "base": "d2f79949cd93dd6e4e50a6b7a6a0cbc62d00ebe9",
     "baseMode": "100644"
   },
