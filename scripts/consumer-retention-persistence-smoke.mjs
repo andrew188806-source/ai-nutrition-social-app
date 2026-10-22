@@ -93,6 +93,35 @@ export const BILLING_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal
 export const BILLING_SOCIAL_OVERRIDES = Object.freeze({ 'scripts/social-friends-postgres.mjs': Object.freeze(['100644', 'e3338f449c8acdf011a1939fd93772181063d917']) });
 // <<END-BILLING-PINS>>
 export const BILLING_MIGRATION_SHA256 = '46157615eca4effea5cc86e698d0ea1dc15a898ca50efc03c7db7f74b55fe17f';
+// ENT-F2 (retention line, 2026-10-21; Owner authorization to construct a local inactive candidate, NOT an acceptance): the product-side billing transport and the three DEFAULT-DISABLED billing Edge entrypoints. NO migration, NO config.toml change,
+// NO grant. Recognized only together with the exact ENT-F1 record AND the exact S2-ACT2 record (everything they require), all-or-nothing, as the OUTERMOST one-way layer (see recoverySuccessorState at the end of this file). Binding is one-way: this file pins the exact
+// mode/blob of the sixteen paths below and of the two older validators ENT-F2 edits (the recovery guard, which also accepts the ENT-F2 paths, and the capture smoke, whose frozen proof exempts them); none of them records this file's hash, and the new
+// smoke/mutation scripts only import helpers from it (code import, no hash). The Doc 05 append is judged by its own checks. The ordered migration tail is unchanged (no migration is added).
+// <<EDGE-PINS>>
+export const EDGE_FILES = Object.freeze({
+  'supabase/functions/_shared/billing-transport/config.ts': Object.freeze(['100644', 'ed814f9bcd9ce6877f8d0f0f5b02c58157591a46']),
+  'supabase/functions/_shared/billing-transport/denoPostgresBillingTransport.ts': Object.freeze(['100644', 'dc9eca05fa1d709ea0f2f5e4ed6974973b697a5c']),
+  'supabase/functions/_shared/billing-transport/executor.ts': Object.freeze(['100644', 'dfef92a91d66b9fe7f56171149ea3a4a84f2232d']),
+  'supabase/functions/_shared/billing-transport/http.ts': Object.freeze(['100644', '2c234febf56b8ae9863e7a13c8f405d8e2f33dcd']),
+  'supabase/functions/_shared/billing-transport/sql.ts': Object.freeze(['100644', 'e023b3613211bb947442f0d2a3879058349d6047']),
+  'supabase/functions/billing-link/config.ts': Object.freeze(['100644', 'c7595782d43f390b0e075aa49e947654acf0619b']),
+  'supabase/functions/billing-link/handler.ts': Object.freeze(['100644', '78e96a93a94110022d5a978b1670fe3c059f9ef0']),
+  'supabase/functions/billing-link/index.ts': Object.freeze(['100644', 'b5a204e4b6a44711dbbb5a24b4ea126685ed16dc']),
+  'supabase/functions/billing-process/config.ts': Object.freeze(['100644', '944a5bcb8e17e1d2313e444d4761355c7b89513f']),
+  'supabase/functions/billing-process/handler.ts': Object.freeze(['100644', 'e8a68524be643de84c2fb4c5925712b219ea8c2b']),
+  'supabase/functions/billing-process/index.ts': Object.freeze(['100644', 'd6f313ff58bf6f2aab1990e7bfa661b5f1c4f541']),
+  'supabase/functions/billing-webhook/config.ts': Object.freeze(['100644', '0cecebb31c588f7c1e9c91dd277df8c580163c33']),
+  'supabase/functions/billing-webhook/handler.ts': Object.freeze(['100644', '578fbcd1394b8c24e85c1c665fc6f1c5f0524b9b']),
+  'supabase/functions/billing-webhook/index.ts': Object.freeze(['100644', 'aa24871bc6c3ae4590d5fcf7b089205df2b8e932']),
+  'scripts/consumer-retention-billing-edge-smoke.mjs': Object.freeze(['100644', '03dbd2694d45ab10c1b2c126bffceb9e2091ba77']),
+  'scripts/consumer-retention-billing-edge-mutations.mjs': Object.freeze(['100644', 'b364176c15ca0f629e728ea4b73b431e6eed1251'])
+});
+// The exact post-ENT-F2 bytes of the two older validators ENT-F2 edits. Only when both are exact (together with EDGE_FILES) are they projected back to the identities the S2-ACT2 record pins (ACT2_FILES) for the evaluation of the older chain.
+export const EDGE_PROJECTION = Object.freeze({
+  'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '1b64063f56706926e9de1e6ab63b1e1461e99f15']),
+  'scripts/consumer-retention-capture-smoke.mjs': Object.freeze(['100644', 'cf85ec178fbe3d93c543812f2f29a416df2801cc'])
+});
+// <<END-EDGE-PINS>>
 // Social C4 (F2/F3) INTEGRATION (integration line, 2026-10-19; authorization to integrate two locally accepted candidates, NOT an acceptance of the combination): social candidate 49002767411569dab350f8946632e40bf6b40720
 // (tree a684ff3366a79bee0fc87e1c96e26bbe2e1537aa, base ec534c3d) merged with ENT-R C3 cfdbfe4a (tree 8e627677). Two forward migrations sort between the ENT1-A and the ENT-R migration. Recognized only together with the exact ENT-R
 // record (and everything it requires), all-or-nothing. Binding is one-way: this file pins the exact mode/blob of the 24 paths below (the 22 social candidate paths plus the two social guards the integration edits: SR2I-A gates 43/62 and GEO-1D-P0 gate 25; the 23rd social candidate path, consumerRuntimeComposition.ts, is a recovery-inventory path and is pinned
@@ -797,6 +826,18 @@ export function billingFilesState(git){
   const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=BILLING_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
   return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':billing-mismatch')};
 }
+// All-or-nothing, byte-exact check of the ENT-F2 files (mode/blob in index and worktree). Returns {present,exact,violations}.
+export function edgeFilesState(git){
+  const paths=Object.keys(EDGE_FILES);
+  if(paths.length!==16||new Set(paths).size!==16||paths.some(p=>p.startsWith('supabase/migrations/')||p==='supabase/config.toml'))throw Error('EDGE_RECORD_SHAPE');
+  const index=new Map();for(const l of git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean)){const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+  const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p)));
+  if(present.length===0&&index.size===0)return {present:false,exact:true,violations:[]};
+  const hashed=present.length?git(['hash-object','--',...present]).trim().split('\n').filter(Boolean):[];
+  const worktree=new Map(present.map((p,i)=>[p,hashed[i]]));
+  const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=EDGE_FILES[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&worktree.get(p)===blob);});
+  return {present:true,exact:bad.length===0,violations:bad.map(p=>p+':edge-mismatch')};
+}
 function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=false,s2ff1=false,s2ff2=false,billing=false){
   const S=RECOVERY_SUCCESSOR,paths=S.entries.map(e=>e[1]);
   if(S.entries.length!==27||new Set(paths).size!==27)throw Error('RECOVERY_RECORD_SHAPE');
@@ -840,7 +881,7 @@ function recoverySuccessorStateCore(git,demo=false,acq=false,seal=false,social=f
 }
 export function frozen(rec){
   const git=args=>{const p=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(p.status)throw Error(`GIT_READ ${args} ${p.stderr}`);return p.stdout;};
-  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md',...Object.keys(ENT0_FILES),...Object.keys(ACQ_FILES),...Object.keys(SEAL_FILES),...Object.keys(SOCIAL_FILES),...Object.keys(BILLING_FILES)];
+  const candidate=['supabase/migrations/'+MIGRATION,'supabase/migrations/'+CAPTURE_SUCCESSOR,'scripts/consumer-retention-capture-smoke.mjs','scripts/consumer-retention-capture-mutations.mjs','scripts/consumer-retention-persistence-smoke.mjs','scripts/consumer-retention-persistence-mutations.mjs','docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md',...Object.keys(ENT0_FILES),...Object.keys(ACQ_FILES),...Object.keys(SEAL_FILES),...Object.keys(SOCIAL_FILES),...Object.keys(BILLING_FILES),...Object.keys(EDGE_FILES)];
   // The accepted R0-A tree remains the frozen reference even after the additive commit.
   const baseline='3b1957e8dc459db6fdaa06bec873c1acc632ae9a';const entries=git(['ls-tree','-r',baseline]).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,,blob]=m.split(' ');return {path:p,mode,blob};});
   const index=new Map(git(['ls-files','--stage']).trim().split('\n').map(l=>{const [m,p]=l.split('\t');const [mode,blob,stage]=m.split(' ');return [p,{mode,blob,stage}];}));
@@ -850,6 +891,8 @@ export function frozen(rec){
   if(successor.state==='ent0'&&successor.social==='record')for(const q of Object.keys(SOCIAL_FILES))exempt.add(q);
   // ENT-F1: only the exact record (on top of the S2-FF1/social/ENT-R/ENT1-A/ENT0/origin records) exempts its 14 paths.
   if(successor.state==='ent0'&&successor.social==='record'&&successor.billing==='record')for(const q of Object.keys(BILLING_FILES))exempt.add(q);
+  // ENT-F2: only the exact record (on top of the exact ENT-F1 record) exempts its 16 paths.
+  if(successor.state==='ent0'&&successor.social==='record'&&successor.billing==='record'&&successor.edge==='record')for(const q of Object.keys(EDGE_FILES))exempt.add(q);
   const violations=[...successor.violations];for(const e of entries){if(exempt.has(e.path))continue;const i=index.get(e.path);if(!i||i.mode!==e.mode||i.blob!==e.blob||i.stage!=='0')violations.push(e.path+':index');}
   const diff=git(['diff',baseline,'--name-only']);for(const p of diff.trim().split('\n').filter(Boolean))if(!candidate.includes(p)&&!exempt.has(p))violations.push(p+':tracked');
   const untracked=git(['ls-files','--others','--exclude-standard']).trim().split('\n').filter(Boolean);for(const p of untracked)if(!candidate.includes(p))violations.push(p+':untracked');
@@ -1169,7 +1212,7 @@ export async function runSmoke({bin,out,cli,evidence}){
 export const ACT2_MODULE_BLOB='b8a50a451657b466777bac6425fe196423c5019d';
 export const ACT2_MIGRATION_SHA256='de050926c783289647345fc1e28369f6c7a9d72e422acdd847bddcd02bea2bcf';
 const ACT2_MODULE_PATH='scripts/s2-act2-exact-successor.mjs';
-export function checkedAct2State(git){
+export function checkedAct2StateRaw(git){
  const staged=git(['ls-files','--stage','--',ACT2_MODULE_PATH]).trim();
  const wt=fs.existsSync(path.join(ROOT,ACT2_MODULE_PATH))?git(['hash-object','--',ACT2_MODULE_PATH]).trim():null;
  if(staged!=='100644 '+ACT2_MODULE_BLOB+' 0\t'+ACT2_MODULE_PATH||wt!==ACT2_MODULE_BLOB)return {state:'invalid',paths:[],violations:['act2:module-binding']};
@@ -1177,13 +1220,49 @@ export function checkedAct2State(git){
 }
 const act2RootGit=args=>{const r=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(r.status)throw Error('ACT2_GIT_READ');return r.stdout;};
 export function isAct2Migration(name){return name===ACT2_MIGRATION&&checkedAct2State(act2RootGit).state==='record';}
-export function recoverySuccessorState(git){
- const act2=checkedAct2State(git);
+function recoverySuccessorStateWithAct2(git){
+ const act2=checkedAct2StateRaw(git);
  if(act2.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:act2.violations};
  if(act2.state==='base')return recoverySuccessorStateBeforeACT2(git);
  const prior=recoverySuccessorStateBeforeACT2(act2PredecessorGit(git));
  if(!prior.exempt||prior.social!=='record')return {state:'invalid',exempt:false,paths:[],violations:['act2:requires-accepted-predecessor',...prior.violations]};
  return {...prior,act2:'record',paths:[...new Set([...prior.paths,...act2.paths,ACT2_MODULE_PATH])]};
+}
+
+// ENT-F2 one-way exact successor (OUTERMOST layer, on top of the exact S2-ACT2 record). This root pins the sixteen ENT-F2 leaves (EDGE_FILES) and the exact post-ENT-F2 bytes of the two older validators ENT-F2 edits (EDGE_PROJECTION).
+// Only when ALL of them are exact are those two validators projected back to the identities that the S2-ACT2 record pins (ACT2_FILES), and the complete older chain (S2-ACT2 -> ENT-F1 -> ... -> origin) is evaluated UNCHANGED on that projection.
+// Nothing records this file's hash, no older module records any ENT-F2 byte, and there is no wildcard: a partial or mismatching ENT-F2 state is 'invalid'.
+export function edgeProjectionState(git){
+ const paths=Object.keys(EDGE_PROJECTION);
+ if(paths.length!==2||paths.some(p=>!ACT2_FILES[p]))throw Error('EDGE_PROJECTION_SHAPE');
+ const rows=git(['ls-files','--stage','--',...paths]).trim().split('\n').filter(Boolean);
+ const index=new Map();for(const row of rows){const [m,p]=row.split('\t');const [mode,blob,stage]=m.split(' ');index.set(p,[...(index.get(p)??[]),{mode,blob,stage}]);}
+ const present=paths.filter(p=>fs.existsSync(path.join(ROOT,p))),hashes=present.length?git(['hash-object','--',...present]).trim().split('\n'):[];
+ const wt=new Map(present.map((p,i)=>[p,hashes[i]]));
+ const bad=paths.filter(p=>{const i=index.get(p),[mode,blob]=EDGE_PROJECTION[p];return !(i&&i.length===1&&i[0].stage==='0'&&i[0].mode===mode&&i[0].blob===blob&&wt.get(p)===blob);});
+ return {exact:bad.length===0,violations:bad.map(p=>p+':edge-projection-mismatch')};
+}
+export function edgePredecessorGit(git){return args=>{
+ const out=git(args);
+ if(args[0]==='ls-files'&&args.includes('--stage'))return out.split('\n').map(line=>{const at=line.indexOf('\t'),name=line.slice(at+1);return at<0||!EDGE_PROJECTION[name]?line:ACT2_FILES[name].mode+' '+ACT2_FILES[name].blob+' 0\t'+name;}).join('\n');
+ if(args[0]==='hash-object'&&args.includes('--')){const names=args.slice(args.indexOf('--')+1),lines=out.trim().split('\n');return names.map((name,i)=>EDGE_PROJECTION[name]?ACT2_FILES[name].blob:lines[i]).join('\n')+'\n';}
+ return out;
+};}
+// The S2-ACT2 state under the accepted successors: with the exact ENT-F2 record the two projected validators are read at the identities the S2-ACT2 record pins; otherwise exactly as before.
+export function checkedAct2State(git){
+ const ef=edgeFilesState(git);
+ if(ef.present&&ef.exact&&edgeProjectionState(git).exact)return checkedAct2StateRaw(edgePredecessorGit(git));
+ return checkedAct2StateRaw(git);
+}
+export function recoverySuccessorState(git){
+ const ef=edgeFilesState(git);
+ if(!ef.present)return {...recoverySuccessorStateWithAct2(git),edge:'base'};
+ if(!ef.exact)return {state:'invalid',exempt:false,paths:[],violations:ef.violations};
+ const pj=edgeProjectionState(git);
+ if(!pj.exact)return {state:'invalid',exempt:false,paths:[],violations:pj.violations};
+ const prior=recoverySuccessorStateWithAct2(edgePredecessorGit(git));
+ if(!prior.exempt||prior.act2!=='record'||prior.billing!=='record')return {state:'invalid',exempt:false,paths:[],violations:['edge:requires-accepted-act2-and-billing-predecessors',...(prior.violations??[])]};
+ return {...prior,edge:'record',paths:[...new Set([...prior.paths,...Object.keys(EDGE_FILES)])]};
 }
 
 export function withAct2Tail(tail){return isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;}

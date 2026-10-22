@@ -1514,3 +1514,49 @@ Owner 一次核定 G1～G4 後建立的垂直切片：signed 合成 delivery →
 ### 21.9 與 Social S2-ACT1 的整合（retention line，2026-10-21；作者整合自測，不是 acceptance）
 - 基準：main `014acf7b6f48eb018b1e603f793d1613df8fc832`（tree `44e93f2d…`，Social S2-ACT1 已本機落地且由 Owner 手動 push）。已接受的 ENT-F1 候選 `f27800a687b08b7feb3b241959d75a9be9965cd3`（tree `7ce53b68…`）與 ACT1 的共同祖先為 `cbadc92c`；整合為一個 `git merge --no-ff`，兩條歷史完整保留。
 - ACT1 只改 `apps/mobile/app/meal-buddies.tsx` 與 persistence smoke；ENT-F1 的 migration、11 個 billing TS 產品檔、billing smoke／mutations 與 ACT1 的 UI bytes 皆未改動。兩線只在 persistence smoke 相交：鏈為 `social → S2-FF1 → S2-FF2 → S2-ID1 → S2-ACT1 → ENT-F1`，ENT-F1 record 要求 S2-FF1、S2-FF2、S2-ID1、S2-ACT1 四者 record；social 檔案逐檔優先序為 `billing 覆寫 ‖ S2-ACT1 ‖ S2-ID1 ‖ S2-FF2 ‖ 社交基準`。沒有 blanket allowlist、沒有自我或循環 hash，Hosted binding 維持 UNVERIFIED。- 更正（§21.8 與先前報告的過時敘述）：Social S2-ID1 與 S2-ACT1 **均已由 Owner 手動 push**，§21.8「遠端 push 尚待 Owner」已過時（已提交的 §21.8 文字不改寫）。本候選的 Hosted binding 仍為 UNVERIFIED；不納入 S2-ACT2-PREP 或其他外線工作。
+
+## 22. ENT-F2：billing 進入點與產品端 SQL transport（預設停用；retention line，2026-10-21；**施工者自測與凍結，不是 acceptance**）
+
+Owner 於 2026-10-21 授權的本機 inactive 包（對應 ENT-F prep 計畫的 F-C，不選 ENT-W）。它補上 ENT-F1 之後兩個**尚未實作**（不是「尚未驗證」）的缺口：(G-1) `BillingTransport` 的真實 SQL 實作原本只存在於 billing smoke 內的測試端；(G-2) 沒有任何 Edge 進入點。**不改變 §1–§21 的任何契約**；沒有 migration、沒有 `supabase/config.toml` 變更、沒有新角色或 GRANT、沒有提供者、沒有 producer、沒有 namespace 設定、沒有 EXECUTE 授予；完成後仍然沒有任何事實被攝入。
+
+### 22.1 產品面（16 個路徑，ENT-F2 record）
+- `supabase/functions/_shared/billing-transport/{executor,sql,config,http,denoPostgresBillingTransport}.ts`：driver 埠（`BillingDriver`：BEGIN、callback、COMMIT 在同一連線；callback 失敗 ROLLBACK 並原樣丟出；COMMIT 階段的任何失敗丟 `BillingCommitPhaseError`）、五個 `retention_billing.*` 函式的 SQL 常數與參數對應、環境變數名稱與驗證、HTTP 小工具、Deno/Postgres.js 薄包裝。
+- `supabase/functions/billing-webhook/`、`billing-link/`、`billing-process/`（各 `config.ts`、`handler.ts`、`index.ts`）。
+- `scripts/consumer-retention-billing-edge-smoke.mjs`、`scripts/consumer-retention-billing-edge-mutations.mjs`。
+- successor 調整（不刪任何 assertion）：recovery guard（新增 ENT-F2 路徑集合與 all-or-nothing record）、persistence smoke（ENT-F2 record 層，要求 ENT-F1 record）、capture smoke 的 frozen proof（admit ENT-F2 的 16 個路徑）。ENT-F1 的 14 個受保護路徑、所有 migration、既有 16 個函式目錄、Mobile 與 shared 的 bytes 均未改。
+
+### 22.2 契約
+- **預設停用，且在動用任何資源之前拒絕**：每個進入點先載入設定；開關不是**恰好** `true`、或任何必要值缺失／不合法，一律 `503`，**在讀取 request body、呼叫 Auth／Verifier、建立資料庫連線之前**結束，日誌為零。沒有任何預設值（開關、namespace、payload 上限、purchase intent 有效期都沒有）。匯入 `index.ts` 不讀環境、不建立連線、不建立平台 client。
+- **安全性由 handler 本身成立**，不依賴 `verify_jwt` 的平台預設；`config.toml` 未改**不等於**已證明部署後入口不可到達（該預設未驗證）。
+- **webhook**：正式組合**沒有 adapter**（`adapter: null`，物件凍結），因此永遠回 `503` 且不讀 body；沒有任何環境開關、header 或程式路徑可在執行期選 Verifier。合成 Verifier 只存在於測試檔，只能由測試注入 `processBillingWebhookRequest`。原始 bytes 逐 byte 交給 Verifier；body 大小限制作用在**實際串流讀取**（沿 ENT-F1 `receiveDelivery`），Content-Length 只是提早拒絕。
+- **link**：只信平台 `auth.getUser()` 的 userId；任何 body 內容、owner header 都不被採用；body 另有 256 bytes 的實際讀取上限。**登入驗證不是外部付款 subject 的所有權證明**：本端點只建立伺服器發出、雜湊儲存的 purchase intent；提供者綁定機制（X5）未決，本包不發明。未套用 consumer eligibility（PC-2）閘：若需要是後續決定。
+- **process**：共享密鑰（`x-billing-process-secret`，常數時間比對，至少 32 字元），缺設定即 503。
+- **commit 確認遺失**：COMMIT 之後若沒有伺服器的確定答覆（連線中斷、重置、逾時），結果是 `BillingCommitOutcomeUnknownError`（`08006`、`commitOutcomeUnknown`、可重試），**不宣稱已 ROLLBACK 或零寫入，也絕不回成功 ack**；只有伺服器以非連線類 SQLSTATE 回覆 COMMIT 的錯誤才是確定中止並原樣丟出。對相同 delivery 重試由資料庫去重（`duplicate`）；process 對已提交的 item 重試只會找到它已結案（`next_candidate` 為空）。
+- **process 交易邊界**：一個 item 一個交易（沿 ENT-F1）。回應只計「已確認提交」的結果：`completed`（final outcome 數）、`committedOutcomes`（計數）、`failedTransactions`、`itemOutcomeUnknown`、`stoppedBecause` 與固定的 `note`；`status` 為 `ok`／`stopped`（blocked、busy／retry，HTTP 200）／`failed`／`unknown`（HTTP 503）。後續 item 失敗**不撤銷**前面已提交的 item，也不宣稱整批零副作用或整批成功；`blocked`、`quarantined`、`retry`、`mapping_pending` 沿用 ENT-F1 契約，不會被改寫成 `admitted`。回應與錯誤不含 id、payload、秘密。
+
+### 22.3 環境變數（只命名，不給值）
+`BILLING_INGEST_ENABLED`、`BILLING_NAMESPACE`、`BILLING_MAX_BODY_BYTES`、`BILLING_INGRESS_DB_URL`（webhook、link：只有 `ingest_delivery`／`create_link_intent` 的登入角色）、`BILLING_PRODUCER_DB_URL`（process：已登記的 ENT0 producer 登入角色，只有 `next_candidate`／`process_item`／`record_attempt`）、`BILLING_PROCESS_SECRET`、`BILLING_LINK_TTL_SECONDS`；平台提供 `SUPABASE_URL`、`SUPABASE_ANON_KEY`。**相對於授權指令的草案 `BILLING_DB_URL`，改為兩個 URL**：ENT-F1 的角色分離（ingress 與 producer 各自只有各自的函式）使單一角色違反最小權限。
+
+### 22.4 驗證邊界與未驗證
+- Node／PG 層：產品模組（含真實 `index.ts` 組合，Deno 與 npm 以 stub 注入）在 Node 內執行；SQL 層以**實際專用登入角色**對本機 disposable PostgreSQL 17.6 執行（`session_user` 即該角色，非 superuser）；故障以 TCP proxy 在協定訊息邊界精確注入（COMMIT 前、COMMIT 送出但未到達、COMMIT 已套用但回覆遺失）。fixture 角色只存在拋棄式資料庫。
+- **Deno 薄包裝未執行**（沒有 Deno runtime）：只做結構檢查，行為 UNVERIFIED。**平台**（`verify_jwt`、CORS、部署、Supavisor／pooler、TLS）未驗證。Hosted binding 維持 UNVERIFIED。
+- 不含：提供者、Verifier／Mapper 實作、對帳、coverage、registry／seal 啟用、ENT-W、ENT1-B、到期、purge。實際自測結果與未驗證清單在交付報告（repository 外）。
+
+### 22.5 首次獨立驗收後的修正（F2-E01；retention line，2026-10-22；作者修正自測，不是 acceptance）
+- **被拒絕的原因**：候選 `293f0958` 的 mutation 判定鏈（`exercise → gateRunner → detectedBy／ok`）把任何逸出 gate 的例外包成 `pass:false` 並計為 detector；連線中止（`Connection terminated`）、未預期崩潰（TypeError 型態）與 fresh setup 中止在已通過的未變控制之後都被計為偵測。其 F03 驗的是從 ENT-F1 匯入、F2 實際不使用的 helper。§22.4 與先前報告中「60／60 符合預先宣告」「F03 PASS」的結論因此**撤回**，改以本節為準（見交付的 ERRATA）。產品 bytes（14 個產品 TS）與 migration 未變。
+- **判定契約**（smoke 與 mutation 共用同一個 `judgeGate`）：`pass`；`explicit_fail`＝gate **回傳** `pass:false` 且帶它觀察到的值，或型別化的 `StageRefusal`（具名產品階段被資料庫以 SQLSTATE 拒絕，或送出的語句／參數向量與預期不同）；`crash`＝其他任何例外或畸形結果，**永不是 detector**（smoke 回報 BLOCKED，mutation 記為未偵測）；setup／連線／初始化失敗（含 `Connection terminated`、`terminating connection`）一律丟出 `SETUP_GATE`，整個 run BLOCKED。前一次未變控制的 PASS 不會把後續例外變成產品觀察。
+- **F03** 現在驅動 F2 實際使用的完整鏈：`judgeGate` 分類表，以及在子行程中對真實 `runMutations`（含 green mutant）與真實 `runSmoke` 注入 setup、crash、畸形結果、明示失敗與永遠通過的 gate（注入發生在未變控制通過之後），並含正常 PASS、明示 FAIL 的正向對照。
+- **Y07／Y08／Y36**：T01 對每個產品呼叫記錄「語句文字與參數向量」（driver 在送出前記錄）並與由觀察值獨立算出的預期向量比對，偵測依據是具名階段的參數差異與 SQLSTATE；L01 在後續案例執行前先以關閉／拒絕端點的 Auth 呼叫數與連線數失敗。新增 Y61–Y63（共 63 個 mutant）示範同一機制。
+
+### 22.6 第二輪定向複驗後的修正（F2-E01 仍未結案的變體；retention line，2026-10-22；作者修正自測，不是 acceptance）
+- **第二輪驗收發現**：§22.5 的判定鏈仍把 `DatabaseError`＋五字元 SQLSTATE 一律包成 `StageRefusal`，`judgeGate` 又先接受 `StageRefusal`，因此真實的 `pg_terminate_backend`（57P01）與 `statement_timeout`（57014），以及 typed 的 08006／53300／57P01／57014 與「SQL 送出前的連線故障」，在 SQL 與參數完全正確（`parameterDiffs=[]`）時仍取得 detector PASS。§22.5「判定鏈已修正」的結論對這個變體**撤回**。產品 bytes、migration 與 ENT-F1 不變。
+- **修正的判定順序**：先辨識原始故障的來源、型別與 SQLSTATE 類別（`classifyFault`／`classifyDbFacts`），再決定能否形成具體 `StageRefusal`。連線例外（08）、資源不足（53）、操作員介入含 administrator shutdown 與 query_canceled／各類逾時（57）、系統錯誤（58）、內部錯誤（XX）與任何 FATAL／PANIC 嚴重度，以及連線／逾時訊息與 Node socket 錯誤碼，一律是**測試環境故障 ⇒ SETUP（BLOCKED）**，無論有無具名階段、語句紀錄或參數差異。只有 0A／22／23／25／42／44／P0 類的資料庫拒絕、或 gate **明確宣告**為預期的 SQLSTATE（例如安排好的鎖競爭 55P03）才可能是產品層拒絕；未宣告的 40／55 及未分類碼是 crash（不計 detector）。
+- **成立條件**：`StageRefusal` 只在「有拒絕且確有已記錄送出的語句」或「有語句／參數差異」時成立；沒有送出語句卻有錯誤，不能以 statement-count 0 當 detector。`judgeGate` 不因型別信任 `StageRefusal`：它以同一套分類**重新驗證**其中的原始事實（code／severity／message／語句數／差異），被偽造或畸形的 `StageRefusal` 不計偵測。
+- **F03** 補測 typed `DatabaseError` 經 `stageCall → StageRefusal／SetupFault → judgeGate → runMutations／runSmoke` 的完整路徑，含：正確 SQL／參數下的 57P01、08006、53300、57014、57P03；送出前的連線故障；setup 加參數差異；FATAL＋未知碼；帶 SQLSTATE 外觀的普通 Error；真正拒絕（22023 有／無差異、42501、語句差異）；已宣告與未宣告的 55P03；40P01；偽造的 `StageRefusal`；以及 green mutant 與 smoke runner 的對應控制。另有 `T08` 以**真實伺服器**故障驗證同一條分類（`pg_terminate_backend`、`statement_timeout`、銷毀 socket、被拒的 TCP 連線、真實資料錯誤、真實鎖競爭）。
+- **未變**：Y07／Y08／Y36 的具體觀察、Y12／Y61–Y63 的語句與參數差異保護；`EPIPE`／`EBADF` 與 COMMIT 結果未知的限制（`commitFailureIsDefinite` 以五字元大寫碼判斷「確定中止」）仍如 ERRATA 揭露，**本輪不修改、不宣稱已解決**。
+
+### 22.7 與 S2-ACT2 main 的整合（integration line，2026-10-23；作者修正自測，不是 acceptance；不含落地）
+- **基準**：原庫 `main` ＝ `93bf0f416ef9b6cecc506c5336e9c18fadbb2bf1`（tree `03a5576155cbff2c8aae5ae54ab66b94b1f0a409`；ENT-F1 與 S2-ACT2 已本機落地，未 push）。ENT-F2 第二輪修正候選 `cf30e0e8…`（base `9841a175…`，不含 ACT2）以三方內容合併接入；ACT2 的產品、migration、`config.toml` 位元組一律保留，ENT-F2 不修改社交產品、權限或資料契約，也沒有自己的 migration（整合後共 152 個 migration）。
+- **實際交集**：檔案層只有 recovery guard、capture smoke、persistence smoke 三個檔案；另外 ENT-F2 的 F01 需要重新以 ACT2 main 為基準（`BASE_TREE`、`CONFIG_TOML_BLOB`、migration 數）。guard 與 capture smoke 以內容合併（ACT2 的 `act2Paths` 允許與 ENT-F2 的允許並存；匯入取聯集），persistence smoke 保留 ACT2 的全部內容。
+- **信任鏈（單向、最外層）**：S2-ACT2 的外層包裝原封不動（內部改名 `recoverySuccessorStateWithAct2`；`checkedAct2State` 改名 `checkedAct2StateRaw`）。ENT-F2 是**更外一層**：新的 `recoverySuccessorState` 要求 (1) 16 個 ENT-F2 檔位元組精確（`EDGE_FILES`，不含 migration 與 `config.toml`）、(2) ENT-F2 所編輯的兩個舊驗證器（recovery guard、capture smoke）位元組精確（`EDGE_PROJECTION`）。兩者皆成立時，才把這兩個驗證器**投影回 S2-ACT2 記錄所釘的身分**（`ACT2_FILES`），並以未改動的舊鏈（S2-ACT2 → ENT-F1 → … → origin）評估該投影；舊鏈必須是 `exempt`、`act2 ＝ record`、`billing ＝ record`，否則 `invalid`（`edge:requires-accepted-act2-and-billing-predecessors`）。`checkedAct2State` 對外改為「在已接受的後繼下」讀取，使 guard 與 migration tail 判定（`isAct2Migration`）維持運作。沒有萬用字元、沒有自我或循環 hash：persistence smoke 釘住 guard／capture smoke，而 guard／capture smoke 只 import persistence smoke，不記錄其 hash；ACT2 模組仍只釘葉子，不釘 persistence smoke 或任何 ENT-F2 位元組。
+- **保持不變的 ACT2 事實**：ACT2 既有的 14 項 v1 smoke 紅燈不被修掉、不被隱藏、不被改標 PASS，也不屬於本整合的責任範圍；B 比較以新 main 為 base 逐 gate 呈現。

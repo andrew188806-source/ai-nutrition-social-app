@@ -112,6 +112,26 @@ export const BILLING_PATHS = Object.freeze([
   "scripts/consumer-retention-billing-smoke.mjs",
   "scripts/consumer-retention-billing-mutations.mjs"
 ]);
+// ENT-F2 (retention line, 2026-10-21; Owner authorization to construct a local inactive candidate, NOT an acceptance): the product-side billing transport and the three DEFAULT-DISABLED billing Edge entrypoints add exactly these sixteen paths (the persistence/capture smokes, the Doc 05 append and this guard are
+// judged by their own records). No migration, no config.toml change, no grant. Bound here by PATH only and all-or-nothing, and only together with the complete ENT-F1 successor; the persistence smoke pins their bytes and nothing here records the persistence smoke's hash.
+export const EDGE_PATHS = Object.freeze([
+  "supabase/functions/_shared/billing-transport/config.ts",
+  "supabase/functions/_shared/billing-transport/denoPostgresBillingTransport.ts",
+  "supabase/functions/_shared/billing-transport/executor.ts",
+  "supabase/functions/_shared/billing-transport/http.ts",
+  "supabase/functions/_shared/billing-transport/sql.ts",
+  "supabase/functions/billing-link/config.ts",
+  "supabase/functions/billing-link/handler.ts",
+  "supabase/functions/billing-link/index.ts",
+  "supabase/functions/billing-process/config.ts",
+  "supabase/functions/billing-process/handler.ts",
+  "supabase/functions/billing-process/index.ts",
+  "supabase/functions/billing-webhook/config.ts",
+  "supabase/functions/billing-webhook/handler.ts",
+  "supabase/functions/billing-webhook/index.ts",
+  "scripts/consumer-retention-billing-edge-smoke.mjs",
+  "scripts/consumer-retention-billing-edge-mutations.mjs"
+]);
 // Social C4 (F2/F3) integration (integration line, 2026-10-19; integration of two locally accepted candidates, not an acceptance of the combination): exactly these 24 paths (the 22 social candidate paths and the two social guards the integration edits) on top of the recovery inventory and the ENT-R successor. The 23rd path the social candidate
 // modifies, the runtime composition, is already an INVENTORY path. Bound here by PATH only and all-or-nothing, and only together with the complete ENT-R, ENT1-A, ENT0 and origin successors; the persistence smoke pins their bytes and nothing here records a validator hash.
 export const SOCIAL_PATHS = Object.freeze([
@@ -218,8 +238,10 @@ const s2ff2Active = changed.some((p) => S2FF2_PATHS.includes(p) && !SOCIAL_PATHS
 const s2ff1Changed = changed.filter((p) => S2FF1_PATHS.includes(p));
 const billingChanged = changed.filter((p) => BILLING_PATHS.includes(p));
 const billingActive = billingChanged.length > 0;
+const edgeChanged = changed.filter((p) => EDGE_PATHS.includes(p));
+const edgeActive = edgeChanged.length > 0;
 const demoExact = demoChanged.length === 0 || (demoChanged.length === DEMO_PATHS.length && DEMO_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && ENT0_PATHS.every((p) => changed.includes(p)) && pc2Changed.length === PC2_PATHS.length);
-const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p) && !S2FF1_PATHS.includes(p) && !S2FF2_PATHS.includes(p) && !BILLING_PATHS.includes(p) && !(act2Paths.includes(p) && !INVENTORY.includes(p)));
+const recoveryChanged = changed.filter((p) => !VALIDATION_SUCCESSOR.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p) && !S2FF1_PATHS.includes(p) && !S2FF2_PATHS.includes(p) && !BILLING_PATHS.includes(p) && !EDGE_PATHS.includes(p) && !(act2Paths.includes(p) && !INVENTORY.includes(p)));
 const validationSuccessorExact = validationSuccessor.length === 0 || (validationSuccessor.length === VALIDATION_SUCCESSOR.length && validationSuccessor.every((p) => fs.existsSync(path.join(ROOT, p))));
 record("candidate inventory is exact (27 distinct recovery paths: 21 modified + 6 added, plus either none or exactly both authorized retention validators; the approved hook path is deliberately NOT modified — it is byte-pinned by frozen guards)", JSON.stringify(recoveryChanged) === JSON.stringify([...INVENTORY].sort()) && validationSuccessorExact, { extra: recoveryChanged.filter((p) => !INVENTORY.includes(p)), missing: INVENTORY.filter((p) => !recoveryChanged.includes(p)), validationSuccessor });
 const ent0Migration = ENT0_PATHS[0];
@@ -231,7 +253,9 @@ const forwardMigrations = [...(ent0Active ? [ent0Migration] : []), ...(demoActiv
 const socialServerPaths = socialActive ? SOCIAL_PATHS.filter((p) => p.startsWith("supabase/") && !SOCIAL_MIGRATION_PATHS.includes(p)) : [];
 // ENT-F1 also adds pure/DI TypeScript libraries under supabase/functions/_shared (no function entrypoint, no config.toml change): exactly its recorded paths and only together with the exact ENT-F1 record.
 const billingServerPaths = billingActive ? BILLING_PATHS.filter((p) => p.startsWith("supabase/") && !p.startsWith("supabase/migrations/")) : [];
-const permittedServer = [...new Set([...forwardMigrations,...socialServerPaths,...billingServerPaths,...act2Paths.filter(p=>p.startsWith('supabase/'))])].sort();
+// ENT-F2 adds server TypeScript under supabase/functions only (three entrypoint directories and one shared module): exactly its recorded paths, only together with the exact ENT-F2 record, never a migration or config.toml.
+const edgeServerPaths = edgeActive ? EDGE_PATHS.filter((p) => p.startsWith("supabase/functions/")) : [];
+const permittedServer = [...new Set([...forwardMigrations,...socialServerPaths,...billingServerPaths,...edgeServerPaths,...act2Paths.filter(p=>p.startsWith('supabase/'))])].sort();
 const notForward = (p) => p && !permittedServer.includes(p);
 record("server paths: 0 (supabase/** byte-identical, modes unchanged; the only permitted exceptions are the single R0-B-ENT0 forward migration and, only with the exact origin successor, the single demo forward migration)", JSON.stringify(supabaseChanged) === JSON.stringify(permittedServer) && git(["diff", "--name-only", BASELINE, "--", "supabase"]).stdout.split("\n").filter(notForward).length === 0 && git(["diff", BASELINE, "--summary", "--", "supabase"]).stdout.split("\n").filter((l) => l.trim() && !permittedServer.some((m) => l.includes(m))).length === 0, supabaseChanged);
 const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));
@@ -243,6 +267,7 @@ record("Social C4 integration successor is all-or-nothing (the 24 social/integra
 record("S2-FF1 successor is all-or-nothing (one Inbox path, only with the complete social/ENT chain; exact bytes pinned one-way by persistence)", s2ff1Changed.length === 0 || (s2ff1Changed.length === S2FF1_PATHS.length && S2FF1_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && socialChanged.length === SOCIAL_PATHS.length && sealChanged.length === SEAL_PATHS.length && acqChanged.length === ACQ_PATHS.length && ent0Changed.length === ENT0_PATHS.length && demoExact && pc2Exact), { s2ff1Changed });
 record("S2-FF2 successor is all-or-nothing (three fixed flow paths; requires S2-FF1 and the complete social/ENT chain; bytes pinned by persistence)", !s2ff2Active || (S2FF2_PATHS.every((p) => changed.includes(p) && fs.existsSync(path.join(ROOT,p))) && s2ff1Changed.length === S2FF1_PATHS.length && socialChanged.length === SOCIAL_PATHS.length && sealChanged.length === SEAL_PATHS.length && acqChanged.length === ACQ_PATHS.length && ent0Changed.length === ENT0_PATHS.length && demoExact && pc2Exact), { s2ff2Active });
 record("ENT-F1 successor is all-or-nothing (the fourteen ENT-F1 paths are all present, or none is; only together with the complete S2-FF1, S2-FF2, social, ENT-R, ENT1-A, ENT0 and origin successors; none of them is an inventory, ENT0, ENT1-A, ENT-R, social, S2-FF1, PC-2 or origin path)", billingChanged.length === 0 || (billingChanged.length === BILLING_PATHS.length && BILLING_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && s2ff1Changed.length === S2FF1_PATHS.length && S2FF2_PATHS.every((p) => changed.includes(p)) && socialChanged.length === SOCIAL_PATHS.length && sealChanged.length === SEAL_PATHS.length && acqChanged.length === ACQ_PATHS.length && ent0Changed.length === ENT0_PATHS.length && demoExact && pc2Exact && BILLING_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p) && !S2FF1_PATHS.includes(p) && !S2FF2_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p))), { billingChanged });
+record("ENT-F2 successor is all-or-nothing (the sixteen ENT-F2 paths are all present, or none is; only together with the complete ENT-F1, S2-FF1, S2-FF2, social, ENT-R, ENT1-A, ENT0 and origin successors; no migration of its own; config.toml keeps the bytes of the social record, pinned by the persistence smoke; none of them is an inventory, ENT0, ENT1-A, ENT-R, social, S2-FF1, S2-FF2, ENT-F1, PC-2 or origin path)", edgeChanged.length === 0 || (edgeChanged.length === EDGE_PATHS.length && EDGE_PATHS.every((p) => fs.existsSync(path.join(ROOT, p))) && billingChanged.length === BILLING_PATHS.length && s2ff1Changed.length === S2FF1_PATHS.length && S2FF2_PATHS.every((p) => changed.includes(p)) && socialChanged.length === SOCIAL_PATHS.length && sealChanged.length === SEAL_PATHS.length && acqChanged.length === ACQ_PATHS.length && ent0Changed.length === ENT0_PATHS.length && demoExact && pc2Exact && !edgeChanged.some((p) => p.startsWith("supabase/migrations/")) && EDGE_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !ACQ_PATHS.includes(p) && !SEAL_PATHS.includes(p) && !SOCIAL_PATHS.includes(p) && !S2FF1_PATHS.includes(p) && !S2FF2_PATHS.includes(p) && !BILLING_PATHS.includes(p) && !PC2_PATHS.includes(p) && !DEMO_PATHS.includes(p))), { edgeChanged });
 record("PC-2 consent-document successor is all-or-nothing (the ten recorded paths are all present, or none of the ten is; no recovery path is touched by it)", pc2Exact && pc2Changed.every((p) => !INVENTORY.includes(p)), pc2Changed);
 record("origin successor is all-or-nothing (the sixteen recorded new paths are all present, or none is; only together with the ENT0 and PC-2 successors; none of the sixteen is an inventory, ENT0 or PC-2 path)", demoExact && DEMO_PATHS.every((p) => !INVENTORY.includes(p) && !ENT0_PATHS.includes(p) && !PC2_PATHS.includes(p)), demoChanged);
 record("dependencies and lockfiles unchanged", git(["diff", "--quiet", BASELINE, "--", "package.json", "package-lock.json", "apps/mobile/package.json"]).status === 0);

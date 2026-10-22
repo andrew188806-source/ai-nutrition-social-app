@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import {
   ROOT, MIGRATION, CAPTURE_SUCCESSOR, CAPTURE_SUCCESSOR_SHA256, recorder, cluster, baseline, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK,
-  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_FILES, ACQ_MIGRATION, SEAL_FILES, SEAL_MIGRATION, SOCIAL_FILES, SOCIAL_MIGRATIONS, BILLING_FILES, BILLING_MIGRATION, isAct2Migration, withAct2Tail, withSocialTail
+  recoverySuccessorState, ENT0_FILES, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_FILES, ACQ_MIGRATION, SEAL_FILES, SEAL_MIGRATION, SOCIAL_FILES, SOCIAL_MIGRATIONS, BILLING_FILES, BILLING_MIGRATION, EDGE_FILES, isAct2Migration, withAct2Tail, withSocialTail
 } from './consumer-retention-persistence-smoke.mjs';
 import { activateDisposableFixture } from './pc2-consumer-onboarding-fixtures.mjs';
 
@@ -769,6 +769,9 @@ export function frozenProof() {
   // R0-B-ENT-F1: its 14 paths are admitted ONLY in the exact ENT-F1 record (all-or-nothing, on top of the S2-FF1/social/ENT-R/ENT1-A/ENT0/origin records; byte-pinned by the persistence smoke).
   const billingPaths = successor.state === 'ent0' && successor.acq === 'record' && successor.seal === 'record' && successor.social === 'record' && successor.billing === 'record' ? Object.keys(BILLING_FILES) : [];
   for (const p of billingPaths) exempt.add(p);
+  // ENT-F2: its 16 paths are admitted ONLY in the exact ENT-F2 record (all-or-nothing, on top of the exact ENT-F1 record; byte-pinned by the persistence smoke). It adds no migration.
+  const edgePaths = billingPaths.length && successor.edge === 'record' ? Object.keys(EDGE_FILES) : [];
+  for (const p of edgePaths) exempt.add(p);
   const violations = [...successor.violations];
   for (const e of entries) {
     if (ALLOWED_PATHS.includes(e.path) || exempt.has(e.path)) continue;
@@ -776,11 +779,11 @@ export function frozenProof() {
     if (!i || i.mode !== e.mode || i.blob !== e.blob || i.stage !== '0') violations.push(e.path + ':index');
   }
   for (const p of git(['diff', BASELINE_COMMIT, '--name-only']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':tracked');
-  for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !ent0Paths.includes(p) && !acqPaths.includes(p) && !sealPaths.includes(p) && !socialPaths.includes(p) && !billingPaths.includes(p)) violations.push(p + ':untracked');
+  for (const p of git(['ls-files', '--others', '--exclude-standard']).trim().split('\n').filter(Boolean)) if (!ALLOWED_PATHS.includes(p) && !ent0Paths.includes(p) && !acqPaths.includes(p) && !sealPaths.includes(p) && !socialPaths.includes(p) && !billingPaths.includes(p) && !edgePaths.includes(p)) violations.push(p + ':untracked');
   const added = [...index.keys()].filter(p => !entries.some(e => e.path === p));
   for (const p of added) if (!ALLOWED_PATHS.includes(p) && !exempt.has(p)) violations.push(p + ':added');
   const wt = ALLOWED_PATHS.filter(p => fs.existsSync(path.join(ROOT, p)));
-  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, demo: successor.demo ?? null, acq: successor.acq ?? null, seal: successor.seal ?? null, social: successor.social ?? null, billing: successor.billing ?? null, violations: successor.violations } };
+  return { baseline: BASELINE_COMMIT, trackedAtBaseline: entries.length, added: added.filter(p => ALLOWED_PATHS.includes(p)), violations, allowed: ALLOWED_PATHS, present: wt, recoverySuccessor: { state: successor.state, demo: successor.demo ?? null, acq: successor.acq ?? null, seal: successor.seal ?? null, social: successor.social ?? null, billing: successor.billing ?? null, act2: successor.act2 ?? null, edge: successor.edge ?? null, violations: successor.violations } };
 }
 export function inventoryProof() {
   const dir = path.join(ROOT, 'supabase/migrations');
