@@ -5,7 +5,14 @@ import {ProfilePhotoService} from '../_shared/profile-photo/service.ts';
 import {parsePhotoRequest} from '../../../packages/shared/src/domain/profile-photo.ts';
 import {loadConfig,type PhotoConfig} from './config.ts';
 // Identity-only boundary: remove remains available when normal core reads/writes are forbidden.
-export async function verifyOwner(request:Request,config:PhotoConfig):Promise<string|null>{const authorization=request.headers.get('Authorization');if(!authorization)return null;const client=createClient(config.supabaseUrl,config.supabaseAnonKey,{global:{headers:{Authorization:authorization}},auth:{persistSession:false,autoRefreshToken:false}});const {data,error}=await client.auth.getUser();if(error){if([400,401,403].includes(Number(error.status)))return null;throw Error('identity_service_unavailable');}return data.user?.id??null;}
+export async function verifyOwner(request:Request,config:PhotoConfig):Promise<string|null>{
+ const authorization=request.headers.get('Authorization');if(!authorization)return null;
+ const responses=new Set<Response>();
+ const trackedFetch:typeof fetch=async(input,init)=>{const response=await fetch(input,init);responses.add(response);return response;};
+ const client=createClient(config.supabaseUrl,config.supabaseAnonKey,{global:{headers:{Authorization:authorization},fetch:trackedFetch},auth:{persistSession:false,autoRefreshToken:false}});
+ try{const {data,error}=await client.auth.getUser();if(error){if([400,401,403].includes(Number(error.status)))return null;throw Error('identity_service_unavailable');}return data.user?.id??null;}
+ finally{for(const response of responses){if(!response.bodyUsed)try{await response.body?.cancel();}catch{/* Only this verifier's request responses; keep the original failure. */}}responses.clear();}
+}
 export type PhotoDependencies={loadConfig:()=>PhotoConfig|null;verifyOwner:typeof verifyOwner;createTransport:()=>SocialRuntimeExecutorTransport};
 const defaults:PhotoDependencies={loadConfig,verifyOwner,createTransport:createDenoSocialRuntimeExecutorTransport};
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','cache-control':'no-store','pragma':'no-cache'}});
