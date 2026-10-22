@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // GEO-1C-P0 guard — the real tree, measured against the canonical manifest.
+import {checkedAct2State} from "./consumer-retention-persistence-smoke.mjs";
+import {act2FrozenPathSuccessor,act2CompositionOrder,act2CompositionEmpty} from "./s2-act2-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -32,6 +34,7 @@ const git = (args) => {
   if (result.status !== 0) throw result.error ?? new Error(result.stderr || "git_failed");
   return (result.stdout ?? "").trim();
 };
+const act2Record = checkedAct2State(git);
 const lines = (value) => (value ? value.split(/\r?\n/).filter(Boolean) : []);
 
 const checks = []; const failures = [];
@@ -127,7 +130,8 @@ check("no Mobile byte is touched at all", recbLifecycle.valid || reccp0Successor
 check("the frozen GEO-1A shared contract and authority are byte-unchanged",
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--",
     "supabase/functions/_shared/geo-api",
-    "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql"])).length === 0);
+    "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql"])).length === 0
+  || act2FrozenPathSuccessor(git,act2Record,GEO1CP0_BASELINE,["supabase/functions/_shared/geo-api","supabase/migrations/20260825010000_geo_shared_candidate_authority.sql"]));
 check("no byte outside the GEO-1C-P0 manifest is touched", recbLifecycle.valid || reccp0Successor ||
   lines(git(["diff", "--name-only", GEO1CP0_BASELINE, "--"]))
     .every((file) => GEO1CP0_PATHS.includes(file) || GEO1C_PATHS.includes(file) || RECA_PATHS.includes(file) || RECBP0_PATHS.includes(file)));

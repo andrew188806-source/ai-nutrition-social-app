@@ -23,6 +23,7 @@ const relationship = load(path.join(root, "supabase/functions/_shared/meal-buddy
 const serviceModule = load(path.join(root, "supabase/functions/_shared/meal-buddy-relationship-api/service.ts"));
 const requestModule = load(path.join(root, "supabase/functions/_shared/meal-buddy-relationship-api/request.ts"));
 
+const { sealCodeSearchCandidateRef } = load(path.join(root, "supabase/functions/_shared/code-search-candidate-ref.ts"));
 const checks = []; const failures = [];
 function check(name, condition) { checks.push(name); console.log(`${condition ? "PASS" : "FAIL"} ${name}`); if (!condition) failures.push(name); }
 async function rejects(operation) { try { await operation(); return false; } catch { return true; } }
@@ -63,6 +64,12 @@ class LocalRepository {
     }
     return [this.row(record, actor)];
   }
+  // A legacy ambiguous ref is replay-only, matching the canonical SQL authority.
+  async legacyReplay(actor, target) {
+    const rows = await this.read(actor, target);
+    if (rows.length !== 1) throw new Error("stranger_exposure_context_required");
+    return rows;
+  }
   async read(actor, target) {
     if (!this.eligible(actor, target)) return [];
     const record = this.pairs.get(this.pair(actor, target));
@@ -96,7 +103,8 @@ class LocalRepository {
 }
 const repository = new LocalRepository();
 const service = new serviceModule.MealBuddyRelationshipService(repository, candidateCipher, relationshipCipher);
-const candidateRef = async (actor, target) => candidateCipher.seal(actor, target, now);
+// Existing ordinary friend-invitation scenarios use the real server code-search provenance.
+const candidateRef = async (actor, target) => sealCodeSearchCandidateRef(candidateCipher, actor, target, now);
 
 const sendAB = await service.execute(ids.A, { operation: "send", candidateRef: await candidateRef(ids.A, ids.B) }, now);
 check("01 valid A to B creates one outgoing pending invite", sendAB.relationships.length === 1 && sendAB.relationships[0].state === "outgoing_pending");
@@ -157,6 +165,16 @@ check("32 send request contract is exact", validSend.ok);
 check("33 arbitrary target UUID is not expressible", !(await requestModule.parseMealBuddyRelationshipRequest(new Request("https://local.invalid", { method: "POST", body: JSON.stringify({ operation: "send", candidateRef: await candidateRef(ids.A, ids.B), targetUserId: ids.B }) }))).ok);
 check("34 list request accepts no target or graph scope", (await requestModule.parseMealBuddyRelationshipRequest(new Request("https://local.invalid", { method: "POST", body: JSON.stringify({ operation: "list" }) }))).ok);
 check("35 query/header authority inputs are rejected", requestModule.carriesMealBuddyRelationshipAuthorityInput(new Request("https://local.invalid?target=x")) && requestModule.carriesMealBuddyRelationshipAuthorityInput(new Request("https://local.invalid", { headers: { "x-target-user-id": ids.B } })));
+
+
+// Separate old ambiguous-ref cases: rejection must leave the model entirely unchanged.
+const oldRef = (actor, target) => candidateCipher.seal(actor, target, now);
+const beforeOld = JSON.stringify([...repository.pairs]);
+check("36 old ordinary ref cannot create a new relationship", await rejects(async () => service.execute(ids.A, { operation: "send", candidateRef: await oldRef(ids.A, ids.C) }, now)) && JSON.stringify([...repository.pairs]) === beforeOld);
+check("37 old ordinary ref replays an accepted pair without writing", (await service.execute(ids.A, { operation: "send", candidateRef: await oldRef(ids.A, ids.B) }, now)).relationships[0].state === "accepted" && JSON.stringify([...repository.pairs]) === beforeOld);
+check("38 old ordinary ref replays a pending pair without writing", (await service.execute(ids.E, { operation: "send", candidateRef: await oldRef(ids.E, ids.F) }, now)).relationships[0].state === "outgoing_pending" && JSON.stringify([...repository.pairs]) === beforeOld);
+check("39 old ordinary ref cannot revive a declined invite", await rejects(async () => service.execute(ids.C, { operation: "send", candidateRef: await oldRef(ids.C, ids.D) }, now)) && JSON.stringify([...repository.pairs]) === beforeOld);
+check("40 old ordinary replay remains behind current block authority", await (async () => { repository.blocks.add(ids.A + "|" + ids.B); const denied = await rejects(async () => service.execute(ids.A, { operation: "send", candidateRef: await oldRef(ids.A, ids.B) }, now)); repository.blocks.clear(); return denied && JSON.stringify([...repository.pairs]) === beforeOld; })());
 
 console.log(JSON.stringify({ suite: "meal-buddy-relationship-sr2i-a-smoke", total: checks.length, passed: checks.length - failures.length, failed: failures.length, failures, networkUsed: false, databaseUsed: false, credentialsUsed: false, repositoryBytesModified: false }, null, 2));
 if (failures.length) process.exitCode = 1;

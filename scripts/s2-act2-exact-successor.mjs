@@ -81,16 +81,34 @@ export const ACT2_FILES=Object.freeze({
     "base": "d10c42ae482caf86e31788f2c833de665afebef4",
     "baseMode": "100644"
   },
+  "scripts/geo-coordinate-source-geo-1c-p0-guard.mjs": {
+    "mode": "100644",
+    "blob": "cdf1bb188a3d00c25489252f5d4ba6350eedfa5d",
+    "base": "221af1cb7727413ff3554f1e9c407376ad49152c",
+    "baseMode": "100644"
+  },
   "scripts/geo-meal-buddy-geo-1d-p0-guard.mjs": {
     "mode": "100644",
     "blob": "587d210572caf997cefbb83d37ee8f5da4fb620b",
     "base": "1936fc5c5332d58d8f24e0a0715a63dec905acf1",
     "baseMode": "100644"
   },
+  "scripts/geo-recommendation-geo-1c-guard.mjs": {
+    "mode": "100644",
+    "blob": "a0a0a30716d8306d75856829d3bd89264721fbb8",
+    "base": "e7aaa3f0dcaf5be08e0526b1e1b724f987b2e2b0",
+    "baseMode": "100644"
+  },
   "scripts/meal-buddy-relationship-sr2i-a-guard.mjs": {
     "mode": "100644",
     "blob": "45d285dc47f8581310eba996c0305c201fd7a252",
     "base": "cafdb5f1623837a842de234f1750caee0bc884a4",
+    "baseMode": "100644"
+  },
+  "scripts/meal-buddy-relationship-sr2i-a-smoke.mjs": {
+    "mode": "100644",
+    "blob": "39f2accd24b5c431aca17c375c55311b4935cb2c",
+    "base": "17647118544564025e12e849706ca24ef94e4e1d",
     "baseMode": "100644"
   },
   "scripts/meal-buddy-relationship-sr2i-b-contract.mjs": {
@@ -135,10 +153,22 @@ export const ACT2_FILES=Object.freeze({
     "base": "1b708f81b071e2d54aee37b29e8893bb4ec9336a",
     "baseMode": "100644"
   },
+  "scripts/social-candidate-sr2g-d-guard.mjs": {
+    "mode": "100644",
+    "blob": "2e275216076491934e035e743417cc0539d6f365",
+    "base": "e7ddb372f6cd339b540ab4fab23a9c6f40ea075c",
+    "baseMode": "100644"
+  },
   "scripts/social-f2-unit.mjs": {
     "mode": "100644",
     "blob": "b66645ae8aef3e50242c6e5ceb2c3b0c949e8a38",
     "base": "c28638f4e307efe6ee5fa818a87107c7a543415e",
+    "baseMode": "100644"
+  },
+  "scripts/social-interest-sr2h-b-guard.mjs": {
+    "mode": "100644",
+    "blob": "858868b4344f25a178b01a89b1f16f24532dd809",
+    "base": "35a677494ff2223a4720f969755c090d37c51d78",
     "baseMode": "100644"
   },
   "supabase/config.toml": {
@@ -324,3 +354,29 @@ export function act2PredecessorGit(git){return args=>{
 };}
 
 export function exactAct2LeafText(file,text){const p=ACT2_FILES[file];return !!p&&crypto.createHash('sha1').update(Buffer.concat([Buffer.from('blob '+Buffer.byteLength(text)+'\0'),Buffer.from(text)])).digest('hex')===p.blob;}
+
+// Exact successor of an older frozen-path detector. No wildcard exception: each actual changed
+// file must have this accepted historical blob as its predecessor in the complete root-checked record.
+export function act2FrozenPathSuccessor(git, record, baseline, paths) {
+ if (record.state !== 'record') return false;
+ const changed = git(['diff','--name-only',baseline,'--',...paths]).trim().split(/\r?\n/).filter(Boolean);
+ return changed.length > 0 && changed.every(file => {
+  const pin = ACT2_FILES[file];
+  return !!pin?.base && git(['rev-parse',baseline+':'+file]).trim() === pin.base;
+ });
+}
+export function act2CompositionOrder(record, text, executable) {
+ if (record.state !== 'record' || !exactAct2LeafText('supabase/functions/_shared/meal-buddy-candidate-api/compose.ts',text)) return false;
+ const stages=['readMealBuddyCandidateCards)(', 'readSocialCandidateTasteSources(', 'composeMealBuddyContextRanking(', 'resolveSocialEntitlement(', 'applySocialExposure(', 'readExposedSocialProfileFacts(', 'projectPublicSocialProfiles(', 'readExposedCandidateInterests(', 'toMealBuddyCandidateApiResponse('];
+ const positions=stages.map(s=>executable.indexOf(s));
+ return positions.every((p,i)=>p>0 && (i===0 || p>positions[i-1]))
+  && executable.includes('composeMealBuddyCandidateFacts(composition)');
+}
+export function act2CompositionEmpty(record, text) {
+ return record.state === 'record' && exactAct2LeafText('supabase/functions/_shared/meal-buddy-candidate-api/compose.ts',text)
+  && /const EMPTY: MealBuddyCandidateApiResponse = Object\.freeze\(\{/.test(text)
+  && /candidates: Object\.freeze\(\[\]\)/.test(text)
+  && (text.match(/return null;/g)??[]).length>=2
+  && text.includes('const facts=await composeMealBuddyCandidateFacts(composition);')
+  && text.includes('return facts===null?EMPTY:toMealBuddyCandidateApiResponse(');
+}

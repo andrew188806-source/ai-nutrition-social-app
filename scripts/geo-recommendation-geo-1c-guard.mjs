@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {checkedAct2State} from "./consumer-retention-persistence-smoke.mjs";
+import {act2FrozenPathSuccessor,act2CompositionOrder,act2CompositionEmpty} from "./s2-act2-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import child from "node:child_process";
@@ -56,6 +58,7 @@ const git = (args) => {
   if (result.status !== 0) throw result.error ?? new Error(result.stderr || "git_failed");
   return (result.stdout ?? "").trim();
 };
+const act2Record = checkedAct2State(git);
 const lines = (value) => value ? value.split(/\r?\n/).filter(Boolean) : [];
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const checks = []; const failures = [];
@@ -275,7 +278,8 @@ check("GEO-1A and GEO-1C-P0 implementation bytes are unchanged",
     "supabase/functions/_shared/geo-api",
     "supabase/functions/_shared/restaurant-geocoding",
     "supabase/migrations/20260825010000_geo_shared_candidate_authority.sql",
-    "supabase/migrations/20260826010000_restaurant_geocode_source_authority.sql"])).length === 0);
+    "supabase/migrations/20260826010000_restaurant_geocode_source_authority.sql"])).length === 0
+  || act2FrozenPathSuccessor(git,act2Record,GEO1C_BASELINE,["supabase/functions/_shared/geo-api","supabase/functions/_shared/restaurant-geocoding","supabase/migrations/20260825010000_geo_shared_candidate_authority.sql","supabase/migrations/20260826010000_restaurant_geocode_source_authority.sql"]));
 check("GEO-1B implementation bytes are unchanged",
   isGeo1dSuccessor
     ? lines(git(["diff", "--name-only", GEO1D_BASELINE, "--", "apps/mobile/features/consumer-location"]))

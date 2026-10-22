@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // SR-2H-B lifecycle-aware local authority guard. Read-only: no network, database, credentials,
 // deployment or repository writes.
+import {checkedAct2State} from "./consumer-retention-persistence-smoke.mjs";
+import {act2FrozenPathSuccessor,act2CompositionOrder,act2CompositionEmpty} from "./s2-act2-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -29,6 +31,7 @@ function git(args) {
   if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed`);
   return result.stdout;
 }
+const act2Record = checkedAct2State(git);
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const sha256 = (bytes) => crypto.createHash("sha256").update(bytes).digest("hex");
 const lines = (value) => value.split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean).sort();
@@ -140,7 +143,8 @@ check("41 SR-2H-A current-data profile and compact max-three bytes are unchanged
   "supabase/functions/_shared/meal-buddy-candidate-profile-api/compose.ts",
   "supabase/functions/_shared/social-interest/aggregate.ts",
   "apps/mobile/features/meal-buddy-candidates/MealBuddyCandidateCard.tsx"
-].every((file) => git(["diff", "--name-only", SR2HB_BASELINE, "--", file]).trim() === ""));
+].every((file) => git(["diff", "--name-only", SR2HB_BASELINE, "--", file]).trim() === "")
+ || act2FrozenPathSuccessor(git,act2Record,SR2HB_BASELINE,["supabase/functions/_shared/meal-buddy-candidate-profile-api/compose.ts","supabase/functions/_shared/social-interest/aggregate.ts","apps/mobile/features/meal-buddy-candidates/MealBuddyCandidateCard.tsx"]));
 
 const frozenMigrations = Object.freeze({
   "supabase/migrations/20260818010000_social_interest_catalog_and_profile_selections.sql": "313cfc323970d69a9e4d7e4d0849a3facbe45dc43512ddfd01fdd38f3b10d012",

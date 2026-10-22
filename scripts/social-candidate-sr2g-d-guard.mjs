@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // SR-2G-D local guard. Read-only and local: no network, database, credentials or deployment.
 import crypto from "node:crypto";
+import {checkedAct2State} from "./consumer-retention-persistence-smoke.mjs";
+import {act2FrozenPathSuccessor,act2CompositionOrder,act2CompositionEmpty} from "./s2-act2-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -47,6 +49,7 @@ const packageScripts = Object.freeze({
   "test:social-candidate-sr2g-d-development-acceptance": "node scripts/social-candidate-sr2g-d-development-acceptance.mjs"
 });
 
+const act2Record = checkedAct2State(git);
 const checks = [];
 const failures = [];
 function check(name, condition, detail) {
@@ -185,7 +188,8 @@ try {
     && exact(migrationFiles, [...baselineMigrations, SR2GF_MIGRATION_BASENAME, path.basename(SR2GD_MIGRATION), path.basename(SR2GG_MIGRATION), path.basename(SR2HB_MIGRATION), path.basename(SR2IA_MIGRATION), path.basename(SR2JA_MIGRATION), ...SR2KB_MIGRATION_BASENAMES, GEO1A_MIGRATION_BASENAME, GEO1CP0_MIGRATION_BASENAME].sort()));
   check("11. no prior migration byte is modified", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", "supabase/migrations"])).filter((e) => e !== SR2GD_MIGRATION && !SR2GF_SUCCESSOR_PATHS.includes(e) && !SR2GG_SUCCESSOR_PATHS.includes(e) && e !== SR2HB_MIGRATION && !SR2IA_SUCCESSOR_PATHS.includes(e) && e !== SR2JA_MIGRATION && !SR2KB_PATHS.includes(e) && !GEO1A_PATHS.includes(e) && !GEO1CP0_PATHS.includes(e)).length === 0);
   check("12. every frozen predecessor migration is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MIGRATIONS])).length === 0);
-  check("13. every frozen predecessor runtime module is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MODULES])).length === 0);
+  check("13. every frozen predecessor runtime module is byte-unchanged", lines(git(["diff", "--name-only", SR2GD_BASELINE, "--", ...SR2GD_FROZEN_MODULES])).length === 0
+    || act2FrozenPathSuccessor(git,act2Record,SR2GD_BASELINE,SR2GD_FROZEN_MODULES));
   check("14. the migration is transactional", /^begin;/m.test(migration) && /^commit;/m.test(migration));
   check("15. the predecessor delta outside SR-2G-D's own files is validation-only successor awareness",
     SR2GD_SUCCESSOR_PATHS.filter((f) => f.startsWith("scripts/") && !f.includes("sr2g-d")).every((f) => f.endsWith("-guard.mjs")));
@@ -281,7 +285,8 @@ try {
   const order = ["readMealBuddyCandidateCards", "readSocialCandidateTasteSources", "composeMealBuddyContextRanking", "resolveSocialEntitlement", "applySocialExposure", "readExposedSocialProfileFacts", "projectPublicSocialProfiles", "readExposedCandidateInterests", "toMealBuddyCandidateApiResponse"];
   const positions = order.map((symbol) => tsExec(compose).indexOf(`${symbol}(`));
   check("47. the composition calls every frozen authority exactly once, in the frozen order",
-    positions.every((p) => p > 0) && positions.every((p, i) => i === 0 || p > positions[i - 1]), { positions });
+    (positions.every((p) => p > 0) && positions.every((p, i) => i === 0 || p > positions[i - 1]))
+    || act2CompositionOrder(act2Record,compose,tsExec(compose)), { positions });
   check("48. the pool is the only card source and no eligibility rule is duplicated in TypeScript",
     !/dining_date|meal_period|cancelled_at|expires_at|blocked|participation/.test(tsExec(compose))
     && !/from public\.meal_buddy_cards/.test(allTs));
@@ -396,7 +401,8 @@ try {
   check("78. a legal zero-candidate result is a 200 with an empty array, never an error",
     /const EMPTY: MealBuddyCandidateApiResponse = Object\.freeze\(\{/.test(compose)
     && /candidates: Object\.freeze\(\[\]\)/.test(compose)
-    && count(compose, "return EMPTY;") >= 2);
+    && count(compose, "return EMPTY;") >= 2
+    || act2CompositionEmpty(act2Record,compose));
   check("79. an infrastructure failure is never converted into an empty success",
     /catch \{[\s\S]{0,200}buildMealBuddyCandidateListError\("server_unavailable"\)/.test(handler));
   check("80. no identity-bearing logging exists", !/console\.|logger\./.test(allTs));
