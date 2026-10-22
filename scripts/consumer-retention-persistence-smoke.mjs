@@ -112,8 +112,8 @@ export const EDGE_FILES = Object.freeze({
   'supabase/functions/billing-webhook/config.ts': Object.freeze(['100644', '0cecebb31c588f7c1e9c91dd277df8c580163c33']),
   'supabase/functions/billing-webhook/handler.ts': Object.freeze(['100644', '578fbcd1394b8c24e85c1c665fc6f1c5f0524b9b']),
   'supabase/functions/billing-webhook/index.ts': Object.freeze(['100644', 'aa24871bc6c3ae4590d5fcf7b089205df2b8e932']),
-  'scripts/consumer-retention-billing-edge-smoke.mjs': Object.freeze(['100644', '7c6e66e5e3d183d8a4942b40b0646ff83aeb1e5c']),
-  'scripts/consumer-retention-billing-edge-mutations.mjs': Object.freeze(['100644', '3b703055954d7d45b8576e1fe9ef0d4c3bbebda7'])
+  'scripts/consumer-retention-billing-edge-smoke.mjs': Object.freeze(['100644', 'b922115123e5ed3f7fe9b47ccf19ebcad6efc3b1']),
+  'scripts/consumer-retention-billing-edge-mutations.mjs': Object.freeze(['100644', 'b364176c15ca0f629e728ea4b73b431e6eed1251'])
 });
 export const EDGE_RECOVERY_OVERRIDES = Object.freeze({ 'scripts/consumer-meal-save-recovery-guard.mjs': Object.freeze(['100644', '7daa1408abf5ba01a077d8bb281aedf27bf15dd3']) });
 // <<END-EDGE-PINS>>

@@ -134,7 +134,7 @@ export async function runMutations({ bin, out, prefixes = [] }) {
       const detectedBy = gates.filter(g => obs[g].explicit), crashedGates = gates.filter(g => obs[g].crashed), passedGates = gates.filter(g => obs[g].pass);
       // gate: every listed gate returned an explicit failure. green: every listed gate PASSED (an explicit failure or a crash is a mismatch).
       const ok = cls === 'gate' ? detectedBy.length === gates.length : passedGates.length === gates.length;
-      const row = { id, class: cls, protection, file, gates, reason: reason ?? null, ok, detectedBy, crashedGates, kinds: Object.fromEntries(gates.map(g => [g, obs[g].kind])), observed: Object.fromEntries(gates.map(g => [g, { pass: obs[g].pass, kind: obs[g].kind, observed: JSON.stringify(obs[g].observed).slice(0, 400) }])) };
+      const row = { id, class: cls, protection, file, gates, reason: reason ?? null, ok, detectedBy, crashedGates, kinds: Object.fromEntries(gates.map(g => [g, obs[g].kind])), observed: Object.fromEntries(gates.map(g => [g, { pass: obs[g].pass, kind: obs[g].kind, observed: JSON.stringify(obs[g].observed) }])) };
       results.push(row); rec.write('mut-' + id + '.json', row);
       console.log('MUTANT ' + id + ' ' + cls + ' ' + (ok ? 'OK' : 'MISMATCH') + ' detectedBy=' + detectedBy.join(','));
       if (!ok) exitCode = 1;
@@ -146,7 +146,7 @@ export async function runMutations({ bin, out, prefixes = [] }) {
   const complete = !blocked && results.length === selected.length;
   const status = blocked ? 'BLOCKED' : !complete ? 'BLOCKED' : summary.mismatches.length ? 'FAIL' : 'PASS';
   if (status === 'BLOCKED' && exitCode === 0) exitCode = 2;
-  rec.write('result.json', { status, exitCode, prefixes, summary, results: results.map(r => ({ id: r.id, class: r.class, ok: r.ok })), blocked, startedUtc: started, endedUtc: new Date().toISOString(), identity: sourceIdentity() });
+  rec.write('result.json', { status, exitCode, exitCodeNote: 'exitCode is the value runMutations RETURNS (the value the CLI wrapper hands to process.exit); it is not an OS exit code. The OS exit code of the node process is recorded by the runner (run-meta.json).', prefixes, summary, results: results.map(r => ({ id: r.id, class: r.class, ok: r.ok })), blocked, startedUtc: started, endedUtc: new Date().toISOString(), identity: sourceIdentity() });
   console.log('SUMMARY ' + JSON.stringify(summary));
   return exitCode;
 }
