@@ -108,7 +108,7 @@ begin
  insert into platform_identity_internal.current_avatar(owner_user_id) values(a)
  on conflict(owner_user_id) do update set revision=pg_catalog.gen_random_uuid(),jpeg_bytes=null,sha256=null,width=null,height=null,last_request_id=null,last_request_digest=null;
 end $$;
-create function platform_identity_internal.lifecycle_clear() returns trigger language plpgsql security definer set search_path='' as $
+create function platform_identity_internal.lifecycle_clear() returns trigger language plpgsql security definer set search_path='' as $$
 declare fk_name text;
 begin
  if TG_OP='DELETE' then

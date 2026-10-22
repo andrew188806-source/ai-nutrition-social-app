@@ -46,7 +46,7 @@ export const PH1_FILES=Object.freeze({
   },
   "apps/mobile/features/profile-photo/media.ts": {
     "mode": "100644",
-    "blob": "33b76723cff81c74f5ce0eb1158997f6835ff675",
+    "blob": "f392cc0e433a9f3145c0b10c92cbc559ae76114b",
     "base": null,
     "baseMode": null
   },
@@ -82,7 +82,7 @@ export const PH1_FILES=Object.freeze({
   },
   "scripts/s2-ph1-media-smoke.mjs": {
     "mode": "100644",
-    "blob": "f63693e8ffde4175f9cd631cbc7ecbc93b44667d",
+    "blob": "ba25884e8a0949e0e124160fbdbb41d9d59197c9",
     "base": null,
     "baseMode": null
   },
@@ -166,7 +166,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/migrations/20261022183336_platform_private_avatar_ph1_64ba91de.sql": {
     "mode": "100644",
-    "blob": "7a8c3358b215b0ae9f1b5c31ae8fd83d86704aec",
+    "blob": "7fb8d2020199d4a42531df8ff53e911edb058302",
     "base": null,
     "baseMode": null
   }

@@ -1193,8 +1193,8 @@ export function withAct2Tail(tail){const prior=isAct2Migration(ACT2_MIGRATION)?[
 
 
 // PH1 one-way successor: this root pins the module; the module pins only exact leaves.
-export const PH1_MODULE_BLOB='073113bfa3162939387e405e2121ae381e88520a';
-export const PH1_MIGRATION_SHA256='b03e9e35c47dc321546b43aa03f0d429a6e4bf853587773fc31b0b79daf61382';
+export const PH1_MODULE_BLOB='0cba930e0a72a3d5983152a3612ce3eebbba478e';
+export const PH1_MIGRATION_SHA256='37a41acda4873cdbecad6879de3dc0a6f399c688607db3d833c30a9cc24a8bb9';
 const PH1_MODULE_PATH='scripts/s2-ph1-exact-successor.mjs';
 export function checkedPH1State(git){
  const staged=git(['ls-files','--stage','--',PH1_MODULE_PATH]).trim();

@@ -5,10 +5,11 @@ import {manipulateAsync,SaveFormat} from 'expo-image-manipulator';
 // tasks protect their own resources. No render-time IO or unrelated module/global photo state.
 const pendingCacheUris=new Set<string>();
 const liveTasks=new Map<symbol,Set<string>>();const webPending=new Set<string>();
+const isCacheFile=(uri:string)=>uri.startsWith(Paths.cache.uri.replace(/\/?$/,'/'));
 function journal(){const d=new Directory(Paths.cache,'profile-photo-ph1');d.create({intermediates:true,idempotent:true});return new File(d,'owned-temp.json');}
-function readJournal():string[]{const f=journal();if(!f.exists)return [];const data=JSON.parse(f.textSync());if(!Array.isArray(data)||!data.every(v=>typeof v==='string'&&v.startsWith(Paths.cache.uri)))throw Error('cleanup_manifest_invalid');return data;}
+function readJournal():string[]{const f=journal();if(!f.exists)return [];const data=JSON.parse(f.textSync());if(!Array.isArray(data)||!data.every(v=>typeof v==='string'&&isCacheFile(v)))throw Error('cleanup_manifest_invalid');return data;}
 function writeJournal(values:string[]){journal().write(JSON.stringify([...new Set(values)]));}
-function register(uri:string){if(typeof document!=='undefined'){if(uri.startsWith('blob:'))webPending.add(uri);return;}if(uri.startsWith(Paths.cache.uri)){pendingCacheUris.add(uri);writeJournal([...readJournal(),uri]);}}
+function register(uri:string){if(typeof document!=='undefined'){if(uri.startsWith('blob:'))webPending.add(uri);return;}if(isCacheFile(uri)){pendingCacheUris.add(uri);writeJournal([...readJournal(),uri]);}}
 export function retryPhotoTempCleanup():boolean{
  const live=new Set([...liveTasks.values()].flatMap(s=>[...s]));
  if(typeof document!=='undefined'){for(const uri of webPending){if(!live.has(uri)){URL.revokeObjectURL(uri);webPending.delete(uri);}}return false;}
