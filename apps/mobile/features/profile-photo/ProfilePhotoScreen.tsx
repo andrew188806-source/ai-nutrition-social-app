@@ -8,7 +8,7 @@ import {createProfilePhotoRepository} from './repository';
 import {ProfilePhotoMediaSession,retryPhotoTempCleanup} from './media';
 const Button=({label,disabled=false,onPress}:{label:string;disabled?:boolean;onPress:()=>void})=><Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={{padding:14,opacity:disabled?.4:1,borderWidth:1,borderRadius:10}}><Text>{label}</Text></Pressable>;
 export function PhotoSession({actor,removalOnly=false}:{actor:string;removalOnly?:boolean}){
- const runtime=useConsumerRuntime();
+ const runtime=useConsumerRuntime(),router=useRouter();
  const controller=useMemo(()=>new ProfilePhotoController(runtime.mode==='supabase'?createProfilePhotoRepository():null,actor,removalOnly,randomUUID),[actor,removalOnly,runtime.mode]);
  const [state,setState]=useState(()=>controller.snapshot());const [confirm,setConfirm]=useState(false);const [picking,setPicking]=useState(false);
  const media=useMemo(()=>new ProfilePhotoMediaSession(),[]);
@@ -16,6 +16,9 @@ export function PhotoSession({actor,removalOnly=false}:{actor:string;removalOnly
  const busy=state.busy||picking;
  const pick=async()=>{if(busy)return;setPicking(true);try{const data=await media.pick();if(data)controller.setDraft(data);}catch{controller.setDraft(null);controller.notice('選圖或格式處理失敗，未儲存；請重新選擇。');}finally{controller.cleanup(media.cleanupPending);setPicking(false);}};
  return <View style={{gap:12,padding:12}}><Text>{removalOnly?'私人頭貼移除':'平台私人頭貼'}</Text><Text>{removalOnly?'只查詢本人是否有照片及移除，不讀取照片內容。':'此照片僅供本人預覽，不會發布給好友或陌生飯友。'}</Text>
+ {!removalOnly?<Text>只儲存 256×256 內縮圖，不持久保存原圖；選圖後需由本人確認儲存。</Text>:null}
+ {state.busy&&state.phase!=='loading'?<Text>正在向伺服器確認操作…</Text>:null}
+ {state.authRequired?<Button label="前往登入" onPress={()=>router.replace('/login')}/>:null}
  {state.phase==='loading'?<Text>正在讀取伺服器狀態…</Text>:null}
  {state.remote?<Text>{state.remote.present?'本人有一張私人縮圖。':'伺服器目前沒有私人照片。'}</Text>:null}
  {!removalOnly&&state.preview?<Image accessibilityLabel="伺服器回讀的本人私人頭貼" source={{uri:state.preview}} style={{width:160,height:160}}/>:null}

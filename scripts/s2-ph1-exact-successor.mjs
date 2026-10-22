@@ -34,13 +34,13 @@ export const PH1_FILES=Object.freeze({
   },
   "apps/mobile/features/profile-photo/ProfilePhotoScreen.tsx": {
     "mode": "100644",
-    "blob": "6c1d0bf3488c6a2f6617fe927c0cebb41a806322",
+    "blob": "ad56b06c89db17a7cd3d98c2b7c5f5fbc58ca8af",
     "base": null,
     "baseMode": null
   },
   "apps/mobile/features/profile-photo/controller.ts": {
     "mode": "100644",
-    "blob": "12e387caf93690daf0390b30aa9e8ef5bd485149",
+    "blob": "94d7bd6ffb3063b2a00bb43ee8d6434c80fc2d5f",
     "base": null,
     "baseMode": null
   },
@@ -76,7 +76,7 @@ export const PH1_FILES=Object.freeze({
   },
   "scripts/s2-ph1-host.mjs": {
     "mode": "100644",
-    "blob": "3349a64be8871675dc1684aa5ee7807f9ef949d1",
+    "blob": "646feaf0f89d884b847cb619456c7208bdeb70dd",
     "base": null,
     "baseMode": null
   },
