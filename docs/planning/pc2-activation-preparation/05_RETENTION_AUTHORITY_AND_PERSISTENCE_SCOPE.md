@@ -1541,3 +1541,9 @@ Owner 於 2026-10-21 授權的本機 inactive 包（對應 ENT-F prep 計畫的 
 - Node／PG 層：產品模組（含真實 `index.ts` 組合，Deno 與 npm 以 stub 注入）在 Node 內執行；SQL 層以**實際專用登入角色**對本機 disposable PostgreSQL 17.6 執行（`session_user` 即該角色，非 superuser）；故障以 TCP proxy 在協定訊息邊界精確注入（COMMIT 前、COMMIT 送出但未到達、COMMIT 已套用但回覆遺失）。fixture 角色只存在拋棄式資料庫。
 - **Deno 薄包裝未執行**（沒有 Deno runtime）：只做結構檢查，行為 UNVERIFIED。**平台**（`verify_jwt`、CORS、部署、Supavisor／pooler、TLS）未驗證。Hosted binding 維持 UNVERIFIED。
 - 不含：提供者、Verifier／Mapper 實作、對帳、coverage、registry／seal 啟用、ENT-W、ENT1-B、到期、purge。實際自測結果與未驗證清單在交付報告（repository 外）。
+
+### 22.5 首次獨立驗收後的修正（F2-E01；retention line，2026-10-22；作者修正自測，不是 acceptance）
+- **被拒絕的原因**：候選 `293f0958` 的 mutation 判定鏈（`exercise → gateRunner → detectedBy／ok`）把任何逸出 gate 的例外包成 `pass:false` 並計為 detector；連線中止（`Connection terminated`）、未預期崩潰（TypeError 型態）與 fresh setup 中止在已通過的未變控制之後都被計為偵測。其 F03 驗的是從 ENT-F1 匯入、F2 實際不使用的 helper。§22.4 與先前報告中「60／60 符合預先宣告」「F03 PASS」的結論因此**撤回**，改以本節為準（見交付的 ERRATA）。產品 bytes（14 個產品 TS）與 migration 未變。
+- **判定契約**（smoke 與 mutation 共用同一個 `judgeGate`）：`pass`；`explicit_fail`＝gate **回傳** `pass:false` 且帶它觀察到的值，或型別化的 `StageRefusal`（具名產品階段被資料庫以 SQLSTATE 拒絕，或送出的語句／參數向量與預期不同）；`crash`＝其他任何例外或畸形結果，**永不是 detector**（smoke 回報 BLOCKED，mutation 記為未偵測）；setup／連線／初始化失敗（含 `Connection terminated`、`terminating connection`）一律丟出 `SETUP_GATE`，整個 run BLOCKED。前一次未變控制的 PASS 不會把後續例外變成產品觀察。
+- **F03** 現在驅動 F2 實際使用的完整鏈：`judgeGate` 分類表，以及在子行程中對真實 `runMutations`（含 green mutant）與真實 `runSmoke` 注入 setup、crash、畸形結果、明示失敗與永遠通過的 gate（注入發生在未變控制通過之後），並含正常 PASS、明示 FAIL 的正向對照。
+- **Y07／Y08／Y36**：T01 對每個產品呼叫記錄「語句文字與參數向量」（driver 在送出前記錄）並與由觀察值獨立算出的預期向量比對，偵測依據是具名階段的參數差異與 SQLSTATE；L01 在後續案例執行前先以關閉／拒絕端點的 Auth 呼叫數與連線數失敗。新增 Y61–Y63（共 63 個 mutant）示範同一機制。

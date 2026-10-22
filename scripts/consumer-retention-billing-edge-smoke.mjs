@@ -18,7 +18,7 @@ import { createRequire } from 'node:module';
 import { ROOT, recorder, sha, uuid } from './consumer-retention-persistence-smoke.mjs';
 import { options, frozenProof, inventoryProof } from './consumer-retention-capture-smoke.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
-import { billingFresh, runDetector, isExplicitFailure } from './consumer-retention-billing-smoke.mjs';
+import { billingFresh } from './consumer-retention-billing-smoke.mjs';
 
 export { options };
 const requireRoot = createRequire(path.join(ROOT, 'package.json'));
@@ -318,6 +318,9 @@ Object.assign(GATES, {
       const k = kit(env); const probe = probeRequest([new TextEncoder().encode('{}')], { headers: { authorization: 'Bearer t' } }); const res = await k.run(probe.request); rows[name] = { status: res.status, auth: k.auth.length, transports: k.created.length, pulled: probe.state.pulled };
     }
     { const k = kit(); rec('GET', k, await k.run(new Request('http://x/l', { method: 'GET', headers: { authorization: 'Bearer t' } }))); }
+    // Fail fast on the explicit observations of the closed / refused endpoints BEFORE any later case runs: a mutant that authenticates or connects before refusing is judged by these COUNTS, never by an exception raised by a later case.
+    const closedNames = ['empty env', 'switch off', 'no namespace', 'bad namespace', 'no ttl', 'ttl too long', 'no db url', 'no platform url', 'no anon key'];
+    if (!(closedNames.every(n => rows[n].status === 503 && rows[n].auth === 0 && rows[n].transports === 0 && rows[n].pulled === 0) && rows.GET.status === 405 && rows.GET.auth === 0 && rows.GET.transports === 0)) return R(false, { phase: 'closed-and-method-refused-endpoints', rows });
     { const k = kit(); const probe = probeRequest(Array.from({ length: 40 }, () => bytes(32)), { headers: { authorization: 'Bearer t' } }); const res = await k.run(probe.request); rows.oversizedBody = { status: res.status, auth: k.auth.length, transports: k.created.length, bytesRead: probe.state.bytes }; }
     { const k = kit(); const probe = probeRequest([bytes(500)], { headers: { authorization: 'Bearer t', 'content-length': '500' } }); const res = await k.run(probe.request); rows.declaredOversize = { status: res.status, auth: k.auth.length, pulled: probe.state.pulled }; }
     { const k = kit(); const exact = '{}' + ' '.repeat(254); const res = await k.run(new Request('http://x/l', { method: 'POST', body: exact, headers: { authorization: 'Bearer t' } })); rows.exactlyAtTheCap = { status: res.status, auth: k.auth.length, bytes: exact.length }; }
@@ -645,32 +648,39 @@ Object.assign(GATES, {
     const ing = await ingressRole(ctx); const prod = await producerRole(ctx, ns);
     const kit = edgeKit(); const log = []; const mk = kit.factory(log); const tIng = mk(dbUrl(ctx, ing)), tProd = mk(dbUrl(ctx, prod.role));
     const bh = sha256hex('binding:e2e'); const expires = Date.now() + 3600000;
-    const link = await tIng.transaction(tx => tx.createLinkIntent(ns, O1, bh, expires));
-    const linkRow = (await q(ctx, `select * from ${B}.identity_links`))[0];
+    const isoOf = x => new Date(x).toISOString();
+    // The wire-level parameter vector the product MUST send for an observation (computed here from the observation, never from product code).
+    const ingestParams = o => [o.namespace, o.deliveryId, o.subjectRef, o.payloadDigest, o.kind, o.periodStartMs === null ? null : isoOf(o.periodStartMs), o.periodEndMs === null ? null : isoOf(o.periodEndMs), isoOf(o.signedAtMs), o.environment, o.bindingHash, o.reasonCode];
+    // Every product call goes through stageCall(): at a NAMED stage a database rejection (SQLSTATE) or a wrong statement / parameter vector is an explicit, typed observation (StageRefusal). Any other exception escaping this gate is NEVER a detection.
+    const call = (label, key, expected, fn) => stageCall(log, kit.Sq.BILLING_SQL, label, key, expected, fn);
     const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const link = await call('createLinkIntent', 'createLinkIntent', [ns, O1, bh, isoOf(expires)], () => tIng.transaction(tx => tx.createLinkIntent(ns, O1, bh, expires)));
+    const linkRow = (await q(ctx, `select * from ${B}.identity_links`))[0];
     const o1 = obs(ns, 'sub-e2e-1', 'd-ü-測試-1', 'paid_period', atMs(5, 123), atMs(40, 456), { signedAtMs: BASE + 789, bindingHash: bh });
-    const r1 = await tIng.transaction(tx => tx.ingestDelivery(o1));
+    const r1 = await call('ingestDelivery(o1)', 'ingestDelivery', ingestParams(o1), () => tIng.transaction(tx => tx.ingestDelivery(o1)));
     const row1 = (await inboxRows(ctx, 'item_id=$1', [r1.item_id]))[0];
-    const dup = await tIng.transaction(tx => tx.ingestDelivery(o1));
-    const conflict = await tIng.transaction(tx => tx.ingestDelivery({ ...o1, payloadDigest: sha256hex('different') }));
+    const dup = await call('ingestDelivery(o1 again)', 'ingestDelivery', ingestParams(o1), () => tIng.transaction(tx => tx.ingestDelivery(o1)));
+    const o1c = { ...o1, payloadDigest: sha256hex('different') };
+    const conflict = await call('ingestDelivery(o1 other digest)', 'ingestDelivery', ingestParams(o1c), () => tIng.transaction(tx => tx.ingestDelivery(o1c)));
     const o2 = obs(ns, 'sub-e2e-1', 'd-grace-1', 'grace_period', null, null, { reasonCode: 'GRACE_X' });
-    const r2 = await tIng.transaction(tx => tx.ingestDelivery(o2));
+    const r2 = await call('ingestDelivery(o2)', 'ingestDelivery', ingestParams(o2), () => tIng.transaction(tx => tx.ingestDelivery(o2)));
     const row2 = (await inboxRows(ctx, 'item_id=$1', [r2.item_id]))[0];
-    const unknownNs = await tIng.transaction(tx => tx.ingestDelivery({ ...o1, namespace: 'no.such.namespace', deliveryId: 'x' }));
-    const c1 = await tProd.transaction(tx => tx.nextCandidate(ns));
-    const cOther = await tProd.transaction(tx => tx.nextCandidate('no.such.namespace'));
-    const p1 = await tProd.transaction(tx => tx.processItem(c1));
+    const oU = { ...o1, namespace: 'no.such.namespace', deliveryId: 'x' };
+    const unknownNs = await call('ingestDelivery(unknown namespace)', 'ingestDelivery', ingestParams(oU), () => tIng.transaction(tx => tx.ingestDelivery(oU)));
+    const c1 = await call('nextCandidate(ns)', 'nextCandidate', [ns], () => tProd.transaction(tx => tx.nextCandidate(ns)));
+    const cOther = await call('nextCandidate(other)', 'nextCandidate', ['no.such.namespace'], () => tProd.transaction(tx => tx.nextCandidate('no.such.namespace')));
+    const p1 = await call('processItem(c1)', 'processItem', [c1], () => tProd.transaction(tx => tx.processItem(c1)));
     const row1After = (await inboxRows(ctx, 'item_id=$1', [r1.item_id]))[0];
     const ledger = await ledgerRows(ctx, O1);
     const linkAfter = (await q(ctx, `select state, subject_ref, owner_user_id from ${B}.identity_links`))[0];
-    const c2 = await tProd.transaction(tx => tx.nextCandidate(ns));
-    const p2 = await tProd.transaction(tx => tx.processItem(c2));
+    const c2 = await call('nextCandidate(ns) again', 'nextCandidate', [ns], () => tProd.transaction(tx => tx.nextCandidate(ns)));
+    const p2 = await call('processItem(c2)', 'processItem', [c2], () => tProd.transaction(tx => tx.processItem(c2)));
     const row2After = (await inboxRows(ctx, 'item_id=$1', [r2.item_id]))[0];
     const o3 = obs(ns, 'sub-e2e-1', 'd-later-1', 'paid_period', atMs(60), atMs(90));
-    const r3 = await tIng.transaction(tx => tx.ingestDelivery(o3));
-    const att = await tProd.transaction(tx => tx.recordAttempt(r3.item_id, 'LOCK_TIMEOUT'));
+    const r3 = await call('ingestDelivery(o3)', 'ingestDelivery', ingestParams(o3), () => tIng.transaction(tx => tx.ingestDelivery(o3)));
+    const att = await call('recordAttempt(r3)', 'recordAttempt', [r3.item_id, 'LOCK_TIMEOUT'], () => tProd.transaction(tx => tx.recordAttempt(r3.item_id, 'LOCK_TIMEOUT')));
     const row3 = (await inboxRows(ctx, 'item_id=$1', [r3.item_id]))[0];
-    const attFinal = await tProd.transaction(tx => tx.recordAttempt(r1.item_id, 'LOCK_TIMEOUT'));
+    const attFinal = await call('recordAttempt(r1)', 'recordAttempt', [r1.item_id, 'LOCK_TIMEOUT'], () => tProd.transaction(tx => tx.recordAttempt(r1.item_id, 'LOCK_TIMEOUT')));
     const row1Final = (await inboxRows(ctx, 'item_id=$1', [r1.item_id]))[0];
     const allowedSql = new Set([...Object.values(kit.Sq.BILLING_SQL), 'begin', 'commit', 'rollback']); const stray = [...new Set(log.map(l => l.text))].filter(t => !allowedSql.has(t));
     const ok = stray.length === 0 && link.outcome === 'created' && UUID.test(link.link_id) && linkRow.link_id === link.link_id && linkRow.state === 'pending' && linkRow.owner_user_id === O1 && linkRow.binding_hash === bh && linkRow.subject_ref === null && ms(linkRow.expires_at) === expires
@@ -976,13 +986,60 @@ Object.assign(GATES, {
     return R(ok, { changed: [...changed].sort(), extra, touchedForbidden, migrations, configBlob, protectedChanged, presentNew: presentNew.length, sourcesAreNew, frozen: { violations: frozen.violations, successor: frozen.recoverySuccessor }, inv: { migrationCount: inv.migrationCount, newPaths: inv.newPaths.length, last: inv.last } });
   },
 
+  // F03 drives the REAL judgement chain of THIS package (judgeGate -> runGate -> runSmoke, and -> gateRunner -> runMutations), not helpers imported from ENT-F1. The chains run in child processes with a test-side fault injected into a gate AFTER the unmutated control passed,
+  // so a "baseline passed earlier" can never be what makes a later setup fault or crash look like a detection. Controls in both directions keep the correction from degenerating into "reject everything" or "detect nothing".
   async F03_HARNESS_SETUP_AND_CRASH_ARE_NEVER_A_DETECTOR() {
-    const thrown = async message => { try { return { threw: false, v: await runDetector(async () => { throw Error(message); }, 'x') }; } catch (e) { return { threw: true, message: e.message }; } };
-    const setup = []; for (const m of ['timeout expired', 'connect ECONNREFUSED 127.0.0.1:5432', 'Connection terminated unexpectedly', 'SETUP_UNSTUBBED_NPM_IMPORT npm:x', 'SETUP_GIT diff']) setup.push([m, await thrown(m)]);
-    const crash = []; for (const m of ["Cannot read properties of undefined (reading 'x')", 'BILLING_COMMIT_OUTCOME_UNKNOWN']) crash.push([m, await thrown(m)]);
-    const okRun = await runDetector(async () => R(true, { v: 1 }), 'p'), failRun = await runDetector(async () => R(false, { expected: 1, actual: 2 }), 'f'), bare = await runDetector(async () => ({ pass: false }), 'b');
-    const ok = setup.every(([, x]) => x.threw && /^SETUP_GATE /.test(x.message)) && crash.every(([, x]) => !x.threw && x.v.crashed === true && !isExplicitFailure(x.v)) && okRun.pass && isExplicitFailure(failRun) && !isExplicitFailure(bare);
-    return R(ok, { setup: setup.map(([m, x]) => [m, x.threw ? 'BLOCKED' : 'absorbed']), crash: crash.map(([m, x]) => [m, x.threw ? 'thrown' : x.v.crashed ? 'crash(not a detector)' : 'wrong']), explicit: isExplicitFailure(failRun), bareFailIsExplicit: isExplicitFailure(bare) });
+    const out = {};
+    // (a) the classification function itself
+    const setupMsgs = ['timeout expired', 'connect ECONNREFUSED 127.0.0.1:5432', 'Connection terminated unexpectedly', 'terminating connection due to administrator command', 'SETUP_UNSTUBBED_NPM_IMPORT npm:x', 'SETUP_GIT diff', 'GATE_WATCHDOG_TIMEOUT x', 'spawnSync initdb.exe ETIMEDOUT', 'read ECONNRESET'];
+    const crashBodies = [() => { throw Error("Cannot read properties of undefined (reading 'x')"); }, () => { const o = null; return o.x; }, () => { throw Error('BILLING_COMMIT_OUTCOME_UNKNOWN'); }, () => { throw new TypeError('x is not a function'); }, () => undefined, () => 'not an object', () => ({}), () => ({ pass: false }), () => ({ pass: false, observed: null }), () => ({ pass: false, observed: {} }), () => ({ pass: 'yes' })];
+    const setup = []; for (const m of setupMsgs) { try { const v = await judgeGate(async () => { throw Error(m); }, 'x'); setup.push([m, 'absorbed:' + v.kind]); } catch (e) { setup.push([m, /^SETUP_GATE /.test(e.message) ? 'BLOCKED' : 'wrong:' + e.message]); } }
+    const crash = []; for (const b of crashBodies) { try { const v = await judgeGate(async () => b(), 'x'); crash.push(v.kind); } catch (e) { crash.push('thrown:' + e.message.slice(0, 40)); } }
+    const goodPass = await judgeGate(async () => R(true, { v: 1 }), 'p'), goodFail = await judgeGate(async () => R(false, { expected: 1, actual: 2 }), 'f');
+    const stageFail = await judgeGate(async () => { throw new StageRefusal({ stage: 's', sql: 'k', rejection: { code: '22023' }, parameterDiffs: [] }); }, 's');
+    const dbRej = [isDatabaseRejection(Object.assign(new (class DatabaseError extends Error {})('x'), { code: '22023' })), isDatabaseRejection(Object.assign(Error('x'), { code: '22023' })), isDatabaseRejection(Object.assign(new (class DatabaseError extends Error {})('x'), { code: 'E123' }))];
+    out.classification = { setup, crash, goodPass: goodPass.kind, goodFail: goodFail.kind, stageFail: stageFail.kind, dbRejectionRecognition: dbRej };
+    const aOk = setup.every(([, v]) => v === 'BLOCKED') && crash.every(k => k === 'crash') && goodPass.kind === 'pass' && goodFail.kind === 'explicit_fail' && stageFail.kind === 'explicit_fail' && same(dbRej, [true, false, false]);
+    // (b)+(c) the real mutation chain and the real smoke runner, with injected faults
+    const here = fileURLToPath(import.meta.url), mutFile = path.join(path.dirname(here), 'consumer-retention-billing-edge-mutations.mjs');
+    const script = `
+      import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'; import { pathToFileURL } from 'node:url';
+      const S = await import(pathToFileURL(process.env.F03_SMOKE).href), M = await import(pathToFileURL(process.env.F03_MUT).href);
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-f03-')); const rows = [];
+      const inject = {
+        setup1: () => { throw Error('Connection terminated unexpectedly'); }, setup2: () => { throw Error('terminating connection due to administrator command'); }, setup3: () => { throw Error('timeout expired'); },
+        crash1: () => { const o = null; return o.x; }, crash2: () => { throw Error("Cannot read properties of undefined (reading 'x')"); }, crash3: () => { throw Error('something unexpected'); },
+        explicit: () => ({ pass: false, observed: { auth: 1, expected: 0, injected: true } }), alwaysPass: () => ({ pass: true, observed: {} }), malformed: () => ({ pass: false })
+      };
+      const withInjection = async (gateId, how, fn, passFirst = true) => { const saved = S.GATES[gateId]; let calls = 0; S.GATES[gateId] = how === 'none' ? saved : async () => { if (passFirst && ++calls === 1) return saved(); return inject[how](); }; try { return await fn(); } finally { S.GATES[gateId] = saved; } };
+      const mutChain = async (prefix, gatePrefix, how) => { const gateId = S.ALL_GATE_IDS.find(x => x.startsWith(gatePrefix + '_')); const dir = path.join(tmp, 'mut-' + prefix + '-' + how);
+        const code = await withInjection(gateId, how, () => M.runMutations({ bin: 'D:/no-such-pg', out: dir, prefixes: [prefix] }));
+        const r = JSON.parse(fs.readFileSync(path.join(dir, 'result.json'), 'utf8')); return { chain: 'mutations', mutant: prefix, how, code, status: r.status, exitCode: r.exitCode, detected: r.summary?.gateDetected ?? null, greenOk: r.summary?.greenOk ?? null, crashed: r.summary?.crashedMutants ?? null, mismatches: (r.summary?.mismatches ?? []).length }; };
+      const smokeChain = async (gatePrefix, how) => { const gateId = S.ALL_GATE_IDS.find(x => x.startsWith(gatePrefix + '_')); const dir = path.join(tmp, 'smoke-' + gatePrefix + '-' + how);
+        const code = await withInjection(gateId, how, () => S.runSmoke({ bin: 'D:/no-such-pg', out: dir, selected: [gateId] }), false);
+        const r = JSON.parse(fs.readFileSync(path.join(dir, 'result.json'), 'utf8')); return { chain: 'smoke', gate: gatePrefix, how, code, status: r.status, exitCode: r.exitCode, failed: r.failed.length, checks: r.checks.length }; };
+      for (const how of ['none', 'setup1', 'setup2', 'setup3', 'crash1', 'crash2', 'crash3', 'explicit', 'alwaysPass', 'malformed']) rows.push(await mutChain('Y36_', 'L01', how));
+      for (const how of ['none', 'setup1', 'crash1', 'explicit', 'malformed']) rows.push(await mutChain('Y30_', 'W01', how)); // a GREEN mutant: only 'none' may be accepted
+      for (const how of ['none', 'setup1', 'setup2', 'crash1', 'crash3', 'explicit', 'malformed']) rows.push(await smokeChain('S02', how));
+      fs.rmSync(tmp, { recursive: true, force: true });
+      console.log('F03_ROWS ' + JSON.stringify(rows));`;
+    const ch = child.spawnSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, F03_SMOKE: here, F03_MUT: mutFile }, encoding: 'utf8', timeout: 900000, maxBuffer: 32 << 20, cwd: ROOT });
+    const line = String(ch.stdout ?? '').split(/\r?\n/).find(l => l.startsWith('F03_ROWS ')); let rows = []; try { rows = JSON.parse(line.slice('F03_ROWS '.length)); } catch { /* reported */ }
+    const get = (chain, key, how) => rows.find(r => r.chain === chain && (r.mutant ?? r.gate) === key && r.how === how);
+    const m = (k, h) => get('mutations', k, h), s = (k, h) => get('smoke', k, h);
+    const mutOk = r => r && r.status === 'PASS' && r.exitCode === 0 && r.detected === 1 && !r.mismatches;
+    const mutBlocked = r => r && r.status === 'BLOCKED' && r.exitCode === 2 && !r.detected;
+    const mutNotDetected = r => r && r.status === 'FAIL' && r.exitCode === 1 && !r.detected && r.mismatches === 1;
+    const checks = {
+      mutNormalDetected: mutOk(m('Y36_', 'none')), mutExplicitInjectionDetected: mutOk(m('Y36_', 'explicit')),
+      mutSetupBlocked: ['setup1', 'setup2', 'setup3'].map(h => mutBlocked(m('Y36_', h))), mutCrashNotDetected: ['crash1', 'crash2', 'crash3', 'malformed'].map(h => mutNotDetected(m('Y36_', h)) && m('Y36_', h).crashed === 1),
+      mutAlwaysPassUndetected: mutNotDetected(m('Y36_', 'alwaysPass')) && m('Y36_', 'alwaysPass').crashed === 0,
+      greenNormalAccepted: m('Y30_', 'none')?.status === 'PASS' && m('Y30_', 'none')?.greenOk === 1, greenSetupBlocked: mutBlocked(m('Y30_', 'setup1')), greenCrashRejected: m('Y30_', 'crash1')?.status === 'FAIL' && m('Y30_', 'crash1')?.mismatches === 1, greenExplicitRejected: m('Y30_', 'explicit')?.status === 'FAIL' && m('Y30_', 'explicit')?.mismatches === 1, greenMalformedRejected: m('Y30_', 'malformed')?.status === 'FAIL',
+      smokeNormalPass: s('S02', 'none')?.status === 'PASS' && s('S02', 'none')?.exitCode === 0, smokeSetupBlocked: ['setup1', 'setup2'].map(h => s('S02', h)?.status === 'BLOCKED' && s('S02', h)?.exitCode === 2), smokeCrashBlocked: ['crash1', 'crash3', 'malformed'].map(h => s('S02', h)?.status === 'BLOCKED' && s('S02', h)?.exitCode === 2 && s('S02', h)?.checks === 0), smokeExplicitFails: s('S02', 'explicit')?.status === 'FAIL' && s('S02', 'explicit')?.exitCode === 1 && s('S02', 'explicit')?.failed === 1
+    };
+    out.chains = { childExit: ch.status, rows: rows.length, checks };
+    const flat = Object.values(checks).flat();
+    return R(aOk && ch.status === 0 && rows.length === 22 && flat.every(v => v === true), { ...out, rowsDetail: rows });
   }
 });
 
@@ -1021,20 +1078,54 @@ export function sourceIdentity() {
   return { head, tree, sourceRoot: srcRoot.dir === null ? 'repository' : 'mutated-copy', files };
 }
 
-// An exception raised while the product is being exercised is an EXPLICIT failure observation (the product misbehaved; the same gate passes on the unmutated product, so the exception is attributable), recorded with its name, SQLSTATE and message.
-// Infrastructure / setup errors (connection, timeout, initdb, SETUP_*) are NEVER absorbed: they propagate and make the whole run BLOCKED (E02 rule). The F gates test the harness itself and are not wrapped.
-const INFRA_ERROR = /timeout expired|connection timeout|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|the database system is|too many clients|cannot connect|initdb|pg_ctl|postmaster|spawnSync|GATE_WATCHDOG_TIMEOUT|SETUP_/i;
-export async function exercise(body) {
-  try { return await body(); }
+// ==== the gate judgement chain (F2-E01 correction) =====================================================================================================================
+// ONE classification, used by the smoke runner AND the mutation harness (the harness imports runGate):  body -> judgeGate -> { kind, pass, observed }
+//   pass          : the gate returned pass:true
+//   explicit_fail : the gate RETURNED pass:false together with a non-empty observation object (values it observed), or a typed StageRefusal (a NAMED product stage that the database refused with a SQLSTATE, or whose statement / parameter vector differs from the expected one)
+//   crash         : ANY other exception, or a malformed gate result (no boolean, or pass:false without an observation). A crash is NEVER a detector. The smoke runner reports it as BLOCKED; the mutation harness records the mutant as not detected.
+//   (throws)      : infrastructure / setup / connection / initialisation failure => Error('SETUP_GATE ...') => the whole run is BLOCKED, never a detection.
+// Nothing here depends on the earlier PASS of the same gate on an unmutated copy: a baseline PASS does not turn later exceptions into product observations.
+export const SETUP_ERROR = /timeout expired|connection timeout|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|Connection terminated|terminating connection|the database system is|too many clients|cannot connect|initdb|pg_ctl|postmaster|spawnSync|GATE_WATCHDOG_TIMEOUT|SETUP_/i;
+export class StageRefusal extends Error {
+  constructor(detail) { super('STAGE_REFUSAL ' + detail.stage); this.name = 'StageRefusal'; this.detail = detail; }
+}
+export const isDatabaseRejection = e => e?.constructor?.name === 'DatabaseError' && typeof e.code === 'string' && /^[0-9A-Z]{5}$/.test(e.code);
+// Runs one product call at a NAMED stage and compares what the product actually sent (statement text and parameter vector, recorded by the driver BEFORE the statement runs) with the expected vector.
+export async function stageCall(log, sqlMap, label, key, expected, fn) {
+  const before = log.length; let value; let rejection = null;
+  try { value = await fn(); }
+  catch (e) {
+    if (!isDatabaseRejection(e)) throw e; // connection / unexpected errors are not stage observations: they stay setup (BLOCKED) or crash (not a detector)
+    rejection = { name: e.constructor.name, code: e.code, message: String(e.message).slice(0, 120) };
+  }
+  const sent = log.slice(before).filter(l => l.text === sqlMap[key]);
+  const diffs = [];
+  if (sent.length !== 1) diffs.push({ kind: 'statement-count', expected: 1, actual: sent.length });
+  else {
+    const p = sent[0].params ?? [];
+    if (p.length !== expected.length) diffs.push({ kind: 'param-count', expected: expected.length, actual: p.length });
+    expected.forEach((x, i) => { if (!Object.is(p[i], x)) diffs.push({ index: i, expected: x, actual: p[i] }); });
+  }
+  if (rejection || diffs.length) throw new StageRefusal({ stage: label, sql: key, rejection, parameterDiffs: diffs });
+  return value;
+}
+export async function judgeGate(body, id = '?') {
+  let r;
+  try { r = await body(); }
   catch (e) {
     const message = String(e?.message ?? e);
-    if (INFRA_ERROR.test(message)) throw e;
-    return R(false, { productThrew: { name: e?.constructor?.name ?? null, code: e?.code ?? null, message: message.slice(0, 200) } });
+    if (e instanceof StageRefusal) return { kind: 'explicit_fail', pass: false, observed: { stageRefusal: e.detail } };
+    if (SETUP_ERROR.test(message)) throw Error('SETUP_GATE ' + id + ' ' + message.slice(0, 200));
+    return { kind: 'crash', pass: false, observed: { gateCrashed: { name: e?.constructor?.name ?? null, code: e?.code ?? null, message: message.slice(0, 200) } } };
   }
+  if (r === null || typeof r !== 'object' || typeof r.pass !== 'boolean') return { kind: 'crash', pass: false, observed: { gateCrashed: { name: 'MalformedGateResult', message: 'the gate returned no boolean pass' } } };
+  if (r.pass) return { kind: 'pass', pass: true, observed: r.observed };
+  if (r.observed === null || typeof r.observed !== 'object' || Object.keys(r.observed).length === 0) return { kind: 'crash', pass: false, observed: { gateCrashed: { name: 'MalformedGateResult', message: 'pass:false without an observation' } } };
+  return { kind: 'explicit_fail', pass: false, observed: r.observed };
 }
 export async function runGate(cl, id) {
   const body = PURE_IDS.has(id) ? () => GATES[id]() : () => billingFresh(cl, id, ctx => GATES[id](ctx), { apply: true });
-  return id.startsWith('F') ? body() : exercise(body);
+  return judgeGate(body, id);
 }
 export async function runSmoke({ bin, out, selected = ALL_GATE_IDS }) {
   const rec = recorder(out);
@@ -1048,7 +1139,8 @@ export async function runSmoke({ bin, out, selected = ALL_GATE_IDS }) {
         if (!PURE_IDS.has(id) && cl === null) cl = await entCluster(bin, rec);
         r = await runGate(cl, id);
       } catch (e) { blocked = { id, message: String(e.message), stack: e.stack }; rec.write('check-' + id + '.json', { id, status: 'BLOCKED', error: blocked.message }); console.log('CHECK ' + id + ' BLOCKED ' + blocked.message.slice(0, 600)); break; }
-      rec.write('check-' + id + '.json', { id, pass: r.pass, ms: Date.now() - t0, observed: r.observed });
+      if (r.kind === 'crash') { blocked = { id, message: 'GATE_CRASH ' + JSON.stringify(r.observed.gateCrashed) }; rec.write('check-' + id + '.json', { id, status: 'BLOCKED', error: blocked.message, ms: Date.now() - t0 }); console.log('CHECK ' + id + ' BLOCKED ' + blocked.message.slice(0, 600)); break; }
+      rec.write('check-' + id + '.json', { id, pass: r.pass, kind: r.kind, ms: Date.now() - t0, observed: r.observed });
       results.push({ id, pass: r.pass });
       console.log('CHECK ' + id + ' ' + (r.pass ? 'PASS' : 'FAIL'));
     }

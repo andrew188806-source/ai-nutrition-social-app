@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // TastKind ENT-F2 actual-source mutations. Each mutant is a temporary COPY of the real product TypeScript (the transport, the three entrypoints, and - for the protected-library controls - the ENT-F1 libraries they drive) with ONE defect.
 // Every spec names its protection, its detector gate(s) and its class BEFORE it runs:
-//   gate  : EVERY listed gate must return an explicit failure on the mutant (an exception raised by the mutated product is recorded as such: by-exception detections are reported separately)
+//   gate  : EVERY listed gate must return an EXPLICIT failure on the mutant: a gate that returned pass:false with the values it observed, or a typed StageRefusal (a named product stage refused by the database with a SQLSTATE, or sending a wrong statement / parameter vector).
+//           An exception that merely escapes a gate is NEVER a detection (F2-E01): infrastructure / setup errors make the whole run BLOCKED, any other exception is a CRASH (recorded, the mutant counts as NOT detected).
 //   green : an observably equivalent mutant (defence in depth): every listed gate must stay green; the reason is stated
 // Rules inherited from the ENT-F1 correction (E02): a gate that THROWS an infrastructure / setup error (connection, timeout, initdb, SETUP_*) makes the WHOLE run BLOCKED, never a detection. Before any mutant the listed gates must PASS on an unmutated copy of the same files (a failing control
 // blocks the run), and every mutant must actually differ from the original. The result is judged only by result.json cross-checked with the exit code, stdout/stderr and the per-mutant files (tools/verify-run.mjs).
@@ -38,6 +39,9 @@ export const SPECS = [
   ['Y11_NEXT_CANDIDATE_COERCES_ANY_VALUE', 'a non-text candidate id is coerced instead of refused', SQL, s => once(s, 'if (typeof v !== "string") throw new BillingTransportShapeError();\n      return v;', 'return String(v);'), 'gate', ['T00']],
   ['Y12_NAMESPACE_INTERPOLATED_INTO_SQL', 'a value is spliced into the statement text instead of travelling as a parameter', SQL, s => once(s, 'await session.query(BILLING_SQL.nextCandidate, [namespace])', 'await session.query(BILLING_SQL.nextCandidate.replace("$1::text", "\'" + namespace + "\'"), [])'), 'gate', ['T01']],
   ['Y13_STATEMENT_REFERENCES_AN_ENT0_FUNCTION', 'the transport reaches beyond the five billing functions', SQL, s => once(s, 'processItem: "select retention_billing.process_item($1::uuid) as s",', 'processItem: "select retention_billing.process_item($1::uuid) as s /* retention_entitlement.admit_entitlement_event */",'), 'gate', ['S02', 'T00']],
+  ['Y61_RECORD_ATTEMPT_ARGUMENTS_SWAPPED', 'the item id and the reason travel in each other place', SQL, s => once(s, 'await session.query(BILLING_SQL.recordAttempt, [itemId, reason])', 'await session.query(BILLING_SQL.recordAttempt, [reason, itemId])'), 'gate', ['T01']],
+  ['Y62_LINK_EXPIRY_SENT_AS_RAW_MILLISECONDS', 'the purchase-intent expiry is sent as a bare millisecond number', SQL, s => once(s, '[namespace, ownerUserId, bindingHash, new Date(expiresAtMs).toISOString()]', '[namespace, ownerUserId, bindingHash, String(expiresAtMs)]'), 'gate', ['T01']],
+  ['Y63_INGEST_PERIOD_BOUNDS_SWAPPED', 'the period start and end are exchanged on the wire', SQL, s => once(s, 'isoOrNull(o.periodStartMs), isoOrNull(o.periodEndMs), new Date(o.signedAtMs)', 'isoOrNull(o.periodEndMs), isoOrNull(o.periodStartMs), new Date(o.signedAtMs)'), 'gate', ['T01']],
   // ---- configuration and HTTP primitives ----
   ['Y14_ANY_NON_EMPTY_SWITCH_ENABLES', 'only the exact text "true" enables', CFG, s => once(s, 'return read(BILLING_ENV.enabled)?.trim() === "true";', 'return (read(BILLING_ENV.enabled)?.trim() ?? "") !== "";'), 'gate', ['W01']],
   ['Y15_PAYLOAD_LIMIT_HAS_A_DEFAULT', 'an absent / invalid payload limit must close the endpoint', WHC, s => once(s, 'const maxBodyBytes = readBoundedInteger(read, BILLING_ENV.maxBodyBytes, 1, MAX_BODY_BYTES_LIMIT);', 'const maxBodyBytes = readBoundedInteger(read, BILLING_ENV.maxBodyBytes, 1, MAX_BODY_BYTES_LIMIT) ?? 65536;'), 'gate', ['W01']],
@@ -99,7 +103,8 @@ export function makeCopy(file, mutate) {
   if (file) { const p = path.join(dir, file); const before = fs.readFileSync(p, 'utf8'); const after = mutate(before); changed = after !== before; fs.writeFileSync(p, after); }
   return { dir, changed };
 }
-const gateRunner = async (cl, id) => { const r = await runGate(cl, id); return { pass: !!r.pass, observed: r.observed, byException: !!(r.observed && typeof r.observed === 'object' && 'productThrew' in r.observed) }; };
+// The ONE judgement used by the smoke runner too (runGate -> judgeGate): kind is 'pass' | 'explicit_fail' | 'crash'; a setup error has already thrown SETUP_GATE (the whole run is BLOCKED).
+const gateRunner = async (cl, id) => { const r = await runGate(cl, id); return { kind: r.kind, pass: r.kind === 'pass', explicit: r.kind === 'explicit_fail', crashed: r.kind === 'crash', observed: r.observed }; };
 
 export async function runMutations({ bin, out, prefixes = [] }) {
   const rec = recorder(out); const started = new Date().toISOString();
@@ -115,8 +120,8 @@ export async function runMutations({ bin, out, prefixes = [] }) {
     const used = [...new Set(selected.flatMap(sp => sp[5]))].sort(); const controls = {};
     const base = makeCopy(null, null);
     try { Object.assign(controls, await run(base, used)); } finally { setSourceRoot(null); fs.rmSync(base.dir, { recursive: true, force: true }); }
-    rec.write('controls.json', Object.fromEntries(Object.entries(controls).map(([g, v]) => [g, { pass: v.pass }])));
-    const badControls = Object.entries(controls).filter(([, v]) => !v.pass).map(([g]) => g);
+    rec.write('controls.json', Object.fromEntries(Object.entries(controls).map(([g, v]) => [g, { pass: v.pass, kind: v.kind }])));
+    const badControls = Object.entries(controls).filter(([, v]) => v.kind !== 'pass').map(([g]) => g);
     console.log('CONTROL ' + (badControls.length === 0 ? 'PASS' : 'FAIL ' + badControls.join(',')) + ' gates=' + used.join(','));
     if (badControls.length) throw Error('SETUP_CONTROL_FAILED ' + badControls.join(','));
     for (const [id, protection, file, mutate, cls, gates, reason] of selected) {
@@ -126,9 +131,10 @@ export async function runMutations({ bin, out, prefixes = [] }) {
         if (!copy.changed) throw Error('SETUP_MUTANT_UNCHANGED ' + id);
         obs = await run(copy, gates);
       } finally { setSourceRoot(null); fs.rmSync(copy.dir, { recursive: true, force: true }); }
-      const detectedBy = gates.filter(g => !obs[g].pass);
-      const ok = cls === 'gate' ? detectedBy.length === gates.length : detectedBy.length === 0;
-      const row = { id, class: cls, protection, file, gates, reason: reason ?? null, ok, detectedBy, byException: gates.filter(g => !obs[g].pass && obs[g].byException), observed: Object.fromEntries(gates.map(g => [g, { pass: obs[g].pass, observed: JSON.stringify(obs[g].observed).slice(0, 400) }])) };
+      const detectedBy = gates.filter(g => obs[g].explicit), crashedGates = gates.filter(g => obs[g].crashed), passedGates = gates.filter(g => obs[g].pass);
+      // gate: every listed gate returned an explicit failure. green: every listed gate PASSED (an explicit failure or a crash is a mismatch).
+      const ok = cls === 'gate' ? detectedBy.length === gates.length : passedGates.length === gates.length;
+      const row = { id, class: cls, protection, file, gates, reason: reason ?? null, ok, detectedBy, crashedGates, kinds: Object.fromEntries(gates.map(g => [g, obs[g].kind])), observed: Object.fromEntries(gates.map(g => [g, { pass: obs[g].pass, kind: obs[g].kind, observed: JSON.stringify(obs[g].observed).slice(0, 400) }])) };
       results.push(row); rec.write('mut-' + id + '.json', row);
       console.log('MUTANT ' + id + ' ' + cls + ' ' + (ok ? 'OK' : 'MISMATCH') + ' detectedBy=' + detectedBy.join(','));
       if (!ok) exitCode = 1;
@@ -136,7 +142,7 @@ export async function runMutations({ bin, out, prefixes = [] }) {
   } catch (e) { blocked = { message: String(e.message), stack: e.stack }; exitCode = 2; console.log('MUTANT_RUN BLOCKED ' + blocked.message.slice(0, 400)); }
   finally { setSourceRoot(null); if (cl) await cl.stop(); }
   const gateRows = results.filter(r => r.class === 'gate'), greenRows = results.filter(r => r.class === 'green');
-  const summary = { total: results.length, selected: selected.length, gateMutants: gateRows.length, gateDetected: gateRows.filter(r => r.ok).length, byExceptionOnly: gateRows.filter(r => r.byException.length === r.gates.length).length, greenMutants: greenRows.length, greenOk: greenRows.filter(r => r.ok).length, mismatches: results.filter(r => !r.ok).map(r => r.id) };
+  const summary = { total: results.length, selected: selected.length, gateMutants: gateRows.length, gateDetected: gateRows.filter(r => r.ok).length, crashedMutants: results.filter(r => r.crashedGates.length > 0).length, greenMutants: greenRows.length, greenOk: greenRows.filter(r => r.ok).length, mismatches: results.filter(r => !r.ok).map(r => r.id) };
   const complete = !blocked && results.length === selected.length;
   const status = blocked ? 'BLOCKED' : !complete ? 'BLOCKED' : summary.mismatches.length ? 'FAIL' : 'PASS';
   if (status === 'BLOCKED' && exitCode === 0) exitCode = 2;
