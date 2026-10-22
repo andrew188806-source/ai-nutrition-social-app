@@ -166,7 +166,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/migrations/20261022183336_platform_private_avatar_ph1_64ba91de.sql": {
     "mode": "100644",
-    "blob": "7fb8d2020199d4a42531df8ff53e911edb058302",
+    "blob": "1005af255e73222b8e7dfdd3ee926d087b34b374",
     "base": null,
     "baseMode": null
   }

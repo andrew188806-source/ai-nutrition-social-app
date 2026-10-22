@@ -144,8 +144,8 @@ grant create on schema platform_identity_internal to platform_avatar_authority;
 -- Installer retains table ownership; authority cannot grant access or disable FORCE RLS.
 do $$ declare f record;begin
  for f in select p.oid::regprocedure signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='platform_identity_internal' loop
-  execute format('alter function %s owner to platform_avatar_authority',f.signature);
   execute format('revoke all on function %s from public,anon,authenticated,authenticator,service_role,social_runtime_executor',f.signature);
+  execute format('alter function %s owner to platform_avatar_authority',f.signature);
  end loop;
 end $$;
 revoke create on schema platform_identity_internal from platform_avatar_authority;
