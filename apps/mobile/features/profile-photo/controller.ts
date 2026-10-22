@@ -12,7 +12,7 @@ export class ProfilePhotoController {
  snapshot=()=>this.state;
  subscribe=(fn:(s:PhotoScreenState)=>void)=>{this.listeners.add(fn);return ()=>{this.listeners.delete(fn);};};
  private set(s:Partial<PhotoScreenState>){if(!this.active)return;this.state={...this.state,...s};for(const l of this.listeners)l(this.state);}
- dispose(){this.active=false;this.epoch++;this.pending=null;this.state={phase:'idle',busy:false,remote:null,preview:null,draft:null,message:null,cleanupPending:false};this.listeners.clear();}
+ dispose(){this.active=false;this.epoch++;this.pending=null;this.state={phase:'idle',busy:false,remote:null,preview:null,draft:null,message:null,cleanupPending:false};for(const l of this.listeners)l(this.state);this.listeners.clear();}
  notice(message:string){this.set({message});}
  canPut(){return !!this.port?.canPut&&!this.removalOnly;}
  setDraft(value:string|null){if(this.state.busy||this.pending||this.removalOnly)return;this.set({draft:value,message:value?'尚未儲存；請確認後儲存。':null});}

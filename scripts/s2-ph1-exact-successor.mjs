@@ -34,13 +34,13 @@ export const PH1_FILES=Object.freeze({
   },
   "apps/mobile/features/profile-photo/ProfilePhotoScreen.tsx": {
     "mode": "100644",
-    "blob": "04a7e4a791e3b19a90f138522d384e5f763d7d00",
+    "blob": "6c1d0bf3488c6a2f6617fe927c0cebb41a806322",
     "base": null,
     "baseMode": null
   },
   "apps/mobile/features/profile-photo/controller.ts": {
     "mode": "100644",
-    "blob": "86d0a58723c925403339558c50200dc2e85a593d",
+    "blob": "12e387caf93690daf0390b30aa9e8ef5bd485149",
     "base": null,
     "baseMode": null
   },
@@ -76,7 +76,7 @@ export const PH1_FILES=Object.freeze({
   },
   "scripts/s2-ph1-host.mjs": {
     "mode": "100644",
-    "blob": "92cb16936d34e740c04002cee1b187fe3eb071ed",
+    "blob": "3349a64be8871675dc1684aa5ee7807f9ef949d1",
     "base": null,
     "baseMode": null
   },
@@ -118,7 +118,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/profile-photo/codec.test.ts": {
     "mode": "100644",
-    "blob": "85f8bb1aeef36c7b052ad54757919bf68cd99a43",
+    "blob": "745a7eb9b995261b50d9f54545ca88c184302d71",
     "base": null,
     "baseMode": null
   },

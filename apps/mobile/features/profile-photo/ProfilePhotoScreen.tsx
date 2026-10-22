@@ -1,5 +1,5 @@
-import {useEffect,useMemo,useState} from 'react';
-import {useRouter} from 'expo-router';
+import {useCallback,useMemo,useState} from 'react';
+import {useFocusEffect,useRouter} from 'expo-router';
 import {Image,Pressable,ScrollView,Text,View} from 'react-native';
 import {randomUUID} from 'expo-crypto';
 import {useConsumerRuntime} from '../consumer-runtime/ConsumerRuntimeProvider';
@@ -12,7 +12,7 @@ export function PhotoSession({actor,removalOnly=false}:{actor:string;removalOnly
  const controller=useMemo(()=>new ProfilePhotoController(runtime.mode==='supabase'?createProfilePhotoRepository():null,actor,removalOnly,randomUUID),[actor,removalOnly,runtime.mode]);
  const [state,setState]=useState(()=>controller.snapshot());const [confirm,setConfirm]=useState(false);const [picking,setPicking]=useState(false);
  const media=useMemo(()=>new ProfilePhotoMediaSession(),[]);
- useEffect(()=>{controller.activate();media.activate();const un=controller.subscribe(setState);controller.cleanup(media.cleanupPending);void controller.load();return()=>{un();controller.dispose();media.dispose();};},[controller,media]);
+ useFocusEffect(useCallback(()=>{controller.activate();media.activate();const un=controller.subscribe(setState);setState(controller.snapshot());controller.cleanup(media.cleanupPending);void controller.load();return()=>{controller.dispose();media.dispose();un();setConfirm(false);};},[controller,media]));
  const busy=state.busy||picking;
  const pick=async()=>{if(busy)return;setPicking(true);try{const data=await media.pick();if(data)controller.setDraft(data);}catch{controller.setDraft(null);controller.notice('選圖或格式處理失敗，未儲存；請重新選擇。');}finally{controller.cleanup(media.cleanupPending);setPicking(false);}};
  return <View style={{gap:12,padding:12}}><Text>{removalOnly?'私人頭貼移除':'平台私人頭貼'}</Text><Text>{removalOnly?'只查詢本人是否有照片及移除，不讀取照片內容。':'此照片僅供本人預覽，不會發布給好友或陌生飯友。'}</Text>
