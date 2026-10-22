@@ -62,6 +62,7 @@ export default function RootLayout() {
           <Stack.Screen name="social" options={{ title: zhTW.mobile.socialTitle }} />
           <Stack.Screen name="restaurants" options={{ title: zhTW.mobile.primaryNav.explore }} />
           <Stack.Screen name="permissions" options={{ title: zhTW.mobile.primaryNav.profile }} />
+          <Stack.Screen name="profile-photo" options={{ title: "平台私人頭貼" }} />
           <Stack.Screen name="me" options={{ title: zhTW.mobile.primaryNav.profile }} />
           <Stack.Screen name="group-tables" options={{ title: zhTW.mobile.groupTablesTitle }} />
           <Stack.Screen name="health-goal-plan" options={{ title: zhTW.mobile.healthGoalPlan.title }} />

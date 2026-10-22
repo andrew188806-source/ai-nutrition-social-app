@@ -1,3 +1,4 @@
+import {bindProfilePhotoRuntime,clearProfilePhotoRuntime} from '../profile-photo/repository';
 import {bindStrangerRuntime,clearStrangerRuntime,type StrangerClient} from '../stranger-exposure/repository';
 import { bindSocialFriendsRuntime, clearSocialFriendsRuntime, type FriendClient } from "../social-friends/repository";
 import { isConsumerDemoClientAllowed } from "../consumer-onboarding/demoEnvironment";
@@ -412,6 +413,7 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
   clearMealBuddyRelationshipRuntimeDependencies();
   clearSocialFriendsRuntime();
   clearStrangerRuntime();
+  clearProfilePhotoRuntime();
   clearMealBuddyChatRuntimeDependencies();
   clearMealBuddyPushRuntimeDependencies();
   clearSocialInterestSettingsRuntimeDependencies();
@@ -518,6 +520,8 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
         mealBuddyClient: client as unknown as SupabaseMealBuddyClientLike,
         catalogClient: client as unknown as SupabaseInterestCatalogClientLike
       });
+      // Private removal remains bound when upload capability is off; no social/member dependency.
+      bindProfilePhotoRuntime(authPort,client as unknown as StrangerClient,capabilityFlags.supabaseWritesEnabled);
       if (capabilityFlags.supabaseWritesEnabled) {
         bindMealBuddyCardCreateRuntimeDependencies({
           authPort,

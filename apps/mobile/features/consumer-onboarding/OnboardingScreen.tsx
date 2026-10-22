@@ -1,3 +1,4 @@
+import {ProfilePhotoRemovalPanel} from '../profile-photo/ProfilePhotoScreen';
 import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -16,8 +17,8 @@ export default function OnboardingScreen() {
     if (runtime.state.authState.status === "signedIn" && snapshot.demoEnvironment === true && snapshot.demo?.confirmed && snapshot.state?.coreEligible && !snapshot.pending && !snapshot.uncertain) router.replace("/");
   }, [router, runtime.state.authState.status, snapshot.demoEnvironment, snapshot.demo?.confirmed, snapshot.state?.coreEligible, snapshot.pending, snapshot.uncertain]);
   if (runtime.state.authState.status !== "signedIn") return <ScrollView contentContainerStyle={{ padding: 22, gap: 16 }}><Text>請先登入帳號。</Text><Pc2Button label="前往登入" onPress={() => router.replace("/login")} /></ScrollView>;
-  if (snapshot.demoStatus === "loading" || (snapshot.pending && snapshot.demoEnvironment !== false)) return <ScrollView contentContainerStyle={{ padding: 22 }}><Text>正在查核帳號狀態…</Text></ScrollView>;
-  if (snapshot.demoEnvironment === true && snapshot.demo?.confirmed && !snapshot.uncertain) return <ScrollView contentContainerStyle={{ padding: 22 }}><Text>Demo 草稿已確認；正在進入 Demo…</Text></ScrollView>;
+  if (snapshot.demoStatus === "loading" || (snapshot.pending && snapshot.demoEnvironment !== false)) return <ScrollView contentContainerStyle={{ padding: 22 }}><Text>正在查核帳號狀態…</Text><ProfilePhotoRemovalPanel/></ScrollView>;
+  if (snapshot.demoEnvironment === true && snapshot.demo?.confirmed && !snapshot.uncertain) return <ScrollView contentContainerStyle={{ padding: 22 }}><Text>Demo 草稿已確認；正在進入 Demo…</Text><ProfilePhotoRemovalPanel/></ScrollView>;
   if (snapshot.demoEnvironment === true || snapshot.demoStatus === "error") return <ScrollView contentContainerStyle={{ padding: 22, gap: 16 }}>
     <Text style={{ fontSize: 24 }}>TastKind Demo 草稿確認</Text>
     {snapshot.pending ? <Text>正在讀取帳號確認狀態…</Text> : null}
@@ -28,6 +29,7 @@ export default function OnboardingScreen() {
     {snapshot.error ? <Text accessibilityRole="alert">確認狀態尚未保存或無法查核。請重試；不會視為成功。</Text> : null}
     {!snapshot.pending && (snapshot.error || snapshot.uncertain || !snapshot.demo) ? <Pc2Button label="重試讀取確認狀態" disabled={busy} onPress={() => void controller?.refresh()} /> : null}
     {snapshot.demo?.confirmed && !snapshot.pending && !snapshot.uncertain ? <Text>Demo 草稿已確認；正在進入 Demo…</Text> : null}
+    <ProfilePhotoRemovalPanel/>
     <Pc2Button label={c.logout} disabled={busy} onPress={() => void runtime.signOut()} />
   </ScrollView>;
   return <ScrollView contentContainerStyle={{ padding: 22, gap: 16 }}><Text style={{ fontSize: 24 }}>{c.title}</Text>
@@ -48,6 +50,7 @@ export default function OnboardingScreen() {
     <Pc2Button label={c.reread} disabled={busy} onPress={() => void controller?.refresh()} />
     <Pc2Button label={c.support} onPress={() => router.push("/account-support" as never)} />
     {snapshot.state?.coreEligible ? <Pc2Button label="進入已完成正式授權的服務" disabled={busy} onPress={() => router.replace("/")} /> : null}
+    <ProfilePhotoRemovalPanel/>
     <Pc2Button label={c.logout} disabled={busy} onPress={() => void runtime.signOut()} />
   </ScrollView>;
 }

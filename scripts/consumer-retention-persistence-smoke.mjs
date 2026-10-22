@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {ph1FilesState,ph1PredecessorGit,PH1_FILES,PH1_MIGRATION} from './s2-ph1-exact-successor.mjs';
+
 import {act2FilesState,act2PredecessorGit,ACT2_FILES,ACT2_MIGRATION} from './s2-act2-exact-successor.mjs';
 // Disposable PostgreSQL only. Candidate metadata never constitutes Consumer authority.
 import fs from 'node:fs';
@@ -247,9 +249,10 @@ export async function baseline(cl,rec,{legacy=false}={}){
   // Exact successor recognition: the original 143-file inventory (the retention migration is file 143), followed by an EXACT ORDERED tail of pinned forward migrations. No tail file is assumed to be last:
   // the accepted tails are [], [capture], [capture, ENT0], [capture, ENT0, origin demo migration] and [capture, ENT0, origin demo migration, ENT1-A]; the demo migration sorts after ENT0 and the ENT1-A migration after the demo
   // migration. Each tail file is pinned by sha256.
-  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256};
+  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256,[PH1_MIGRATION]:PH1_MIGRATION_SHA256};
   const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION,BILLING_MIGRATION]];
   if(isAct2Migration(ACT2_MIGRATION))tails.push([...tails.at(-1),ACT2_MIGRATION]);
+  if(checkedPH1State(act2RootGit).state==='record')tails.push([...tails.at(-1),PH1_MIGRATION]);
   const tail=tails.find(t=>files.length===143+t.length&&files.slice(143).join('|')===t.join('|')&&t.every(n=>sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))===tailPins[n]));
   if(!tail||files[142]!==MIGRATION)throw Error('MIGRATION_INVENTORY');
   const predecessors=files.slice(0,142);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
@@ -1169,7 +1172,7 @@ export async function runSmoke({bin,out,cli,evidence}){
 export const ACT2_MODULE_BLOB='b8a50a451657b466777bac6425fe196423c5019d';
 export const ACT2_MIGRATION_SHA256='de050926c783289647345fc1e28369f6c7a9d72e422acdd847bddcd02bea2bcf';
 const ACT2_MODULE_PATH='scripts/s2-act2-exact-successor.mjs';
-export function checkedAct2State(git){
+function checkedAct2StateBeforePH1(git){
  const staged=git(['ls-files','--stage','--',ACT2_MODULE_PATH]).trim();
  const wt=fs.existsSync(path.join(ROOT,ACT2_MODULE_PATH))?git(['hash-object','--',ACT2_MODULE_PATH]).trim():null;
  if(staged!=='100644 '+ACT2_MODULE_BLOB+' 0\t'+ACT2_MODULE_PATH||wt!==ACT2_MODULE_BLOB)return {state:'invalid',paths:[],violations:['act2:module-binding']};
@@ -1177,8 +1180,8 @@ export function checkedAct2State(git){
 }
 const act2RootGit=args=>{const r=child.spawnSync('git',args,{cwd:ROOT,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}});if(r.status)throw Error('ACT2_GIT_READ');return r.stdout;};
 export function isAct2Migration(name){return name===ACT2_MIGRATION&&checkedAct2State(act2RootGit).state==='record';}
-export function recoverySuccessorState(git){
- const act2=checkedAct2State(git);
+function recoverySuccessorStateBeforePH1(git){
+ const act2=checkedAct2StateBeforePH1(git);
  if(act2.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:act2.violations};
  if(act2.state==='base')return recoverySuccessorStateBeforeACT2(git);
  const prior=recoverySuccessorStateBeforeACT2(act2PredecessorGit(git));
@@ -1186,6 +1189,32 @@ export function recoverySuccessorState(git){
  return {...prior,act2:'record',paths:[...new Set([...prior.paths,...act2.paths,ACT2_MODULE_PATH])]};
 }
 
-export function withAct2Tail(tail){return isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;}
+export function withAct2Tail(tail){const prior=isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;return checkedPH1State(act2RootGit).state==='record'?[...prior,PH1_MIGRATION]:prior;}
+
+
+// PH1 one-way successor: this root pins the module; the module pins only exact leaves.
+export const PH1_MODULE_BLOB='073113bfa3162939387e405e2121ae381e88520a';
+export const PH1_MIGRATION_SHA256='a0b72ecfdb8e005b7da4c5893fc4fabc356911d4b3968f2a5aa293dd9a8f49a6';
+const PH1_MODULE_PATH='scripts/s2-ph1-exact-successor.mjs';
+export function checkedPH1State(git){
+ const staged=git(['ls-files','--stage','--',PH1_MODULE_PATH]).trim();
+ const present=fs.existsSync(path.join(ROOT,PH1_MODULE_PATH));
+ if(!present&&!staged)return {state:'base',paths:[],violations:[]};
+ if(staged!=='100644 '+PH1_MODULE_BLOB+' 0\t'+PH1_MODULE_PATH||git(['hash-object','--',PH1_MODULE_PATH]).trim()!==PH1_MODULE_BLOB)return {state:'invalid',paths:[],violations:['ph1:module-binding']};
+ return ph1FilesState(git,ROOT);
+}
+export function checkedAct2State(git){
+ const ph1=checkedPH1State(git);if(ph1.state==='invalid')return ph1;
+ const prior=checkedAct2StateBeforePH1(ph1.state==='record'?ph1PredecessorGit(git):git);
+ if(ph1.state==='record'&&prior.state!=='record')return {state:'invalid',paths:[],violations:['ph1:requires-accepted-act2']};
+ return ph1.state==='record'?{...prior,paths:[...new Set([...prior.paths,...ph1.paths,PH1_MODULE_PATH])]}:prior;
+}
+export function isPH1Migration(name){return name===PH1_MIGRATION&&checkedPH1State(act2RootGit).state==='record';}
+export function recoverySuccessorState(git){
+ const ph1=checkedPH1State(git);if(ph1.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:ph1.violations};
+ const prior=recoverySuccessorStateBeforePH1(ph1.state==='record'?ph1PredecessorGit(git):git);
+ if(ph1.state==='record'&&(!prior.exempt||prior.act2!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['ph1:requires-complete-predecessor',...prior.violations]};
+ return ph1.state==='record'?{...prior,ph1:'record',paths:[...new Set([...prior.paths,...ph1.paths,PH1_MODULE_PATH])]}:prior;
+}
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){let code;try{code=await runSmoke(options());}catch(e){console.error(e.stack);code=2;}process.exitCode=code;}
