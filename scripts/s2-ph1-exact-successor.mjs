@@ -142,13 +142,13 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/profile-photo/handler.test.ts": {
     "mode": "100644",
-    "blob": "cce53d627d29542c0d535f24449c5caeaeadc655",
+    "blob": "3c5e360d470421827a4b9e8c45be1f66ba8865d1",
     "base": null,
     "baseMode": null
   },
   "supabase/functions/profile-photo/handler.ts": {
     "mode": "100644",
-    "blob": "09be5543d4fea8b72c6f0149af2fb927447b1839",
+    "blob": "bd0515410de9dd27cb8d3db5aea63553f41a204f",
     "base": null,
     "baseMode": null
   },
