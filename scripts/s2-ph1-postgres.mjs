@@ -1,3 +1,4 @@
+import {assessDenoSuite} from './s2-ph1-suite-verdict.mjs';
 // Fresh local PostgreSQL 17 integration. No Hosted access, secrets, skips or assumed PASS.
 // Provider authentication is an injected synthetic boundary; production handlers/services/SQL run.
 // Global heavy-PG lock is mandatory and held by this PID until all owned PG processes exit.
@@ -17,7 +18,11 @@ const connect=async user=>{const c=new Client({host:"127.0.0.1",port,user,databa
 const close=async c=>{await c.end();connections.delete(c);};
 const LEGACY='00000000-0000-4000-8000-000000000104';
 try{
- fs.mkdirSync(out);ownsOut=true;const version=run("postgres",["--version"]);check("PostgreSQL17 required",/PostgreSQL\) 17\./.test(version),version);
+ fs.mkdirSync(out);ownsOut=true;
+ const sourceGit=args=>child.execFileSync('git',['-c','safe.directory='+root,...args],{cwd:root,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}}).trim();
+ const testedFiles=sourceGit(['ls-files','--','apps/mobile/features/profile-photo','packages/shared/src/domain/profile-photo.ts','packages/shared/src/domain/profile-photo-limits.ts','supabase/functions/profile-photo','supabase/functions/_shared/profile-photo','supabase/functions/_shared/social-runtime-transport','scripts/s2-ph1*','supabase/config.toml']).split('\n').filter(Boolean);
+ fs.writeFileSync(path.join(out,'execution-source.json'),JSON.stringify({head:sourceGit(['rev-parse','HEAD']),tree:sourceGit(['rev-parse','HEAD^{tree}']),parents:sourceGit(['show','-s','--format=%P','HEAD']),dirty:sourceGit(['status','--porcelain=v1','-uall'])!=='',files:testedFiles.map(file=>({file,sha256:createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex')}))},null,2));
+const version=run("postgres",["--version"]);check("PostgreSQL17 required",/PostgreSQL\) 17\./.test(version),version);
  port=await new Promise((resolve,reject)=>{const s=net.createServer();s.on("error",reject);s.listen(0,"127.0.0.1",()=>{const p=s.address().port;s.close(()=>resolve(p));});});
  run("initdb",["-D",path.join(out,"data"),"-U","supabase_admin","--encoding=UTF8","--locale=C","-A","trust","--no-sync"]);
  run("pg_ctl",["-D",path.join(out,"data"),"-l",path.join(out,"postgres.log"),"-o","-p "+port+" -c listen_addresses=127.0.0.1 -c fsync=off -c shared_buffers=16MB -c max_connections=25","start"]);started=true;
@@ -45,10 +50,12 @@ try{
 
  const deno=arg('--deno');if(!process.argv.includes('--deno'))throw Error('--deno required');
  // Run the actual Deno handler + codec + DB transport. Only Auth provider identity is synthetic.
- const result=child.spawnSync(deno,['test','--allow-env','--allow-net=127.0.0.1','--config=supabase/functions/profile-photo/deno.json','--lock=supabase/functions/profile-photo/deno.lock','supabase/functions/profile-photo/pg.test.ts'],{cwd:root,env:{...process.env,PH1_TEST_PG_PORT:String(port)},encoding:'utf8',timeout:180000,maxBuffer:12e6});
+ const result=child.spawnSync(deno,['test','--allow-read='+root,'--allow-run='+process.execPath,'--allow-env','--allow-net=127.0.0.1','--config=supabase/functions/profile-photo/deno.json','--lock=supabase/functions/profile-photo/deno.lock','supabase/functions/profile-photo/pg.test.ts'],{cwd:root,env:{...process.env,PH1_TEST_PG_PORT:String(port),PH1_TEST_NODE:process.execPath},encoding:'utf8',timeout:180000,maxBuffer:12e6});
  fs.writeFileSync(path.join(out,'deno-tests.stdout.txt'),result.stdout??'');fs.writeFileSync(path.join(out,'deno-tests.stderr.txt'),result.stderr??'');
- check('PH1 real Deno/PG suite completed normally',!result.error&&result.status===0,{status:result.status,error:String(result.error??''),stdout:result.stdout,stderr:result.stderr});
- if(result.error||result.status!==0)throw Error('PH1_DENO_SUITE_NOT_PASS');
+ const contract=JSON.parse(fs.readFileSync(path.join(root,'supabase/functions/profile-photo/pg-suite-contract.json'),'utf8')),verdict=assessDenoSuite(result,contract);
+ fs.writeFileSync(path.join(out,'deno-suite-verdict.json'),JSON.stringify(verdict,null,2));
+ check('PH1 real Deno/PG suite completed normally',verdict.pass,{status:result.status,error:String(result.error??''),verdict,stdout:result.stdout,stderr:result.stderr});
+ if(!verdict.pass)throw Error('PH1_DENO_SUITE_NOT_COMPLETE');
 }catch(e){failed={message:e.message,stack:e.stack};console.error(e.stack);process.exitCode=1;}
 finally{
  for(const c of [...connections])try{await close(c);}catch{}

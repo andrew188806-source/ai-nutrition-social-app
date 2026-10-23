@@ -1,5 +1,5 @@
 import type {PhotoRequest,PhotoState} from '../../../../packages/shared/src/domain/profile-photo';
-import type {PhotoPort} from './repository';
+import {PhotoRequestError,type PhotoPort} from './repository';
 export type PhotoScreenState={phase:'idle'|'loading'|'ready'|'error'|'unknown'|'unavailable';busy:boolean;remote:PhotoState|null;preview:string|null;draft:string|null;message:string|null;cleanupPending:boolean;authRequired:boolean};
 const copy:Record<string,string>={invalid_photo:'照片格式、大小或影像內容不符限制，尚未儲存。',state_changed:'照片已更新，請重新讀取後再確認操作。',request_reused:'本次請求內容不一致，請重新讀取。',owner_or_core_required:'目前帳號或必要授權不允許讀寫；仍可於帳號授權頁移除私人照片。',authentication_required:'登入已變更，請重新登入。',upload_unavailable:'目前未提供上傳。',retryable_failure:'交易未完成，請重新讀取後重試。'};
 const explain=(code:string)=>copy[code]??'服務或連線暫時不可用；未能確認照片狀態。';
@@ -29,7 +29,7 @@ export class ProfilePhotoController {
   this.set({busy:true,message:null,authRequired:false});
   try{const r=await this.port.execute(this.actor,request);if(!('state' in r))throw Error('invalid_server_response');responseReceived=true;await this.finish(r.state,epoch);}
   catch(e){if(!this.active||epoch!==this.epoch)return;const code=e instanceof Error?e.message:'outcome_unknown';
-   const refused=['invalid_photo','state_changed','request_reused','owner_or_core_required','authentication_required','upload_unavailable','retryable_failure','invalid_request'].includes(code);
+   const refused=e instanceof PhotoRequestError&&(e.outcome==='not_sent'||e.outcome==='refused');
    if(refused&&!wasUncertain&&!responseReceived){this.pending=null;this.uncertain=false;this.set({phase:'error',busy:false,remote:null,preview:null,draft:null,authRequired:code==='authentication_required',message:explain(code)});}
    else {this.uncertain=true;this.set({phase:'unknown',busy:false,remote:null,preview:null,draft:null,authRequired:code==='authentication_required',message:wasUncertain&&refused?'本次重送被拒絕，但先前結果仍未確認。請查證目前狀態。':'結果尚未確認；請查證，不代表儲存或移除成功。'});}
   }

@@ -40,25 +40,31 @@ export const PH1_FILES=Object.freeze({
   },
   "apps/mobile/features/profile-photo/controller.ts": {
     "mode": "100644",
-    "blob": "94d7bd6ffb3063b2a00bb43ee8d6434c80fc2d5f",
+    "blob": "1a96aa0a7eef1b9737338490a756a577c40a2c84",
     "base": null,
     "baseMode": null
   },
   "apps/mobile/features/profile-photo/media.ts": {
     "mode": "100644",
-    "blob": "f392cc0e433a9f3145c0b10c92cbc559ae76114b",
+    "blob": "8ccd944a843e4dd7f81908af9fd2c4f4c986c243",
     "base": null,
     "baseMode": null
   },
   "apps/mobile/features/profile-photo/repository.ts": {
     "mode": "100644",
-    "blob": "973b13cabbeacc81a5dc6d99e3b15277af4ee608",
+    "blob": "d3e3bbd2d3dedaf1194e51fc5d4469a045414caa",
+    "base": null,
+    "baseMode": null
+  },
+  "packages/shared/src/domain/profile-photo-limits.ts": {
+    "mode": "100644",
+    "blob": "e1881bfbb99b8c156a7d74b27fe7a41c21357f23",
     "base": null,
     "baseMode": null
   },
   "packages/shared/src/domain/profile-photo.ts": {
     "mode": "100644",
-    "blob": "0a3ad1e6a05b569e5c00fc3b984c91880bfd5393",
+    "blob": "3208e461044fd2009e3e219baec667c43c335427",
     "base": null,
     "baseMode": null
   },
@@ -74,27 +80,45 @@ export const PH1_FILES=Object.freeze({
     "base": null,
     "baseMode": null
   },
+  "scripts/s2-ph1-client-commit-control.mjs": {
+    "mode": "100644",
+    "blob": "c2b9e3ede8b263f1e3ea611635994a4b8a1a8559",
+    "base": null,
+    "baseMode": null
+  },
   "scripts/s2-ph1-host.mjs": {
     "mode": "100644",
-    "blob": "646feaf0f89d884b847cb619456c7208bdeb70dd",
+    "blob": "0a3788fedff1ec90ba530bcb34abd8e9d5672260",
     "base": null,
     "baseMode": null
   },
   "scripts/s2-ph1-media-smoke.mjs": {
     "mode": "100644",
-    "blob": "ba25884e8a0949e0e124160fbdbb41d9d59197c9",
+    "blob": "2acd34851a18490635a7226b850207473dcfb7d4",
     "base": null,
     "baseMode": null
   },
   "scripts/s2-ph1-negative-controls.mjs": {
     "mode": "100644",
-    "blob": "3ef88a247c5a5d1bcb26c95086c961cb30dacaae",
+    "blob": "45bcb3981defc0d0758196fd559922546c479ded",
     "base": null,
     "baseMode": null
   },
   "scripts/s2-ph1-postgres.mjs": {
     "mode": "100644",
-    "blob": "424e8365ceb0582a7bed757a3050d5a5b3f2de9f",
+    "blob": "db3ec61c958b6e43ed27ef4f05202d893c90bf73",
+    "base": null,
+    "baseMode": null
+  },
+  "scripts/s2-ph1-runner-controls.mjs": {
+    "mode": "100644",
+    "blob": "6c245335d88ba74b3b0b3459f69160fd54be0de4",
+    "base": null,
+    "baseMode": null
+  },
+  "scripts/s2-ph1-suite-verdict.mjs": {
+    "mode": "100644",
+    "blob": "9799f322a0287f88fb0799de3bcc8ebc1cc12040",
     "base": null,
     "baseMode": null
   },
@@ -106,7 +130,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/_shared/profile-photo/imageCodec.ts": {
     "mode": "100644",
-    "blob": "7bf779c74e4c41bfa9c4224a09c87d8f3ec7a2ce",
+    "blob": "6895b99de45228b0784aec6aca69561e7245fa2e",
     "base": null,
     "baseMode": null
   },
@@ -118,7 +142,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/profile-photo/codec.test.ts": {
     "mode": "100644",
-    "blob": "745a7eb9b995261b50d9f54545ca88c184302d71",
+    "blob": "5c5f60e6dd8c905063c3cc03d7f2f5b5ca1aaf04",
     "base": null,
     "baseMode": null
   },
@@ -140,6 +164,12 @@ export const PH1_FILES=Object.freeze({
     "base": null,
     "baseMode": null
   },
+  "supabase/functions/profile-photo/fixtures/client-conversion.json": {
+    "mode": "100644",
+    "blob": "1f28505fd4d0d7fafea95cd461f3cd6c66e6f163",
+    "base": null,
+    "baseMode": null
+  },
   "supabase/functions/profile-photo/handler.test.ts": {
     "mode": "100644",
     "blob": "3c5e360d470421827a4b9e8c45be1f66ba8865d1",
@@ -148,7 +178,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/profile-photo/handler.ts": {
     "mode": "100644",
-    "blob": "5bc3a1b5a2c4306e9f2be6a8b7808a7ddf5aeba9",
+    "blob": "5a4b0236ae886518fad6538a529091712e3b47b4",
     "base": null,
     "baseMode": null
   },
@@ -158,9 +188,15 @@ export const PH1_FILES=Object.freeze({
     "base": null,
     "baseMode": null
   },
+  "supabase/functions/profile-photo/pg-suite-contract.json": {
+    "mode": "100644",
+    "blob": "e524a05d8f315a500e095a0c6a3f41416966b0c2",
+    "base": null,
+    "baseMode": null
+  },
   "supabase/functions/profile-photo/pg.test.ts": {
     "mode": "100644",
-    "blob": "30a62bf8da91de22745eed676bdd5ae1024c33b9",
+    "blob": "ab15a4a0b80f8f612aabaf8149e30e822f53186d",
     "base": null,
     "baseMode": null
   },

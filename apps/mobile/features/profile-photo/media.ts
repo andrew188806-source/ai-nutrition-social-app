@@ -1,3 +1,4 @@
+import {PHOTO_LIMITS,PHOTO_INPUT_BASE64} from '../../../../packages/shared/src/domain/profile-photo-limits';
 import {Directory,File,Paths} from 'expo-file-system';
 import {launchImageLibraryAsync} from 'expo-image-picker';
 import {manipulateAsync,SaveFormat} from 'expo-image-manipulator';
@@ -24,9 +25,9 @@ export class ProfilePhotoMediaSession {
  try{
   const selected=await launchImageLibraryAsync({mediaTypes:['images'],allowsEditing:true,aspect:[1,1],quality:1,exif:false});
   if(selected.canceled)return null;const asset=selected.assets[0];track(asset.uri);if(!current())return null;
-  const resize=asset.width>=asset.height?{width:Math.min(1024,asset.width)}:{height:Math.min(1024,asset.height)};
+  const resize=asset.width>=asset.height?{width:Math.min(PHOTO_LIMITS.inputEdge,asset.width)}:{height:Math.min(PHOTO_LIMITS.inputEdge,asset.height)};
   const output=await manipulateAsync(asset.uri,[{resize}],{format:SaveFormat.JPEG,compress:.8,base64:true});track(output.uri);
-  if(!current())return null;if(!output.base64||output.base64.length>349528)throw Error('photo_too_large');return output.base64;
+  if(!current())return null;if(!output.base64||output.base64.length>PHOTO_INPUT_BASE64)throw Error('photo_too_large');return output.base64;
  }finally{liveTasks.delete(task);owned.clear();this.cleanupPending=retryPhotoTempCleanup();}}
  dispose(){this.alive=false;this.epoch++;this.cleanupPending=retryPhotoTempCleanup();}
 }
