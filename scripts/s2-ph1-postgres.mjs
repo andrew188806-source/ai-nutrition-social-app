@@ -20,7 +20,7 @@ const LEGACY='00000000-0000-4000-8000-000000000104';
 try{
  fs.mkdirSync(out);ownsOut=true;
  const sourceGit=args=>child.execFileSync('git',['-c','safe.directory='+root,...args],{cwd:root,encoding:'utf8',env:{...process.env,GIT_OPTIONAL_LOCKS:'0'}}).trim();
- const testedFiles=sourceGit(['ls-files','--','apps/mobile/features/profile-photo','packages/shared/src/domain/profile-photo.ts','packages/shared/src/domain/profile-photo-limits.ts','supabase/functions/profile-photo','supabase/functions/_shared/profile-photo','supabase/functions/_shared/social-runtime-transport','scripts/s2-ph1*','supabase/config.toml']).split('\n').filter(Boolean);
+ const testedFiles=sourceGit(['ls-files','--','apps/mobile/features/profile-photo','packages/shared/src/domain/profile-photo.ts','supabase/functions/profile-photo','supabase/functions/_shared/profile-photo','supabase/functions/_shared/social-runtime-transport','scripts/s2-ph1*','supabase/config.toml']).split('\n').filter(Boolean);
  fs.writeFileSync(path.join(out,'execution-source.json'),JSON.stringify({head:sourceGit(['rev-parse','HEAD']),tree:sourceGit(['rev-parse','HEAD^{tree}']),parents:sourceGit(['show','-s','--format=%P','HEAD']),dirty:sourceGit(['status','--porcelain=v1','-uall'])!=='',files:testedFiles.map(file=>({file,sha256:createHash('sha256').update(fs.readFileSync(path.join(root,file))).digest('hex')}))},null,2));
 const version=run("postgres",["--version"]);check("PostgreSQL17 required",/PostgreSQL\) 17\./.test(version),version);
  port=await new Promise((resolve,reject)=>{const s=net.createServer();s.on("error",reject);s.listen(0,"127.0.0.1",()=>{const p=s.address().port;s.close(()=>resolve(p));});});

@@ -1,9 +1,8 @@
-import {PHOTO_LIMITS} from '../../../packages/shared/src/domain/profile-photo-limits.ts';
 import {createClient} from 'npm:@supabase/supabase-js@2.57.4';
 import {createDenoSocialRuntimeExecutorTransport} from '../_shared/social-runtime-transport/denoPostgresExecutorTransport.ts';
 import type {SocialRuntimeExecutorTransport} from '../_shared/social-runtime-transport/executorTransactionTransport.ts';
 import {ProfilePhotoService} from '../_shared/profile-photo/service.ts';
-import {parsePhotoRequest} from '../../../packages/shared/src/domain/profile-photo.ts';
+import {PHOTO_LIMITS,parsePhotoRequest} from '../../../packages/shared/src/domain/profile-photo.ts';
 import {loadConfig,type PhotoConfig} from './config.ts';
 // Identity-only boundary: remove remains available when normal core reads/writes are forbidden.
 export async function verifyOwner(request:Request,config:PhotoConfig):Promise<string|null>{

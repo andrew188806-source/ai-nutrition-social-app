@@ -1,4 +1,4 @@
-import {PHOTO_LIMITS,PHOTO_INPUT_BASE64} from '../../../../packages/shared/src/domain/profile-photo-limits';
+import {PHOTO_LIMITS,PHOTO_INPUT_BASE64} from '../../../../packages/shared/src/domain/profile-photo';
 import {Directory,File,Paths} from 'expo-file-system';
 import {launchImageLibraryAsync} from 'expo-image-picker';
 import {manipulateAsync,SaveFormat} from 'expo-image-manipulator';

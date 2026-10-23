@@ -1,5 +1,5 @@
 import jpeg from 'npm:jpeg-js@0.4.4';
-import {PHOTO_LIMITS,PHOTO_INPUT_BASE64,PHOTO_DECODER_MP} from '../../../../packages/shared/src/domain/profile-photo-limits.ts';
+import {PHOTO_LIMITS,PHOTO_INPUT_BASE64,PHOTO_DECODER_MP} from '../../../../packages/shared/src/domain/profile-photo.ts';
 export const INPUT_LIMIT=PHOTO_LIMITS.inputBytes, OUTPUT_LIMIT=PHOTO_LIMITS.outputBytes;
 export class PhotoInputError extends Error { constructor(){super('invalid_photo');} }
 const fail=():never=>{throw new PhotoInputError();};

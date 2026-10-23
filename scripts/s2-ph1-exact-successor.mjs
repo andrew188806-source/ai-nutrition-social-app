@@ -46,7 +46,7 @@ export const PH1_FILES=Object.freeze({
   },
   "apps/mobile/features/profile-photo/media.ts": {
     "mode": "100644",
-    "blob": "8ccd944a843e4dd7f81908af9fd2c4f4c986c243",
+    "blob": "2dc23b64b1d8acea3c45dcb2300844d3bb93acbf",
     "base": null,
     "baseMode": null
   },
@@ -56,15 +56,9 @@ export const PH1_FILES=Object.freeze({
     "base": null,
     "baseMode": null
   },
-  "packages/shared/src/domain/profile-photo-limits.ts": {
-    "mode": "100644",
-    "blob": "e1881bfbb99b8c156a7d74b27fe7a41c21357f23",
-    "base": null,
-    "baseMode": null
-  },
   "packages/shared/src/domain/profile-photo.ts": {
     "mode": "100644",
-    "blob": "3208e461044fd2009e3e219baec667c43c335427",
+    "blob": "38e82a4367b4d897c8702e7e648a0dfc58c6c575",
     "base": null,
     "baseMode": null
   },
@@ -76,7 +70,7 @@ export const PH1_FILES=Object.freeze({
   },
   "scripts/s2-ph1-binding-controls.mjs": {
     "mode": "100644",
-    "blob": "d9e6561a9b2a548b922b72044b95bbb006a14f65",
+    "blob": "d5c050f23e88278a0099422e9e8e720c42d74ad6",
     "base": null,
     "baseMode": null
   },
@@ -94,19 +88,19 @@ export const PH1_FILES=Object.freeze({
   },
   "scripts/s2-ph1-media-smoke.mjs": {
     "mode": "100644",
-    "blob": "2acd34851a18490635a7226b850207473dcfb7d4",
+    "blob": "f76f695e60120b0daa1891bfa3ed62e4ca139f0d",
     "base": null,
     "baseMode": null
   },
   "scripts/s2-ph1-negative-controls.mjs": {
     "mode": "100644",
-    "blob": "45bcb3981defc0d0758196fd559922546c479ded",
+    "blob": "44a076f80bed7101ef7269a039bbcbddb2a55602",
     "base": null,
     "baseMode": null
   },
   "scripts/s2-ph1-postgres.mjs": {
     "mode": "100644",
-    "blob": "db3ec61c958b6e43ed27ef4f05202d893c90bf73",
+    "blob": "30b4e5937fa4a793fb8249cad7f8559ce5afab2d",
     "base": null,
     "baseMode": null
   },
@@ -130,7 +124,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/_shared/profile-photo/imageCodec.ts": {
     "mode": "100644",
-    "blob": "6895b99de45228b0784aec6aca69561e7245fa2e",
+    "blob": "5a516cedf4c210260366db633d2b6a37b4c85bb6",
     "base": null,
     "baseMode": null
   },
@@ -178,7 +172,7 @@ export const PH1_FILES=Object.freeze({
   },
   "supabase/functions/profile-photo/handler.ts": {
     "mode": "100644",
-    "blob": "5a4b0236ae886518fad6538a529091712e3b47b4",
+    "blob": "2c8bc9d927bcb786b3fd6403a5fcf6f481b3fde2",
     "base": null,
     "baseMode": null
   },
