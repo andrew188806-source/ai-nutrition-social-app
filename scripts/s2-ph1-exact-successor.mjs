@@ -76,7 +76,7 @@ export const PH1_FILES=Object.freeze({
   },
   "scripts/s2-ph1-binding-controls.mjs": {
     "mode": "100644",
-    "blob": "c9a24da00e3958100f09edfa7d7de10ba0ff5347",
+    "blob": "d9e6561a9b2a548b922b72044b95bbb006a14f65",
     "base": null,
     "baseMode": null
   },
