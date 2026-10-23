@@ -100,10 +100,10 @@ export const BILLING_MIGRATION_SHA256 = '46157615eca4effea5cc86e698d0ea1dc15a898
 // <<EDGE-PINS>>
 export const EDGE_FILES = Object.freeze({
   'supabase/functions/_shared/billing-transport/config.ts': Object.freeze(['100644', 'ed814f9bcd9ce6877f8d0f0f5b02c58157591a46']),
-  'supabase/functions/_shared/billing-transport/denoPostgresBillingTransport.ts': Object.freeze(['100644', 'dc9eca05fa1d709ea0f2f5e4ed6974973b697a5c']),
-  'supabase/functions/_shared/billing-transport/executor.ts': Object.freeze(['100644', 'dfef92a91d66b9fe7f56171149ea3a4a84f2232d']),
+  'supabase/functions/_shared/billing-transport/denoPostgresBillingTransport.ts': Object.freeze(['100644', '04a9fef6855a2c29d7f65300084bd720ebd3c26c']),
+  'supabase/functions/_shared/billing-transport/executor.ts': Object.freeze(['100644', 'bd0b37532be4dac8219f6b0559f567d1bf9a73f3']),
   'supabase/functions/_shared/billing-transport/http.ts': Object.freeze(['100644', '2c234febf56b8ae9863e7a13c8f405d8e2f33dcd']),
-  'supabase/functions/_shared/billing-transport/sql.ts': Object.freeze(['100644', 'e023b3613211bb947442f0d2a3879058349d6047']),
+  'supabase/functions/_shared/billing-transport/sql.ts': Object.freeze(['100644', '20dc846db6ab2df15d23af098046f2f4c3fd6f64']),
   'supabase/functions/billing-link/config.ts': Object.freeze(['100644', 'c7595782d43f390b0e075aa49e947654acf0619b']),
   'supabase/functions/billing-link/handler.ts': Object.freeze(['100644', '78e96a93a94110022d5a978b1670fe3c059f9ef0']),
   'supabase/functions/billing-link/index.ts': Object.freeze(['100644', 'b5a204e4b6a44711dbbb5a24b4ea126685ed16dc']),
@@ -113,8 +113,8 @@ export const EDGE_FILES = Object.freeze({
   'supabase/functions/billing-webhook/config.ts': Object.freeze(['100644', '0cecebb31c588f7c1e9c91dd277df8c580163c33']),
   'supabase/functions/billing-webhook/handler.ts': Object.freeze(['100644', '578fbcd1394b8c24e85c1c665fc6f1c5f0524b9b']),
   'supabase/functions/billing-webhook/index.ts': Object.freeze(['100644', 'aa24871bc6c3ae4590d5fcf7b089205df2b8e932']),
-  'scripts/consumer-retention-billing-edge-smoke.mjs': Object.freeze(['100644', '03dbd2694d45ab10c1b2c126bffceb9e2091ba77']),
-  'scripts/consumer-retention-billing-edge-mutations.mjs': Object.freeze(['100644', 'b364176c15ca0f629e728ea4b73b431e6eed1251'])
+  'scripts/consumer-retention-billing-edge-smoke.mjs': Object.freeze(['100644', '96feba09f4286a455f7f3797dbe3ad2eb6247c55']),
+  'scripts/consumer-retention-billing-edge-mutations.mjs': Object.freeze(['100644', '3168a91930754ffeebd838dbec353104f27ff805'])
 });
 // The exact post-ENT-F2 bytes of the two older validators ENT-F2 edits. Only when both are exact (together with EDGE_FILES) are they projected back to the identities the S2-ACT2 record pins (ACT2_FILES) for the evaluation of the older chain.
 export const EDGE_PROJECTION = Object.freeze({

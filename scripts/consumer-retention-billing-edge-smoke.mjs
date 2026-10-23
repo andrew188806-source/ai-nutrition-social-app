@@ -23,7 +23,7 @@ import { billingFresh } from './consumer-retention-billing-smoke.mjs';
 export { options };
 const requireRoot = createRequire(path.join(ROOT, 'package.json'));
 const tsc = requireRoot('typescript');
-const { Client } = requireRoot('pg');
+const { Client, DatabaseError: PgDatabaseError } = requireRoot('pg');
 
 const R = (pass, observed) => ({ pass: !!pass, observed });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -480,9 +480,17 @@ Object.assign(GATES, {
   // ---- T00: classification and shapes (pure) -------------------------------------------------------------------------------------------------------------------------
   async T00_TRANSPORT_COMMIT_CLASSIFICATION_AND_SHAPES() {
     const { stubs } = makeStubs(); const S = newEdgeSession({ stubs }); const Sq = S.load('_shared/billing-transport/sql.ts'), E = S.load('_shared/billing-transport/executor.ts'), core = S.load('_shared/billing-core/index.ts');
-    const definite = [['23514', true], ['40001', true], ['40P01', true], ['P0001', true], ['23503', true], ['08006', false], ['08000', false], ['57P01', false], ['57014', true], ['XX000', false], ['58030', false], ['ECONNRESET', false], ['CONNECTION_CLOSED', false], ['', false], [undefined, false], [null, false], [42, false]];
-    const classRows = definite.map(([code, want]) => [String(code), Sq.commitFailureIsDefinite(code === null && false ? null : { code }) === want]);
-    classRows.push(['no object', Sq.commitFailureIsDefinite(null) === false], ['plain error', Sq.commitFailureIsDefinite(Error('x')) === false]);
+    // F2-E02: the classification reads the DRIVER's attestation of a server answer (BillingCommitPhaseError.serverAnswer), never the shape of the raw failure (EPIPE / EBADF are five upper-case characters too).
+    const att = (code, severity = 'ERROR') => new E.BillingCommitPhaseError(Object.assign(Error('server answer'), { code, severity }), { code, severity });
+    const raw = (code, extra = {}) => new E.BillingCommitPhaseError(Object.assign(Error('raw ' + code), { code, ...extra }), null);
+    const definite = [
+      ['attested 23514', att('23514'), true], ['attested 23505', att('23505'), true], ['attested 23503', att('23503'), true], ['attested 40001', att('40001'), true], ['attested 40P01', att('40P01'), true], ['attested P0001', att('P0001'), true], ['attested 57014', att('57014'), true],
+      ['attested 08006', att('08006'), false], ['attested 08000', att('08000'), false], ['attested 57P01', att('57P01'), false], ['attested 57P01 FATAL', att('57P01', 'FATAL'), false], ['attested XX000', att('XX000'), false], ['attested 58030', att('58030'), false],
+      ['attested 23505 FATAL', att('23505', 'FATAL'), false], ['attested 23505 PANIC', att('23505', 'PANIC'), false], ['attested 23505 lower-case severity', att('23505', 'error'), false], ['attested lower-case code', att('2350a'), false],
+      ['raw EPIPE', raw('EPIPE', { errno: -32, syscall: 'write' }), false], ['raw EBADF', raw('EBADF', { errno: -9, syscall: 'write' }), false], ['raw ECONNRESET', raw('ECONNRESET'), false], ['raw 08006', raw('08006'), false], ['raw server-shaped 23505 ERROR (unattested)', raw('23505', { severity: 'ERROR' }), false], ['raw 23514', raw('23514'), false],
+      ['no phase', null, false], ['phase without serverAnswer', {}, false], ['serverAnswer text', { serverAnswer: '23505' }, false], ['serverAnswer numeric code', { serverAnswer: { code: 23505, severity: 'ERROR' } }, false]
+    ];
+    const classRows = definite.map(([name, phase, want]) => [name, Sq.commitFailureIsDefinite(phase) === want]);
     const driverOf = rows => ({ withTransaction: async fn => fn({ query: async (text, params) => rows(text, params) }), close: async () => {} });
     const asTx = async (rows, call) => { const t = Sq.createBillingTransport(driverOf(rows)); try { return { ok: true, v: await t.transaction(tx => call(tx)) }; } catch (e) { return { ok: false, name: e.constructor.name, message: e.message }; } };
     const shapes = {};
@@ -496,10 +504,13 @@ Object.assign(GATES, {
     shapes.nextNull = await asTx(() => [{ s: null }], tx => tx.nextCandidate('a.b.c'));
     shapes.nextNumber = await asTx(() => [{ s: 7 }], tx => tx.nextCandidate('a.b.c'));
     shapes.missingColumn = await asTx(() => [{ other: 1 }], tx => tx.nextCandidate('a.b.c'));
-    const bodyError = Error('body failed'); const cause = Object.assign(Error('server abort'), { code: '23514' }); const unknownCause = Object.assign(Error('Connection terminated unexpectedly'), {});
+    const bodyError = Error('body failed'); const cause = Object.assign(Error('server abort'), { code: '23514', severity: 'ERROR' }); const unknownCause = Object.assign(Error('Connection terminated unexpectedly'), {});
+    const epipeCause = Object.assign(Error('write EPIPE'), { code: 'EPIPE', errno: -32, syscall: 'write' }); const forgedCause = Object.assign(Error('duplicate key'), { code: '23505', severity: 'ERROR' });
     const through = async (driver) => { const t = Sq.createBillingTransport(driver); try { await t.transaction(async () => 1); return { threw: false }; } catch (e) { return { threw: true, e }; } };
     const bodyThrown = await through({ withTransaction: async () => { throw bodyError; }, close: async () => {} });
-    const definiteThrown = await through({ withTransaction: async () => { throw new E.BillingCommitPhaseError(cause); }, close: async () => {} });
+    const definiteThrown = await through({ withTransaction: async () => { throw new E.BillingCommitPhaseError(cause, { code: '23514', severity: 'ERROR' }); }, close: async () => {} });
+    const epipeThrown = await through({ withTransaction: async () => { throw new E.BillingCommitPhaseError(epipeCause); }, close: async () => {} });
+    const forgedThrown = await through({ withTransaction: async () => { throw new E.BillingCommitPhaseError(forgedCause, null); }, close: async () => {} });
     const unknownThrown = await through({ withTransaction: async () => { throw new E.BillingCommitPhaseError(unknownCause); }, close: async () => {} });
     const classified = unknownThrown.e ? core.classifyDbFailure(unknownThrown.e) : null;
     const sqlTexts = Object.values(Sq.BILLING_SQL);
@@ -507,9 +518,10 @@ Object.assign(GATES, {
     const sqlOk = sqlTexts.length === 5 && Object.isFrozen(Sq.BILLING_SQL) && sqlTexts.every(t => /^select retention_billing\.[a-z_]+\(/.test(t) && !/retention_(entitlement|acquisition|capture|internal)/.test(t) && !/;/.test(t)) && same(sqlTexts.map(maxParam), [11, 4, 1, 1, 2]);
     const ok = classRows.every(([, g]) => g) && shapes.object.ok && shapes.object.v.outcome === 'received' && shapes.jsonText.ok && shapes.jsonText.v.outcome === 'duplicate' && shapes.jsonText.v.item_id === null
       && ['noRows', 'twoRows', 'notJson', 'outcomeNotString', 'arrayResult', 'nextNumber', 'missingColumn'].every(k => shapes[k].ok === false && shapes[k].name === 'BillingTransportShapeError') && shapes.nextNull.ok && shapes.nextNull.v === null
-      && bodyThrown.threw && bodyThrown.e === bodyError && definiteThrown.threw && definiteThrown.e === cause && unknownThrown.threw && unknownThrown.e.commitOutcomeUnknown === true && unknownThrown.e.code === '08006' && !String(unknownThrown.e.message).includes('terminated')
+      && bodyThrown.threw && bodyThrown.e === bodyError && definiteThrown.threw && definiteThrown.e === cause && unknownThrown.threw && unknownThrown.e.commitOutcomeUnknown === true && unknownThrown.e.code === '08006' && !String(unknownThrown.e.message).includes('terminated') && unknownThrown.e.commitFailure === unknownCause
+      && [epipeThrown, forgedThrown].every(x => x.threw && x.e.commitOutcomeUnknown === true && x.e.code === '08006') && epipeThrown.e.commitFailure === epipeCause && forgedThrown.e.commitFailure === forgedCause
       && classified.failure === 'transient' && classified.retry === true && classified.terminal === false && sqlOk;
-    return R(ok, { classRows: classRows.filter(([, g]) => !g), shapes: Object.fromEntries(Object.entries(shapes).map(([k, v]) => [k, v.ok ? 'ok' : v.name])), bodyPassThrough: bodyThrown.e === bodyError, definitePassThrough: definiteThrown.e === cause, unknown: unknownThrown.e?.commitOutcomeUnknown, classified, sqlOk });
+    return R(ok, { classRows: classRows.filter(([, g]) => !g), shapes: Object.fromEntries(Object.entries(shapes).map(([k, v]) => [k, v.ok ? 'ok' : v.name])), bodyPassThrough: bodyThrown.e === bodyError, definitePassThrough: definiteThrown.e === cause, unknown: unknownThrown.e?.commitOutcomeUnknown, epipeUnknown: epipeThrown.e?.commitOutcomeUnknown ?? null, forgedUnknown: forgedThrown.e?.commitOutcomeUnknown ?? null, classified, sqlOk });
   }
 });
 
@@ -571,7 +583,8 @@ function nodePgDriver(url, CommitPhaseError, log = null) {
         try { result = await fn(session); }
         catch (e) { log?.push({ text: 'rollback' }); await c.query('rollback').catch(() => {}); throw e; }
         log?.push({ text: 'commit' });
-        try { await c.query('commit'); } catch (e) { throw new CommitPhaseError(e); }
+        // A commit-phase failure carries a server answer ONLY when pg itself built the error from the server's ErrorResponse (its DatabaseError class) - never because of the error's shape.
+        try { await c.query('commit'); } catch (e) { throw new CommitPhaseError(e, e instanceof PgDatabaseError ? { code: e.code, severity: e.severity } : null); }
         return result;
       } finally { await c.end().catch(() => {}); }
     },
@@ -961,12 +974,14 @@ Object.assign(GATES, {
     const rows = {
       imports: [...code.matchAll(/from\s*"([^"]+)"/g)].map(m => m[1]).sort(),
       optionsPinned: /max:\s*1/.test(code) && /prepare:\s*false/.test(code) && /ssl:\s*"require"/.test(code),
-      commitPhaseOnlyAfterTheBody: /bodyFinished\s*=\s*true/.test(code) && /if\s*\(bodyFinished\)\s*throw new BillingCommitPhaseError\(e\)/.test(code),
+      commitPhaseOnlyAfterTheBody: /bodyFinished\s*=\s*true/.test(code) && /if\s*\(bodyFinished\)\s*throw new BillingCommitPhaseError\(e,\s*serverAnswerOf\(e\)\)/.test(code),
+      // F2-E02: the binding attests a server answer only through Postgres.js' own server-error class, and attests nothing when the class is absent
+      attestsOnlyTheServerErrorClass: /typeof PostgresError !== "function" \|\| !\(e instanceof \(PostgresError/.test(code) && (code.match(/serverAnswerOf\(/g) ?? []).length === 2 && !/commitFailureIsDefinite|SQLSTATE/.test(code),
       connectsLazily: !/await\s+sql\s*`|\.connect\(/.test(code),
       noLogging: !/console\./.test(code),
       denoExecuted: false
     };
-    const ok = same(rows.imports, ['./executor.ts', './sql.ts', 'npm:postgres@3.4.7']) && rows.optionsPinned && rows.commitPhaseOnlyAfterTheBody && rows.connectsLazily && rows.noLogging;
+    const ok = same(rows.imports, ['./executor.ts', './sql.ts', 'npm:postgres@3.4.7']) && rows.optionsPinned && rows.commitPhaseOnlyAfterTheBody && rows.attestsOnlyTheServerErrorClass && rows.connectsLazily && rows.noLogging;
     return R(ok, { ...rows, note: 'static shape only: NOT executed under Deno (no Deno runtime); behaviour UNVERIFIED' });
   },
 
@@ -1128,6 +1143,111 @@ GATES.T08_REAL_SERVER_SETUP_FAULTS_ARE_BLOCKED_AND_REFUSALS_ARE_CLASSIFIED = asy
   const facts = { terminateBackend: res.terminateBackend?.facts?.error, statementTimeout: res.statementTimeout?.facts?.error, socketDestroyed: res.socketDestroyed?.facts?.error, connectRefused: res.connectRefused?.facts?.error, lockUndeclared: res.lockUndeclared?.facts?.error };
   const ok = wrong.length === 0 && res.terminateKilled === true && facts.terminateBackend?.code === '57P01' && facts.terminateBackend?.severity === 'FATAL' && facts.statementTimeout?.code === '57014' && facts.lockUndeclared?.code === '55P03' && facts.socketDestroyed?.code == null && /Connection terminated/.test(facts.socketDestroyed?.message ?? '');
   return R(ok, { wrong, outcomes: Object.fromEntries(Object.entries(res).filter(([, v]) => v && typeof v === 'object' && 'outcome' in v).map(([k, v]) => [k, v.outcome])), terminateKilled: res.terminateKilled, facts });
+};
+
+// T09 (F2-E02): a COMMIT-phase failure WITHOUT a server answer attested by the driver keeps the commit-outcome-unknown contract all the way to the process response; a server ErrorResponse to the COMMIT stays a definite abort.
+// Every case runs against the real database through real login roles; the truth (inbox state, owner, entitlement events) is read over an INDEPENDENT connection (ctx.su) right after the first answer, before any retry or cleanup.
+// EPIPE / EBADF / 08006 / unknown-origin failures are INJECTED AT THE DRIVER BOUNDARY: the real Node driver ran BEGIN, the product statements and a SUCCESSFUL real COMMIT, and the wrapper then reports a commit-phase failure
+// carrying the raw error and NO server answer (what a driver does when its socket reports a failure after the server applied the COMMIT). This is NOT a real socket fault and NOT a Deno / Postgres.js execution.
+GATES.T09_DRIVER_BOUNDARY_COMMIT_FAILURES_KEEP_THE_UNKNOWN_CONTRACT = async ctx => {
+  const ns = 'store.sandbox', nsT = 'store.t9x'; const O1 = await makeUser(ctx, 1); await configure(ctx, ns); await configure(ctx, nsT); await activeLink(ctx, ns, O1, 'sub-t9');
+  const ing = await ingressRole(ctx); const prod = await producerRole(ctx, ns);
+  // A deferred unique constraint (test database only), checked by the server AT COMMIT: admitting an item whose delivery id starts with DUP-AT-COMMIT inserts the same key twice.
+  await ctx.g.query(ctx.su, 'create table public.edge_commit_dup(k int, constraint edge_commit_dup_u unique (k) deferrable initially deferred)');
+  await ctx.g.query(ctx.su, "create function public.edge_dup_at_commit() returns trigger language plpgsql security definer set search_path = pg_catalog, public as $f$ begin if new.delivery_id like 'DUP-AT-COMMIT%' and new.state = 'admitted' then insert into public.edge_commit_dup values (1), (1); end if; return null; end $f$");
+  await ctx.g.query(ctx.su, `create trigger edge_dup_at_commit after update on ${B}.inbox for each row execute function public.edge_dup_at_commit()`);
+  const kit = edgeKit(); const mk = kit.factory(); const direct = envFor(ctx, { ing, prod: prod.role, ns }); const adapter = syntheticAdapter(ns);
+  const rawOf = e => (e ? { ctor: e.constructor?.name ?? null, code: e.code ?? null, errno: e.errno ?? null, syscall: e.syscall ?? null, severity: e.severity ?? null, message: String(e.message) } : null);
+  // The driver-boundary wrapper around the REAL Node driver (stage 'after_commit': the real COMMIT returned, then a commit-phase failure without a server answer; stage 'body': the matching statement really ran, then the body fails).
+  const boundary = plan => url => kit.Sq.createBillingTransport({
+    async withTransaction(fn) {
+      const sent = []; const inner = nodePgDriver(url, kit.E.BillingCommitPhaseError);
+      const result = await inner.withTransaction(session => fn({
+        async query(text, params) {
+          sent.push({ text, params: [...params] });
+          if (plan.stage === 'body' && !plan.fired && plan.match(text, params)) { await session.query(text, params); plan.fired = true; plan.firedAt = 'body-after-the-statement-ran'; throw plan.inject(); }
+          return session.query(text, params);
+        }
+      }));
+      if (plan.stage === 'after_commit' && !plan.fired && sent.some(s => plan.match(s.text, s.params))) { plan.fired = true; plan.firedAt = 'after-a-successful-real-commit'; throw new kit.E.BillingCommitPhaseError(plan.inject(), null); }
+      return result;
+    },
+    async close() {}
+  });
+  const injector = make => { const plan = { stage: 'after_commit', fired: false, firedAt: null, lastRaw: null, match: () => false }; plan.inject = () => (plan.lastRaw = make()); return plan; };
+  const EPIPE = () => Object.assign(new Error('write EPIPE'), { code: 'EPIPE', errno: -32, syscall: 'write' });
+  const EBADF = () => Object.assign(new Error('EBADF: bad file descriptor, write'), { code: 'EBADF', errno: -9, syscall: 'write' });
+  const RAW08006 = () => Object.assign(new Error('connection failure during commit'), { code: '08006' });
+  const makeItem = async (deliveryId, startDay) => {
+    const o = obs(ns, 'sub-t9', deliveryId, 'paid_period', atMs(startDay), atMs(startDay + 2));
+    const r = await kit.webhook(direct.webhook, adapter, mk)(webhookReq(ns, [o])); if (r.status !== 200) throw Error('SETUP_ITEM ' + deliveryId);
+    return (await inboxRows(ctx, 'delivery_id=$1', [deliveryId]))[0].item_id;
+  };
+  const truth = async ids => {
+    const items = {}; for (const id of ids) { const r = (await inboxRows(ctx, 'item_id=$1', [id]))[0]; items[id] = { state: r.state, attempts: r.attempts, ownerSet: r.owner_user_id !== null }; }
+    return { items, events: await count(ctx, `${ENT}.entitlement_events`), dupRows: await count(ctx, 'public.edge_commit_dup') };
+  };
+  const drain = async factory => { const res = await kit.process(direct.process, factory)(processReq()); return { status: res.status, body: await bodyOf(res) }; };
+  const out = { process: {}, transport: {} };
+  const processOf = id => (text, params) => /process_item/.test(text) && params[0] === id;
+  const processCase = async (name, deliveries, plan, pick) => {
+    const ids = []; for (const [d, day] of deliveries) ids.push(await makeItem(d, day));
+    const before = await truth(ids); if (plan) plan.match = processOf(ids[pick]);
+    const first = await drain(plan ? boundary(plan) : mk); const afterFailure = await truth(ids);
+    const retry = await drain(mk); const afterRetry = await truth(ids); const retry2 = await drain(mk); const afterRetry2 = await truth(ids);
+    return (out.process[name] = { ids, injected: plan ? { stage: plan.stage, at: plan.firedAt, raw: rawOf(plan.lastRaw) } : null, before, first, afterFailure, retry, afterRetry, retry2, afterRetry2 });
+  };
+  // 1-3: EPIPE, EBADF and a raw (unattested) 08006 after a successful real COMMIT of process_item
+  await processCase('epipe_after_real_commit', [['d-t9-1', 10]], injector(EPIPE), 0);
+  await processCase('ebadf_after_real_commit', [['d-t9-2', 20]], injector(EBADF), 0);
+  await processCase('raw_08006_after_real_commit', [['d-t9-3', 30]], injector(RAW08006), 0);
+  // 5: an EPIPE in the BODY (after process_item really ran, before any COMMIT): rolled back, never success, never unknown
+  { const plan = injector(EPIPE); plan.stage = 'body'; await processCase('epipe_in_the_body', [['d-t9-5', 50]], plan, 0); }
+  // 7: a partial batch: the first item is confirmed committed, the second item's COMMIT really applies and then fails at the driver boundary
+  await processCase('partial_batch_second_commit_unknown', [['d-t9-6a', 60], ['d-t9-6b', 70]], injector(EPIPE), 1);
+  // 4: a REAL server answer at COMMIT (deferred unique, 23505): the transport rethrows the original DatabaseError, nothing is committed, the endpoint answers failed (not unknown); after the cause is removed one retry admits once
+  {
+    const id = await makeItem('DUP-AT-COMMIT-1', 80); const before = await truth([id]);
+    let raw = null; try { await mk(dbUrl(ctx, prod.role)).transaction(tx => tx.processItem(id)); } catch (e) { raw = e; }
+    const afterTransport = await truth([id]);
+    const first = await drain(mk); const afterFailure = await truth([id]);
+    await ctx.g.query(ctx.su, `drop trigger edge_dup_at_commit on ${B}.inbox`);
+    const retry = await drain(mk); const afterRetry = await truth([id]); const retry2 = await drain(mk); const afterRetry2 = await truth([id]);
+    out.process.server_23505_at_commit = { ids: [id], transportError: rawOf(raw), transportUnknown: raw?.commitOutcomeUnknown === true, before, afterTransport, first, afterFailure, retry, afterRetry, retry2, afterRetry2 };
+  }
+  // 3 (other unknown origins) and 5 (explicit rollback), at the transport, on a namespace that no drain touches
+  {
+    const deliver = async (name, make, rollback = false) => {
+      const o = obs(nsT, 'sub-t9x', 'd-t9x-' + name, 'paid_period', atMs(90), atMs(92)); const plan = injector(make); plan.match = text => /ingest_delivery/.test(text);
+      let err = null; const rollbackError = Error('explicit rollback in the body');
+      try { await boundary(rollback ? { ...plan, stage: 'none' } : plan)(dbUrl(ctx, ing)).transaction(async tx => { await tx.ingestDelivery(o); if (rollback) throw rollbackError; }); } catch (e) { err = e; }
+      const rows = await count(ctx, `${B}.inbox`, 'delivery_id=$1', [o.deliveryId]);
+      out.transport[name] = { threw: err !== null, unknown: err?.commitOutcomeUnknown === true, code: err?.code ?? null, keepsRaw: rollback ? null : err?.commitFailure === plan.lastRaw, sameError: rollback ? err === rollbackError : null, raw: rawOf(rollback ? null : plan.lastRaw), committedRows: rows };
+    };
+    await deliver('epipe', EPIPE); await deliver('ebadf', EBADF); await deliver('raw_08006', RAW08006);
+    await deliver('no_code', () => new Error('socket hang up'));
+    await deliver('server_shaped_but_unattested_23505', () => Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505', severity: 'ERROR' }));
+    await deliver('node_stream_code', () => Object.assign(new Error('write after end'), { code: 'ERR_STREAM_WRITE_AFTER_END' }));
+    await deliver('explicit_rollback', EPIPE, true);
+  }
+  const p = out.process, t = out.transport;
+  const unknownCase = k => { const c = p[k], id = c.ids[0]; return c.injected?.at === 'after-a-successful-real-commit' && c.first.status === 503 && c.first.body.status === 'unknown' && c.first.body.itemOutcomeUnknown === true && c.first.body.completed === 0 && same(c.first.body.committedOutcomes, {})
+    && c.afterFailure.items[id].state === 'admitted' && c.afterFailure.items[id].ownerSet === true && c.afterFailure.events === c.before.events + 1
+    && c.retry.status === 200 && c.retry.body.completed === 0 && c.afterRetry.events === c.afterFailure.events && c.afterRetry2.events === c.afterFailure.events; };
+  const body = p.epipe_in_the_body, bid = body.ids[0];
+  const bodyOk = body.injected?.at === 'body-after-the-statement-ran' && body.first.status === 503 && body.first.body.status === 'failed' && body.first.body.itemOutcomeUnknown === false && body.first.body.completed === 0
+    && body.afterFailure.items[bid].state !== 'admitted' && body.afterFailure.events === body.before.events && body.retry.status === 200 && body.retry.body.completed === 1 && body.afterRetry.items[bid].state === 'admitted' && body.afterRetry.events === body.before.events + 1 && body.afterRetry2.events === body.afterRetry.events;
+  const part = p.partial_batch_second_commit_unknown, [pa, pb] = part.ids;
+  const partialOk = part.injected?.at === 'after-a-successful-real-commit' && part.first.status === 503 && part.first.body.status === 'unknown' && part.first.body.itemOutcomeUnknown === true && part.first.body.completed === 1 && same(part.first.body.committedOutcomes, { admitted: 1 })
+    && part.afterFailure.items[pa].state === 'admitted' && part.afterFailure.items[pb].state === 'admitted' && part.afterFailure.events === part.before.events + 2 && part.retry.status === 200 && part.retry.body.completed === 0 && part.afterRetry.events === part.afterFailure.events && part.afterRetry2.events === part.afterFailure.events;
+  const dup = p.server_23505_at_commit, did = dup.ids[0];
+  const dupOk = dup.transportError?.ctor === 'DatabaseError' && dup.transportError.code === '23505' && dup.transportError.severity === 'ERROR' && dup.transportUnknown === false && dup.afterTransport.items[did].state !== 'admitted' && dup.afterTransport.events === dup.before.events && dup.afterTransport.dupRows === 0
+    && dup.first.status === 503 && dup.first.body.status === 'failed' && dup.first.body.itemOutcomeUnknown === false && dup.first.body.completed === 0 && dup.afterFailure.items[did].state !== 'admitted' && dup.afterFailure.events === dup.before.events && dup.afterFailure.dupRows === 0
+    && dup.retry.status === 200 && dup.retry.body.completed === 1 && dup.afterRetry.items[did].state === 'admitted' && dup.afterRetry.events === dup.before.events + 1 && dup.afterRetry2.events === dup.afterRetry.events;
+  const transportOk = ['epipe', 'ebadf', 'raw_08006', 'no_code', 'server_shaped_but_unattested_23505', 'node_stream_code'].every(k => t[k].threw && t[k].unknown && t[k].code === '08006' && t[k].keepsRaw === true && t[k].committedRows === 1)
+    && t.explicit_rollback.threw && t.explicit_rollback.unknown === false && t.explicit_rollback.sameError === true && t.explicit_rollback.committedRows === 0;
+  const verdicts = { epipe: unknownCase('epipe_after_real_commit'), ebadf: unknownCase('ebadf_after_real_commit'), raw08006: unknownCase('raw_08006_after_real_commit'), body: bodyOk, partial: partialOk, server23505: dupOk, transport: transportOk };
+  return R(Object.values(verdicts).every(Boolean), { verdicts, ...out, note: 'driver-boundary injection after a real COMMIT; not a real socket fault, not Deno / Postgres.js' });
 };
 
 GATES.F02_GATE_SELECTION_CONTRACT = async () => {

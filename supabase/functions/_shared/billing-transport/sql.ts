@@ -17,9 +17,12 @@ export const BILLING_SQL = Object.freeze({
 export class BillingCommitOutcomeUnknownError extends Error {
   readonly code = "08006";
   readonly commitOutcomeUnknown = true as const;
-  constructor() {
+  // The original commit-phase failure, kept for diagnosis only (it is never answered to a caller).
+  readonly commitFailure: unknown;
+  constructor(commitFailure: unknown = null) {
     super("BILLING_COMMIT_OUTCOME_UNKNOWN");
     this.name = "BillingCommitOutcomeUnknownError";
+    this.commitFailure = commitFailure;
   }
 }
 
@@ -32,11 +35,14 @@ export class BillingTransportShapeError extends Error {
 
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 const CONNECTION_OR_SHUTDOWN_CLASS = /^(08|57P|58|XX)/;
-// A failed COMMIT is a DEFINITE abort only when the server itself answered with an error of a non-connection class (for example a deferred constraint, 40001, 40P01). Anything else - no code, a driver/network error code,
-// a connection or shutdown class - leaves the outcome unknown.
-export function commitFailureIsDefinite(failure: unknown): boolean {
-  const code = (failure as { code?: unknown } | null)?.code;
-  return typeof code === "string" && SQLSTATE.test(code) && !CONNECTION_OR_SHUTDOWN_CLASS.test(code);
+// A failed COMMIT is a DEFINITE abort only when the DRIVER attests that the server itself answered the COMMIT with an ErrorResponse (BillingCommitPhaseError.serverAnswer), of severity ERROR and of a non-connection
+// class (for example a deferred constraint, 40001, 40P01). The code of the raw failure is never evidence on its own: a Node/socket error (EPIPE, EBADF, ...) also has a five-character upper-case code. Anything else -
+// no attested server answer, FATAL/PANIC, a connection or shutdown class - leaves the outcome unknown.
+export function commitFailureIsDefinite(phase: { readonly serverAnswer?: unknown } | null | undefined): boolean {
+  const answer = phase?.serverAnswer as { code?: unknown; severity?: unknown } | null | undefined;
+  if (answer === null || answer === undefined || typeof answer !== "object") return false;
+  const { code, severity } = answer;
+  return typeof code === "string" && SQLSTATE.test(code) && severity === "ERROR" && !CONNECTION_OR_SHUTDOWN_CLASS.test(code);
 }
 
 function singleValue(rows: readonly Record<string, unknown>[]): unknown {
@@ -86,7 +92,7 @@ function transactionFor(session: BillingSession): BillingTx {
 export type ClosableBillingTransport = BillingTransport & { close(): Promise<void> };
 
 // One BillingTransport.transaction = one database transaction on one connection. A body failure rolls the whole transaction back (never a partial commit). A failure in the COMMIT phase is classified honestly:
-// a server-side abort is rethrown unchanged; a missing answer becomes BillingCommitOutcomeUnknownError - never "rolled back", never success.
+// a server-side abort attested by the driver is rethrown unchanged; anything else becomes BillingCommitOutcomeUnknownError - never "rolled back", never success.
 export function createBillingTransport(driver: BillingDriver): ClosableBillingTransport {
   return {
     async transaction<T>(fn: (tx: BillingTx) => Promise<T>): Promise<T> {
@@ -94,8 +100,8 @@ export function createBillingTransport(driver: BillingDriver): ClosableBillingTr
         return await driver.withTransaction((session) => fn(transactionFor(session)));
       } catch (e) {
         if (e instanceof BillingCommitPhaseError) {
-          if (commitFailureIsDefinite(e.commitFailure)) throw e.commitFailure;
-          throw new BillingCommitOutcomeUnknownError();
+          if (commitFailureIsDefinite(e)) throw e.commitFailure;
+          throw new BillingCommitOutcomeUnknownError(e.commitFailure);
         }
         throw e;
       }

@@ -5,8 +5,17 @@
 // request-scoped transport (`max: 1`); the connection is opened lazily by the first statement, never by construction.
 import postgres from "npm:postgres@3.4.7";
 
-import { BillingCommitPhaseError, type BillingDriver, type BillingSession } from "./executor.ts";
+import { BillingCommitPhaseError, type BillingDriver, type BillingServerCommitAnswer, type BillingSession } from "./executor.ts";
 import { createBillingTransport, type ClosableBillingTransport } from "./sql.ts";
+
+// Postgres.js raises its own PostgresError class ONLY for an ErrorResponse sent by the server; connection, socket and timeout failures are other errors. That class - not the shape of an error - is the attestation that the
+// server answered the COMMIT. If the class is not available the binding attests nothing (the outcome stays unknown).
+function serverAnswerOf(e: unknown): BillingServerCommitAnswer | null {
+  const PostgresError = (postgres as unknown as { PostgresError?: unknown }).PostgresError;
+  if (typeof PostgresError !== "function" || !(e instanceof (PostgresError as new (...a: never[]) => Error))) return null;
+  const { code, severity } = e as { code?: unknown; severity?: unknown };
+  return typeof code === "string" && typeof severity === "string" ? { code, severity } : null;
+}
 
 export const BILLING_POSTGRES_OPTIONS = Object.freeze({
   max: 1,
@@ -34,7 +43,7 @@ export function createDenoBillingDriver(connectionUrl: string): BillingDriver {
           return result;
         })) as T;
       } catch (e) {
-        if (bodyFinished) throw new BillingCommitPhaseError(e);
+        if (bodyFinished) throw new BillingCommitPhaseError(e, serverAnswerOf(e));
         throw e;
       }
     },
