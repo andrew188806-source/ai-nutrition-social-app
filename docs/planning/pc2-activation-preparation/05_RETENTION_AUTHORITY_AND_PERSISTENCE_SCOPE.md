@@ -1566,3 +1566,24 @@ Owner 於 2026-10-21 授權的本機 inactive 包（對應 ENT-F prep 計畫的 
 - **修正**：driver 埠（`executor.ts`）的 `BillingCommitPhaseError` 增加 `serverAnswer`：**只有 driver 以它自己的伺服器錯誤型別**（Node 的 pg `DatabaseError`、Deno 的 Postgres.js `PostgresError`；兩者都只由伺服器 ErrorResponse 建立）辨識出「伺服器對 COMMIT 回了錯」時才填入 `{code, severity}`。`commitFailureIsDefinite` 只讀這個證明：須為 SQLSTATE 形、`severity ＝ ERROR`、非 08／57P／58／XX 類，才是確定中止並原樣丟出原始錯誤；其他一切（沒有證明、FATAL／PANIC、連線類、socket／transport 錯誤、來源不明）一律 `BillingCommitOutcomeUnknownError`（`08006`、`commitOutcomeUnknown`），並保留原始失敗於 `commitFailure`（只供診斷，不回應給呼叫者）。不是以 `EPIPE`／`EBADF` 字串特判，也不是把所有錯誤改成 unknown：伺服器在 COMMIT 回的 23505／23514 等仍是確定中止。
 - **不變**：交易邊界（body 失敗 ROLLBACK 並原樣丟出）、process handler 的 `tracked`／回應摘要（unknown 已由 `commitOutcomeUnknown` 傳遞，修正後不再在 transport 遺失）、14 個產品檔中其餘 11 個、ENT-F1、ACT2、migration、`config.toml`。改動的產品檔：`executor.ts`、`sql.ts`、`denoPostgresBillingTransport.ts`（Deno 綁定仍未在 Deno 執行，行為 UNVERIFIED）。
 - **驗證**：新 gate `T09`（真 PG、真 login 角色；EPIPE／EBADF／未證明的 08006 等於真 COMMIT 成功**之後**在 driver 邊界注入，**不是實體 socket 故障、也不是 Deno 執行**）、`T00` 分類表改為「有／無 driver 證明」、`S03` 靜態檢查綁定只以 `PostgresError` 證明，以及 4 個新 mutant（Y64–Y67）。
+## 23. ENT-W1：以週期 sweep 驅動 ENT1-A resolver（預設停用；retention line，2026-10-25；**作者整合自測，不是 acceptance**）
+
+### 23.1 範圍
+- 新增 migration `20261025010000_consumer_retention_acquisition_resolve_sweep.sql`（排在 PH1 `20261022183336` 之後；bytes 與隔離 checkpoint 的草稿相同，sha256 `19999f49…`）、共用模組 `supabase/functions/_shared/acquisition-resolve/{sql,worker}.ts`，以及預設停用的 Edge 入口 `supabase/functions/retention-acquisition-resolve/{config,handler,index}.ts`。不修改 `config.toml`。不排程、不部署、不啟用，也不建立任何 LOGIN 角色、membership 或 Hosted 執行者。
+- 契約沿用 §19（ENT1-A）：T0、owner、capture context 來自不可變的 capture anchor；資格**只**由 `resolve_detail_acquisition`（經 ENT0）決定；4320h 是 receipt 的效力期限，不是掃描截止；pending／unknown／`no_actor_claim` 不寫入，也不是 Free；既有 receipt 只 replay。沒有新的付款、seal、final grant 或 purge 政策。
+
+### 23.2 恢復設計（v2 的「一個週期內恢復」保證已撤回）
+- 單列 `retention_acquisition.resolution_sweep_state`。`claim_resolution_page` **唯讀**，回應遺失不損失任何東西。`begin_resolution_item` 只接受 cursor 之後的下一個未解析 id，並累計 attempts。resolver 與 `advance_resolution_cursor('resolved')` 在同一交易內一起提交。`examined`／`wrap` 推進必須連續：資料庫拒絕越過任何尚無 receipt 的 anchor（`NOT_BEGUN`、`UNRESOLVED_BEFORE_TARGET`、`UNRESOLVED_IN_RANGE`、`UNRESOLVED_REMAIN`）。wrap 後本輪結束。worker 在第一個失敗或 COMMIT 未知時就停止，每輪使用新的 driver，用完即關閉。
+- 「最多 3 次 starts」是**每 id、每 cycle 的內部重試界線**：第 4 次 start 把 cursor 移到該 id（本 cycle 跳過），不寫 receipt、不做任何決定，下一 cycle 一定重新處理。它不是永久排除，也不是取得資格的政策。
+- 「不遺失」只在六項前提下成立：週期觸發、預算至少一筆、資料庫可連線、無人無限期持鎖、anchor 不可變、沒有 superuser 竄改。不提供恢復時間或延遲上限。
+
+### 23.3 權限
+`consumer_retention_acquisition_worker`：NOLOGIN、NOINHERIT、沒有 member；只有 `USAGE retention_acquisition`，以及 EXECUTE 四個函式（resolver、claim、begin、advance）。沒有任何表權限、`retention_capture`／`retention_entitlement` 的 USAGE 或 ENT0 函式。由 migration 內的 G2 檢查精確確認。Postgres.js 3.4.7 建立 driver 時會讀 `PG*` 環境變數，Edge 的 env 權限必須允許。
+
+### 23.4 驗證器的單向 successor
+- ENT-W1 是 PH1 之上的**最外層**精確 successor：`scripts/consumer-retention-entw1-exact-successor.mjs` 逐一記錄每個 leaf 的 mode、blob 與它在 main 的 identity；root（persistence smoke）pin 這個模組的 blob 與 migration 的 sha256。只有完整記錄精確時，較早的整條 chain（PH1 → ENT-F2 → S2-ACT2 → … → origin）才在 ENT-W1 的前身視圖上**原樣**評估，而且必須完整；部分、竄改或混版一律 `invalid`。沒有萬用字元，也沒有自我或循環 hash。
+- P14（acquisition smoke）：沒有 ENT-W1 時，`apps/`、`packages/`、`supabase/functions/` 下仍不得有檔案提到 schema 或 resolver。有完整精確的 ENT-W1 記錄時，提到它們的檔案與 import ENT-W1 模組的檔案，必須**恰好**是記錄的清單（`ENTW1_WIRING`），多一個呼叫者、被竄改或混版都會拒絕。
+- recovery guard 與社交 guard 的 bytes 不變（它們從 `checkedAct2State(...).paths` 取得豁免）。capture smoke 與 billing-edge smoke 的修改方式與 PH1 相同（`isEntw1Migration`、F01 overlay）。
+
+### 23.5 證據
+隔離 checkpoint（`run-20261024-entw1-iso-cla01\checkpoints\checkpoint-01-isolated-20261024`，manifest `01918c14…`，唯讀）：PG gates 21/21、mutation 控制組＋12/12、gap gates 4/4、真 Deno 型別檢查／無網路 runtime 8/8／`Deno.serve` 2/2／對真 PG 5/5，都在同一份 migration 與 product bytes 上完成。整合 run（`run-20261025-entw1-int-cla01`）只補整合影響範圍：精確 successor（F01–F03）、完整 migration chain（G17）、受影響的共用驗證器與 B 比較。PG gate 除 G16（seal＋billing tail）與 G17（完整 chain）外，都使用縮減 fixture。
