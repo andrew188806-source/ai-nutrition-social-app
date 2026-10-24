@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // SR-2H-B lifecycle-aware local authority guard. Read-only: no network, database, credentials,
 // deployment or repository writes.
-import {checkedAct2State} from "./consumer-retention-persistence-smoke.mjs";
+import {checkedAct2State,checkedPH1State} from "./consumer-retention-persistence-smoke.mjs";
 import {act2FrozenPathSuccessor,act2CompositionOrder,act2CompositionEmpty} from "./s2-act2-exact-successor.mjs";
+import {ph1HeadDeleted} from "./s2-ph1-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -46,7 +47,7 @@ const state = Object.freeze({
   headParent: head === SR2HB_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
   worktreePaths: statusPaths(), stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
   headDeltaPaths: delta.map((entry) => entry.split("\t")[1]),
-  headDeleted: delta.some((entry) => entry.startsWith("D\t"))
+  headDeleted: ph1HeadDeleted(git, delta, checkedPH1State(git))
 });
 const lifecycle = classifySr2hbLifecycle(state);
 const migration = read(SR2HB_MIGRATION);

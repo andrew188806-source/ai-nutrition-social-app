@@ -68,9 +68,21 @@ export const PH1_FILES=Object.freeze({
     "base": "4fe23dae564cce2173f34c275f89bd30640c964a",
     "baseMode": "100644"
   },
+  "scripts/meal-buddy-relationship-sr2i-a-guard.mjs": {
+    "mode": "100644",
+    "blob": "aa0809e54eeb274d3350c3d3a1e165e4d72afadf",
+    "base": "45d285dc47f8581310eba996c0305c201fd7a252",
+    "baseMode": "100644"
+  },
+  "scripts/meal-buddy-relationship-sr2i-b-guard.mjs": {
+    "mode": "100644",
+    "blob": "c2cf54d671e0c92f2d61945d05222e956e59fda5",
+    "base": "94648819dd5cbb2764e620c5fdedd9f0818e2127",
+    "baseMode": "100644"
+  },
   "scripts/s2-ph1-binding-controls.mjs": {
     "mode": "100644",
-    "blob": "d5c050f23e88278a0099422e9e8e720c42d74ad6",
+    "blob": "7e7f350337f913e16ce7992f81a5e19ca4e09638",
     "base": null,
     "baseMode": null
   },
@@ -115,6 +127,24 @@ export const PH1_FILES=Object.freeze({
     "blob": "9799f322a0287f88fb0799de3bcc8ebc1cc12040",
     "base": null,
     "baseMode": null
+  },
+  "scripts/social-candidate-sr2g-g-guard.mjs": {
+    "mode": "100644",
+    "blob": "3f5d5a2f0745015a676a9f6a8c88fbf26c3589e2",
+    "base": "4f205f3bded92416b6f7619c9ed723a78cb71bcc",
+    "baseMode": "100644"
+  },
+  "scripts/social-candidate-sr2h-a-guard.mjs": {
+    "mode": "100644",
+    "blob": "c5300f76e412ffa9f4b4fac6826e02b4dbfde5f7",
+    "base": "00eb9672fa44ecff19c8a0a8a743bd51e5471758",
+    "baseMode": "100644"
+  },
+  "scripts/social-interest-sr2h-b-guard.mjs": {
+    "mode": "100644",
+    "blob": "7dfe7edd6d7ffdaeaa3aa49de3da9e1db1bfc1ce",
+    "base": "858868b4344f25a178b01a89b1f16f24532dd809",
+    "baseMode": "100644"
   },
   "supabase/config.toml": {
     "mode": "100644",
@@ -220,3 +250,18 @@ export function ph1PredecessorGit(git){return args=>{
  return out;
 };}
 
+
+// Retain the original no-deletion detector. Only the exact unaccepted intermediate PH1
+// leaf may be projected away, after the full one-way root/record binding succeeds.
+export function ph1HeadDeleted(git,delta,verified){
+ const deleted=delta.filter(line=>line.startsWith('D\t'));
+ if(deleted.length===0)return false;
+ if(verified?.state!=='record'||deleted.length!==1||deleted[0]!=='D\tpackages/shared/src/domain/profile-photo-limits.ts')return true;
+ try{
+ const file='packages/shared/src/domain/profile-photo-limits.ts';
+ return !!git(['ls-tree','93bf0f416ef9b6cecc506c5336e9c18fadbb2bf1','--',file]).trim()
+ ||!!git(['ls-tree','HEAD','--',file]).trim()
+ ||git(['ls-tree','HEAD^','--',file]).trim()!=='100644 blob e1881bfbb99b8c156a7d74b27fe7a41c21357f23\t'+file
+ ||!!git(['diff','--name-only','--diff-filter=D','93bf0f416ef9b6cecc506c5336e9c18fadbb2bf1','HEAD']).trim();
+ }catch{return true;}
+}

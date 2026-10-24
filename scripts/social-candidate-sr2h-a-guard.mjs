@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // SR-2H-A lifecycle-aware, read-only authority guard.
+import {checkedPH1State} from "./consumer-retention-persistence-smoke.mjs";
+import {ph1HeadDeleted} from "./s2-ph1-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -36,7 +38,7 @@ const state = Object.freeze({
   headParent: head === SR2HA_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
   worktreePaths: statusPaths(), stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
   headDeltaPaths: delta.map((entry) => entry.split("\t")[1]),
-  headDeleted: delta.some((entry) => entry.startsWith("D\t"))
+  headDeleted: ph1HeadDeleted(git, delta, checkedPH1State(git))
 });
 const lifecycle = classifySr2haLifecycle(state);
 const frozenHaDelta = lines(git(["diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", SR2HB_BASELINE]));

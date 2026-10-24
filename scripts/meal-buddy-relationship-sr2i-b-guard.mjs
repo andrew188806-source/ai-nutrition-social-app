@@ -2,6 +2,8 @@
 // SR-2I-B lifecycle-aware local Mobile activation guard. Read-only and offline.
 import crypto from "node:crypto";
 import { acceptedGqa6rProductPaths } from "./gqa6r-stable-demo-repair-manifest.mjs";
+import {checkedPH1State} from "./consumer-retention-persistence-smoke.mjs";
+import {ph1HeadDeleted} from "./s2-ph1-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -40,7 +42,7 @@ const state = Object.freeze({
   head, originHead, ahead, behind,
   parent: head === SR2IB_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
   worktreePaths: statusPaths(), stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-  deltaPaths: delta.map((entry) => entry.split("\t")[1]), deleted: delta.some((entry) => entry.startsWith("D\t"))
+  deltaPaths: delta.map((entry) => entry.split("\t")[1]), deleted: ph1HeadDeleted(git, delta, checkedPH1State(git))
 });
 const lifecycle = classifySr2ibLifecycle(state);
 const sources = new Map(SR2IB_SOURCE_PATHS.map((file) => [file, read(file)]));

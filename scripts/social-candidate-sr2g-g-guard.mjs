@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // SR-2G-G lifecycle-aware local guard. Read-only; no network, database, credentials or deployment.
+import {checkedPH1State} from "./consumer-retention-persistence-smoke.mjs";
+import {ph1HeadDeleted} from "./s2-ph1-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -44,7 +46,7 @@ const state = Object.freeze({
   headParent: head === SR2GG_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
   worktreePaths: statusPaths(), stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
   headDeltaPaths: delta.map((entry) => entry.split("\t")[1]),
-  headDeleted: delta.some((entry) => entry.startsWith("D\t"))
+  headDeleted: ph1HeadDeleted(git, delta, checkedPH1State(git))
 });
 const lifecycle = classifySr2ggLifecycle(state);
 const recbp0Lifecycle = classifyRecbp0Lifecycle({ ...state, parent: state.headParent,
