@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import {checkedAct2State} from './consumer-retention-persistence-smoke.mjs';
+import {checkedAct2State,checkedPH1State} from './consumer-retention-persistence-smoke.mjs';
 import {ACT2_FILES,exactAct2LeafText} from './s2-act2-exact-successor.mjs';
 // SR-2I-A lifecycle-aware local authority guard. Read-only: no network, database, credentials,
 // deployment or repository writes.
+import {ph1HeadDeleted} from "./s2-ph1-exact-successor.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -51,7 +52,7 @@ const state = Object.freeze({
   head, originHead, ahead, behind,
   parent: head === SR2IA_BASELINE ? null : git(["rev-parse", "HEAD^"]).trim(),
   worktreePaths: statusPaths(), stagedPaths: lines(git(["diff", "--cached", "--name-only"])),
-  deltaPaths: delta.map((entry) => entry.split("\t")[1]), deleted: delta.some((entry) => entry.startsWith("D\t"))
+  deltaPaths: delta.map((entry) => entry.split("\t")[1]), deleted: ph1HeadDeleted(git, delta, checkedPH1State(git))
 });
 const lifecycle = classifySr2iaLifecycle(state);
 const migration = read(SR2IA_MIGRATION);

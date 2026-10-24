@@ -41,6 +41,7 @@ export default function MeScreen() {
   ];
 
   const settingsItems: ProfileRowItem[] = [
+    { icon: "shield", title: "平台私人頭貼", subtitle: "僅供本人預覽與管理，不發布給其他使用者", onPress: () => router.push("/profile-photo" as never) },
     { icon: "shield", title: "設定產品密碼", onPress: () => router.push("/account-password" as never) },
     { icon: "shield", title: "帳號授權與撤回", onPress: () => router.push("/onboarding" as never) },
     { icon: "buddies", title: "飯友參與設定", onPress: () => router.push("/participation-settings" as never) },

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {ph1FilesState,ph1PredecessorGit,PH1_FILES,PH1_MIGRATION} from './s2-ph1-exact-successor.mjs';
+
 import {act2FilesState,act2PredecessorGit,ACT2_FILES,ACT2_MIGRATION} from './s2-act2-exact-successor.mjs';
 // Disposable PostgreSQL only. Candidate metadata never constitutes Consumer authority.
 import fs from 'node:fs';
@@ -276,9 +278,10 @@ export async function baseline(cl,rec,{legacy=false}={}){
   // Exact successor recognition: the original 143-file inventory (the retention migration is file 143), followed by an EXACT ORDERED tail of pinned forward migrations. No tail file is assumed to be last:
   // the accepted tails are [], [capture], [capture, ENT0], [capture, ENT0, origin demo migration] and [capture, ENT0, origin demo migration, ENT1-A]; the demo migration sorts after ENT0 and the ENT1-A migration after the demo
   // migration. Each tail file is pinned by sha256.
-  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256};
+  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256,[PH1_MIGRATION]:PH1_MIGRATION_SHA256};
   const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION,BILLING_MIGRATION]];
   if(isAct2Migration(ACT2_MIGRATION))tails.push([...tails.at(-1),ACT2_MIGRATION]);
+  if(activePH1Inventory())tails.push([...tails.at(-1),PH1_MIGRATION]);
   const tail=tails.find(t=>files.length===143+t.length&&files.slice(143).join('|')===t.join('|')&&t.every(n=>sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))===tailPins[n]));
   if(!tail||files[142]!==MIGRATION)throw Error('MIGRATION_INVENTORY');
   const predecessors=files.slice(0,142);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
@@ -1249,12 +1252,12 @@ export function edgePredecessorGit(git){return args=>{
  return out;
 };}
 // The S2-ACT2 state under the accepted successors: with the exact ENT-F2 record the two projected validators are read at the identities the S2-ACT2 record pins; otherwise exactly as before.
-export function checkedAct2State(git){
+function checkedAct2StateWithEdge(git){
  const ef=edgeFilesState(git);
  if(ef.present&&ef.exact&&edgeProjectionState(git).exact)return checkedAct2StateRaw(edgePredecessorGit(git));
  return checkedAct2StateRaw(git);
 }
-export function recoverySuccessorState(git){
+function recoverySuccessorStateWithEdge(git){
  const ef=edgeFilesState(git);
  if(!ef.present)return {...recoverySuccessorStateWithAct2(git),edge:'base'};
  if(!ef.exact)return {state:'invalid',exempt:false,paths:[],violations:ef.violations};
@@ -1265,6 +1268,37 @@ export function recoverySuccessorState(git){
  return {...prior,edge:'record',paths:[...new Set([...prior.paths,...Object.keys(EDGE_FILES)])]};
 }
 
-export function withAct2Tail(tail){return isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;}
+export function withAct2Tail(tail){const prior=isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;return activePH1Inventory()?[...prior,PH1_MIGRATION]:prior;}
+
+
+// Integration: PH1 is the outermost exact overlay on the accepted ENT-F2/E02 layer.
+// Hash DAG remains root -> PH1 module -> exact leaves. No root/self hashes in leaves.
+export const PH1_MODULE_BLOB='397032117e5a07f34709bce8e3dba34b773b8e52';
+export const PH1_MIGRATION_SHA256='161fdb7cd18c32e8c9b18f0d6c39c87aa6300295ef2e107fbd0902c223c62092';
+const PH1_MODULE_PATH='scripts/s2-ph1-exact-successor.mjs';
+export function checkedPH1State(git){
+ const staged=git(['ls-files','--stage','--',PH1_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,PH1_MODULE_PATH));
+ if(!present&&!staged)return {state:'base',paths:[],violations:[]};
+ if(staged!=='100644 '+PH1_MODULE_BLOB+' 0\t'+PH1_MODULE_PATH||git(['hash-object','--',PH1_MODULE_PATH]).trim()!==PH1_MODULE_BLOB)return {state:'invalid',paths:[],violations:['ph1:module-binding']};
+ return ph1FilesState(git,ROOT);
+}
+export function checkedAct2State(git){
+ const ph1=checkedPH1State(git);if(ph1.state==='invalid')return ph1;
+ const view=ph1.state==='record'?ph1PredecessorGit(git):git;
+ const prior=checkedAct2StateWithEdge(view);
+ if(ph1.state==='record'){
+  const complete=recoverySuccessorStateWithEdge(view);
+  if(!complete.exempt||complete.edge!=='record'||prior.state!=='record')return {state:'invalid',paths:[],violations:['ph1:requires-accepted-entf2-act2-billing',...(complete.violations??[])]};
+  return {...prior,paths:[...new Set([...prior.paths,...ph1.paths,PH1_MODULE_PATH])]};
+ }return prior;
+}
+export function recoverySuccessorState(git){
+ const ph1=checkedPH1State(git);if(ph1.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:ph1.violations};
+ const prior=recoverySuccessorStateWithEdge(ph1.state==='record'?ph1PredecessorGit(git):git);
+ if(ph1.state==='record'&&(!prior.exempt||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['ph1:requires-complete-entf2-predecessor',...(prior.violations??[])]};
+ return ph1.state==='record'?{...prior,ph1:'record',paths:[...new Set([...prior.paths,...ph1.paths,PH1_MODULE_PATH])]}:prior;
+}
+function activePH1Inventory(){return recoverySuccessorState(act2RootGit).ph1==='record';}
+export function isPH1Migration(name){return name===PH1_MIGRATION&&activePH1Inventory();}
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){let code;try{code=await runSmoke(options());}catch(e){console.error(e.stack);code=2;}process.exitCode=code;}

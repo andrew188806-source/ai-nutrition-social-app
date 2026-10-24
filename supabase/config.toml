@@ -82,3 +82,7 @@ verify_jwt = true
 
 [functions.stranger-exposure]
 verify_jwt = true
+
+[functions.profile-photo]
+# PH1 owner-only private thumbnail, real getUser and DB authority; no publication.
+verify_jwt = true

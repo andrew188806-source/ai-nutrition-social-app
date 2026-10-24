@@ -1,0 +1,297 @@
+{
+  "testName": "PH1 actual Deno handler/codec + PostgreSQL full private-owner lifecycle",
+  "assertions": [
+    {
+      "id": "PH1-001",
+      "name": "verified identity required"
+    },
+    {
+      "id": "PH1-002",
+      "name": "unknown owner field refused before writes"
+    },
+    {
+      "id": "PH1-003",
+      "name": "true initial empty state"
+    },
+    {
+      "id": "PH1-004",
+      "name": "real codec and owner save"
+    },
+    {
+      "id": "PH1-005",
+      "name": "actual server readback thumbnail"
+    },
+    {
+      "id": "PH1-006",
+      "name": "other owner cannot use captured revision to read A pixels"
+    },
+    {
+      "id": "PH1-007",
+      "name": "other owner sees own empty state only"
+    },
+    {
+      "id": "PH1-008",
+      "name": "same request exact replay no new version"
+    },
+    {
+      "id": "PH1-009",
+      "name": "malformed different photo rejected"
+    },
+    {
+      "id": "PH1-010",
+      "name": "same request different valid payload refused"
+    },
+    {
+      "id": "PH1-011",
+      "name": "explicit rollback preserves old photograph"
+    },
+    {
+      "id": "PH1-012",
+      "name": "bad codec cannot mutate prior state"
+    },
+    {
+      "id": "PH1-013",
+      "name": "atomic replace changes revision"
+    },
+    {
+      "id": "PH1-014",
+      "name": "stale preview cannot read prior photo"
+    },
+    {
+      "id": "PH1-015",
+      "name": "remove clears all media columns"
+    },
+    {
+      "id": "PH1-016",
+      "name": "remove same request replay is idempotent"
+    },
+    {
+      "id": "PH1-017",
+      "name": "old upload cannot revive removed photograph"
+    },
+    {
+      "id": "PH1-018",
+      "name": "concurrent CAS one winner one explicit stale"
+    },
+    {
+      "id": "PH1-019",
+      "name": "replace versus delete uses single CAS winner"
+    },
+    {
+      "id": "PH1-020",
+      "name": "old removal does not silently delete newer photo"
+    },
+    {
+      "id": "PH1-021",
+      "name": "commit response loss stays unknown"
+    },
+    {
+      "id": "PH1-022",
+      "name": "owner can independently verify committed request"
+    },
+    {
+      "id": "PH1-023",
+      "name": "lost removal response reconcilable without pixels"
+    },
+    {
+      "id": "PH1-024",
+      "name": "actual lifecycle caller rollback preserves prior media"
+    },
+    {
+      "id": "PH1-025",
+      "name": "actual lifecycle caller rollback preserves prior media"
+    },
+    {
+      "id": "PH1-026",
+      "name": "actual profile status caller cleans and blocks reads"
+    },
+    {
+      "id": "PH1-027",
+      "name": "disabled owner recovery metadata only"
+    },
+    {
+      "id": "PH1-028",
+      "name": "identity-only remove does not depend on core"
+    },
+    {
+      "id": "PH1-029",
+      "name": "actual deleted_at transition clears media"
+    },
+    {
+      "id": "PH1-030",
+      "name": "real existing deletion-request insert clears and prevents reupload while pending"
+    },
+    {
+      "id": "PH1-031",
+      "name": "real core consent update event clears media"
+    },
+    {
+      "id": "PH1-032",
+      "name": "AI-only actual withdrawal caller preserves private bytes"
+    },
+    {
+      "id": "PH1-033",
+      "name": "actual stop operation and changed member row preserve private source"
+    },
+    {
+      "id": "PH1-034",
+      "name": "canonical block write does not delete private bytes"
+    },
+    {
+      "id": "PH1-035",
+      "name": "actual hard Auth delete caller removes entire tombstone/media row"
+    },
+    {
+      "id": "PH1-036",
+      "name": "actual profile delete creates media-free CAS tombstone while Auth remains"
+    },
+    {
+      "id": "PH1-037",
+      "name": "hard Auth delete without prior photo is not blocked by cleanup tombstone FK"
+    },
+    {
+      "id": "PH1-038",
+      "name": "actual profile cleanup waited at owner photo lock"
+    },
+    {
+      "id": "PH1-039",
+      "name": "put first then actual disable serializes to empty media"
+    },
+    {
+      "id": "PH1-040",
+      "name": "status first then delayed put rechecks fresh authority"
+    },
+    {
+      "id": "PH1-041",
+      "name": "real lock timeout is recoverable refusal, never success or detector"
+    },
+    {
+      "id": "PH1-042",
+      "name": "anon no direct media table privilege"
+    },
+    {
+      "id": "PH1-043",
+      "name": "authenticated no direct media table privilege"
+    },
+    {
+      "id": "PH1-044",
+      "name": "authenticator no direct media table privilege"
+    },
+    {
+      "id": "PH1-045",
+      "name": "service_role no direct media table privilege"
+    },
+    {
+      "id": "PH1-046",
+      "name": "social_runtime_executor no direct media table privilege"
+    },
+    {
+      "id": "PH1-047",
+      "name": "anon no private helper function execution"
+    },
+    {
+      "id": "PH1-048",
+      "name": "authenticated no private helper function execution"
+    },
+    {
+      "id": "PH1-049",
+      "name": "authenticator no private helper function execution"
+    },
+    {
+      "id": "PH1-050",
+      "name": "service_role no private helper function execution"
+    },
+    {
+      "id": "PH1-051",
+      "name": "executor has exactly five owner functions and no cleanup helper"
+    },
+    {
+      "id": "PH1-052",
+      "name": "avatar authority has no membership source read grant"
+    },
+    {
+      "id": "PH1-053",
+      "name": "narrow authority no bypass/login/membership"
+    },
+    {
+      "id": "PH1-054",
+      "name": "forged SQL actor refused by actual server function"
+    },
+    {
+      "id": "PH1-055",
+      "name": "F1 handler accepts 1024x1024"
+    },
+    {
+      "id": "PH1-056",
+      "name": "F1 real readback 1024x1024"
+    },
+    {
+      "id": "PH1-057",
+      "name": "F1 handler accepts 1000x1000"
+    },
+    {
+      "id": "PH1-058",
+      "name": "F1 real readback 1000x1000"
+    },
+    {
+      "id": "PH1-059",
+      "name": "F1 handler accepts 1000x1001"
+    },
+    {
+      "id": "PH1-060",
+      "name": "F1 real readback 1000x1001"
+    },
+    {
+      "id": "PH1-061",
+      "name": "F1 handler accepts 1024x976"
+    },
+    {
+      "id": "PH1-062",
+      "name": "F1 real readback 1024x976"
+    },
+    {
+      "id": "PH1-063",
+      "name": "F1 handler accepts 1024x977"
+    },
+    {
+      "id": "PH1-064",
+      "name": "F1 real readback 1024x977"
+    },
+    {
+      "id": "PH1-065",
+      "name": "F1 actual client transform accepted 2048x2048"
+    },
+    {
+      "id": "PH1-066",
+      "name": "F1 actual client server readback 2048x2048"
+    },
+    {
+      "id": "PH1-067",
+      "name": "F1 actual client transform accepted 2000x1000"
+    },
+    {
+      "id": "PH1-068",
+      "name": "F1 actual client server readback 2000x1000"
+    },
+    {
+      "id": "PH1-069",
+      "name": "F1 over dimension refused without write 1025x1"
+    },
+    {
+      "id": "PH1-070",
+      "name": "F1 over dimension refused without write 1025x1024"
+    },
+    {
+      "id": "PH1-071",
+      "name": "F3 direct SQL disabled refused inside put without media write"
+    },
+    {
+      "id": "PH1-072",
+      "name": "F3 direct SQL pending deletion refused inside put without media write"
+    },
+    {
+      "id": "PH1-073",
+      "name": "F4 real committed HTTP mutation and post Auth change preserve unknown"
+    }
+  ]
+}
