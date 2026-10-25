@@ -15,7 +15,8 @@ import child from 'node:child_process';
 import { createHash, createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { ROOT, recorder, sha, uuid, checkedPH1State, recoverySuccessorState } from './consumer-retention-persistence-smoke.mjs';
+import { ROOT, recorder, sha, uuid, checkedPH1State, recoverySuccessorState, checkedEntw1State, ENTW1_MODULE_PATH } from './consumer-retention-persistence-smoke.mjs';
+import { entw1PredecessorGit } from './consumer-retention-entw1-exact-successor.mjs';
 import { options, frozenProof, inventoryProof } from './consumer-retention-capture-smoke.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
 import { billingFresh } from './consumer-retention-billing-smoke.mjs';
@@ -989,11 +990,14 @@ Object.assign(GATES, {
   async F01_FROZEN_SCOPE_AND_INVENTORY() {
     // Preserve the original ENT-F2 detector on an exact, complete PH1 predecessor view.
     // No path or identity is hidden unless root/module/index/worktree AND the ENT-F2 chain match.
-    const rawGit=args=>gitRun(args),ph1=checkedPH1State(rawGit),chain=recoverySuccessorState(rawGit);
+    // ENT-W1 (outermost, on top of PH1): only with its complete exact record are its leaves and its one migration overlaid and the PH1 view taken on the ENT-W1 predecessor view.
+    const rawGit=args=>gitRun(args),w=checkedEntw1State(rawGit),ph1=checkedPH1State(rawGit),chain=recoverySuccessorState(rawGit);
+    const entw1Qualified=w.state==='record'&&chain.entw1==='record';
+    const view=entw1Qualified?entw1PredecessorGit(rawGit):rawGit;
     const qualified=ph1.state==='record'&&chain.ph1==='record'&&chain.edge==='record';
-    const projected=qualified?ph1PredecessorGit(rawGit):rawGit;
-    const overlay=new Set(qualified?[...ph1.paths,'scripts/s2-ph1-exact-successor.mjs']:[]);
-    const migrationOffset=qualified?1:0;
+    const projected=qualified?ph1PredecessorGit(view):view;
+    const overlay=new Set([...(qualified?[...ph1.paths,'scripts/s2-ph1-exact-successor.mjs']:[]),...(entw1Qualified?[...w.paths,ENTW1_MODULE_PATH]:[])]);
+    const migrationOffset=(qualified?1:0)+(entw1Qualified?1:0);
     const changed = new Set(gitRun(['diff', '--name-only', BASE_TREE]).split('\n').filter(p=>p&&!overlay.has(p)));
     for (const p of gitRun(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)) changed.add(p);
     const extra = [...changed].filter(p => !ALLOWED_CHANGES.has(p) && !['.env.example', 'docs/handoff/04_DEPLOYMENT_ENVIRONMENTS/REQUIRED_ENV_NAMES.md'].includes(p));
@@ -1006,7 +1010,7 @@ Object.assign(GATES, {
     const frozen = frozenProof(), inv = inventoryProof();
     const ok = extra.length === 0 && touchedForbidden.length === 0 && migrations === 152 && configBlob === CONFIG_TOML_BLOB && protectedChanged.length === 0 && presentNew.length === ENT_F2_SOURCE_PATHS.length && sourcesAreNew.length === 0
       && frozen.violations.length === 0 && frozen.recoverySuccessor.state === 'ent0' && frozen.recoverySuccessor.billing === 'record' && frozen.recoverySuccessor.act2 === 'record' && frozen.recoverySuccessor.edge === 'record' && inv.migrationCount-migrationOffset === 152 && inv.changedBaselineMigrations.length === 0;
-    return R(ok, { ph1Qualified:qualified, actualMigrationCount:migrations+migrationOffset, changed: [...changed].sort(), extra, touchedForbidden, migrations, configBlob, protectedChanged, presentNew: presentNew.length, sourcesAreNew, frozen: { violations: frozen.violations, successor: frozen.recoverySuccessor }, inv: { migrationCount: inv.migrationCount, newPaths: inv.newPaths.length, last: inv.last } });
+    return R(ok, { ph1Qualified:qualified, entw1Qualified, actualMigrationCount:migrations+migrationOffset, changed: [...changed].sort(), extra, touchedForbidden, migrations, configBlob, protectedChanged, presentNew: presentNew.length, sourcesAreNew, frozen: { violations: frozen.violations, successor: frozen.recoverySuccessor }, inv: { migrationCount: inv.migrationCount, newPaths: inv.newPaths.length, last: inv.last } });
   },
 
   // F03 drives the REAL judgement chain of THIS package, not helpers imported from ENT-F1:  raw fault -> classifyFault -> stageCall -> StageRefusal / SetupFault -> judgeGate -> runGate -> runSmoke, and -> gateRunner -> runMutations.

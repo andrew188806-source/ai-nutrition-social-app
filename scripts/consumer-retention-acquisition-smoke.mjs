@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION as PINNED_ACQ_MIGRATION, ACQ_MIGRATION_SHA256, SEAL_MIGRATION, BILLING_MIGRATION, withAct2Tail, withSocialTail, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
 import { act, frozenProof, inventoryProof, options, ELIGIBLE } from './consumer-retention-capture-smoke.mjs';
+import { checkedEntw1State } from './consumer-retention-persistence-smoke.mjs';
+import { ENTW1_WIRING } from './consumer-retention-entw1-exact-successor.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
 
 export { options };
@@ -474,14 +476,13 @@ Object.assign(GATES, {
     const viewRefs = (await q(ctx, "select c.relname from pg_class c where c.relkind in ('v','m') and pg_get_viewdef(c.oid) ilike '%retention_acquisition%'")).map(x => x.relname);
     const trigFns = (await q(ctx, `select c.relname, p.proname from pg_trigger t join pg_proc p on p.oid=t.tgfoid join pg_class c on c.oid=t.tgrelid where p.pronamespace=to_regnamespace('${ACQ_SCHEMA}') and not t.tgisinternal order by 1,2`));
     const ext = (await q(ctx, "select extname from pg_extension where extname in ('pg_cron','pg_net','pg_background','pgmq')")).map(x => x.extname);
-    // static scan of the repository: no application, edge function, shared package or script (other than the validators) names the schema or the resolver
-    const hits = [];
-    const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name === 'node_modules' || e.name === '.git') continue; const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|tsx|js|mjs|json)$/.test(e.name)) { const t = fs.readFileSync(p, 'utf8'); if (/retention_acquisition|resolve_detail_acquisition/.test(t)) hits.push(path.relative(ROOT, p).replace(/\\/g, '/')); } } };
-    for (const d of ['apps', 'packages', 'supabase/functions']) if (fs.existsSync(path.join(ROOT, d))) walk(path.join(ROOT, d));
+    // static scan of the repository: no application, edge function, shared package or script (other than the validators) names the schema or the resolver; with the complete exact ENT-W1 record exactly its
+    // recorded files do (and only they import the ENT-W1 module), see resolverWiringProof
+    const wiring = resolverWiringProof();
     const ok = anchors === 1 && receipts === 0 && triggersBefore.length > 0 && same(triggersBefore, (await q(ctx, "select tgname from pg_trigger where tgrelid='public.meal_records'::regclass and not tgisinternal order by 1")).map(x => x.tgname))
-      && refs.length === 0 && viewRefs.length === 0 && same(trigFns.map(x => x.relname + '.' + x.proname), ['detail_acquisition_records.reject_receipt_update', 'detail_acquisition_records.validate_receipt']) && ext.length === 0 && hits.length === 0
+      && refs.length === 0 && viewRefs.length === 0 && same(trigFns.map(x => x.relname + '.' + x.proname), ['detail_acquisition_records.reject_receipt_update', 'detail_acquisition_records.validate_receipt']) && ext.length === 0 && wiring.ok
       && !triggersBefore.some(t => /acq|acquisition/i.test(t));
-    return R(ok, { anchors, receipts, triggersBefore, refs, viewRefs, trigFns, ext, repoHits: hits });
+    return R(ok, { anchors, receipts, triggersBefore, refs, viewRefs, trigFns, ext, repoHits: wiring.names, wiring });
   },
   async P15_EIGHT_CONCURRENT_RESOLVES_ARE_EXACTLY_ONCE(ctx) {
     const owner = await makeUser(ctx, 15); const bill = await makeProducer(ctx, 'billing');
@@ -902,6 +903,58 @@ export async function migrationRollbackAndDrift(cl, installSource = acqSource())
   return R(out.every(o => o.pass), out);
 }
 
+// The repository-wide wiring scan of P14, under apps/, packages/ and supabase/functions/:
+//  - names:      files naming the acquisition schema or the resolver (unchanged rule)
+//  - edges:      "importer -> target" for every module reference that RESOLVES (relative to the importer's own directory, normalized) to a file of the ENT-W1 modules (supabase/functions/_shared/acquisition-resolve/**
+//                or supabase/functions/retention-acquisition-resolve/**). Supported references: import ... from / export ... from, side-effect import "x", import type, dynamic import("x") and require("x") with a
+//                string literal. Same-directory (./worker.ts), parent (../), re-exports and dynamic imports are all edges; references to unrelated modules are resolved and ignored.
+//  - unresolved: files with a quoted string naming one of the ENT-W1 module directories that did not resolve to an edge (a template / computed specifier, an import-map alias, ...): never allowed
+// ENT-W1-A02 (first independent acceptance): the rejected candidate only matched fixed path fragments, so "./worker.ts" from inside the module directory and "./acquisition-resolve/worker.ts" from _shared were missed.
+export const ENTW1_MODULE_DIR = /^supabase\/functions\/(?:_shared\/acquisition-resolve|retention-acquisition-resolve)\//;
+const SPECIFIERS = [
+  /\b(?:import|export)\b[^'"`;]*?\bfrom\s*(['"])([^'"\n]+)\1/g,     // import x from "m"; import type {T} from "m"; export {a} from "m"; export * from "m"
+  /\bimport\s*(['"])([^'"\n]+)\1/g,                                // import "m"
+  /\b(?:import|require)\s*\(\s*(['"])([^'"\n]+)\1\s*\)/g            // import("m"), require("m")
+];
+export function moduleReferences(importer, source) {
+  const refs = new Set();
+  for (const re of SPECIFIERS) for (const m of source.matchAll(re)) refs.add(m[2]);
+  return [...refs].map(spec => {
+    const bare = spec.replace(/[?#].*$/, '');
+    let target = null;
+    if (bare.startsWith('./') || bare.startsWith('../')) target = path.posix.normalize(path.posix.join(path.posix.dirname(importer), bare));
+    else if (bare.startsWith('file://')) { try { target = path.relative(ROOT, fileURLToPath(bare)).split(path.sep).join('/'); } catch { target = null; } }
+    return { spec, target };
+  });
+}
+export function scanWiring({ extra = {}, drop = [] } = {}) {
+  const files = [];
+  const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name === 'node_modules' || e.name === '.git') continue; const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|tsx|js|mjs|json)$/.test(e.name)) files.push(path.relative(ROOT, p).replace(/\\/g, '/')); } };
+  for (const d of ['apps', 'packages', 'supabase/functions']) if (fs.existsSync(path.join(ROOT, d))) walk(path.join(ROOT, d));
+  const all = [...new Set([...files.filter(p => !drop.includes(p)), ...Object.keys(extra)])].sort();
+  const text = p => (Object.prototype.hasOwnProperty.call(extra, p) ? extra[p] : fs.readFileSync(path.join(ROOT, p), 'utf8'));
+  const names = [], edges = [], unresolved = [];
+  for (const p of all) {
+    const t = text(p);
+    if (/retention_acquisition|resolve_detail_acquisition/.test(t)) names.push(p);
+    const refs = moduleReferences(p, t), hits = refs.filter(r => r.target && ENTW1_MODULE_DIR.test(r.target) && r.target !== p);
+    for (const h of hits) edges.push(p + ' -> ' + h.target);
+    const quoted = [...t.matchAll(/["'`]([^"'`\n]*(?:acquisition-resolve\/|retention-acquisition-resolve\/)[^"'`\n]*)["'`]/g)].map(m => m[1]);
+    if (quoted.some(q => !refs.some(r => r.spec === q && r.target && ENTW1_MODULE_DIR.test(r.target)))) unresolved.push(p);
+  }
+  return { names, edges: [...new Set(edges)].sort(), unresolved };
+}
+// Without the ENT-W1 module (state 'base') names, edges and unresolved must all be empty, exactly as before ENT-W1. With the complete exact ENT-W1 record (the root's checkedEntw1State, which also requires the
+// whole older chain) names and edges must EQUAL the recorded lists (ENTW1_WIRING) and unresolved must be empty; an 'invalid' (partial, tampered, mixed) ENT-W1 state never passes. `git`, `extra` (virtual
+// added/overridden files) and `drop` (paths hidden) exist only for the negative controls of the ENT-W1 smoke; P14 calls it with the defaults.
+export function resolverWiringProof({ git = args => { const r = child.spawnSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', maxBuffer: 256e6, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } }); if (r.status) throw Error('GIT ' + args[0] + ' ' + r.stderr); return r.stdout; }, extra = {}, drop = [] } = {}) {
+  const { names, edges, unresolved } = scanWiring({ extra, drop });
+  const importers = [...new Set(edges.map(e => e.split(' -> ')[0]))].sort();
+  const entw1 = checkedEntw1State(git);
+  const sameList = (a, b) => JSON.stringify(a) === JSON.stringify([...b].sort());
+  const ok = entw1.state === 'record' ? sameList(names, ENTW1_WIRING.names) && sameList(edges, ENTW1_WIRING.edges) && unresolved.length === 0 : entw1.state === 'base' && names.length === 0 && edges.length === 0 && unresolved.length === 0;
+  return { ok, entw1: entw1.state, entw1Violations: entw1.violations, names, edges, importers, unresolved, expected: entw1.state === 'record' ? ENTW1_WIRING : { names: [], edges: [] } };
+}
 GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const frozen = frozenProof(), inv = inventoryProof();
   const sourceSha = sha(fs.readFileSync(path.join(ROOT, 'supabase/migrations', ACQ_MIGRATION)));
