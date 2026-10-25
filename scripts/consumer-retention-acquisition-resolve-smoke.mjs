@@ -12,7 +12,8 @@ import crypto from 'node:crypto';
 import child from 'node:child_process';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import os from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as P from './consumer-retention-persistence-smoke.mjs';
 import * as EN from './consumer-retention-entitlement-smoke.mjs';
 import * as AQ from './consumer-retention-acquisition-smoke.mjs';
@@ -292,7 +293,7 @@ GATES.G01_MIGRATION_EXACT_POST_STATE = async cl => fresh(cl, 'G01', async ctx =>
 });
 
 GATES.G02_MIGRATION_REFUSALS_LEAVE_NOTHING = async cl => {
-  const left = async ctx => (await q(ctx, `select (select count(*)::int from pg_roles where rolname=$1) roles, to_regclass('${ACQ}.resolution_sweep_state') is not null tbl, (select count(*)::int from pg_proc where pronamespace='${ACQ}'::regnamespace and proname in ('claim_resolution_page','begin_resolution_item','advance_resolution_cursor','first_unresolved_in')) fns`, [WORKER]))[0];
+  const left = async ctx => (await q(ctx, `select (select count(*)::int from pg_roles where rolname=$1) roles, to_regclass('${ACQ}.resolution_sweep_state') is not null or to_regclass('${ACQ}.resolution_attempts') is not null tbl, (select count(*)::int from pg_proc where pronamespace='${ACQ}'::regnamespace and proname in ('claim_resolution_page','begin_resolution_item','advance_resolution_cursor','first_unresolved_in')) fns`, [WORKER]))[0];
   const cases = {};
   const refuse = async (label, prepare, prefix, { runner = 'su', acq = true } = {}) => fresh(cl, 'G02-' + label, async ctx => {
     await prepare(ctx);
@@ -886,11 +887,95 @@ return { GATES, runs, tls: () => tls };
 })();
 
 // ===== new integration gates =====
-// The evidence identity: the checkpoint's runtime results (pg-4, mut-3, gaps-2, denopg-1, deno-2) were produced on exactly these bytes.
+// The checkpoint (and the rejected candidate 4fc3c6b3) migration bytes. ENT-W1-A01 changed the migration, so runtime evidence produced on these bytes does NOT apply to this tree's migration; the product TypeScript is unchanged.
 const CHECKPOINT_MIGRATION_SHA256 = '19999f49f730d7669351e21e1e4fb183c56fb482be199a3b7e2bcd33fb1532b0';
 const CHECKPOINT_PRODUCT_SHA256 = Object.freeze({"supabase/functions/_shared/acquisition-resolve/sql.ts":"14a61fd906d66d8f9a51858d11165c444882f4d2d8efce565a2d809f8dc2e7ef","supabase/functions/_shared/acquisition-resolve/worker.ts":"c6eaad91f12e4f68384c3b5643118a217ee7ae8a52826da9c01bc91b4b3c24fd","supabase/functions/retention-acquisition-resolve/config.ts":"aca37dd0474c5881fc2f993a8e1ae9d69a66fb447f1b0c12c575595cedf5bf1d","supabase/functions/retention-acquisition-resolve/handler.ts":"27fc37aa6acf8c30a49c83eede63df2c3def617c814eb0f9eb6369185acd54d2","supabase/functions/retention-acquisition-resolve/index.ts":"1dbf38f2d939764cd8518783a198534308fc58f3f134a210dfa9d87ad5c31c9e"});
 const sha256 = b => crypto.createHash('sha256').update(b).digest('hex');
 const NEW = {};
+// ---- ENT-W1-A01: the per-resource / per-cycle start bound (the first independent acceptance's counterexample, and its controls) ----
+// The judged quantity is the number of COMMITTED 'proceed' answers of begin_resolution_item for one (cycle, resource), observed at the driver boundary of transactions that committed, plus the truth read on an
+// independent superuser connection (state row and, when present, the per-resource start rows). Never a handler label alone.
+const A01_SECRET = 'a'.repeat(40);
+function startsDriver(url, E, inject = {}) {
+  const d = nodeDriver(url, E, inject), begins = [];
+  return { begins, transactions: () => d.transactions, async withTransaction(fn) { const local = []; const out = await d.withTransaction(s => fn({ async query(text, params) { const rows = await s.query(text, params); if (/begin_resolution_item/.test(text)) local.push({ cycle: String(params[0]), resource: params[1], answer: rows[0]?.s ?? null }); return rows; } })); begins.push(...local); return out; }, async close() { await d.close(); } };
+}
+const startRows = async ctx => (await q(ctx, `select to_regclass('${ACQ}.resolution_attempts') is not null t`))[0].t ? (await q(ctx, `select cycle::text, resource_id, starts from ${ACQ}.resolution_attempts order by cycle, resource_id`)) : null;
+async function handlerRun(M, ctx, url, inject) {
+  const d = startsDriver(url, M.E, inject);
+  const res = await M.H.processRetentionResolveRequest(new Request('http://x/r', { method: 'POST', headers: { 'x-retention-resolve-secret': A01_SECRET } }), { loadConfig: () => ({ ok: true, value: { resolverDbUrl: url, secret: A01_SECRET } }), createDriver: () => d, limits: LIM(), now: () => Date.now() });
+  return { http: res.status, body: await res.json(), begins: d.begins, st: await state(ctx), rows: await startRows(ctx), receipts: (await receipts(ctx)).map(r => r.resource_id) };
+}
+const failOn = bad => ({ bodyEnd: s => (isResolveTx(s) && paramId(s) === bad ? Error('A01 injected persistent body failure for one resource') : null) });
+const proceedCount = (runs, cycle, resource) => runs.flatMap(r => r.begins).filter(b => b.cycle === cycle && b.resource === resource && b.answer?.outcome === 'proceed').length;
+// invariant of the start state at every observation: rows only for the CURRENT cycle and only for resources after the cursor; each 1..3
+const startInvariant = r => r.rows === null || r.rows.every(x => x.cycle === r.st.cycle && (r.st.cursor_after === null || x.resource_id > r.st.cursor_after) && x.starts >= 1 && x.starts <= 3);
+NEW.A01_LATE_LOWER_ANCHOR_KEEPS_THE_COMMITTED_STARTS_OF_A_FAILING_ID = async cl => {
+  const scenario = async (label, withLate) => fresh(cl, 'A01-' + label, async ctx => {
+    const M = session(); const login = await workerLogin(ctx); const w = await paidWorld(ctx); const o = await paidOwner(ctx, w, 1);
+    const low = rid(2001), bad = rid(2002), good = rid(2003); await anchor(ctx, o, { id: bad, t0Ms: w.now - DAY }); await anchor(ctx, o, { id: good, t0Ms: w.now - DAY });
+    let late = null;
+    if (withLate) { late = await ctx.open('supabase_admin'); await late.query('begin'); await late.query("set local session_replication_role = 'replica'"); const t0 = iso(w.now - DAY);
+      await late.query("insert into public.meal_records(id,user_id,meal_type,occurred_at,meal_date,source) values($1,$2,'lunch',$3::timestamptz,$4::date,'manual')", [low, o, t0, t0.slice(0, 10)]);
+      await late.query("insert into retention_capture.detail_capture_anchors(resource_id,owner_user_id,original_recorded_at,capture_kind,capture_contract_version,capture_context) values($1,$2,$3::timestamptz,'canonical_meal_insert','retention-capture-v1','authenticated_actor')", [low, o, t0]); }
+    const url = dbUrl(ctx, login), runs = [];
+    for (let k = 1; k <= 3; k++) runs.push({ k, ...(await handlerRun(M, ctx, url, failOn(bad))) });
+    const visibleBefore = withLate ? (await q(ctx, 'select count(*)::int n from retention_capture.detail_capture_anchors where resource_id = $1', [low]))[0].n : null;
+    if (late) await late.query('commit');
+    for (let k = 4; k <= 6; k++) runs.push({ k, ...(await handlerRun(M, ctx, url, failOn(bad))) });
+    const cycle0Bad = proceedCount(runs, '0', bad), cycle1Bad = proceedCount(runs, '1', bad);
+    const r4 = runs[3];
+    const skippedInCycle0 = runs.flatMap(r => r.begins).filter(b => b.cycle === '0' && b.resource === bad && b.answer?.outcome === 'skipped_after_attempts').length;
+    const ok = runs.slice(0, 3).every((r, i) => r.http === 503 && r.body.status === 'failed' && r.st.cycle === '0' && r.st.inflight_resource === bad && r.st.inflight_attempts === i + 1 && r.receipts.length === 0)
+      && (!withLate || visibleBefore === 0)
+      && cycle0Bad === 3 && skippedInCycle0 === 1
+      && r4.receipts.includes(good) && !r4.receipts.includes(bad) && (!withLate || r4.receipts.includes(low)) && r4.st.cycle === '1'
+      && cycle1Bad >= 1 && runs.every(startInvariant);
+    return { ok, cycle0BadProceedStarts: cycle0Bad, cycle0BadSkips: skippedInCycle0, cycle1BadProceedStarts: cycle1Bad, visibleBefore, runs: runs.map(r => ({ k: r.k, http: r.http, status: r.body.status, recorded: r.body.recorded, skipped: r.body.skippedAfterAttempts, begins: r.begins.map(b => b.cycle + ':' + b.resource.slice(-4) + ':' + (b.answer?.outcome ?? '?') + (b.answer?.attempt ? '#' + b.answer.attempt : '')), st: r.st, rows: r.rows, receipts: r.receipts.map(x => x.slice(-4)) })) };
+  });
+  const lateLower = await scenario('late-lower-anchor', true), control = await scenario('no-late-anchor-control', false);
+  return R(lateLower.ok && control.ok, { lateLower, control, expected: 'exactly 3 committed proceed starts for the failing id in cycle 0, then one skip in cycle 0, later Paid ids recorded, a new start in cycle 1' });
+};
+NEW.A01_CONCURRENT_INTERLEAVED_AND_ROLLED_BACK_STARTS_STAY_WITHIN_THREE = async cl => fresh(cl, 'A01C', async ctx => {
+  const login = await workerLogin(ctx); const w = await paidWorld(ctx); const o = await paidOwner(ctx, w, 1, { fromMs: w.now - 395 * DAY, untilMs: w.now - 394 * DAY });
+  const low = rid(3001), bad = rid(3002), next = rid(3003); await anchor(ctx, o, { id: bad, t0Ms: w.now - DAY }); await anchor(ctx, o, { id: next, t0Ms: w.now - DAY });
+  const conns = []; for (let i = 0; i < 4; i++) conns.push(await ctx.open(login));
+  const begin = (c, id) => c.query(`select ${ACQ}.begin_resolution_item(0, $1::uuid) s`, [id]).then(r => r.rows[0].s);
+  const out = {};
+  // (1) a start inside a transaction that ROLLS BACK is not counted
+  await conns[0].query('begin'); out.rolledBack = await begin(conns[0], bad); await conns[0].query('rollback');
+  out.afterRollback = { st: await state(ctx), rows: await startRows(ctx) };
+  // (2) two concurrent committed starts on the failing id
+  out.concurrentPair = (await Promise.all([begin(conns[1], bad), begin(conns[2], bad)])).map(s => s.outcome).sort();
+  // (3) a lower anchor becomes visible; the failing id is no longer next; the lower one is begun, resolved (pending: Free) and passed in ONE transaction
+  await anchor(ctx, o, { id: low, t0Ms: w.now - DAY });
+  out.badWhileLowerUnresolved = (await begin(conns[1], bad)).outcome;
+  out.lowerBegin = (await begin(conns[1], low)).outcome;
+  await conns[1].query('begin'); out.lowerResolved = (await conns[1].query(`select ${ACQ}.resolve_detail_acquisition($1::uuid) s`, [low])).rows[0].s.outcome; out.lowerAdvanced = (await conns[1].query(`select ${ACQ}.advance_resolution_cursor(0, $1::uuid, 'resolved') s`, [low])).rows[0].s.outcome; await conns[1].query('commit');
+  out.afterLower = { st: await state(ctx), rows: await startRows(ctx) };
+  // (4) three concurrent starts on the failing id: only ONE more proceed may exist (the third), the rest skip or are stale
+  out.concurrentTriple = (await Promise.all([begin(conns[1], bad), begin(conns[2], bad), begin(conns[3], bad)])).map(s => s.outcome).sort();
+  out.final = { st: await state(ctx), rows: await startRows(ctx) };
+  const proceeds = [...out.concurrentPair, ...out.concurrentTriple].filter(x => x === 'proceed').length;
+  const ok = out.rolledBack.outcome === 'proceed' && out.afterRollback.st.inflight_resource === null && (out.afterRollback.rows === null || out.afterRollback.rows.length === 0)
+    && same(out.concurrentPair, ['proceed', 'proceed']) && out.badWhileLowerUnresolved === 'out_of_order' && out.lowerBegin === 'proceed' && out.lowerResolved === 'pending' && out.lowerAdvanced === 'advanced'
+    && proceeds === 3 && out.concurrentTriple.includes('skipped_after_attempts') && out.final.st.cursor_after === bad && out.final.st.skipped_total === '1' && (await receipts(ctx)).length === 0;
+  return R(ok, { ...out, committedProceedStartsForBadInCycle0: proceeds });
+});
+NEW.A01_START_STATE_HAS_A_BOUNDED_LIFECYCLE = async cl => fresh(cl, 'A01L', async ctx => {
+  const M = session(); const login = await workerLogin(ctx); const w = await paidWorld(ctx); const o = await paidOwner(ctx, w, 1);
+  const exists = (await q(ctx, `select to_regclass('${ACQ}.resolution_attempts') is not null t`))[0].t;
+  if (!exists) return R(false, { startTable: 'absent: the rejected candidate keeps ONE inflight counter (no per-resource start state)' });
+  const ids = [rid(4001), rid(4002), rid(4003)]; for (const id of ids) await anchor(ctx, o, { id, t0Ms: w.now - DAY });
+  const url = dbUrl(ctx, login);
+  const seen = [];
+  const r1 = await handlerRun(M, ctx, url, failOn(ids[1])); seen.push(r1);                     // 4001 recorded, 4002 fails: one row (cycle 0, 4002, 1)
+  const r2 = await handlerRun(M, ctx, url, {}); seen.push(r2);                                   // 4002, 4003 recorded, wrap: no row left
+  const acl = (await q(ctx, `select c.relrowsecurity, c.relforcerowsecurity, pg_get_userbyid(c.relowner) owner, (select count(*)::int from aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a where a.grantee <> c.relowner) others, has_table_privilege($1, '${ACQ}.resolution_attempts', 'SELECT,INSERT,UPDATE,DELETE') worker from pg_class c where c.oid = '${ACQ}.resolution_attempts'::regclass`, [WORKER]))[0];
+  const ok = same(r1.rows, [{ cycle: '0', resource_id: ids[1], starts: 1 }]) && r2.rows.length === 0 && r2.st.cycle === '1' && r2.receipts.length === 3 && seen.every(startInvariant)
+    && acl.relrowsecurity && acl.relforcerowsecurity && acl.owner === 'consumer_retention_acquisition_owner' && acl.others === 0 && acl.worker === false;
+  return R(ok, { afterFailure: { st: r1.st, rows: r1.rows }, afterCycle: { st: r2.st, rows: r2.rows, receipts: r2.receipts.length }, acl });
+});
 NEW.F01_ENTW1_EXACT_SUCCESSOR_AND_INVENTORY = async () => {
   const w = P.checkedEntw1State(rootGit), chain = P.recoverySuccessorState(rootGit), act2 = P.checkedAct2State(rootGit);
   const migrations = fs.readdirSync(path.join(ROOT, 'supabase/migrations')).filter(n => n.endsWith('.sql')).sort();
@@ -906,7 +991,7 @@ NEW.F01_ENTW1_EXACT_SUCCESSOR_AND_INVENTORY = async () => {
     chainComplete: chain.exempt === true && chain.entw1 === 'record' && chain.ph1 === 'record' && chain.edge === 'record' && chain.act2 === 'record' && chain.billing === 'record',
     act2StateCarriesEntw1Paths: act2.state === 'record' && Object.keys(ENTW1_FILES).every(p => act2.paths.includes(p)) && act2.paths.includes(P.ENTW1_MODULE_PATH),
     migrationCount154: migrations.length === 154, lastIsEntw1: migrations.at(-1) === ENTW1_MIGRATION, tailEndsPh1ThenEntw1: JSON.stringify(tail.slice(-2)) === JSON.stringify([PH1_MIGRATION, ENTW1_MIGRATION]),
-    migrationPinned: migSha === P.ENTW1_MIGRATION_SHA256, migrationIsCheckpointBytes: migSha === CHECKPOINT_MIGRATION_SHA256, productIsCheckpointBytes: productDrift.length === 0,
+    migrationPinned: migSha === P.ENTW1_MIGRATION_SHA256, migrationIsNotTheRejectedA01Bytes: migSha !== CHECKPOINT_MIGRATION_SHA256, productIsCheckpointBytes: productDrift.length === 0,
     diffVsMainIsExactlyTheRecord: JSON.stringify(changed) === JSON.stringify(expected), recordedBasesAreTrue: baseTruth.length === 0, configTomlUnchanged: config.now === config.base
   };
   return R(Object.values(rows).every(Boolean), { rows, changed, expected, baseTruth, productDrift, migSha, tail: tail.slice(-3), chain: { state: chain.state, entw1: chain.entw1, ph1: chain.ph1, edge: chain.edge, act2: chain.act2, billing: chain.billing, violations: chain.violations }, w: { state: w.state, violations: w.violations } });
@@ -919,24 +1004,76 @@ const lyingGit = (git, { stage = {}, hash = {} }) => args => {
   return out;
 };
 const FAKE = 'f'.repeat(40);
+// P14 module-resolution controls (virtual files through resolverWiringProof's extra/drop; the real worktree/index controls are F04). Every refused case must be refused BY P14's own wiring evidence (an extra edge,
+// name or unresolved reference, or an invalid record), not by another guard.
+const P14_CASES = {
+  sameDirectoryRelativeImport: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'import { runAcquisitionSweep } from "./worker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge' },
+  sharedParentRelativeImport: { file: 'supabase/functions/_shared/zz-extra-caller.ts', body: 'import { runAcquisitionSweep } from "./acquisition-resolve/worker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge' },
+  upOneLevelRelativeImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'import { runAcquisitionSweep } from "../_shared/acquisition-resolve/worker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge' },
+  dottedDetourImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'import { runAcquisitionSweep } from "../zz-extra-caller/../_shared/./acquisition-resolve/worker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge' },
+  reExport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export * from "../_shared/acquisition-resolve/worker.ts";\n', refuse: 'edge' },
+  namedReExport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export { runAcquisitionSweep as run } from "../_shared/acquisition-resolve/worker.ts";\n', refuse: 'edge' },
+  typeOnlyImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'import type { SweepLimits } from "../_shared/acquisition-resolve/worker.ts";\nexport type L = SweepLimits;\n', refuse: 'edge' },
+  dynamicImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export const load = () => import("../_shared/acquisition-resolve/worker.ts");\n', refuse: 'edge' },
+  entrypointHandlerImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'import { processRetentionResolveRequest } from "../retention-acquisition-resolve/handler.ts";\nexport const h = processRetentionResolveRequest;\n', refuse: 'edge' },
+  computedSpecifier: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'const n = "worker";\nexport const load = () => import(`../_shared/acquisition-resolve/${n}.ts`);\n', refuse: 'unresolved' },
+  newEdgeInsideTheModule: { file: 'supabase/functions/retention-acquisition-resolve/zz-extra.ts', body: 'export * from "../_shared/acquisition-resolve/sql.ts";\n', refuse: 'edge' },
+  extraFileNamesTheResolver: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export const s = "select retention_acquisition.resolve_detail_acquisition($1)";\n', refuse: 'name' },
+  unrelatedRelativeImportPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'import { jsonResponse } from "../_shared/billing-transport/http.ts";\nimport "./local.ts";\nexport const r = jsonResponse;\n', refuse: null },
+  unrelatedSiblingNamedLikeTheModulePositive: { file: 'supabase/functions/zz-unrelated/acquisition-resolve-notes.ts', body: 'import { x } from "./other.ts";\nexport const y = x;\n', refuse: null }
+};
 NEW.F02_P14_WIRING_IS_EXACT_AND_REFUSES_EVERY_DEVIATION = async () => {
   const proof = o => AQ.resolverWiringProof(o);
   const sqlTs = 'supabase/functions/_shared/acquisition-resolve/sql.ts';
-  const extraFile = 'supabase/functions/zz-entw1-control/index.ts';
-  const cases = {
-    exactRecord: proof({ git: rootGit }),
-    extraFileNamesTheResolver: proof({ git: rootGit, extra: { [extraFile]: 'export const s = "select retention_acquisition.resolve_detail_acquisition($1)";' } }),
-    extraCallerImportsTheWorker: proof({ git: rootGit, extra: { [extraFile]: 'import { runAcquisitionSweep } from "../_shared/acquisition-resolve/worker.ts";\nexport { runAcquisitionSweep };' } }),
+  const exact = proof({ git: rootGit });
+  const cases = {};
+  for (const [k, c] of Object.entries(P14_CASES)) { const v = proof({ git: rootGit, extra: { [c.file]: c.body } }); const extraEdges = v.edges.filter(e => !ENTW1_WIRING.edges.includes(e)); const extraNames = v.names.filter(n => !ENTW1_WIRING.names.includes(n));
+    const byOwnEvidence = c.refuse === 'edge' ? extraEdges.some(e => e.startsWith(c.file + ' -> ')) : c.refuse === 'name' ? extraNames.includes(c.file) : c.refuse === 'unresolved' ? v.unresolved.includes(c.file) : true;
+    cases[k] = { expected: c.refuse ? 'refused (' + c.refuse + ')' : 'accepted', ok: v.ok, pass: c.refuse ? v.ok === false && byOwnEvidence && v.entw1 === 'record' : v.ok === true, extraEdges, extraNames, unresolved: v.unresolved }; }
+  const integrity = {
     recordedFileTampered: proof({ git: lyingGit(rootGit, { hash: { [sqlTs]: FAKE } }) }),
     recordedNameFileMissing: proof({ git: rootGit, drop: [sqlTs] }),
     newModuleWithOldLeaves: proof({ git: entw1PredecessorGit(rootGit) }),
     moduleTampered: proof({ git: lyingGit(rootGit, { hash: { [P.ENTW1_MODULE_PATH]: FAKE } }) })
   };
-  const oldRuleOnThisTree = { names: cases.exactRecord.names.length, passes: cases.exactRecord.names.length === 0 };
-  const ok = cases.exactRecord.ok && cases.exactRecord.entw1 === 'record' && cases.exactRecord.names.length === ENTW1_WIRING.names.length && cases.exactRecord.names.length > 0
-    && ['extraFileNamesTheResolver', 'extraCallerImportsTheWorker', 'recordedFileTampered', 'recordedNameFileMissing', 'newModuleWithOldLeaves', 'moduleTampered'].every(k => cases[k].ok === false)
-    && cases.recordedFileTampered.entw1 === 'invalid' && cases.newModuleWithOldLeaves.entw1 === 'invalid' && cases.moduleTampered.entw1 === 'invalid' && oldRuleOnThisTree.passes === false;
-  return R(ok, { cases: Object.fromEntries(Object.entries(cases).map(([k, v]) => [k, { ok: v.ok, entw1: v.entw1, names: v.names, importers: v.importers, violations: (v.entw1Violations ?? []).slice(0, 6) }])), oldRuleOnThisTree, note: 'old rule = the P14 of main 9d4d50c5 (no file may name the resolver): it refuses this tree, which is why P14 had to change' });
+  const oldRuleOnThisTree = { names: exact.names.length, passes: exact.names.length === 0 };
+  const ok = exact.ok && exact.entw1 === 'record' && same(exact.names, [...ENTW1_WIRING.names].sort()) && same(exact.edges, [...ENTW1_WIRING.edges].sort()) && exact.edges.length > 0 && exact.unresolved.length === 0
+    && Object.values(cases).every(c => c.pass) && Object.values(integrity).every(v => v.ok === false)
+    && integrity.recordedFileTampered.entw1 === 'invalid' && integrity.newModuleWithOldLeaves.entw1 === 'invalid' && integrity.moduleTampered.entw1 === 'invalid' && oldRuleOnThisTree.passes === false;
+  return R(ok, { exact: { ok: exact.ok, names: exact.names, edges: exact.edges, unresolved: exact.unresolved }, cases, integrity: Object.fromEntries(Object.entries(integrity).map(([k, v]) => [k, { ok: v.ok, entw1: v.entw1, violations: (v.entw1Violations ?? []).slice(0, 4) }])), oldRuleOnThisTree, note: 'old rule = the P14 of main 9d4d50c5 (no file may name the resolver): it refuses this tree, which is why P14 had to change' });
+};
+// P14 with REAL bytes: a throwaway clone of this tree (git clone --shared, junctions to this tree's node_modules removed afterwards with a non-recursive rmdir); each control writes a real file into the worktree,
+// then also stages it, and asks the clone's own P14 wiring proof; the exact candidate must be accepted before, between and after the controls.
+NEW.F04_P14_REAL_WORKTREE_AND_INDEX_CONTROLS = async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'entw1-p14-')), Q = path.join(tmp, 'fx');
+  const g = (cwd, args) => { const r = child.spawnSync('git', ['-c', 'safe.directory=*', ...args], { cwd, encoding: 'utf8', env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }, maxBuffer: 256e6 }); if (r.status) throw Error('SETUP_GIT ' + args.join(' ') + ' ' + r.stderr); return r.stdout; };
+  const links = [];
+  try {
+    if (rootGit(['diff', '--name-only']).trim() || rootGit(['ls-files', '--others', '--exclude-standard']).trim()) throw Error('SETUP_F04_NEEDS_NO_UNSTAGED_OR_UNTRACKED_CHANGE');
+    g(tmp, ['clone', '--shared', '--no-checkout', '--quiet', ROOT, Q]); g(Q, ['config', 'core.autocrlf', 'false']); g(Q, ['checkout', '--quiet', '--detach', rootGit(['rev-parse', 'HEAD']).trim()]);
+    // an uncommitted staged candidate: carry the index state of the leaves into the fixture
+    const staged = rootGit(['diff', '--cached', '--name-only']).split('\n').filter(Boolean);
+    for (const p of staged) { if (fs.existsSync(path.join(ROOT, p))) { fs.mkdirSync(path.dirname(path.join(Q, p)), { recursive: true }); fs.copyFileSync(path.join(ROOT, p), path.join(Q, p)); g(Q, ['add', '--', p]); } }
+    for (const l of ['node_modules', 'apps/mobile/node_modules']) { const t = fs.realpathSync(path.join(ROOT, l)); fs.symlinkSync(t, path.join(Q, l), 'junction'); links.push(path.join(Q, l)); }
+    const AQX = await import(pathToFileURL(path.join(Q, 'scripts/consumer-retention-acquisition-smoke.mjs')).href);
+    const qGit = args => g(Q, args), idx = fs.readFileSync(path.join(Q, '.git/index'));
+    const proof = () => { const v = AQX.resolverWiringProof({ git: qGit }); return { ok: v.ok, entw1: v.entw1, edges: v.edges, names: v.names, unresolved: v.unresolved }; };
+    const rows = [{ name: 'exact-before', ...proof() }];
+    for (const k of ['sameDirectoryRelativeImport', 'sharedParentRelativeImport', 'upOneLevelRelativeImport', 'reExport', 'dynamicImport', 'computedSpecifier', 'unrelatedRelativeImportPositive']) {
+      const c = P14_CASES[k], abs = path.join(Q, c.file), created = !fs.existsSync(path.dirname(abs));
+      try { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, c.body); rows.push({ name: k + ':worktree', expectRefused: !!c.refuse, ...proof() }); g(Q, ['add', '--', c.file]); rows.push({ name: k + ':staged', expectRefused: !!c.refuse, ...proof() }); }
+      finally { fs.writeFileSync(path.join(Q, '.git/index'), idx); fs.rmSync(abs, { force: true }); if (created) { try { fs.rmdirSync(path.dirname(abs)); } catch { /* not empty or gone */ } } }
+      rows.push({ name: k + ':restored', ...proof() });
+    }
+    const clean = g(Q, ['status', '--porcelain', '--untracked-files=all']).trim() === '' || staged.length > 0;
+    rows.push({ name: 'exact-after', ...proof() });
+    const ok = rows.every(r => (r.expectRefused === undefined ? r.ok === true && r.entw1 === 'record' : r.expectRefused ? r.ok === false && r.entw1 === 'record' : r.ok === true)) && clean;
+    return R(ok, { rows, fixtureClean: clean });
+  } finally {
+    for (const l of links) { try { child.spawnSync('cmd', ['/c', 'rmdir', l]); } catch { /* gone */ } }
+    const leftLinks = links.filter(l => { try { fs.lstatSync(l); return true; } catch { return false; } });
+    if (leftLinks.length === 0) fs.rmSync(tmp, { recursive: true, force: true });
+  }
 };
 NEW.F03_SUCCESSOR_BINDING_REFUSES_TAMPERED_PARTIAL_AND_MIXED_STATES = async () => {
   const leaf = 'supabase/functions/_shared/acquisition-resolve/worker.ts', mod = P.ENTW1_MODULE_PATH, ph1Mod = 'scripts/s2-ph1-exact-successor.mjs', capture = 'scripts/consumer-retention-capture-smoke.mjs';
@@ -1014,7 +1151,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const selected = sel.length ? ALL.filter(k => sel.includes(k)) : ALL;
   if (fs.existsSync(OUT) && fs.readdirSync(OUT).length) { console.error('REFUSED: --out must be a new or empty directory'); process.exit(2); }
   const rec = P.recorder(OUT);
-  const identity = { head: rootGit(['rev-parse', 'HEAD']).trim(), tree: rootGit(['rev-parse', 'HEAD^{tree}']).trim(), dirty: rootGit(['status', '--porcelain', '-uall']).trim().split('\n').filter(Boolean), smokeSha256: sha256(fs.readFileSync(new URL(import.meta.url))), draftSha256: sha256(fs.readFileSync(DRAFT)), srcRoot: SRC_ROOT };
+  const identity = { head: rootGit(['rev-parse', 'HEAD']).trim(), tree: rootGit(['rev-parse', 'HEAD^{tree}']).trim(), dirty: rootGit(['status', '--porcelain', '-uall']).trim().split('\n').filter(Boolean), smokeSha256: sha256(fs.readFileSync(new URL(import.meta.url))), draftSha256: sha256(fs.readFileSync(DRAFT)), srcRoot: SRC_ROOT, product: Object.fromEntries(PRODUCT_FILES.map(p => [p, sha256(fs.readFileSync(path.join(SRC_ROOT, p)))])) };
   const results = []; let blocked = null; let cl = null;
   try {
     if (unknown.length || selected.length === 0) throw Error('SETUP_GATE_SELECTION ' + JSON.stringify({ unknown, selected }));

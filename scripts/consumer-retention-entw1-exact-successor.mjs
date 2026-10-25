@@ -7,7 +7,7 @@ export const ENTW1_MIGRATION='20261025010000_consumer_retention_acquisition_reso
 export const ENTW1_FILES=Object.freeze({
   "docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md": {
     "mode": "100644",
-    "blob": "dd982cc3f00563b5cc765abd540d37b79b1d32ec",
+    "blob": "f1753cd1e2b647fcf5ff018e5200bde1067c7ff4",
     "base": "7eda851906fc3f4a03917ea0f68a03a9e924b8a6",
     "baseMode": "100644"
   },
@@ -31,19 +31,19 @@ export const ENTW1_FILES=Object.freeze({
   },
   "scripts/consumer-retention-acquisition-resolve-mutations.mjs": {
     "mode": "100644",
-    "blob": "ad8a5388a2fced0216b09bf32f7a47cf2336be7d",
+    "blob": "c9c21adaf7eaa90809fdff84eeedafbcf81e13fe",
     "base": null,
     "baseMode": null
   },
   "scripts/consumer-retention-acquisition-resolve-smoke.mjs": {
     "mode": "100644",
-    "blob": "53be0bf725f0bca381a50df9678098b3197ceef0",
+    "blob": "6f16fa647b5fbb0d2c4c5f0c5488b8c9e0659a37",
     "base": null,
     "baseMode": null
   },
   "scripts/consumer-retention-acquisition-smoke.mjs": {
     "mode": "100644",
-    "blob": "61b07e23399768161cf1bf847135bd5470bdd17b",
+    "blob": "bf1d104fd50f304a2af8f2a95cd580e28c2811e1",
     "base": "8b626ea882450eec8f8688ac35acb7a03e209ff5",
     "baseMode": "100644"
   },
@@ -91,16 +91,16 @@ export const ENTW1_FILES=Object.freeze({
   },
   "supabase/migrations/20261025010000_consumer_retention_acquisition_resolve_sweep.sql": {
     "mode": "100644",
-    "blob": "c4fd32ad31f7eb7faf28317c7df3b9df8173094f",
+    "blob": "d19d5d63a8e54477df465efdb34c50c5c61c0af4",
     "base": null,
     "baseMode": null
   }
 });
 // </ENTW1_FILES>
 // <ENTW1_WIRING>
-// The ONLY files under apps/, packages/ and supabase/functions/ that may name the acquisition schema or the resolver (names), and the only ones that may import the ENT-W1 shared module or
-// entrypoint (importers). The acquisition smoke's P14 accepts exactly these, and only while the complete ENT-W1 record is exact; otherwise it requires none, as before.
-export const ENTW1_WIRING=Object.freeze({names:Object.freeze(["supabase/functions/_shared/acquisition-resolve/sql.ts"]),importers:Object.freeze(["supabase/functions/retention-acquisition-resolve/handler.ts"])});
+// The ONLY files under apps/, packages/ and supabase/functions/ that may name the acquisition schema or the resolver (names), and the ONLY module references that resolve into the ENT-W1 modules
+// (edges, importer -> resolved target, as computed by the acquisition smoke's scanWiring). The acquisition smoke's P14 accepts exactly these, and only while the complete ENT-W1 record is exact; otherwise none, as before.
+export const ENTW1_WIRING=Object.freeze({names:Object.freeze(["supabase/functions/_shared/acquisition-resolve/sql.ts"]),edges:Object.freeze(["supabase/functions/_shared/acquisition-resolve/worker.ts -> supabase/functions/_shared/acquisition-resolve/sql.ts","supabase/functions/retention-acquisition-resolve/handler.ts -> supabase/functions/_shared/acquisition-resolve/worker.ts","supabase/functions/retention-acquisition-resolve/handler.ts -> supabase/functions/retention-acquisition-resolve/config.ts","supabase/functions/retention-acquisition-resolve/index.ts -> supabase/functions/retention-acquisition-resolve/handler.ts"])});
 // </ENTW1_WIRING>
 export function entw1FilesState(git,root){
  const paths=Object.keys(ENTW1_FILES);if(paths.length===0)return {state:'invalid',paths:[],violations:['entw1:empty-record']};

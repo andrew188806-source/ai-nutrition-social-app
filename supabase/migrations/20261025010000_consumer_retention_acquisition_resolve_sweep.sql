@@ -1,10 +1,13 @@
--- TastKind ENT-W1 (DRAFT; not yet a file under supabase/migrations: the final file name, its position in the ordered tail and its pins are fixed only at integration, after PH1).
+-- TastKind ENT-W1 (retention line): the acquisition sweep, the outermost exact successor on the accepted PH1 main (its pins live in the ENT-W1 successor record).
 -- Drives the accepted ENT1-A resolver retention_acquisition.resolve_detail_acquisition(uuid) from outside: a member-less NOLOGIN worker role may EXECUTE the resolver and three sweep functions, nothing else.
 -- Contract kept: T0, owner and capture context come from the immutable capture anchor; eligibility is decided ONLY by the resolver (and through it ENT0); no time cutoff; pending / unknown write nothing and are never Free;
 -- an existing receipt is never re-resolved (it is immutable and the resolver only replays it). No grant, display, expiry or purge. No LOGIN role, no membership, no Hosted actor is created here.
 -- Sweep state (one row): a cursor over anchor resource ids that advances ONLY to an id that was processed (resolved, pending, or skipped after bounded attempts) and ONLY contiguously: it can never pass an anchor
--- without a receipt that nobody processed. The cursor wraps (a new cycle) only when no anchor without a receipt remains after it. A start counter per in-flight id bounds how long one failing id can hold the
--- cursor (a resource that fails or kills the worker on every attempt is skipped for the current cycle after MAX attempts and is attempted again in the next cycle).
+-- without a receipt that nobody processed. The cursor wraps (a new cycle) only when no anchor without a receipt remains after it. COMMITTED starts are counted per (cycle, resource) in resolution_attempts, so
+-- the bound survives a switch of the in-flight id (a late-visible lower anchor, concurrent workers): a resource that fails or kills the worker on every attempt gets at most 3 committed starts in one cycle, is
+-- then skipped for that cycle (no receipt, no decision) and is attempted again in the next cycle. A start row lives only while its resource lies after the cursor in the current cycle: it is deleted when the
+-- cursor passes the resource and every row is deleted at a wrap, so the table never holds history.
+-- ENT-W1-A01 (first independent acceptance): the rejected candidate kept ONE in-flight counter that restarted at 1 whenever another id was begun, so a late lower anchor reset a failing id's committed starts.
 -- Native authenticated superuser only (the new objects are owned by the sealed acquisition owner, as in ENT1-A). A superuser can bypass every guard here; no claim is made against a deliberate administrator.
 BEGIN;
 DO $$ BEGIN
@@ -64,6 +67,7 @@ BEGIN
  END IF;
  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = 'consumer_retention_acquisition_worker')
    OR pg_catalog.to_regclass('retention_acquisition.resolution_sweep_state') IS NOT NULL
+   OR pg_catalog.to_regclass('retention_acquisition.resolution_attempts') IS NOT NULL
    OR EXISTS (SELECT 1 FROM pg_catalog.pg_proc p WHERE p.pronamespace = pg_catalog.to_regnamespace('retention_acquisition')
      AND p.proname IN ('claim_resolution_page','begin_resolution_item','advance_resolution_cursor','first_unresolved_in')) THEN
   RAISE EXCEPTION 'ACQW_ALREADY_PRESENT' USING ERRCODE='42710';
@@ -144,7 +148,8 @@ END $acqw_g1$;
 
 CREATE ROLE consumer_retention_acquisition_worker NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 
--- One row. cycle counts completed passes; cursor_after is the last anchor id processed in this cycle (NULL = start of a cycle). inflight_* bounds the attempts of the id currently being processed.
+-- One row. cycle counts completed passes; cursor_after is the last anchor id processed in this cycle (NULL = start of a cycle). inflight_* mirrors the most recent start (its resource and that resource's
+-- committed starts in this cycle); the bound itself is kept per resource in resolution_attempts.
 CREATE TABLE retention_acquisition.resolution_sweep_state (
  singleton boolean PRIMARY KEY CONSTRAINT sweep_singleton CHECK (singleton),
  cycle bigint NOT NULL CONSTRAINT sweep_cycle_nonnegative CHECK (cycle >= 0),
@@ -160,6 +165,15 @@ CREATE TABLE retention_acquisition.resolution_sweep_state (
 INSERT INTO retention_acquisition.resolution_sweep_state
  (singleton, cycle, cursor_after, inflight_resource, inflight_cycle, inflight_attempts, skipped_total, cycle_started_at, updated_at)
 VALUES (true, 0, NULL, NULL, NULL, 0, 0, pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp()), pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp()));
+
+-- Committed starts of the CURRENT cycle, one row per begun resource that still lies after the cursor (written only by begin_resolution_item, deleted by every cursor move past it and by the wrap). No FK to the
+-- anchors (an FK would add internal triggers on retention_capture); a row of a deleted anchor is removed by the next cursor move past it or by the wrap.
+CREATE TABLE retention_acquisition.resolution_attempts (
+ cycle bigint NOT NULL CONSTRAINT attempts_cycle_nonnegative CHECK (cycle >= 0),
+ resource_id uuid NOT NULL,
+ starts integer NOT NULL CONSTRAINT attempts_starts_range CHECK (starts BETWEEN 1 AND 3),
+ CONSTRAINT resolution_attempts_pkey PRIMARY KEY (cycle, resource_id)
+);
 
 -- The smallest anchor id in (p_after, p_upto] that has no receipt (p_after NULL = from the start; p_upto NULL = no upper bound). The upper bound keeps every per-item check proportional to the claimed range, not to
 -- the receipted anchors after it. Written as an ordered walk of the anchor key with one receipt-key probe per anchor: the single-statement anti-join form was planned as a merge join that read the receipt key from
@@ -228,13 +242,15 @@ BEGIN
   'examined_through', CASE WHEN NOT v_full AND v_examined > 0 THEN v_last ELSE NULL END);
 END $$;
 
--- Marks the start of processing p_resource. Only the NEXT anchor without a receipt after the cursor may be started (anything else is 'stale' or 'out_of_order'); the attempt counter of that id rises by one per start
--- and is cleared when the cursor passes it. When it would exceed 3, the id is skipped for this cycle instead (the cursor moves onto it; the next cycle attempts it again).
+-- Marks the start of processing p_resource. Only the NEXT anchor without a receipt after the cursor may be started (anything else is 'stale' or 'out_of_order'). Every committed start adds one to that
+-- resource's row in resolution_attempts for this cycle, whichever ids were begun in between; when a 4th start would follow 3 committed ones, the id is skipped for this cycle instead (the cursor moves onto it,
+-- its row is deleted; the next cycle attempts it again). All begins and moves serialize on the state row lock, so concurrent workers cannot both take the 3rd start.
 CREATE FUNCTION retention_acquisition.begin_resolution_item(p_cycle bigint, p_resource uuid)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' SET lock_timeout = '2s' AS $$
 DECLARE
  v_s retention_acquisition.resolution_sweep_state%ROWTYPE;
  v_next uuid;
+ v_starts integer;
  v_attempt integer;
 BEGIN
  IF p_cycle IS NULL OR p_resource IS NULL THEN
@@ -257,13 +273,20 @@ BEGIN
  ELSIF v_next < p_resource THEN
   RETURN pg_catalog.jsonb_build_object('outcome', 'out_of_order');
  END IF;
- v_attempt := CASE WHEN v_s.inflight_resource = p_resource AND v_s.inflight_cycle = p_cycle THEN v_s.inflight_attempts + 1 ELSE 1 END;
+ SELECT a.starts INTO v_starts FROM retention_acquisition.resolution_attempts a WHERE a.cycle = p_cycle AND a.resource_id = p_resource;
+ v_attempt := COALESCE(v_starts, 0) + 1;
  IF v_attempt > 3 THEN
   UPDATE retention_acquisition.resolution_sweep_state
      SET cursor_after = p_resource, inflight_resource = NULL, inflight_cycle = NULL, inflight_attempts = 0, skipped_total = skipped_total + 1,
          updated_at = pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp())
    WHERE singleton;
+  DELETE FROM retention_acquisition.resolution_attempts a WHERE a.cycle = p_cycle AND a.resource_id <= p_resource;
   RETURN pg_catalog.jsonb_build_object('outcome', 'skipped_after_attempts', 'attempts', v_attempt - 1);
+ END IF;
+ IF v_starts IS NULL THEN
+  INSERT INTO retention_acquisition.resolution_attempts (cycle, resource_id, starts) VALUES (p_cycle, p_resource, 1);
+ ELSE
+  UPDATE retention_acquisition.resolution_attempts a SET starts = v_attempt WHERE a.cycle = p_cycle AND a.resource_id = p_resource;
  END IF;
  UPDATE retention_acquisition.resolution_sweep_state
     SET inflight_resource = p_resource, inflight_cycle = p_cycle, inflight_attempts = v_attempt, updated_at = pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp())
@@ -303,14 +326,15 @@ BEGIN
      SET cycle = cycle + 1, cursor_after = NULL, inflight_resource = NULL, inflight_cycle = NULL, inflight_attempts = 0,
          cycle_started_at = pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp()), updated_at = pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp())
    WHERE singleton;
+  DELETE FROM retention_acquisition.resolution_attempts a WHERE a.cycle <= p_cycle;
   RETURN pg_catalog.jsonb_build_object('outcome', 'wrapped', 'cycle', p_cycle + 1);
  END IF;
  IF v_s.cursor_after IS NOT NULL AND p_to <= v_s.cursor_after THEN
   RETURN pg_catalog.jsonb_build_object('outcome', 'stale');
  END IF;
  IF p_kind = 'resolved' THEN
-  -- only the id whose processing was started (begin) in this cycle; nothing without a receipt may lie before it
-  IF v_s.inflight_resource IS DISTINCT FROM p_to OR v_s.inflight_cycle IS DISTINCT FROM p_cycle THEN
+  -- only an id with a committed start (begin) in this cycle; nothing without a receipt may lie before it
+  IF NOT EXISTS (SELECT 1 FROM retention_acquisition.resolution_attempts a WHERE a.cycle = p_cycle AND a.resource_id = p_to) THEN
    RETURN pg_catalog.jsonb_build_object('outcome', 'refused', 'reason', 'NOT_BEGUN');
   END IF;
   IF v_next IS NOT NULL AND v_next < p_to THEN
@@ -327,6 +351,8 @@ BEGIN
         inflight_attempts = CASE WHEN inflight_resource IS NOT NULL AND inflight_resource <= p_to THEN 0 ELSE inflight_attempts END,
         updated_at = pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp())
   WHERE singleton;
+ -- the cursor passed these resources: they cannot be begun again in this cycle, their start rows end here
+ DELETE FROM retention_acquisition.resolution_attempts a WHERE a.cycle = p_cycle AND a.resource_id <= p_to;
  RETURN pg_catalog.jsonb_build_object('outcome', 'advanced');
 END $$;
 
@@ -335,11 +361,19 @@ ALTER TABLE retention_acquisition.resolution_sweep_state ENABLE ROW LEVEL SECURI
 ALTER TABLE retention_acquisition.resolution_sweep_state FORCE ROW LEVEL SECURITY;
 CREATE POLICY sweep_owner_select ON retention_acquisition.resolution_sweep_state AS PERMISSIVE FOR SELECT TO consumer_retention_acquisition_owner USING (true);
 CREATE POLICY sweep_owner_update ON retention_acquisition.resolution_sweep_state AS PERMISSIVE FOR UPDATE TO consumer_retention_acquisition_owner USING (true) WITH CHECK (true);
+ALTER TABLE retention_acquisition.resolution_attempts OWNER TO consumer_retention_acquisition_owner;
+ALTER TABLE retention_acquisition.resolution_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE retention_acquisition.resolution_attempts FORCE ROW LEVEL SECURITY;
+CREATE POLICY attempts_owner_select ON retention_acquisition.resolution_attempts AS PERMISSIVE FOR SELECT TO consumer_retention_acquisition_owner USING (true);
+CREATE POLICY attempts_owner_insert ON retention_acquisition.resolution_attempts AS PERMISSIVE FOR INSERT TO consumer_retention_acquisition_owner WITH CHECK (true);
+CREATE POLICY attempts_owner_update ON retention_acquisition.resolution_attempts AS PERMISSIVE FOR UPDATE TO consumer_retention_acquisition_owner USING (true) WITH CHECK (true);
+CREATE POLICY attempts_owner_delete ON retention_acquisition.resolution_attempts AS PERMISSIVE FOR DELETE TO consumer_retention_acquisition_owner USING (true);
 ALTER FUNCTION retention_acquisition.first_unresolved_in(uuid, uuid) OWNER TO consumer_retention_acquisition_owner;
 ALTER FUNCTION retention_acquisition.claim_resolution_page(integer, integer) OWNER TO consumer_retention_acquisition_owner;
 ALTER FUNCTION retention_acquisition.begin_resolution_item(bigint, uuid) OWNER TO consumer_retention_acquisition_owner;
 ALTER FUNCTION retention_acquisition.advance_resolution_cursor(bigint, uuid, text) OWNER TO consumer_retention_acquisition_owner;
 REVOKE ALL ON TABLE retention_acquisition.resolution_sweep_state FROM PUBLIC;
+REVOKE ALL ON TABLE retention_acquisition.resolution_attempts FROM PUBLIC;
 REVOKE ALL ON FUNCTION retention_acquisition.first_unresolved_in(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION retention_acquisition.claim_resolution_page(integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION retention_acquisition.begin_resolution_item(bigint, uuid) FROM PUBLIC;
@@ -408,8 +442,13 @@ BEGIN
       pg_catalog.jsonb_build_array('first_unresolved_in', false, 's', '["search_path=\"\""]'::pg_catalog.jsonb)) THEN
   RAISE EXCEPTION 'ACQW_FUNCTION_SHAPE_MISMATCH' USING ERRCODE='42501';
  END IF;
- -- state: exactly one row at its initial values; exactly two owner policies
+ -- state: exactly one row at its initial values; exactly two owner policies; no start row; exactly the four owner policies of the start table
  IF (SELECT pg_catalog.count(*) FROM retention_acquisition.resolution_sweep_state) <> 1
+   OR (SELECT pg_catalog.count(*) FROM retention_acquisition.resolution_attempts) <> 0
+   OR (SELECT pg_catalog.jsonb_agg(pg_catalog.jsonb_build_array(o.polname::text, o.polcmd, ARRAY(SELECT r.rolname::text FROM pg_catalog.pg_roles r WHERE r.oid = ANY (o.polroles) ORDER BY 1)::text) ORDER BY o.polname::text COLLATE "C")
+       FROM pg_catalog.pg_policy o WHERE o.polrelid = pg_catalog.to_regclass('retention_acquisition.resolution_attempts'))
+      IS DISTINCT FROM pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_array('attempts_owner_delete', 'd', '{consumer_retention_acquisition_owner}'), pg_catalog.jsonb_build_array('attempts_owner_insert', 'a', '{consumer_retention_acquisition_owner}'),
+                                                   pg_catalog.jsonb_build_array('attempts_owner_select', 'r', '{consumer_retention_acquisition_owner}'), pg_catalog.jsonb_build_array('attempts_owner_update', 'w', '{consumer_retention_acquisition_owner}'))
    OR NOT EXISTS (SELECT 1 FROM retention_acquisition.resolution_sweep_state s WHERE s.singleton AND s.cycle = 0 AND s.cursor_after IS NULL AND s.inflight_resource IS NULL AND s.inflight_attempts = 0 AND s.skipped_total = 0)
    OR (SELECT pg_catalog.jsonb_agg(pg_catalog.jsonb_build_array(o.polname::text, o.polcmd, ARRAY(SELECT r.rolname::text FROM pg_catalog.pg_roles r WHERE r.oid = ANY (o.polroles) ORDER BY 1)::text) ORDER BY o.polname::text COLLATE "C")
        FROM pg_catalog.pg_policy o WHERE o.polrelid = pg_catalog.to_regclass('retention_acquisition.resolution_sweep_state'))
