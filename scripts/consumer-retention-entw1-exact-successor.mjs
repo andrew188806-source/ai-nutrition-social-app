@@ -7,7 +7,7 @@ export const ENTW1_MIGRATION='20261025010000_consumer_retention_acquisition_reso
 export const ENTW1_FILES=Object.freeze({
   "docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md": {
     "mode": "100644",
-    "blob": "f1753cd1e2b647fcf5ff018e5200bde1067c7ff4",
+    "blob": "02bc9562de2130d50eae7f0e8e1dc6a8634fc05f",
     "base": "7eda851906fc3f4a03917ea0f68a03a9e924b8a6",
     "baseMode": "100644"
   },
@@ -31,19 +31,19 @@ export const ENTW1_FILES=Object.freeze({
   },
   "scripts/consumer-retention-acquisition-resolve-mutations.mjs": {
     "mode": "100644",
-    "blob": "c9c21adaf7eaa90809fdff84eeedafbcf81e13fe",
+    "blob": "2c90ea34424919293c2b2330adc56017927e44b4",
     "base": null,
     "baseMode": null
   },
   "scripts/consumer-retention-acquisition-resolve-smoke.mjs": {
     "mode": "100644",
-    "blob": "6f16fa647b5fbb0d2c4c5f0c5488b8c9e0659a37",
+    "blob": "6f99298193cb7b00ef83ef0e667e214bd95e9a65",
     "base": null,
     "baseMode": null
   },
   "scripts/consumer-retention-acquisition-smoke.mjs": {
     "mode": "100644",
-    "blob": "bf1d104fd50f304a2af8f2a95cd580e28c2811e1",
+    "blob": "235b727b82a5434223e37b28ea21a4c4ffaa698c",
     "base": "8b626ea882450eec8f8688ac35acb7a03e209ff5",
     "baseMode": "100644"
   },

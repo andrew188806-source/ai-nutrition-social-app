@@ -1020,7 +1020,29 @@ const P14_CASES = {
   newEdgeInsideTheModule: { file: 'supabase/functions/retention-acquisition-resolve/zz-extra.ts', body: 'export * from "../_shared/acquisition-resolve/sql.ts";\n', refuse: 'edge' },
   extraFileNamesTheResolver: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export const s = "select retention_acquisition.resolve_detail_acquisition($1)";\n', refuse: 'name' },
   unrelatedRelativeImportPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'import { jsonResponse } from "../_shared/billing-transport/http.ts";\nimport "./local.ts";\nexport const r = jsonResponse;\n', refuse: null },
-  unrelatedSiblingNamedLikeTheModulePositive: { file: 'supabase/functions/zz-unrelated/acquisition-resolve-notes.ts', body: 'import { x } from "./other.ts";\nexport const y = x;\n', refuse: null }
+  unrelatedSiblingNamedLikeTheModulePositive: { file: 'supabase/functions/zz-unrelated/acquisition-resolve-notes.ts', body: 'import { x } from "./other.ts";\nexport const y = x;\n', refuse: null },
+  // ENT-W1-A02 (targeted re-acceptance): the parser, not a pattern, reads comments, line breaks and escapes. `target` = the decoded, normalized edge the refusal must name.
+  dynamicImportBlockComment: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const anotherWorker = () => import(/* valid comment */ "./worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  dynamicImportLineCommentAndNewlines: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const anotherWorker = () =>\n  import(\n    // the worker\n    "./worker.ts"\n  );\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  dynamicImportWithOptions: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const anotherWorker = () => import("./worker.ts", { with: {} });\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  staticImportWithComments: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'import /* a */ { runAcquisitionSweep } /* b */ from /* c */ "./worker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  multilineReExportFromParent: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export {\n  runAcquisitionSweep,\n} from\n  "../_shared/acquisition-resolve/worker.ts";\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  escapedSpecifier: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'import { runAcquisitionSweep } from "./w\\u006frker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  percentEncodedSpecifier: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const w = () => import("./w%6Frker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  templateLiteralSpecifier: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const w = () => import(`./worker.ts`);\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  requireCall: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'declare const require: (m: string) => unknown;\nexport const w = require(/* c */ "./worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  importEqualsRequire: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'import w = require("./worker.ts");\nexport const again = w;\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  importTypeNode: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export type W = typeof import("../_shared/acquisition-resolve/worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  newUrlWorker: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const w = new Worker(new URL("./worker.ts", import.meta.url).href, { type: "module" });\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  importMetaResolve: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'export const u = import.meta.resolve("./worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  tripleSlashReferencePath: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: '/// <reference path="./worker.ts" />\nexport const x = 1;\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  nonLiteralDynamicImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'const m = "x";\nexport const load = () => import(m);\n', refuse: 'unresolved' },
+  stringNamingTheModuleDirectory: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export const where = "../_shared/acquisition-resolve/worker.ts";\n', refuse: 'unresolved' },
+  sourceThatDoesNotParse: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.ts', body: 'import { runAcquisitionSweep from "./worker.ts";\n', refuse: 'unresolved' },
+  commentedOutReferencesPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: '// import "../_shared/acquisition-resolve/worker.ts";\n/* export * from "../_shared/acquisition-resolve/worker.ts"; import("../_shared/acquisition-resolve/worker.ts") */\nexport const x = 1;\n', refuse: null },
+  unrelatedDynamicImportWithCommentPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'export const l = () => import(/* valid comment */ "../_shared/billing-transport/http.ts");\n', refuse: null },
+  unrelatedReExportPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'export * from "../_shared/billing-transport/http.ts";\nexport { jsonResponse as j } from "../_shared/billing-transport/http.ts";\n', refuse: null },
+  unrelatedSharedSiblingImportPositive: { file: 'supabase/functions/_shared/zz-unrelated.ts', body: 'export const helper = () => import("./billing-transport/executor.ts");\n', refuse: null }
 };
 NEW.F02_P14_WIRING_IS_EXACT_AND_REFUSES_EVERY_DEVIATION = async () => {
   const proof = o => AQ.resolverWiringProof(o);
@@ -1028,8 +1050,8 @@ NEW.F02_P14_WIRING_IS_EXACT_AND_REFUSES_EVERY_DEVIATION = async () => {
   const exact = proof({ git: rootGit });
   const cases = {};
   for (const [k, c] of Object.entries(P14_CASES)) { const v = proof({ git: rootGit, extra: { [c.file]: c.body } }); const extraEdges = v.edges.filter(e => !ENTW1_WIRING.edges.includes(e)); const extraNames = v.names.filter(n => !ENTW1_WIRING.names.includes(n));
-    const byOwnEvidence = c.refuse === 'edge' ? extraEdges.some(e => e.startsWith(c.file + ' -> ')) : c.refuse === 'name' ? extraNames.includes(c.file) : c.refuse === 'unresolved' ? v.unresolved.includes(c.file) : true;
-    cases[k] = { expected: c.refuse ? 'refused (' + c.refuse + ')' : 'accepted', ok: v.ok, pass: c.refuse ? v.ok === false && byOwnEvidence && v.entw1 === 'record' : v.ok === true, extraEdges, extraNames, unresolved: v.unresolved }; }
+    const byOwnEvidence = c.refuse === 'edge' ? (c.target ? extraEdges.includes(c.file + ' -> ' + c.target) : extraEdges.some(e => e.startsWith(c.file + ' -> '))) : c.refuse === 'name' ? extraNames.includes(c.file) : c.refuse === 'unresolved' ? v.unresolved.includes(c.file) : true;
+    cases[k] = { expected: c.refuse ? 'refused (' + c.refuse + ')' : 'accepted', ok: v.ok, pass: c.refuse ? v.ok === false && byOwnEvidence && v.entw1 === 'record' : v.ok === true && v.unresolved.length === 0, extraEdges, extraNames, unresolved: v.unresolved, unresolvedReasons: v.unresolvedReasons }; }
   const integrity = {
     recordedFileTampered: proof({ git: lyingGit(rootGit, { hash: { [sqlTs]: FAKE } }) }),
     recordedNameFileMissing: proof({ git: rootGit, drop: [sqlTs] }),
@@ -1059,7 +1081,8 @@ NEW.F04_P14_REAL_WORKTREE_AND_INDEX_CONTROLS = async () => {
     const qGit = args => g(Q, args), idx = fs.readFileSync(path.join(Q, '.git/index'));
     const proof = () => { const v = AQX.resolverWiringProof({ git: qGit }); return { ok: v.ok, entw1: v.entw1, edges: v.edges, names: v.names, unresolved: v.unresolved }; };
     const rows = [{ name: 'exact-before', ...proof() }];
-    for (const k of ['sameDirectoryRelativeImport', 'sharedParentRelativeImport', 'upOneLevelRelativeImport', 'reExport', 'dynamicImport', 'computedSpecifier', 'unrelatedRelativeImportPositive']) {
+    for (const k of ['sameDirectoryRelativeImport', 'sharedParentRelativeImport', 'upOneLevelRelativeImport', 'reExport', 'dynamicImport', 'computedSpecifier', 'unrelatedRelativeImportPositive',
+      'dynamicImportBlockComment', 'dynamicImportLineCommentAndNewlines', 'escapedSpecifier', 'commentedOutReferencesPositive', 'unrelatedSharedSiblingImportPositive']) {
       const c = P14_CASES[k], abs = path.join(Q, c.file), created = !fs.existsSync(path.dirname(abs));
       try { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, c.body); rows.push({ name: k + ':worktree', expectRefused: !!c.refuse, ...proof() }); g(Q, ['add', '--', c.file]); rows.push({ name: k + ':staged', expectRefused: !!c.refuse, ...proof() }); }
       finally { fs.writeFileSync(path.join(Q, '.git/index'), idx); fs.rmSync(abs, { force: true }); if (created) { try { fs.rmdirSync(path.dirname(abs)); } catch { /* not empty or gone */ } } }

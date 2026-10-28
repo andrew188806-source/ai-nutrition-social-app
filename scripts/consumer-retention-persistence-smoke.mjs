@@ -1307,7 +1307,7 @@ export function isPH1Migration(name){return name===PH1_MIGRATION&&activePH1Inven
 // ENT-W1 (retention line): the OUTERMOST exact overlay on the accepted PH1 layer. Hash DAG: root -> ENT-W1 module -> exact leaves (no root or self hash in any leaf).
 // Only when the module binding AND every ENT-W1 leaf are exact is the complete older chain (PH1 -> ENT-F2 -> S2-ACT2 -> ENT-F1 -> ... -> origin) evaluated UNCHANGED on the ENT-W1 predecessor view,
 // and it must then be complete (ph1, edge, act2 and billing all 'record'); a partial or mismatching ENT-W1 state is 'invalid'. Without the ENT-W1 module everything is exactly as before.
-export const ENTW1_MODULE_BLOB='0bf88bf9a88d4482d2acfb4ce850e2e73b6bb871';
+export const ENTW1_MODULE_BLOB='3e9362b6bcba40c01182a26073749ce20e3ae9b1';
 export const ENTW1_MIGRATION_SHA256='7dacab45b97cadd359e073bfb31c0f6d73e9b2abd001464c2e24ec06f9683c7e';
 export const ENTW1_MODULE_PATH='scripts/consumer-retention-entw1-exact-successor.mjs';
 export function checkedEntw1State(git){

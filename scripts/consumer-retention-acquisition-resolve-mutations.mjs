@@ -48,6 +48,39 @@ export function runChild({ out, script = SUITE, args = [], gates, timeoutMs = 90
   for (const id of gates) { try { checkFiles[id] = JSON.parse(fs.readFileSync(path.join(out, 'check-' + id + '.json'), 'utf8')); } catch { checkFiles[id] = null; } }
   return { ...run, result, resultError, checkFiles };
 }
+// ---- the result schema -------------------------------------------------------------------------------------------------------------------------------------------
+// ENT-W1-T01 (targeted re-acceptance): the judge read `blocked` only when status was BLOCKED and treated a missing `crashed` as [] (`?? []`), so a complete FAIL / OS 1 result carrying a non-null setup `blocked`,
+// or one without `crashed` or `blocked`, was counted DETECTED. Every field the smoke always writes is now mandatory with its type BEFORE any classification; a missing or mistyped field is SCHEMA_INVALID and
+// fault information that contradicts the status is CONTRADICTION. Neither is ever DETECTED or CONTROL_OK, and the whole run is then BLOCKED (aggregate).
+const RESULT_FIELDS = Object.freeze(['status', 'selected', 'checks', 'failed', 'crashed', 'blocked', 'identity']);
+const CHECK_KINDS = new Set(['pass', 'explicit_fail', 'crash']);
+const stringArray = a => Array.isArray(a) && a.every(x => typeof x === 'string');
+const plainObject = o => o !== null && typeof o === 'object' && !Array.isArray(o);
+export function resultSchemaProblems(r) {
+  if (!plainObject(r)) return ['result is not an object'];
+  const missing = RESULT_FIELDS.filter(k => !Object.prototype.hasOwnProperty.call(r, k));
+  if (missing.length) return missing.map(k => 'missing ' + k);
+  const p = [];
+  if (!['PASS', 'FAIL', 'BLOCKED'].includes(r.status)) p.push('status ' + JSON.stringify(r.status));
+  if (!stringArray(r.selected)) p.push('selected is not a string array');
+  if (!Array.isArray(r.checks) || !r.checks.every(c => plainObject(c) && typeof c.id === 'string' && CHECK_KINDS.has(c.kind))) p.push('checks is not an array of {id, kind}');
+  if (!stringArray(r.failed)) p.push('failed is not a string array');
+  if (!stringArray(r.crashed)) p.push('crashed is not a string array');
+  if (!(r.blocked === null || (plainObject(r.blocked) && typeof r.blocked.message === 'string'))) p.push('blocked is neither null nor {message}');
+  const idn = r.identity;
+  if (!plainObject(idn) || typeof idn.smokeSha256 !== 'string' || typeof idn.draftSha256 !== 'string' || typeof idn.srcRoot !== 'string' || !plainObject(idn.product)) p.push('identity is not {smokeSha256, draftSha256, srcRoot, product}');
+  return p;
+}
+// the fault information must agree with the status: PASS/FAIL carry no blocked object, no crashed gate and no crash check; crashed lists exactly the crash checks; BLOCKED names its fault
+export function resultFaultContradictions(r) {
+  const p = [], crashChecks = r.checks.filter(c => c.kind === 'crash').map(c => c.id);
+  if (JSON.stringify([...r.crashed].sort()) !== JSON.stringify([...crashChecks].sort())) p.push('crashed ' + JSON.stringify(r.crashed) + ' != crash checks ' + JSON.stringify(crashChecks));
+  if (r.status !== 'BLOCKED') {
+    if (r.blocked !== null) p.push('status ' + r.status + ' with a non-null blocked ' + JSON.stringify(r.blocked).slice(0, 160));
+    if (r.crashed.length || crashChecks.length) p.push('status ' + r.status + ' with crashed gate(s)');
+  } else if (r.blocked === null && r.crashed.length === 0 && r.checks.length === r.selected.length) p.push('status BLOCKED without a blocked fault, a crash or a missing check');
+  return p;
+}
 // ---- the judge ---------------------------------------------------------------------------------------------------------------------------------------------------
 // expect: 'control' (unmutated sources: must PASS completely, exit 0) or 'detector' (mutated sources: must FAIL completely, exit 1, with explicit observations). identity: what the child must report.
 export function judgeChild(run, { expect, identity }) {
@@ -57,12 +90,16 @@ export function judgeChild(run, { expect, identity }) {
   if (run.signal) { reasons.push('signal ' + run.signal); return verdict('SIGNAL'); }
   if (typeof run.status !== 'number') { reasons.push('no numeric exit'); return verdict('INCOMPLETE'); }
   const r = run.result;
-  if (!r || typeof r !== 'object') { reasons.push('no result.json (' + run.resultError + ')'); return verdict('INCOMPLETE'); }
+  if (r === null || r === undefined) { reasons.push('no result.json (' + run.resultError + ')'); return verdict('INCOMPLETE'); }
+  const schema = resultSchemaProblems(r);
+  if (schema.length) { reasons.push(...schema); return verdict('SCHEMA_INVALID'); }
+  const faults = resultFaultContradictions(r);
+  if (faults.length) { reasons.push(...faults); return verdict('CONTRADICTION'); }
   const lines = run.stdout.split(/\r?\n/), checkLines = lines.filter(l => /^CHECK /.test(l)), resultLines = lines.filter(l => /^RESULT /.test(l)), blockedLines = lines.filter(l => /^BLOCKED /.test(l));
-  if (r.status === 'BLOCKED') { reasons.push('child BLOCKED: ' + String(r.blocked?.message ?? '').slice(0, 160)); return verdict((r.crashed ?? []).length ? 'CRASH' : 'BLOCKED_SETUP'); }
-  if ((r.crashed ?? []).length || (r.checks ?? []).some(c => c.kind === 'crash') || checkLines.some(l => / CRASH$/.test(l))) { reasons.push('crashed gate(s) ' + JSON.stringify(r.crashed)); return verdict('CRASH'); }
+  if (r.status === 'BLOCKED') { reasons.push('child BLOCKED: ' + (r.blocked ? r.blocked.message.slice(0, 160) : 'crashed ' + JSON.stringify(r.crashed))); return verdict(r.crashed.length ? 'CRASH' : 'BLOCKED_SETUP'); }
+  if (checkLines.some(l => / CRASH$/.test(l))) { reasons.push('stdout CRASH line with status ' + r.status); return verdict('CONTRADICTION'); }
   // completeness: the exact non-empty selection, one check per selected gate, one file per check
-  const sel = Array.isArray(r.selected) ? r.selected : [], checks = Array.isArray(r.checks) ? r.checks : [];
+  const sel = r.selected, checks = r.checks;
   const want = [...run.gates].sort(), got = [...sel].sort(), ids = checks.map(c => c.id);
   if (want.length === 0 || sel.length === 0) reasons.push('empty selection');
   if (JSON.stringify(want) !== JSON.stringify(got) || new Set(sel).size !== sel.length) reasons.push('selected ' + JSON.stringify(sel) + ' != requested ' + JSON.stringify(run.gates));
@@ -75,15 +112,15 @@ export function judgeChild(run, { expect, identity }) {
   if (JSON.stringify(checkLines) !== JSON.stringify(expectLines)) reasons.push('stdout CHECK lines disagree with result.checks');
   if (resultLines.length !== 1 || resultLines[0] !== 'RESULT ' + r.status + ' ' + passed + '/' + sel.length) reasons.push('stdout RESULT line ' + JSON.stringify(resultLines));
   if (blockedLines.length) reasons.push('stdout BLOCKED line');
-  const failed = Array.isArray(r.failed) ? r.failed : [];
+  const failed = r.failed;
   const explicit = checks.filter(c => c.kind === 'explicit_fail').map(c => c.id);
   if (JSON.stringify([...failed].sort()) !== JSON.stringify([...explicit].sort())) reasons.push('result.failed != explicit failures');
   for (const id of explicit) { const o = run.checkFiles[id]?.observed; if (!o || typeof o !== 'object' || Object.keys(o).length === 0 || o.gateCrashed) reasons.push('explicit failure without an observation ' + id); }
   if (r.status !== (explicit.length ? 'FAIL' : 'PASS')) reasons.push('status ' + r.status + ' disagrees with the checks');
   if (reasons.length) return verdict('CONTRADICTION');
   // the source the child actually ran
-  const idn = r.identity ?? {};
-  if (idn.smokeSha256 !== identity.smoke || idn.draftSha256 !== identity.draft || path.resolve(idn.srcRoot ?? '') !== path.resolve(identity.srcRoot) || JSON.stringify(idn.product ?? null) !== JSON.stringify(identity.product)) { reasons.push('identity ' + JSON.stringify({ reported: { smoke: idn.smokeSha256, draft: idn.draftSha256, srcRoot: idn.srcRoot }, expected: { smoke: identity.smoke, draft: identity.draft, srcRoot: identity.srcRoot } })); return verdict('IDENTITY_MISMATCH'); }
+  const idn = r.identity;
+  if (idn.smokeSha256 !== identity.smoke || idn.draftSha256 !== identity.draft || path.resolve(idn.srcRoot) !== path.resolve(identity.srcRoot) || JSON.stringify(idn.product) !== JSON.stringify(identity.product)) { reasons.push('identity ' + JSON.stringify({ reported: { smoke: idn.smokeSha256, draft: idn.draftSha256, srcRoot: idn.srcRoot }, expected: { smoke: identity.smoke, draft: identity.draft, srcRoot: identity.srcRoot } })); return verdict('IDENTITY_MISMATCH'); }
   // the expected outcome and exit
   if (expect === 'control') { if (r.status === 'PASS' && run.status === 0) return verdict('CONTROL_OK'); if (r.status === 'PASS' || run.status === 0) { reasons.push('control status ' + r.status + ' exit ' + run.status); return verdict('EXIT_MISMATCH'); } reasons.push('control failed ' + JSON.stringify(failed)); return verdict('CONTROL_FAILED'); }
   if (r.status === 'FAIL' && run.status === 1) return verdict('DETECTED');
@@ -107,12 +144,20 @@ const keep = (OUT, run, judged) => { fs.writeFileSync(path.join(OUT, run.label +
 const STANDIN = `import fs from 'node:fs'; import path from 'node:path';
 const a = process.argv.slice(2), out = a[a.indexOf('--out') + 1], mode = process.env.TK_META_MODE, idn = JSON.parse(process.env.TK_META_IDENTITY), sel = (process.env.TK_GATES ?? '').split(',').filter(Boolean);
 fs.mkdirSync(out, { recursive: true });
-const fail = mode === 'detector' || mode === 'exit_mismatch' || mode === 'stdout_contradiction' || mode === 'fail_without_observation' || mode === 'timeout_after_result_detector';
+const fail = ['detector', 'exit_mismatch', 'stdout_contradiction', 'fail_without_observation', 'timeout_after_result_detector', 'blocked_contradiction', 'missing_crashed', 'missing_blocked', 'missing_identity', 'selected_wrong_type', 'unknown_status', 'blocked_wrong_type', 'crashed_with_fail'].includes(mode);
 const empty = mode === 'empty_control' || mode === 'empty_detector';
 const selected = empty ? [] : sel, checks = selected.map(id => ({ id, kind: fail ? 'explicit_fail' : 'pass' }));
 const identity = mode === 'identity_mismatch' ? { ...idn, draftSha256: '0'.repeat(64) } : idn;
-const status = mode === 'blocked' ? 'BLOCKED' : mode === 'crash' ? 'BLOCKED' : fail ? 'FAIL' : 'PASS';
+const status = mode === 'blocked' || mode === 'crash' || mode === 'blocked_without_fault' ? 'BLOCKED' : mode === 'unknown_status' ? 'DONE' : fail ? 'FAIL' : 'PASS';
 const result = { status, selected, checks: mode === 'crash' ? selected.map(id => ({ id, kind: 'crash' })) : checks, failed: fail ? selected : [], crashed: mode === 'crash' ? selected : [], blocked: mode === 'blocked' || mode === 'crash' ? { message: 'SETUP_META' } : null, identity };
+// the targeted re-acceptance's counterexamples and their neighbours: everything else about these results is a complete, consistent explicit failure (or a complete pass for the control variant)
+if (mode === 'blocked_contradiction' || mode === 'blocked_contradiction_control') result.blocked = { message: 'SETUP_FAILED_NO_DATABASE', phase: 'initdb', code: 'ENOENT' };
+if (mode === 'missing_crashed') delete result.crashed;
+if (mode === 'missing_blocked') delete result.blocked;
+if (mode === 'missing_identity') delete result.identity;
+if (mode === 'selected_wrong_type') result.selected = selected.join(',');
+if (mode === 'blocked_wrong_type') result.blocked = 'SETUP_META';
+if (mode === 'crashed_with_fail') result.crashed = [selected[0]];
 if (mode !== 'missing_result') fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(result));
 for (const c of result.checks) fs.writeFileSync(path.join(out, 'check-' + c.id + '.json'), JSON.stringify({ id: c.id, kind: c.kind, observed: mode === 'fail_without_observation' ? {} : { meta: true } }));
 for (const c of result.checks) process.stdout.write('CHECK ' + c.id + ' ' + (mode === 'stdout_contradiction' ? 'PASS' : c.kind === 'pass' ? 'PASS' : c.kind === 'crash' ? 'CRASH' : 'FAIL') + '\\n');
@@ -130,7 +175,11 @@ async function metaControls(OUT) {
     ['empty_control', 'control', 'INCOMPLETE'], ['empty_detector', 'detector', 'INCOMPLETE'],                                       // the acceptor's first counterexample (empty completion)
     ['timeout_after_result_control', 'control', 'TIMEOUT'], ['timeout_after_result_detector', 'detector', 'TIMEOUT'],             // the acceptor's second counterexample (result written, then a real timeout)
     ['missing_result', 'detector', 'INCOMPLETE'], ['crash', 'detector', 'CRASH'], ['blocked', 'detector', 'BLOCKED_SETUP'],
-    ['exit_mismatch', 'detector', 'EXIT_MISMATCH'], ['stdout_contradiction', 'detector', 'CONTRADICTION'], ['identity_mismatch', 'control', 'IDENTITY_MISMATCH'], ['fail_without_observation', 'detector', 'CONTRADICTION']
+    ['exit_mismatch', 'detector', 'EXIT_MISMATCH'], ['stdout_contradiction', 'detector', 'CONTRADICTION'], ['identity_mismatch', 'control', 'IDENTITY_MISMATCH'], ['fail_without_observation', 'detector', 'CONTRADICTION'],
+    // the targeted re-acceptance's three counterexamples (complete FAIL / OS 1 otherwise), then their neighbours
+    ['blocked_contradiction', 'detector', 'CONTRADICTION'], ['missing_crashed', 'detector', 'SCHEMA_INVALID'], ['missing_blocked', 'detector', 'SCHEMA_INVALID'],
+    ['blocked_contradiction_control', 'control', 'CONTRADICTION'], ['missing_identity', 'detector', 'SCHEMA_INVALID'], ['selected_wrong_type', 'detector', 'SCHEMA_INVALID'], ['unknown_status', 'detector', 'SCHEMA_INVALID'],
+    ['blocked_wrong_type', 'detector', 'SCHEMA_INVALID'], ['crashed_with_fail', 'detector', 'CONTRADICTION'], ['blocked_without_fault', 'detector', 'CONTRADICTION']
   ];
   const rows = [];
   for (const [mode, expect, want] of CASES) {
@@ -146,9 +195,13 @@ async function metaControls(OUT) {
     timeoutAfterResult: aggregate(v(['timeout_after_result_control', 'control']), [v(['timeout_after_result_detector', 'detector'])], true),
     validRun: aggregate(v(['valid_control', 'control']), [v(['detector', 'detector'])], true),
     undetectedMutant: aggregate(v(['valid_control', 'control']), [v(['valid_control', 'detector'])], true),
-    identityChanged: aggregate(v(['valid_control', 'control']), [v(['detector', 'detector'])], false)
+    identityChanged: aggregate(v(['valid_control', 'control']), [v(['detector', 'detector'])], false),
+    blockedContradiction: aggregate(v(['valid_control', 'control']), [v(['blocked_contradiction', 'detector'])], true),
+    missingCrashed: aggregate(v(['valid_control', 'control']), [v(['missing_crashed', 'detector'])], true),
+    missingBlocked: aggregate(v(['valid_control', 'control']), [v(['missing_blocked', 'detector'])], true)
   };
-  const wholeOk = whole.emptyCompletion === 'BLOCKED' && whole.timeoutAfterResult === 'BLOCKED' && whole.validRun === 'PASS' && whole.undetectedMutant === 'FAIL' && whole.identityChanged === 'BLOCKED';
+  const wholeOk = whole.emptyCompletion === 'BLOCKED' && whole.timeoutAfterResult === 'BLOCKED' && whole.validRun === 'PASS' && whole.undetectedMutant === 'FAIL' && whole.identityChanged === 'BLOCKED'
+    && whole.blockedContradiction === 'BLOCKED' && whole.missingCrashed === 'BLOCKED' && whole.missingBlocked === 'BLOCKED';
   const status = rows.every(r => r.ok) && wholeOk ? 'PASS' : 'FAIL';
   fs.writeFileSync(path.join(OUT, 'meta-controls.json'), JSON.stringify({ status, rows, whole, method: 'real child processes (node) running a stand-in; the same runChild/judgeChild/aggregate as the real mutants; not product or PostgreSQL evidence' }, null, 2));
   console.log('META ' + status + ' ' + rows.filter(r => r.ok).length + '/' + rows.length + ' whole=' + JSON.stringify(whole));
