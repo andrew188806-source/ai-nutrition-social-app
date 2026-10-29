@@ -7,7 +7,7 @@ export const ENTW1_MIGRATION='20261025010000_consumer_retention_acquisition_reso
 export const ENTW1_FILES=Object.freeze({
   "docs/planning/pc2-activation-preparation/05_RETENTION_AUTHORITY_AND_PERSISTENCE_SCOPE.md": {
     "mode": "100644",
-    "blob": "02bc9562de2130d50eae7f0e8e1dc6a8634fc05f",
+    "blob": "26b66d9bb26a3b92c91b1c0ca6aa9f066f4dffbd",
     "base": "7eda851906fc3f4a03917ea0f68a03a9e924b8a6",
     "baseMode": "100644"
   },
@@ -37,13 +37,13 @@ export const ENTW1_FILES=Object.freeze({
   },
   "scripts/consumer-retention-acquisition-resolve-smoke.mjs": {
     "mode": "100644",
-    "blob": "6f99298193cb7b00ef83ef0e667e214bd95e9a65",
+    "blob": "ab226d334e1ab73078eb2043f3ff0e947f520eee",
     "base": null,
     "baseMode": null
   },
   "scripts/consumer-retention-acquisition-smoke.mjs": {
     "mode": "100644",
-    "blob": "235b727b82a5434223e37b28ea21a4c4ffaa698c",
+    "blob": "e7fa676df754ae12ec89bf0b458e79b452460a4c",
     "base": "8b626ea882450eec8f8688ac35acb7a03e209ff5",
     "baseMode": "100644"
   },

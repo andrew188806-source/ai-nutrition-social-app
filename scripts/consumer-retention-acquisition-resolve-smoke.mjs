@@ -1042,7 +1042,22 @@ const P14_CASES = {
   commentedOutReferencesPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: '// import "../_shared/acquisition-resolve/worker.ts";\n/* export * from "../_shared/acquisition-resolve/worker.ts"; import("../_shared/acquisition-resolve/worker.ts") */\nexport const x = 1;\n', refuse: null },
   unrelatedDynamicImportWithCommentPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'export const l = () => import(/* valid comment */ "../_shared/billing-transport/http.ts");\n', refuse: null },
   unrelatedReExportPositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'export * from "../_shared/billing-transport/http.ts";\nexport { jsonResponse as j } from "../_shared/billing-transport/http.ts";\n', refuse: null },
-  unrelatedSharedSiblingImportPositive: { file: 'supabase/functions/_shared/zz-unrelated.ts', body: 'export const helper = () => import("./billing-transport/executor.ts");\n', refuse: null }
+  unrelatedSharedSiblingImportPositive: { file: 'supabase/functions/_shared/zz-unrelated.ts', body: 'export const helper = () => import("./billing-transport/executor.ts");\n', refuse: null },
+  // ENT-W1-A02 (second targeted re-acceptance): target IDENTITY under every supported loader, canonicalized by the real file system (Windows separators, case aliases, absolute paths, file URLs,
+  // directory loads). Unrelated Windows-style references stay accepted; a reference that cannot be canonicalized is refused as unresolved.
+  windowsBackslashRequire: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require(".\\\\worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  caseAliasRequire: { file: 'supabase/functions/_shared/acquisition-resolve/zz-extra-caller.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require("../ACQUISITION-RESOLVE/worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  mixedSeparatorsAndCaseRequire: { file: 'supabase/functions/zz-extra-caller/index.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require("..\\\\_shared/Acquisition-Resolve\\\\WORKER.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  outsideBackslashRequire: { file: 'supabase/functions/_shared/zz-extra-caller.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require(".\\\\acquisition-resolve\\\\worker.ts");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  caseAliasStaticImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'import { runAcquisitionSweep } from "../_shared/ACQUISITION-RESOLVE/worker.ts";\nexport const again = runAcquisitionSweep;\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  caseAliasEntrypointReExport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export * from "../Retention-Acquisition-Resolve/handler.ts";\n', refuse: 'edge', target: 'supabase/functions/retention-acquisition-resolve/handler.ts' },
+  absoluteWindowsPathRequire: { file: 'supabase/functions/zz-extra-caller/index.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require(' + JSON.stringify(path.win32.join(ROOT, 'supabase', 'functions', '_shared', 'acquisition-resolve', 'worker.ts')) + ');\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  fileUrlImport: { file: 'supabase/functions/zz-extra-caller/index.ts', body: 'export const w = () => import(' + JSON.stringify(pathToFileURL(path.join(ROOT, 'supabase/functions/_shared/acquisition-resolve/worker.ts')).href) + ');\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve/worker.ts' },
+  directoryLoad: { file: 'supabase/functions/_shared/acquisition-resolve/zz-sub/zz-extra-caller.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = () => require("..");\n', refuse: 'edge', target: 'supabase/functions/_shared/acquisition-resolve' },
+  unresolvableRelativeReference: { file: 'supabase/functions/zz-extra-caller/index.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = () => require("./zz\\u0000.ts");\n', refuse: 'unresolved' },
+  unrelatedWindowsRequirePositive: { file: 'supabase/functions/_shared/zz-unrelated.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require(".\\\\billing-transport\\\\executor.ts");\n', refuse: null },
+  unrelatedWindowsCaseAliasPositive: { file: 'supabase/functions/_shared/zz-unrelated.mjs', body: 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\nexport const loaded = require(".\\\\BILLING-TRANSPORT\\\\executor.ts");\n', refuse: null },
+  unrelatedAbsoluteUrlAndCasePositive: { file: 'supabase/functions/zz-unrelated/index.ts', body: 'export const a = () => import(' + JSON.stringify(pathToFileURL(path.join(ROOT, 'supabase/functions/_shared/billing-transport/http.ts')).href) + ');\nexport const b = () => import("../_shared/Billing-Transport/http.ts");\n', refuse: null }
 };
 NEW.F02_P14_WIRING_IS_EXACT_AND_REFUSES_EVERY_DEVIATION = async () => {
   const proof = o => AQ.resolverWiringProof(o);
@@ -1058,11 +1073,16 @@ NEW.F02_P14_WIRING_IS_EXACT_AND_REFUSES_EVERY_DEVIATION = async () => {
     newModuleWithOldLeaves: proof({ git: entw1PredecessorGit(rootGit) }),
     moduleTampered: proof({ git: lyingGit(rootGit, { hash: { [P.ENTW1_MODULE_PATH]: FAKE } }) })
   };
+  // a parser that cannot be loaded is a SETUP error: P14 must throw SETUP_P14_PARSER, never return a refusal that a caller could count as a detection
+  let parserSetup;
+  try { const v = proof({ git: rootGit, parser: () => { throw Error('parser unavailable (control)'); } }); parserSetup = { threw: false, returned: { ok: v.ok } }; }
+  catch (e) { parserSetup = { threw: true, message: String(e.message).slice(0, 160), setup: /^SETUP_P14_PARSER /.test(e.message) }; }
   const oldRuleOnThisTree = { names: exact.names.length, passes: exact.names.length === 0 };
   const ok = exact.ok && exact.entw1 === 'record' && same(exact.names, [...ENTW1_WIRING.names].sort()) && same(exact.edges, [...ENTW1_WIRING.edges].sort()) && exact.edges.length > 0 && exact.unresolved.length === 0
     && Object.values(cases).every(c => c.pass) && Object.values(integrity).every(v => v.ok === false)
-    && integrity.recordedFileTampered.entw1 === 'invalid' && integrity.newModuleWithOldLeaves.entw1 === 'invalid' && integrity.moduleTampered.entw1 === 'invalid' && oldRuleOnThisTree.passes === false;
-  return R(ok, { exact: { ok: exact.ok, names: exact.names, edges: exact.edges, unresolved: exact.unresolved }, cases, integrity: Object.fromEntries(Object.entries(integrity).map(([k, v]) => [k, { ok: v.ok, entw1: v.entw1, violations: (v.entw1Violations ?? []).slice(0, 4) }])), oldRuleOnThisTree, note: 'old rule = the P14 of main 9d4d50c5 (no file may name the resolver): it refuses this tree, which is why P14 had to change' });
+    && integrity.recordedFileTampered.entw1 === 'invalid' && integrity.newModuleWithOldLeaves.entw1 === 'invalid' && integrity.moduleTampered.entw1 === 'invalid' && oldRuleOnThisTree.passes === false
+    && parserSetup.threw === true && parserSetup.setup === true;
+  return R(ok, { exact: { ok: exact.ok, names: exact.names, edges: exact.edges, unresolved: exact.unresolved }, cases, integrity: Object.fromEntries(Object.entries(integrity).map(([k, v]) => [k, { ok: v.ok, entw1: v.entw1, violations: (v.entw1Violations ?? []).slice(0, 4) }])), parserSetup, oldRuleOnThisTree, note: 'old rule = the P14 of main 9d4d50c5 (no file may name the resolver): it refuses this tree, which is why P14 had to change' });
 };
 // P14 with REAL bytes: a throwaway clone of this tree (git clone --shared, junctions to this tree's node_modules removed afterwards with a non-recursive rmdir); each control writes a real file into the worktree,
 // then also stages it, and asks the clone's own P14 wiring proof; the exact candidate must be accepted before, between and after the controls.
@@ -1082,7 +1102,8 @@ NEW.F04_P14_REAL_WORKTREE_AND_INDEX_CONTROLS = async () => {
     const proof = () => { const v = AQX.resolverWiringProof({ git: qGit }); return { ok: v.ok, entw1: v.entw1, edges: v.edges, names: v.names, unresolved: v.unresolved }; };
     const rows = [{ name: 'exact-before', ...proof() }];
     for (const k of ['sameDirectoryRelativeImport', 'sharedParentRelativeImport', 'upOneLevelRelativeImport', 'reExport', 'dynamicImport', 'computedSpecifier', 'unrelatedRelativeImportPositive',
-      'dynamicImportBlockComment', 'dynamicImportLineCommentAndNewlines', 'escapedSpecifier', 'commentedOutReferencesPositive', 'unrelatedSharedSiblingImportPositive']) {
+      'dynamicImportBlockComment', 'dynamicImportLineCommentAndNewlines', 'escapedSpecifier', 'commentedOutReferencesPositive', 'unrelatedSharedSiblingImportPositive',
+      'windowsBackslashRequire', 'caseAliasRequire', 'mixedSeparatorsAndCaseRequire', 'unrelatedWindowsRequirePositive', 'unrelatedWindowsCaseAliasPositive']) {
       const c = P14_CASES[k], abs = path.join(Q, c.file), created = !fs.existsSync(path.dirname(abs));
       try { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, c.body); rows.push({ name: k + ':worktree', expectRefused: !!c.refuse, ...proof() }); g(Q, ['add', '--', c.file]); rows.push({ name: k + ':staged', expectRefused: !!c.refuse, ...proof() }); }
       finally { fs.writeFileSync(path.join(Q, '.git/index'), idx); fs.rmSync(abs, { force: true }); if (created) { try { fs.rmdirSync(path.dirname(abs)); } catch { /* not empty or gone */ } } }
