@@ -7,9 +7,12 @@ import os from 'node:os';
 import path from 'node:path';
 import child from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { ROOT, MIGRATION, CAPTURE_SUCCESSOR, ENT0_MIGRATION, DEMO_MIGRATION, ACQ_MIGRATION as PINNED_ACQ_MIGRATION, ACQ_MIGRATION_SHA256, SEAL_MIGRATION, BILLING_MIGRATION, withAct2Tail, withSocialTail, recorder, sha, uuid, installProbe, ddlAttempts, PROBE_PAUSE_LOCK } from './consumer-retention-persistence-smoke.mjs';
 import { act, frozenProof, inventoryProof, options, ELIGIBLE } from './consumer-retention-capture-smoke.mjs';
+import { checkedEntw1State } from './consumer-retention-persistence-smoke.mjs';
+import { ENTW1_WIRING } from './consumer-retention-entw1-exact-successor.mjs';
 import { entCluster, selectGates, outcomeOf, selectionContractRows } from './consumer-retention-entitlement-smoke.mjs';
 
 export { options };
@@ -474,14 +477,13 @@ Object.assign(GATES, {
     const viewRefs = (await q(ctx, "select c.relname from pg_class c where c.relkind in ('v','m') and pg_get_viewdef(c.oid) ilike '%retention_acquisition%'")).map(x => x.relname);
     const trigFns = (await q(ctx, `select c.relname, p.proname from pg_trigger t join pg_proc p on p.oid=t.tgfoid join pg_class c on c.oid=t.tgrelid where p.pronamespace=to_regnamespace('${ACQ_SCHEMA}') and not t.tgisinternal order by 1,2`));
     const ext = (await q(ctx, "select extname from pg_extension where extname in ('pg_cron','pg_net','pg_background','pgmq')")).map(x => x.extname);
-    // static scan of the repository: no application, edge function, shared package or script (other than the validators) names the schema or the resolver
-    const hits = [];
-    const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name === 'node_modules' || e.name === '.git') continue; const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|tsx|js|mjs|json)$/.test(e.name)) { const t = fs.readFileSync(p, 'utf8'); if (/retention_acquisition|resolve_detail_acquisition/.test(t)) hits.push(path.relative(ROOT, p).replace(/\\/g, '/')); } } };
-    for (const d of ['apps', 'packages', 'supabase/functions']) if (fs.existsSync(path.join(ROOT, d))) walk(path.join(ROOT, d));
+    // static scan of the repository: no application, edge function, shared package or script (other than the validators) names the schema or the resolver; with the complete exact ENT-W1 record exactly its
+    // recorded files do (and only they import the ENT-W1 module), see resolverWiringProof
+    const wiring = resolverWiringProof();
     const ok = anchors === 1 && receipts === 0 && triggersBefore.length > 0 && same(triggersBefore, (await q(ctx, "select tgname from pg_trigger where tgrelid='public.meal_records'::regclass and not tgisinternal order by 1")).map(x => x.tgname))
-      && refs.length === 0 && viewRefs.length === 0 && same(trigFns.map(x => x.relname + '.' + x.proname), ['detail_acquisition_records.reject_receipt_update', 'detail_acquisition_records.validate_receipt']) && ext.length === 0 && hits.length === 0
+      && refs.length === 0 && viewRefs.length === 0 && same(trigFns.map(x => x.relname + '.' + x.proname), ['detail_acquisition_records.reject_receipt_update', 'detail_acquisition_records.validate_receipt']) && ext.length === 0 && wiring.ok
       && !triggersBefore.some(t => /acq|acquisition/i.test(t));
-    return R(ok, { anchors, receipts, triggersBefore, refs, viewRefs, trigFns, ext, repoHits: hits });
+    return R(ok, { anchors, receipts, triggersBefore, refs, viewRefs, trigFns, ext, repoHits: wiring.names, wiring });
   },
   async P15_EIGHT_CONCURRENT_RESOLVES_ARE_EXACTLY_ONCE(ctx) {
     const owner = await makeUser(ctx, 15); const bill = await makeProducer(ctx, 'billing');
@@ -902,6 +904,141 @@ export async function migrationRollbackAndDrift(cl, installSource = acqSource())
   return R(out.every(o => o.pass), out);
 }
 
+// The repository-wide wiring scan of P14, under apps/, packages/ and supabase/functions/:
+//  - names:      files naming the acquisition schema or the resolver (unchanged rule, raw text)
+//  - edges:      "importer -> target" for every module reference that RESOLVES (relative to the importer's own directory, normalized) to a file of the ENT-W1 modules (supabase/functions/_shared/acquisition-resolve/**
+//                or supabase/functions/retention-acquisition-resolve/**); references to unrelated modules are resolved and ignored.
+//  - unresolved: files whose module references cannot be resolved statically or whose source does not parse: a string naming one of the ENT-W1 module directories that is not itself a resolved reference, a
+//                non-literal module reference (import(x), require(x), import.meta.resolve(x), new URL(x, import.meta.url)), or a parse diagnostic. Never allowed.
+// ENT-W1-A02 (first independent acceptance): the rejected candidate only matched fixed path fragments, so "./worker.ts" from inside the module directory and "./acquisition-resolve/worker.ts" from _shared were missed.
+// ENT-W1-A02 (targeted re-acceptance): the regex scanner that replaced it still missed `import(/* valid comment */ "./worker.ts")`. References are now read from the TypeScript parser's syntax tree (typescript is
+// a declared devDependency, loaded from the repository root like the capture smoke), so comments, line breaks and string escapes are the parser's, not a pattern's. Supported literal references:
+// import ... from / export ... from (re-exports), side-effect import, import type, import x = require("m"), dynamic import("m") (with or without options), require("m"), import("m") type nodes,
+// /// <reference path="m" />, import.meta.resolve("m") and new URL("m", import.meta.url). A missing parser is a setup error, never a fallback to patterns. JSON files have no module syntax: names and the
+// quoted-directory rule read their raw text.
+// ENT-W1-A02 (second targeted re-acceptance): the parser found `require(".\\worker.ts")` and `require("../ACQUISITION-RESOLVE/worker.ts")`, but their targets were computed with POSIX string rules only, so the
+// Windows loader's separators and case-insensitive file identity were missed although real Node loaded the frozen worker. A reference's TARGET IDENTITY is now computed by ONE function (moduleIdentities)
+// under every supported loader rule, each on-disk candidate canonicalized by this checkout's real file system:
+//   - URL loaders (Deno, Node ESM): new URL(spec, file URL of the importer) for "./", "../", "/", "\" forms and file: URLs, then fileURLToPath (WHATWG: "\" is a separator, percent-decoding, query/hash dropped)
+//   - Node CommonJS on Windows (createRequire / require): path.win32.resolve for "./", ".\", "../", "..\", rooted, drive-absolute and UNC forms (both separators)
+//   - POSIX loaders: path.posix for "./" and "../" (a backslash is a file-name character; compared case-SENSITIVELY, as a string)
+// Every rule is applied to every literal reference (an over-approximation: a reference is an edge when ANY supported loader would reach an ENT-W1 module). An on-disk candidate is canonicalized with
+// fs.realpathSync.native of its longest existing ancestor (true case, short names, junctions and symlinks); the remaining tail is compared case-insensitively, as this file system does. Never a content hash,
+// never blanket lower-casing of POSIX candidates. A target is protected when its canonical path IS an ENT-W1 module directory or lies under one. A reference whose canonicalization fails is unresolved
+// (refused), never silently unrelated; a parser that cannot be loaded is SETUP_P14_PARSER (a setup error, never a detector). Limits: absolute POSIX paths ("/x") have no deployment root here and only reach the
+// directory-string rule; bare specifiers (node:, npm:, jsr:, https:, import-map aliases) are not files of this checkout (an import map naming the directories is caught by the JSON rule).
+export const ENTW1_MODULE_DIRS = Object.freeze(['supabase/functions/_shared/acquisition-resolve', 'supabase/functions/retention-acquisition-resolve']);
+const W1_DIR_TEXT = /acquisition-resolve[\\/]/i;
+// "." and ".." alone are directory loads; a drive letter starts a Windows path
+const URL_RELATIVE = /^(?:\.{1,2}(?:[\\/]|$)|[\\/])/, WIN32_PATH = /^(?:\.{1,2}(?:[\\/]|$)|[\\/]|[a-zA-Z]:)/, POSIX_RELATIVE = /^\.{1,2}(?:\/|$)/;
+let TS = null;
+const typescript = () => { try { return (TS ??= createRequire(path.join(ROOT, 'package.json'))('typescript')); } catch (e) { throw Error('SETUP_P14_PARSER ' + e.message); } };
+let ROOT_REAL = null;
+const rootReal = () => { try { return (ROOT_REAL ??= fs.realpathSync.native(ROOT)); } catch (e) { throw Error('SETUP_P14_ROOT ' + e.message); } };
+// canonical ROOT-relative path of an absolute path (null when it is outside this checkout); throws UNRESOLVABLE when the file system cannot tell
+function canonicalOnDisk(abs, memo) {
+  if (memo.has(abs)) return memo.get(abs);
+  let head = path.resolve(abs), real = null; const tail = [];
+  for (;;) {
+    try { real = fs.realpathSync.native(head); break; }
+    catch (e) {
+      if (e.code !== 'ENOENT' && e.code !== 'ENOTDIR') throw Error('UNRESOLVABLE ' + (e.code ?? e.message));
+      const parent = path.dirname(head); if (parent === head) throw Error('UNRESOLVABLE no existing ancestor');
+      tail.unshift(path.basename(head)); head = parent;
+    }
+  }
+  const rel = path.relative(rootReal(), path.join(real, ...tail));
+  const out = rel === '' ? '' : rel.startsWith('..') || path.isAbsolute(rel) ? null : rel.split(path.sep).join('/');
+  memo.set(abs, out);
+  return out;
+}
+const isProtected = (rel, caseInsensitive) => {
+  const r = caseInsensitive ? rel.toLowerCase() : rel;
+  return ENTW1_MODULE_DIRS.some(d => { const x = caseInsensitive ? d.toLowerCase() : d; return r === x || r.startsWith(x + '/'); });
+};
+// every supported loader's target for one literal reference: [{ rule, target, caseInsensitive }]; throws UNRESOLVABLE
+export function moduleIdentities(importer, spec, memo = new Map()) {
+  const importerAbs = path.join(ROOT, importer), out = [];
+  if (URL_RELATIVE.test(spec) || /^file:/i.test(spec)) {
+    let p; try { p = fileURLToPath(new URL(spec, pathToFileURL(importerAbs))); } catch (e) { throw Error('UNRESOLVABLE url ' + (e.code ?? e.message)); }
+    out.push({ rule: 'url', target: canonicalOnDisk(p, memo), caseInsensitive: true });
+  }
+  if (WIN32_PATH.test(spec)) out.push({ rule: 'win32-cjs', target: canonicalOnDisk(path.win32.resolve(path.win32.dirname(importerAbs), spec), memo), caseInsensitive: true });
+  if (POSIX_RELATIVE.test(spec)) out.push({ rule: 'posix', target: path.posix.normalize(path.posix.join(path.posix.dirname(importer), spec)), caseInsensitive: false });
+  return out;
+}
+// One file's references from its syntax tree: { refs: [{ spec, kind }], nonLiteral: [kind], strings: [decoded literal text], parseErrors: n }. Targets are NOT computed here (moduleIdentities, per scan).
+export function moduleReferences(importer, source, parser = typescript) {
+  let ts; try { ts = parser(); } catch (e) { throw /^SETUP_/.test(e.message) ? e : Error('SETUP_P14_PARSER ' + e.message); }
+  const kind = importer.endsWith('.tsx') ? ts.ScriptKind.TSX : importer.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.JS;
+  const sf = ts.createSourceFile(importer, source, ts.ScriptTarget.Latest, false, kind);
+  const refs = [], nonLiteral = [], strings = [];
+  const literal = n => (n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) ? n.text : null);
+  const add = (k, n) => { const spec = literal(n); if (spec === null) nonLiteral.push(k); else refs.push({ spec, kind: k }); };
+  const importMeta = n => n && ts.isMetaProperty(n) && n.keywordToken === ts.SyntaxKind.ImportKeyword && n.name.text === 'meta';
+  const visit = n => {
+    if ((ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) && n.moduleSpecifier) add(ts.isImportDeclaration(n) ? 'import' : 'export-from', n.moduleSpecifier);
+    else if (ts.isImportEqualsDeclaration(n) && ts.isExternalModuleReference(n.moduleReference)) add('import-equals', n.moduleReference.expression);
+    else if (ts.isImportTypeNode(n) && ts.isLiteralTypeNode(n.argument)) add('import-type-node', n.argument.literal);
+    else if (ts.isCallExpression(n)) {
+      const e = n.expression;
+      if (e.kind === ts.SyntaxKind.ImportKeyword) add('dynamic-import', n.arguments[0]);
+      else if (ts.isIdentifier(e) && e.text === 'require') add('require', n.arguments[0]);
+      else if (ts.isPropertyAccessExpression(e) && e.name.text === 'resolve' && importMeta(e.expression)) add('import-meta-resolve', n.arguments[0]);
+    } else if (ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'URL' && n.arguments?.length >= 2 && ts.isPropertyAccessExpression(n.arguments[1]) && n.arguments[1].name.text === 'url' && importMeta(n.arguments[1].expression)) add('new-url', n.arguments[0]);
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) strings.push(n.text);
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  // a triple-slash path is relative to the file even without "./"
+  for (const r of sf.referencedFiles) refs.push({ spec: WIN32_PATH.test(r.fileName) ? r.fileName : './' + r.fileName, kind: 'reference-path' });
+  return { refs, nonLiteral, strings, parseErrors: sf.parseDiagnostics?.length ?? 0 };
+}
+// the parse (content-only) is cached by (path, sha256); identities depend on the file system and are computed on every scan
+const PARSE_CACHE = new Map();
+function scanFile(p, t, memo, parser) {
+  if (p.endsWith('.json')) return { hits: [], unresolved: /["'`][^"'`\n]*acquisition-resolve[\\/][^"'`\n]*["'`]/i.test(t) ? ['json-quoted-directory'] : [] };
+  const key = p + '\0' + createHash('sha256').update(t).digest('hex');
+  let m = parser ? null : PARSE_CACHE.get(key);
+  if (!m) { m = parser ? moduleReferences(p, t, parser) : moduleReferences(p, t); if (!parser) PARSE_CACHE.set(key, m); }
+  const hits = new Set(), protectedSpecs = new Set(), unresolved = [...m.nonLiteral.map(k => 'non-literal ' + k), ...(m.parseErrors ? ['parse-diagnostics ' + m.parseErrors] : [])];
+  for (const r of m.refs) {
+    let ids;
+    try { ids = moduleIdentities(p, r.spec, memo); }
+    catch (e) { if (/^SETUP_/.test(e.message)) throw e; unresolved.push('unresolvable ' + r.kind + ' ' + JSON.stringify(r.spec.slice(0, 120)) + ': ' + e.message); protectedSpecs.add(r.spec); continue; }
+    const prot = ids.filter(i => i.target !== null && isProtected(i.target, i.caseInsensitive));
+    if (prot.length) { protectedSpecs.add(r.spec); for (const i of prot) if (i.target !== p) hits.add(i.target); }
+  }
+  unresolved.push(...m.strings.filter(s => W1_DIR_TEXT.test(s) && !protectedSpecs.has(s)).map(s => 'string ' + JSON.stringify(s.slice(0, 120))));
+  return { hits: [...hits], unresolved };
+}
+export function scanWiring({ extra = {}, drop = [], parser = null } = {}) {
+  const files = [];
+  const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name === 'node_modules' || e.name === '.git') continue; const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|tsx|js|mjs|json)$/.test(e.name)) files.push(path.relative(ROOT, p).replace(/\\/g, '/')); } };
+  for (const d of ['apps', 'packages', 'supabase/functions']) if (fs.existsSync(path.join(ROOT, d))) walk(path.join(ROOT, d));
+  const all = [...new Set([...files.filter(p => !drop.includes(p)), ...Object.keys(extra)])].sort();
+  const text = p => (Object.prototype.hasOwnProperty.call(extra, p) ? extra[p] : fs.readFileSync(path.join(ROOT, p), 'utf8'));
+  const names = [], edges = [], unresolved = [], reasons = {}, memo = new Map();
+  for (const p of all) {
+    const t = text(p);
+    if (/retention_acquisition|resolve_detail_acquisition/.test(t)) names.push(p);
+    const row = scanFile(p, t, memo, parser);
+    for (const h of row.hits) edges.push(p + ' -> ' + h);
+    if (row.unresolved.length) { unresolved.push(p); reasons[p] = row.unresolved; }
+  }
+  return { names, edges: [...new Set(edges)].sort(), unresolved, unresolvedReasons: reasons, scanned: all.length };
+}
+// Without the ENT-W1 module (state 'base') names, edges and unresolved must all be empty, exactly as before ENT-W1. With the complete exact ENT-W1 record (the root's checkedEntw1State, which also requires the
+// whole older chain) names and edges must EQUAL the recorded lists (ENTW1_WIRING) and unresolved must be empty; an 'invalid' (partial, tampered, mixed) ENT-W1 state never passes. `git`, `extra` (virtual
+// added/overridden files), `drop` (paths hidden) and `parser` (a replacement parser loader, for the setup-failure control) exist only for the negative controls of the ENT-W1 smoke; P14 calls it with the defaults.
+export function resolverWiringProof({ git = args => { const r = child.spawnSync('git', ['-C', ROOT, ...args], { encoding: 'utf8', maxBuffer: 256e6, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } }); if (r.status) throw Error('GIT ' + args[0] + ' ' + r.stderr); return r.stdout; }, extra = {}, drop = [], parser = null } = {}) {
+  const { names, edges, unresolved, unresolvedReasons } = scanWiring({ extra, drop, parser });
+  const importers = [...new Set(edges.map(e => e.split(' -> ')[0]))].sort();
+  const entw1 = checkedEntw1State(git);
+  const sameList = (a, b) => JSON.stringify(a) === JSON.stringify([...b].sort());
+  const ok = entw1.state === 'record' ? sameList(names, ENTW1_WIRING.names) && sameList(edges, ENTW1_WIRING.edges) && unresolved.length === 0 : entw1.state === 'base' && names.length === 0 && edges.length === 0 && unresolved.length === 0;
+  return { ok, entw1: entw1.state, entw1Violations: entw1.violations, names, edges, importers, unresolved, unresolvedReasons, expected: entw1.state === 'record' ? ENTW1_WIRING : { names: [], edges: [] } };
+}
 GATES.F01_FROZEN_SCOPE_AND_INVENTORY = async () => {
   const frozen = frozenProof(), inv = inventoryProof();
   const sourceSha = sha(fs.readFileSync(path.join(ROOT, 'supabase/migrations', ACQ_MIGRATION)));

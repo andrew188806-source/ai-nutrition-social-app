@@ -1566,3 +1566,43 @@ Owner 於 2026-10-21 授權的本機 inactive 包（對應 ENT-F prep 計畫的 
 - **修正**：driver 埠（`executor.ts`）的 `BillingCommitPhaseError` 增加 `serverAnswer`：**只有 driver 以它自己的伺服器錯誤型別**（Node 的 pg `DatabaseError`、Deno 的 Postgres.js `PostgresError`；兩者都只由伺服器 ErrorResponse 建立）辨識出「伺服器對 COMMIT 回了錯」時才填入 `{code, severity}`。`commitFailureIsDefinite` 只讀這個證明：須為 SQLSTATE 形、`severity ＝ ERROR`、非 08／57P／58／XX 類，才是確定中止並原樣丟出原始錯誤；其他一切（沒有證明、FATAL／PANIC、連線類、socket／transport 錯誤、來源不明）一律 `BillingCommitOutcomeUnknownError`（`08006`、`commitOutcomeUnknown`），並保留原始失敗於 `commitFailure`（只供診斷，不回應給呼叫者）。不是以 `EPIPE`／`EBADF` 字串特判，也不是把所有錯誤改成 unknown：伺服器在 COMMIT 回的 23505／23514 等仍是確定中止。
 - **不變**：交易邊界（body 失敗 ROLLBACK 並原樣丟出）、process handler 的 `tracked`／回應摘要（unknown 已由 `commitOutcomeUnknown` 傳遞，修正後不再在 transport 遺失）、14 個產品檔中其餘 11 個、ENT-F1、ACT2、migration、`config.toml`。改動的產品檔：`executor.ts`、`sql.ts`、`denoPostgresBillingTransport.ts`（Deno 綁定仍未在 Deno 執行，行為 UNVERIFIED）。
 - **驗證**：新 gate `T09`（真 PG、真 login 角色；EPIPE／EBADF／未證明的 08006 等於真 COMMIT 成功**之後**在 driver 邊界注入，**不是實體 socket 故障、也不是 Deno 執行**）、`T00` 分類表改為「有／無 driver 證明」、`S03` 靜態檢查綁定只以 `PostgresError` 證明，以及 4 個新 mutant（Y64–Y67）。
+## 23. ENT-W1：以週期 sweep 驅動 ENT1-A resolver（預設停用；retention line，2026-10-25；**作者整合自測，不是 acceptance**）
+
+### 23.1 範圍
+- 新增 migration `20261025010000_consumer_retention_acquisition_resolve_sweep.sql`（排在 PH1 `20261022183336` 之後；bytes 與隔離 checkpoint 的草稿相同，sha256 `19999f49…`）、共用模組 `supabase/functions/_shared/acquisition-resolve/{sql,worker}.ts`，以及預設停用的 Edge 入口 `supabase/functions/retention-acquisition-resolve/{config,handler,index}.ts`。不修改 `config.toml`。不排程、不部署、不啟用，也不建立任何 LOGIN 角色、membership 或 Hosted 執行者。
+- 契約沿用 §19（ENT1-A）：T0、owner、capture context 來自不可變的 capture anchor；資格**只**由 `resolve_detail_acquisition`（經 ENT0）決定；4320h 是 receipt 的效力期限，不是掃描截止；pending／unknown／`no_actor_claim` 不寫入，也不是 Free；既有 receipt 只 replay。沒有新的付款、seal、final grant 或 purge 政策。
+
+### 23.2 恢復設計（v2 的「一個週期內恢復」保證已撤回）
+- 單列 `retention_acquisition.resolution_sweep_state`。`claim_resolution_page` **唯讀**，回應遺失不損失任何東西。`begin_resolution_item` 只接受 cursor 之後的下一個未解析 id，並累計 attempts。resolver 與 `advance_resolution_cursor('resolved')` 在同一交易內一起提交。`examined`／`wrap` 推進必須連續：資料庫拒絕越過任何尚無 receipt 的 anchor（`NOT_BEGUN`、`UNRESOLVED_BEFORE_TARGET`、`UNRESOLVED_IN_RANGE`、`UNRESOLVED_REMAIN`）。wrap 後本輪結束。worker 在第一個失敗或 COMMIT 未知時就停止，每輪使用新的 driver，用完即關閉。
+- 「最多 3 次 starts」是**每 id、每 cycle 的內部重試界線**：第 4 次 start 把 cursor 移到該 id（本 cycle 跳過），不寫 receipt、不做任何決定，下一 cycle 一定重新處理。它不是永久排除，也不是取得資格的政策。
+- 「不遺失」只在六項前提下成立：週期觸發、預算至少一筆、資料庫可連線、無人無限期持鎖、anchor 不可變、沒有 superuser 竄改。不提供恢復時間或延遲上限。
+
+### 23.3 權限
+`consumer_retention_acquisition_worker`：NOLOGIN、NOINHERIT、沒有 member；只有 `USAGE retention_acquisition`，以及 EXECUTE 四個函式（resolver、claim、begin、advance）。沒有任何表權限、`retention_capture`／`retention_entitlement` 的 USAGE 或 ENT0 函式。由 migration 內的 G2 檢查精確確認。Postgres.js 3.4.7 建立 driver 時會讀 `PG*` 環境變數，Edge 的 env 權限必須允許。
+
+### 23.4 驗證器的單向 successor
+- ENT-W1 是 PH1 之上的**最外層**精確 successor：`scripts/consumer-retention-entw1-exact-successor.mjs` 逐一記錄每個 leaf 的 mode、blob 與它在 main 的 identity；root（persistence smoke）pin 這個模組的 blob 與 migration 的 sha256。只有完整記錄精確時，較早的整條 chain（PH1 → ENT-F2 → S2-ACT2 → … → origin）才在 ENT-W1 的前身視圖上**原樣**評估，而且必須完整；部分、竄改或混版一律 `invalid`。沒有萬用字元，也沒有自我或循環 hash。
+- P14（acquisition smoke）：沒有 ENT-W1 時，`apps/`、`packages/`、`supabase/functions/` 下仍不得有檔案提到 schema 或 resolver。有完整精確的 ENT-W1 記錄時，提到它們的檔案與 import ENT-W1 模組的檔案，必須**恰好**是記錄的清單（`ENTW1_WIRING`），多一個呼叫者、被竄改或混版都會拒絕。
+- recovery guard 與社交 guard 的 bytes 不變（它們從 `checkedAct2State(...).paths` 取得豁免）。capture smoke 與 billing-edge smoke 的修改方式與 PH1 相同（`isEntw1Migration`、F01 overlay）。
+
+### 23.5 證據
+隔離 checkpoint（`run-20261024-entw1-iso-cla01\checkpoints\checkpoint-01-isolated-20261024`，manifest `01918c14…`，唯讀）：PG gates 21/21、mutation 控制組＋12/12、gap gates 4/4、真 Deno 型別檢查／無網路 runtime 8/8／`Deno.serve` 2/2／對真 PG 5/5，都在同一份 migration 與 product bytes 上完成。整合 run（`run-20261025-entw1-int-cla01`）只補整合影響範圍：精確 successor（F01–F03）、完整 migration chain（G17）、受影響的共用驗證器與 B 比較。PG gate 除 G16（seal＋billing tail）與 G17（完整 chain）外，都使用縮減 fixture。
+### 23.6 第一次獨立驗收的三項 blocker 修正（retention line，2026-10-25；作者修正自測，不是 acceptance）
+- **ENT-W1-A01（每 resource／每 cycle 的 start 上限）**：被拒候選只保存一個 in-flight 計數，換 begin 另一個 id 時就重新從 1 起算；較小 anchor 晚可見時，同一 cycle 內同一 id 可取得 6 次已提交的 proceed。修正：新表 `retention_acquisition.resolution_attempts(cycle, resource_id, starts 1..3)` 依 (cycle, resource) 保存已提交的 starts。begin 從這一列計數，第 4 次改為本 cycle 跳過；`'resolved'` 移動要求這個 resource 在本 cycle 有已提交的 start（`NOT_BEGUN`）；cursor 越過時刪除該列，wrap 時刪除全部，所以只存在本 cycle、cursor 之後的列，不累積歷史。所有 begin 與 cursor 移動仍經同一把狀態列鎖序列化。pending 不當 Free；沒有略過晚到資料，沒有時間截斷；cursor／wrap／未 begin 的拒絕與 resolver 交易契約都沒有放寬。
+  - **migration bytes 改變**：sha256 由 `19999f49…` 變為新值（以 successor 記錄為準）。新增一張表、它的 RLS（ENABLE＋FORCE）與四條只給 owner 的 policy；G1 的「已存在」檢查與 G2 的 post-state 檢查也包含這張表。**權限沒有變**：worker 仍只有 schema USAGE 與四個函式的 EXECUTE，對新表沒有任何權限，PUBLIC 也沒有。
+  - **證據失效範圍**：checkpoint 與被拒候選在舊 migration bytes 上的所有 PG 證據，不再適用於本 migration；受影響的 PG gate、mutation、完整 chain 都在新 bytes 上重跑。product TypeScript 沒有改。
+- **ENT-W1-A02（P14 模組解析）**：P14 原本只比對固定的路徑片段，漏掉 `./worker.ts`、`./acquisition-resolve/worker.ts` 等合法相對引用。修正：每個被掃描檔案的 `import … from`／`export … from`、side-effect import、`import type`、字串常值的動態 `import()`／`require()`，都以 importer 所在目錄解析並正規化成實際路徑；凡指向 ENT-W1 模組目錄的引用都是一條 edge，必須**恰好**等於記錄（`ENTW1_WIRING.edges`）。無法解析卻提到模組目錄的字串一律拒絕。schema／resolver 名稱掃描與沒有 ENT-W1 時的舊規則保留；不禁止無關的 import，也沒有擴大 allowlist。
+- **ENT-W1-T01（mutation 判定鏈）**：被拒的分類器只看 `result.status`，忽略 signal／error，因此空結果和真正 timeout 的 child 都算成 PASS 12/12。修正：單一 `judgeChild` 綜合核對數值 exit、signal、spawn error／timeout、非空且等於選取的 gate 集合、逐 gate 的 check 檔與明示失敗的觀察、stdout 的 CHECK／RESULT 行、以及 child 回報的 smoke／migration／product SHA-256（即 harness 實際寫出的 mutant bytes）。各類故障分開記錄（`TIMEOUT`、`SIGNAL`、`CRASH`、`BLOCKED_SETUP`、`INCOMPLETE`、`CONTRADICTION`、`IDENTITY_MISMATCH`、`EXIT_MISMATCH`、`NOT_DETECTED`）。另新增 `--meta-controls`：以真子程序跑同一判定鏈，包含驗收者的兩個反例。
+### 23.7 定向獨立複驗後的 A02、T01 修正（retention line，2026-10-28；作者修正自測，不是 acceptance）
+- A01 已由定向獨立複驗關閉。本輪沒有修改 migration 與 ENT-W1 product TypeScript：計數、交易、權限與清理語意都不變，successor 只更新三個驗證腳本、本文件、successor 模組與 root 的 pins。
+- **ENT-W1-A02（P14 模組引用解析）**：上一版的 pattern 掃描漏掉 `import(/* valid comment */ "./worker.ts")`，這行可以通過真 Deno check。修正：P14 改用 TypeScript parser 的語法樹讀取引用（typescript 是 repo 既有的 devDependency）。註解、換行與字串跳脫都由 parser 處理，不再靠 pattern；缺少 parser 時是 setup 錯誤，不會退回 pattern。支援的 literal 引用包括：`import … from`／`export … from`（含 re-export）、side-effect import、`import type`、`import x = require("m")`、動態 `import("m")`（含第二個參數）、`require("m")`、型別位置的 `import("m")`、`/// <reference path>`、`import.meta.resolve("m")`，以及 `new URL("m", import.meta.url)`。所有引用都以 importer 所在目錄解析，並在 percent-decoding 後正規化。以下情況都列為 unresolved，一律拒絕：無法靜態解析的引用（非 literal 的 import／require／resolve／URL）、無法 parse 的檔案，以及提到模組目錄、本身卻不是已解析引用的字串。註解中的文字不算引用。名稱掃描、沒有 ENT-W1 時的舊規則與精確記錄都保留；沒有禁止無關的 import，也沒有擴大 allowlist。目前 tree 的 1,268 個被掃描檔案中，沒有非 literal 引用，也沒有 parse diagnostic。
+- **ENT-W1-T01（結果 schema 與一致性）**：上一版的 `judgeChild` 只在 status 為 BLOCKED 時讀 `blocked`，並把缺少的 `crashed` 當成 `[]`，所以完整 FAIL／OS 1 的結果即使帶有非 null 的 setup `blocked`，或缺少 `crashed`、`blocked` 欄位，仍被算成 DETECTED。修正：分類前先強制驗證必要欄位與型別（`status`、`selected`、`checks`、`failed`、`crashed`、`blocked`、`identity`），以及故障資訊與 status 是否一致；否則判為 `SCHEMA_INVALID` 或 `CONTRADICTION`，不會是 DETECTED 或 CONTROL_OK，整 run 判為 BLOCKED。正向 OS 0、明示 detector OS 1、green、空 suite、timeout／signal／error 與來源／mutant bytes 的判定都保留；meta-controls 新增這三個反例與相鄰的矛盾情況。
+### 23.8 第二次定向獨立複驗後的 A02 修正（retention line，2026-10-29；作者修正自測，不是 acceptance）
+- A01 與 T01 都已關閉，本輪不重開。migration、五個 ENT-W1 product TypeScript 檔案、mutation 判定器與 `ENTW1_WIRING` 都沒有修改。
+- **ENT-W1-A02（模組 identity）**：上一版 parser 已找到 `require(".\\worker.ts")` 與 `require("../ACQUISITION-RESOLVE/worker.ts")`，但只以 POSIX 字串規則計算 target，所以沒有考慮 Windows loader 的分隔符與不分大小寫的檔案 identity；真 Node 實際載入了凍結的 worker，P14 卻放行。修正：由單一函式 `moduleIdentities` 依每個支援的 loader 規則計算 target，並以本 checkout 的真實檔案系統做 canonical 化。
+  - URL loader（Deno、Node ESM）：`new URL(spec, importer)`，再 `fileURLToPath`。依 WHATWG 規則，`\` 也是分隔符，並做 percent-decoding。
+  - Windows 上的 Node CommonJS：`path.win32.resolve`。兩種分隔符都適用，也支援 rooted、磁碟機絕對路徑與 UNC。
+  - POSIX：`path.posix`。反斜線是檔名字元，以區分大小寫的字串比對。
+  - 每個 literal 引用都套用全部規則；只要任一支援的 loader 會指到 ENT-W1 模組，就是一條 edge。在磁碟上的候選以最長的既存上層路徑做 `fs.realpathSync.native`，取得實際大小寫，並解析短檔名、junction 與 symlink；不存在的尾段依本檔案系統不分大小寫比對。不以內容 hash 判定 identity，POSIX 候選也不轉小寫。canonical 路徑**就是**模組目錄或位於其下，才算受保護。
+- 無法 canonical 化的引用列為 unresolved，一律拒絕；parser 無法載入時是 `SETUP_P14_PARSER`，屬 setup 錯誤，不是 detector。註解、跳脫與 re-export 的處理、名稱掃描、沒有 ENT-W1 時的舊規則、精確記錄與單向 pins 都保留，無關的 Windows 引用仍被接受。
+- 限制：POSIX 絕對路徑（`/x`）在本機沒有部署根目錄，只由目錄字串規則涵蓋；bare specifier（`node:`、`npm:`、`jsr:`、`https:`、import map 別名）不是本 checkout 的檔案，import map 中提到模組目錄的情況由 JSON 規則涵蓋；大小寫判定依本機檔案系統（預設不分大小寫的 NTFS）。
