@@ -33,6 +33,7 @@ import type { ConsumerMealRuntimeFlags } from "../consumer-meals/types";
 import type { ConsumerPlannedMeal, ConsumerPlannedMealsReadResult } from "../consumer-meals/types";
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
 import type { ConsumerMealRecordsService } from "../consumer-meals/consumerMealRecordsService";
+import type { MonthlyReviewRuntime } from "../consumer-monthly-review/types";
 import type { ConsumerPlannedMealV2Service } from "../consumer-meals/consumerPlannedMealV2Service";
 import type { SupabaseConsumerMealClientLike } from "../consumer-meals/supabaseMealContracts";
 import { getConsumerMealIdentificationFinalizationRuntimeFlags } from "../meal-identification-finalization/featureFlags";
@@ -378,6 +379,7 @@ export type ConsumerRuntimeComposition = {
   getPlannedMeals(plannedDate: string): Promise<ConsumerPlannedMealsReadResult>;
   createOverviewService(timezone: string): ConsumerTodayIntakeOverviewService;
   mealRecordsService: ConsumerMealRecordsService | null;
+  monthlyReview: MonthlyReviewRuntime;
 };
 
 export type ConsumerRuntimeCompositionResult =
@@ -619,6 +621,7 @@ function createMealRuntimeParts(input: {
     createConsumerTodayIntakeOverviewService
   } = require("../consumer-meals/factories") as typeof import("../consumer-meals/factories");
   const { ConsumerPlannedMealsService } = require("../consumer-meals/consumerPlannedMealsService") as typeof import("../consumer-meals/consumerPlannedMealsService");
+  const { createConsumerMonthlyReviewRuntime } = require("../consumer-monthly-review/factory") as typeof import("../consumer-monthly-review/factory");
   const { createConsumerMealIdentificationFinalizationRepository } =
     require("../meal-identification-finalization/factories") as typeof import("../meal-identification-finalization/factories");
   const { ConsumerMealIdentificationFinalizationService } =
@@ -763,6 +766,8 @@ function createMealRuntimeParts(input: {
     mealRecordsService: overviewFlags.mealRecordsSource === "supabase-live"
       ? createConsumerMealRecordsService(overviewFlags, dependencies)
       : null,
+    // R1-A: the raw (not actor-tagged) client, like every other read; the owner is the server's auth.uid().
+    monthlyReview: createConsumerMonthlyReviewRuntime(input.authFlags, { client: input.mealClient, sessionPort: input.authPort }),
     getPlannedMeals: (plannedDate: string) => plannedMealsService.getCurrentUserPlannedMeals({ plannedDate }),
     createOverviewService: (timezone: string) => input.overviewService ?? createConsumerTodayIntakeOverviewService(
       overviewFlags,

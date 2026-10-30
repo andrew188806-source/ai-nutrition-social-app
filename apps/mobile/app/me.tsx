@@ -5,6 +5,7 @@ import { BottomNav, PremiumBadge } from "../components/DemoUi";
 import { useDemoUserPlan } from "../features/demo-user-plan";
 import { getSelfMadeDishes } from "../features/self-made-dishes";
 import { ConsumerProfileStateNotice, useConsumerRuntime } from "../features/consumer-runtime";
+import { MonthlyNutritionReviewCard } from "../features/consumer-monthly-review/MonthlyNutritionReviewCard";
 import { Card, CompactRow, PersonAvatar, SectionHeader, StatCard } from "../theme/components";
 import type { IconName } from "../theme/icons";
 import { fonts, snowPalette as colors } from "../theme/tokens";
@@ -32,6 +33,8 @@ export default function MeScreen() {
   const canonicalProfile = runtime.state.profileState.status === "available" ? runtime.state.profileState.profile : null;
   const canonicalName = canonicalProfile?.displayName || canonicalProfile?.nickname || zhTW.mobile.consumerAuth.profileFallback;
   const loggingOut = runtime.state.operation === "signingOut";
+  // R1-A: once a live monthly review is requested, no demo monthly value (score, protein days, monthly card) is shown in its place.
+  const monthlyReview = runtime.monthlyReview;
 
   const diaryItems: ProfileRowItem[] = [
     { icon: "leaf", title: diary.dailyDiaryTitle, subtitle: diary.dailyDiaryBody, onPress: () => router.push("/meal-log") },
@@ -109,9 +112,9 @@ export default function MeScreen() {
         <Card>
           <SectionHeader title={zhTW.mobile.consumerAuth.demoCardsTitle} subtitle={zhTW.mobile.consumerAuth.demoCardsBody} />
           <View style={styles.statGrid}>
-            <StatCard icon="star" label="本月評分" value={latestMonth.score.replace("月評分：", "")} tone="primary" />
+            {monthlyReview.mode === "disabled" ? <StatCard icon="star" label="本月評分" value={latestMonth.score.replace("月評分：", "")} tone="primary" /> : null}
             <StatCard icon="heart" label="收藏餐點" value={zhTW.mobile.consumerFavorites.profileCountSummary} />
-            <StatCard icon="leaf" label="蛋白質達標" value={latestMonth.proteinDays.replace("蛋白質達標 ", "")} tone="ai" />
+            {monthlyReview.mode === "disabled" ? <StatCard icon="leaf" label="蛋白質達標" value={latestMonth.proteinDays.replace("蛋白質達標 ", "")} tone="ai" /> : null}
           </View>
         </Card>
 
@@ -128,15 +131,19 @@ export default function MeScreen() {
         </Card>
 
         {/* 3. Food/nutrition record entries */}
-        <Card tone="blush">
-          <SectionHeader title={diary.monthlyScoreTitle} subtitle={`${latestMonth.month} · ${diary.monthlyScoreBody}`} />
-          <View style={styles.scoreDetailList}>
-            <Text style={styles.scoreDetailItem}>· {latestMonth.averageCalories}</Text>
-            <Text style={styles.scoreDetailItem}>· {latestMonth.vegetableDays}</Text>
-            <Text style={styles.scoreDetailItem}>· {latestMonth.highFrequency}</Text>
-            <Text style={styles.scoreDetailItem}>· {latestMonth.suggestion}</Text>
-          </View>
-        </Card>
+        {monthlyReview.mode === "disabled" ? (
+          <Card tone="blush">
+            <SectionHeader title={diary.monthlyScoreTitle} subtitle={`${latestMonth.month} · ${diary.monthlyScoreBody}`} />
+            <View style={styles.scoreDetailList}>
+              <Text style={styles.scoreDetailItem}>· {latestMonth.averageCalories}</Text>
+              <Text style={styles.scoreDetailItem}>· {latestMonth.vegetableDays}</Text>
+              <Text style={styles.scoreDetailItem}>· {latestMonth.highFrequency}</Text>
+              <Text style={styles.scoreDetailItem}>· {latestMonth.suggestion}</Text>
+            </View>
+          </Card>
+        ) : (
+          <MonthlyNutritionReviewCard runtime={monthlyReview} reloadKey={`${runtime.state.actorKey}:${runtime.state.actorGeneration}:${runtime.mealDataRevision}`} />
+        )}
 
         <View style={styles.section}>
           <SectionHeader title={diary.unifiedTitle} subtitle={diary.unifiedBody} />

@@ -13,6 +13,8 @@ import {
 } from "./consumerRuntimeComposition";
 import type { ConsumerTodayIntakeOverviewService } from "../consumer-meals/consumerTodayIntakeOverviewService";
 import type { ConsumerMealRecordsService } from "../consumer-meals/consumerMealRecordsService";
+import { fallbackMonthlyReviewRuntime } from "../consumer-monthly-review/factory";
+import type { MonthlyReviewRuntime } from "../consumer-monthly-review/types";
 import type { ConsumerAnalysisMealWriteDraft } from "./consumerMealWriteMapper";
 import type { ConsumerMealWriteRuntimeState } from "./consumerMealWriteRuntime";
 import type { MealSaveOperationKind, MealSaveOperationSummary } from "./mealSaveRecovery";
@@ -75,6 +77,7 @@ export type ConsumerRuntimeContextValue = {
   mealDataRevision: number;
   overviewService: ConsumerTodayIntakeOverviewService | null;
   mealRecordsService: ConsumerMealRecordsService | null;
+  monthlyReview: MonthlyReviewRuntime;
 };
 
 const unavailableState: ConsumerRuntimeState = {
@@ -356,7 +359,8 @@ export function ConsumerRuntimeProvider({ children }: { children: ReactNode }) {
       plannedMealState.revision +
       plannedMealMutationRevision,
     overviewService,
-    mealRecordsService: composition.ok ? composition.value.mealRecordsService : null
+    mealRecordsService: composition.ok ? composition.value.mealRecordsService : null,
+    monthlyReview: composition.ok ? composition.value.monthlyReview : fallbackMonthlyReviewRuntime()
   }), [
     composition,
     controller,
