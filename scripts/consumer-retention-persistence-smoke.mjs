@@ -1344,8 +1344,8 @@ export function isEntw1Migration(name){return name===ENTW1_MIGRATION&&activeEntw
 // hash in any leaf). Only when the module binding AND every R1-A leaf are exact is the complete older chain (ENT-W1 -> PH1 -> ENT-F2 -> S2-ACT2 -> ENT-F1 -> ... -> origin) evaluated
 // UNCHANGED on the R1-A predecessor view, and it must then be complete (entw1, ph1, edge, act2 and billing all 'record'); a partial or mismatching R1-A state is 'invalid'.
 // Without the R1-A module everything is exactly as before (the older functions are called on the real index/worktree).
-export const R1A_MODULE_BLOB='8f2a748cb4af1704bdf86dc034023ea691cb30fd';
-export const R1A_MIGRATION_SHA256='ae2d206ab0ff8e3a602d5c37f256f1ca4855d56e5dc9633fc540f49b2960a9ab';
+export const R1A_MODULE_BLOB='2919437241286e2fdbe260ecf793329d3a7852b2';
+export const R1A_MIGRATION_SHA256='8122a0c3086dc0b7df03da87b52ffc02bb2708ac414b36a7577937056fa1dbc7';
 export const R1A_MODULE_PATH='scripts/consumer-monthly-review-exact-successor.mjs';
 export function checkedR1aState(git){
  const staged=git(['ls-files','--stage','--',R1A_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,R1A_MODULE_PATH));

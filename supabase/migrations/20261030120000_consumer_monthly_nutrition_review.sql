@@ -97,30 +97,25 @@ $$;
 -- Recalculates ONE month of ONE owner from the complete current details (no row limit). Same source digest => no write (revision
 -- unchanged); changed digest => the whole month is recomputed from scratch and revision + 1 (never incremental, so no double count).
 -- A month without any record and without a row stays without a row; an existing row is updated, never deleted.
+-- One source snapshot (R1A-SNAPSHOT-01): under READ COMMITTED every statement of this function has its own snapshot, and the per-owner
+-- advisory lock serializes reviews only, never meal writers. So the digest and every aggregate come from the ONE statement below, and
+-- the row lock is taken before it (a wait for the row must not age the snapshot). A writer that commits after that statement is simply
+-- seen by the next review. Do not add a second read of the details here.
 create function consumer_review.refresh_month(p_user uuid, p_binding_version integer, p_timezone text, p_month_key text) returns void
 language plpgsql set search_path = '' as $$
 declare
   v_start timestamptz := pg_catalog.timezone(p_timezone, (p_month_key || '-01')::timestamp);
   v_end timestamptz := pg_catalog.timezone(p_timezone, ((p_month_key || '-01')::date + interval '1 month')::timestamp);
-  v_digest text; v_row consumer_review.monthly_nutrition_reviews%rowtype; v_has boolean; a record;
+  v_row consumer_review.monthly_nutrition_reviews%rowtype; v_has boolean; a record;
 begin
-  select pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
-      'consumer-monthly-review-v1|' || p_binding_version || '|' || p_timezone || '|' || coalesce((
-        select pg_catalog.string_agg(m.id::text || '@' || pg_catalog.to_char(m.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '@' || pg_catalog.to_char(m.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '[' || coalesce((
-            select pg_catalog.string_agg(i.id::text || '@' || pg_catalog.to_char(i.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '@' || i.consumed_ratio::text || '@' || i.nutrition_snapshot::text, ';' order by i.id)
-            from public.meal_record_items i where i.meal_record_id = m.id), '') || ']', ',' order by m.id)
-        from public.meal_records m
-        where m.user_id = p_user and m.deleted_at is null and m.occurred_at >= v_start and m.occurred_at < v_end), ''), 'UTF8')), 'hex')
-    into v_digest;
   select * into v_row from consumer_review.monthly_nutrition_reviews where user_id = p_user and month_key = p_month_key for update;
   v_has := found;
-  if v_has and v_row.source_digest = v_digest and v_row.binding_version = p_binding_version then return; end if;
   with meals as (
-    select m.id, (m.occurred_at at time zone p_timezone)::date as local_day
+    select m.id, m.updated_at, m.occurred_at, (m.occurred_at at time zone p_timezone)::date as local_day
     from public.meal_records m
     where m.user_id = p_user and m.deleted_at is null and m.occurred_at >= v_start and m.occurred_at < v_end
   ), items as (
-    select i.consumed_ratio,
+    select i.id, i.meal_record_id, i.updated_at, i.nutrition_snapshot, i.consumed_ratio,
       consumer_review.nutrient_value(i.nutrition_snapshot, 'calories', 'kcal') c,
       consumer_review.nutrient_value(i.nutrition_snapshot, 'protein', null) p,
       consumer_review.nutrient_value(i.nutrition_snapshot, 'carbohydrates', 'carbs') h,
@@ -129,6 +124,12 @@ begin
     from public.meal_record_items i join meals on meals.id = i.meal_record_id
   )
   select
+    pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+      'consumer-monthly-review-v1|' || p_binding_version || '|' || p_timezone || '|' || coalesce((
+        select pg_catalog.string_agg(m.id::text || '@' || pg_catalog.to_char(m.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '@' || pg_catalog.to_char(m.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '[' || coalesce((
+            select pg_catalog.string_agg(i.id::text || '@' || pg_catalog.to_char(i.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '@' || i.consumed_ratio::text || '@' || i.nutrition_snapshot::text, ';' order by i.id)
+            from items i where i.meal_record_id = m.id), '') || ']', ',' order by m.id)
+        from meals m), ''), 'UTF8')), 'hex') src_digest,
     (select count(distinct local_day)::integer from meals) days,
     (select count(*)::integer from meals) meal_n,
     (select count(*)::integer from items) item_n,
@@ -143,9 +144,10 @@ begin
     coalesce((select sum((b ->> 'value')::numeric * consumed_ratio) from items where b ->> 'state' = 'valid'), 0) b_t,
     (select count(*)::integer from items where b ->> 'state' = 'valid') b_v, (select count(*)::integer from items where b ->> 'state' = 'missing') b_m, (select count(*)::integer from items where b ->> 'state' = 'invalid') b_i
   into a;
+  if v_has and v_row.source_digest = a.src_digest and v_row.binding_version = p_binding_version then return; end if;
   if not v_has and a.meal_n = 0 then return; end if;
   if v_has then
-    update consumer_review.monthly_nutrition_reviews set binding_version = p_binding_version, report_timezone = p_timezone, revision = revision + 1, source_digest = v_digest,
+    update consumer_review.monthly_nutrition_reviews set binding_version = p_binding_version, report_timezone = p_timezone, revision = revision + 1, source_digest = a.src_digest,
       recorded_days = a.days, meal_count = a.meal_n, item_count = a.item_n,
       calories_total = a.c_t, calories_valid_items = a.c_v, calories_missing_items = a.c_m, calories_invalid_items = a.c_i,
       protein_total = a.p_t, protein_valid_items = a.p_v, protein_missing_items = a.p_m, protein_invalid_items = a.p_i,
@@ -155,7 +157,7 @@ begin
       computed_at = pg_catalog.clock_timestamp()
     where user_id = p_user and month_key = p_month_key;
   else
-    insert into consumer_review.monthly_nutrition_reviews values (p_user, p_month_key, p_binding_version, p_timezone, 'consumer-monthly-review-v1', 1, v_digest,
+    insert into consumer_review.monthly_nutrition_reviews values (p_user, p_month_key, p_binding_version, p_timezone, 'consumer-monthly-review-v1', 1, a.src_digest,
       a.days, a.meal_n, a.item_n, a.c_t, a.c_v, a.c_m, a.c_i, a.p_t, a.p_v, a.p_m, a.p_i, a.h_t, a.h_v, a.h_m, a.h_i, a.f_t, a.f_v, a.f_m, a.f_i, a.b_t, a.b_v, a.b_m, a.b_i,
       pg_catalog.clock_timestamp());
   end if;

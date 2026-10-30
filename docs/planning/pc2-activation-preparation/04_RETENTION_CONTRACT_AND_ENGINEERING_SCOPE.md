@@ -650,7 +650,7 @@ Actual tooling Node v22.23.1、TypeScript 5.9.3；compiler身份與raw hash沿�
 
 ### 13.2 實作（一個新 migration、預設停用的 App 讀取）
 - `supabase/migrations/20261030120000_consumer_monthly_nutrition_review.sql`：新 schema `consumer_review`（runtime 角色無 USAGE）；只能追加的 `report_timezone_bindings`（v1 取自伺服器端 `consumer_profiles.timezone`，不接受 client 值；不提供變更路徑）；`monthly_nutrition_reviews`（每 owner×月一列，無評分欄位）；唯一 runtime 入口 `public.get_current_user_monthly_nutrition_review()`（SECURITY DEFINER，owner＝`auth.uid()`，先過 PC-2 `consumer_core_eligible()`，per-owner 交易鎖，伺服器時鐘決定當月）；只授予 `authenticated` EXECUTE。一般 consumer migration：不要求 superuser、不讀寫任何 retention schema。
-- 計算：完整伺服器讀取該 owner 未刪除的餐點與項目（無筆數上限），以綁定報表時區歸月；營養＝snapshot 五項 × `consumed_ratio`；每項分為 valid／missing（缺或 JSON null）／invalid（非非負數），只加總 valid，三者件數全部揭露；某營養素整月沒有 valid 值時總量與平均為 null（未知，不是 0）。來源摘要（每餐與每項的 id、updated_at、內容）不變則不寫入、版本不變；改變則整月從頭重算、版本＋1（不做增量累加）。沒有紀錄且沒有列的月份不建立列；既有列只更新、不刪除。
+- 計算：完整伺服器讀取該 owner 未刪除的餐點與項目（無筆數上限），以綁定報表時區歸月；營養＝snapshot 五項 × `consumed_ratio`；每項分為 valid／missing（缺或 JSON null）／invalid（非非負數），只加總 valid，三者件數全部揭露；某營養素整月沒有 valid 值時總量與平均為 null（未知，不是 0）。來源摘要（每餐與每項的 id、updated_at、內容）不變則不寫入、版本不變；改變則整月從頭重算、版本＋1（不做增量累加）。**同一快照（R1A-SNAPSHOT-01 修正）：** 先取得摘要列鎖，再由同一條 SQL 語句產生來源摘要與全部聚合；與寫入同時發生時，結果可為寫入前或寫入後的一致狀態（不保證一定最新），不得出現舊摘要配新聚合；晚於該語句提交的寫入由下一次讀取反映。沒有紀錄且沒有列的月份不建立列；既有列只更新、不刪除。
 - App：`apps/mobile/features/consumer-monthly-review/`（旗標 `EXPO_PUBLIC_TASTKIND_CONSUMER_MONTHLY_REVIEW_SOURCE`＋`…_LIVE_READ_OPT_IN`，預設停用）；`me.tsx` 停用時維持原畫面；一旦要求 live，示範的「本月評分／蛋白質達標／月評分卡」不再顯示，改為本人月回顧；來源不可用或設定不完整時顯示「暫時無法取得」，不回退示範值。runtime composition 與 provider 只新增 `monthlyReview` 一個欄位。
 
 ### 13.3 將來明細消失後的可信月摘要（設計，**尚未實作**）
@@ -661,4 +661,4 @@ Actual tooling Node v22.23.1、TypeScript 5.9.3；compiler身份與raw hash沿�
 Free 六月份顯示窗與 Paid 永久保存的判定、Paid 取得／升級的月報永久 grant、降級後隱藏與復訂重顯、較早月份的顯示、評分公式（Q6 第二階段）、收合／purge、Hosted 套用與啟用。
 
 ### 13.5 驗證（作者自測）
-`scripts/consumer-monthly-review-smoke.mjs`（PG：完整前序鏈＋R1-A；本人隔離、月份／時區邊界、缺資料、重送／重算／併發、晚到修正、權限、核心閘；Node：旗標、嚴格 mapper、service、view model、畫面不顯示示範值、migration 靜態範圍）與 `scripts/consumer-monthly-review-mutations.mjs`（單點缺陷各有預先宣告的 detector）。信任鏈：R1-A 是 ENT-W1 之上新的最外層精確 successor（`scripts/consumer-monthly-review-exact-successor.mjs`，由 persistence smoke 釘住）。結果與 B 比較見 repository 外的交付報告。
+`scripts/consumer-monthly-review-smoke.mjs`（PG：完整前序鏈＋R1-A；本人隔離、月份／時區邊界、缺資料、重送／重算／併發、晚到修正、寫入與重算交錯的同一快照、權限、核心閘；Node：旗標、嚴格 mapper、service、view model、畫面不顯示示範值、migration 靜態範圍與單一來源語句）與 `scripts/consumer-monthly-review-mutations.mjs`（單點缺陷各有預先宣告的 detector）。信任鏈：R1-A 是 ENT-W1 之上新的最外層精確 successor（`scripts/consumer-monthly-review-exact-successor.mjs`，由 persistence smoke 釘住）。結果與 B 比較見 repository 外的交付報告。

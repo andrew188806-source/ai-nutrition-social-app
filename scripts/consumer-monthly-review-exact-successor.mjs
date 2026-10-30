@@ -74,19 +74,19 @@ export const R1A_FILES=Object.freeze({
   },
   "docs/planning/pc2-activation-preparation/04_RETENTION_CONTRACT_AND_ENGINEERING_SCOPE.md": {
     "mode": "100644",
-    "blob": "945d51f8d36eaff32d6faca84411eebddfbab713",
+    "blob": "5b7485c4cbd4be3f6711573dafb34f000b5e4a19",
     "base": "c4ffd17115702650ce0975bb55f13a59fd83b5bd",
     "baseMode": "100644"
   },
   "scripts/consumer-monthly-review-mutations.mjs": {
     "mode": "100644",
-    "blob": "854e65433e1829d28ca9e2090b21ceef7bfdee88",
+    "blob": "871a1fa6f10e58a4dc07f8dc831a52958d75e48c",
     "base": null,
     "baseMode": null
   },
   "scripts/consumer-monthly-review-smoke.mjs": {
     "mode": "100644",
-    "blob": "4a647ab2eaf959a00587c000b3fbdb9575d4f8d4",
+    "blob": "6586d91b42f6d27dc89420810ac431786a833ec3",
     "base": null,
     "baseMode": null
   },
@@ -110,7 +110,7 @@ export const R1A_FILES=Object.freeze({
   },
   "supabase/migrations/20261030120000_consumer_monthly_nutrition_review.sql": {
     "mode": "100644",
-    "blob": "831eb16480223dfe515d68fa35609f7ac6ade5f1",
+    "blob": "7b3bbc1998dc66de11b22f78d89b61b517c65c2c",
     "base": null,
     "baseMode": null
   }

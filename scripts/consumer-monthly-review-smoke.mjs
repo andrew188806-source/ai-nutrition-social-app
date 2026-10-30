@@ -30,7 +30,8 @@ export const USERS = {
   A: { id: uid(101), zone: 'Asia/Taipei' }, B: { id: uid(102), zone: 'America/Los_Angeles' }, C: { id: uid(103), zone: 'Pacific/Auckland' },
   D: { id: uid(104), zone: 'Asia/Taipei' }, E: { id: uid(105), zone: 'Europe/London' }, F: { id: uid(106), zone: 'Asia/Taipei' },
   G: { id: uid(107), zone: 'Asia/Taipei' }, H: { id: uid(108), zone: 'Asia/Taipei' }, I: { id: uid(109), zone: 'Asia/Taipei' },
-  K: { id: uid(111), zone: 'Asia/Taipei' }
+  K: { id: uid(111), zone: 'Asia/Taipei' }, L: { id: uid(112), zone: 'Asia/Taipei' }, M: { id: uid(113), zone: 'Asia/Taipei' }, N: { id: uid(114), zone: 'Asia/Taipei' },
+  O: { id: uid(115), zone: 'Asia/Taipei' }, Q: { id: uid(116), zone: 'Asia/Taipei' }
 };
 
 // ---- independent oracle (Intl; does not use the migration or the app code) ----
@@ -266,6 +267,137 @@ GATES.P07_PARALLEL_CALLS_ONE_CONSISTENT_RESULT = async run => {
   return R(results.every(r => r.ok) && bindings === 1 && rows.length === 1 && rows[0].revision === 1 && payloads.size === 1, { bindings, rows: rows.map(r => ({ m: r.month_key, rev: r.revision })), errors: results.filter(r => !r.ok), distinctPayloads: payloads.size });
 };
 
+// ---- R1A-SNAPSHOT-01: one source snapshot per refresh. Writers and reviews share no lock, so every interleaving below uses separate connections, an observed lock wait or an observed completion, and real COMMITs ----
+// Test-only advisory key: the product never takes it. Only the two-statement sensitivity mutant waits on it, between its two reads.
+export const STATEMENT_BARRIER = 1830212302;
+const REVIEW_SQL = 'select public.get_current_user_monthly_nutrition_review() v';
+const connectRun = run => run.env.cl.connect(run.name, 'supabase_admin');
+const pause = ms => new Promise(r => setTimeout(r, ms));
+const zoneDate = (at, zone) => new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(at));
+async function writeMeal(run, user, at, calories) {
+  const r = await asUser(run, user.id, "select public.create_current_user_meal_record('lunch',$1::timestamptz,$2::date,$3,'r1a snapshot',null,'manual',$4::jsonb) v", [at, zoneDate(at, user.zone), user.zone, JSON.stringify([{ displayName: 'r1a snapshot item', nutrition: { calories } }])]);
+  if (!r.ok) throw Error(`SETUP_WRITER ${r.code} ${r.message}`);
+}
+// Independent witness: one REPEATABLE READ read of the details; the digest text is rebuilt here, not by the migration.
+async function witness(run, user, monthKey) {
+  const c = await connectRun(run);
+  try {
+    await c.query('begin isolation level repeatable read');
+    const rows = (await c.query(`select m.id::text mid, to_char(m.updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US') mu, to_char(m.occurred_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US') mo, i.id::text iid, to_char(i.updated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US') iu, i.consumed_ratio::text ratio, i.nutrition_snapshot::text nutrition from public.meal_records m left join public.meal_record_items i on i.meal_record_id = m.id where m.user_id = $1 and m.deleted_at is null and m.occurred_at >= timezone($2, ($3||'-01')::timestamp) and m.occurred_at < timezone($2, ($3||'-01')::date + interval '1 month') order by m.id, i.id`, [user.id, user.zone, monthKey])).rows;
+    await c.query('commit');
+    const meals = new Map(); let calories = 0, items = 0;
+    for (const r of rows) {
+      if (!meals.has(r.mid)) meals.set(r.mid, { ...r, list: [] });
+      if (!r.iid) continue;
+      meals.get(r.mid).list.push(`${r.iid}@${r.iu}@${r.ratio}@${r.nutrition}`); items++;
+      const n = JSON.parse(r.nutrition); if (typeof n.calories === 'number' && n.calories >= 0) calories += n.calories * Number(r.ratio);
+    }
+    const payload = `consumer-monthly-review-v1|1|${user.zone}|` + [...meals.values()].map(m => `${m.mid}@${m.mu}@${m.mo}[${m.list.join(';')}]`).join(',');
+    return { digest: sha(payload), calories, meals: meals.size, items };
+  } finally { await c.end().catch(() => {}); }
+}
+async function reviewRow(run, user, monthKey) { return (await run.su.query('select * from consumer_review.monthly_nutrition_reviews where user_id=$1 and month_key=$2', [user.id, monthKey])).rows[0] ?? null; }
+const sameSource = (row, w) => !!row && row.source_digest === w.digest && Number(row.calories_total) === w.calories && row.meal_count === w.meals && row.item_count === w.items;
+async function beginAuthenticated(c, user) {
+  await c.query('begin isolation level read committed');
+  await c.query('set local role authenticated');
+  await c.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claims',$2,true)", [user.id, JSON.stringify({ sub: user.id, role: 'authenticated' })]);
+}
+const blockers = async (observer, pid) => (await observer.query('select pg_blocking_pids($1) b', [pid])).rows[0].b;
+// A review inside its own open transaction, while `change` commits from another connection. `hold` takes the scheduling lock and returns
+// a release function; `mustWait` means the review has to be seen waiting on that lock (else the schedule was not established: setup, never a verdict).
+async function interleave(run, user, { hold, mustWait, change }) {
+  const holder = await connectRun(run), worker = await connectRun(run), observer = await connectRun(run);
+  let pending = null, done = null, release = null;
+  try {
+    release = await hold(holder);
+    await beginAuthenticated(worker, user);
+    pending = worker.query(REVIEW_SQL).then(r => { done = { ok: true, value: r.rows[0].v }; }, e => { done = { ok: false, code: e.code, message: e.message }; });
+    const deadline = Date.now() + 20000; let waited = false;
+    while (!waited && !done && Date.now() < deadline) { if ((await blockers(observer, worker.processID)).includes(holder.processID)) waited = true; else await pause(50); }
+    if (!waited && !done) throw Error('SETUP_SCHEDULE_NOT_ESTABLISHED review neither waited nor finished');
+    if (mustWait && !waited) throw Error('SETUP_SCHEDULE_NOT_ESTABLISHED review did not wait on the held row');
+    await change();
+    if (waited && !(await blockers(observer, worker.processID)).includes(holder.processID)) throw Error('SETUP_SCHEDULE_LOST review left the barrier before the change committed');
+    await release(); release = null;
+    await pending;
+    if (!done.ok) throw Error(`SETUP_REVIEW_FAILED ${done.code} ${done.message}`);
+    await worker.query('commit');
+    return { waited, response: done.value };
+  } finally {
+    if (release) await release().catch(() => {});
+    if (pending) await pending.catch(() => {});
+    await worker.query('rollback').catch(() => {});
+    for (const c of [holder, worker, observer]) await c.end().catch(() => {});
+  }
+}
+const holdRow = (user, monthKey) => async c => {
+  await c.query('begin');
+  await c.query('select 1 from consumer_review.monthly_nutrition_reviews where user_id=$1 and month_key=$2 for update', [user.id, monthKey]);
+  return () => c.query('commit');
+};
+const holdBarrier = user => async c => {
+  await c.query('select pg_advisory_lock($1::int, hashtext($2::text))', [STATEMENT_BARRIER, user.id]);
+  return () => c.query('select pg_advisory_unlock($1::int, hashtext($2::text))', [STATEMENT_BARRIER, user.id]);
+};
+// D0 stored as revision 1; D1 committed and not yet reviewed; the schedule then commits D2. Either coherent state is a legal outcome, D1 digest with D2 aggregates is not; a replay
+// must then reach D2 with exactly the revisions the facts require, and a further replay must change nothing.
+async function snapshotCase(run, user, monthKey, { hold, mustWait, change }) {
+  const s = await monthStart(run, user.zone, monthKey);
+  await writeMeal(run, user, plus(s, 12 * HOUR), 100);
+  const first = await asUser(run, user.id);
+  if (!first.ok) throw Error(`SETUP_FIRST_REVIEW ${first.code}`);
+  await writeMeal(run, user, plus(s, 36 * HOUR), 50);
+  const d0 = await reviewRow(run, user, monthKey), d1 = await witness(run, user, monthKey);
+  let d2 = null;
+  const ran = await interleave(run, user, { hold, mustWait, change: async () => { await change(s); d2 = await witness(run, user, monthKey); } });
+  const stored = await reviewRow(run, user, monthKey), after = await witness(run, user, monthKey);
+  const outcome = sameSource(stored, d1) ? 'D1' : sameSource(stored, d2) ? 'D2' : 'MIXED';
+  const answered = byMonth(ran.response)[monthKey], responseMatches = !!answered && answered.mealCount === stored?.meal_count && Number(answered.nutrients?.calories?.total ?? 0) === Number(stored?.calories_total);
+  const replay1 = await asUser(run, user.id), r1 = await reviewRow(run, user, monthKey);
+  const replay2 = await asUser(run, user.id), r2 = await reviewRow(run, user, monthKey);
+  const pass = outcome !== 'MIXED' && responseMatches && d0.revision === 1 && stored.revision === 2 && after.digest === d2.digest && replay1.ok && replay2.ok && sameSource(r1, d2)
+    && r1.revision === stored.revision + (outcome === 'D1' ? 1 : 0) && (outcome === 'D1' || r1.computed_at.getTime() === stored.computed_at.getTime())
+    && r2.revision === r1.revision && r2.computed_at.getTime() === r1.computed_at.getTime() && r2.source_digest === r1.source_digest;
+  const brief = r => r && { revision: r.revision, digest: r.source_digest, calories: r.calories_total, meals: r.meal_count, items: r.item_count, computedAt: r.computed_at };
+  return { pass, outcome, waited: ran.waited, responseMatches, d0: brief(d0), d1, d2, stored: brief(stored), after, replay1: brief(r1), replay2: brief(r2) };
+}
+
+GATES.P08_WRITER_AND_REFRESH_SHARE_ONE_SOURCE_SNAPSHOT = async run => {
+  const addFifty = user => s => writeMeal(run, user, plus(s, 60 * HOUR), 50);
+  const l = USERS.L, lm = (await windowMonths(run, l.zone))[5];
+  const rowHeld = await snapshotCase(run, l, lm, { hold: holdRow(l, lm), mustWait: true, change: addFifty(l) });
+  const m = USERS.M, mm = (await windowMonths(run, m.zone))[5];
+  const betweenReads = await snapshotCase(run, m, mm, { hold: holdBarrier(m), mustWait: false, change: addFifty(m) });
+  return R(rowHeld.pass && betweenReads.pass, { rowHeld, betweenReads });
+};
+
+GATES.P09_CORRECTION_EMPTIED_MONTH_RESEND_AND_WRITER_STORM = async run => {
+  const n = USERS.N, nm = (await windowMonths(run, n.zone))[3];
+  const correction = await snapshotCase(run, n, nm, { hold: holdRow(n, nm), mustWait: true, change: async () => { await run.su.query("update public.meal_record_items set nutrition_snapshot='{\"calories\":300}'::jsonb, updated_at=now() + interval '1 second' where user_id=$1", [n.id]); } });
+  const o = USERS.O, om = (await windowMonths(run, o.zone))[4];
+  const emptied = await snapshotCase(run, o, om, { hold: holdRow(o, om), mustWait: true, change: async () => { await run.su.query("update public.meal_records set deleted_at=now(), updated_at=now() + interval '1 second' where user_id=$1", [o.id]); } });
+  // Normal concurrency: each round commits one authenticated writer alongside three reviews. A stored row may lag one round, never mix two.
+  const q = USERS.Q, qm = (await windowMonths(run, q.zone))[5], s = await monthStart(run, q.zone, qm), rounds = [];
+  let prior = null, reviewsOk = true, everyRoundCoherent = true;
+  for (let i = 0; i < 6; i++) {
+    const [, ...reviews] = await Promise.all([writeMeal(run, q, plus(s, (i + 1) * 3 * HOUR), 10 * (i + 1)), asUser(run, q.id), asUser(run, q.id), asUser(run, q.id)]);
+    const w = await witness(run, q, qm), row = await reviewRow(run, q, qm);
+    const coherent = sameSource(row, w) || (prior ? sameSource(row, prior) : row === null);
+    reviewsOk &&= reviews.every(r => r.ok); everyRoundCoherent &&= coherent;
+    rounds.push({ round: i, coherent, digest: row?.source_digest ?? null, revision: row?.revision ?? null, witness: w }); prior = w;
+  }
+  const settled = await asUser(run, q.id), r1 = await reviewRow(run, q, qm), replay = await asUser(run, q.id), r2 = await reviewRow(run, q, qm);
+  // Safe resend: the same request id twice is one meal, so the second review writes nothing.
+  const at = plus(s, 30 * HOUR), request = '5c0d0c5e-7b1f-4d55-9f0a-2d6f0b4f7a11', resendSql = "select public.create_current_user_meal_record_v2('lunch',$1::timestamptz,$2::date,$3::uuid,$4::text,'r1a resend',null,'manual',$5::jsonb) v", resendArgs = [at, zoneDate(at, q.zone), request, q.zone, JSON.stringify([{ displayName: 'r1a resend', nutrition: { calories: 75 } }])];
+  const sent = await asUser(run, q.id, resendSql, resendArgs); await asUser(run, q.id); const r3 = await reviewRow(run, q, qm), w3 = await witness(run, q, qm);
+  const resent = await asUser(run, q.id, resendSql, resendArgs); await asUser(run, q.id); const r4 = await reviewRow(run, q, qm), w4 = await witness(run, q, qm);
+  if (!sent.ok || !resent.ok) throw Error(`SETUP_RESEND ${sent.code ?? resent.code}`);
+  const storm = settled.ok && replay.ok && reviewsOk && everyRoundCoherent && sameSource(r1, prior) && r2.revision === r1.revision && r2.computed_at.getTime() === r1.computed_at.getTime() && r1.revision <= 7;
+  const resend = sameSource(r3, w3) && w3.digest === w4.digest && r4.revision === r3.revision && r4.computed_at.getTime() === r3.computed_at.getTime();
+  return R(correction.pass && emptied.pass && storm && resend, { correction, emptied, rounds, finalRevision: r1?.revision, storm, resend });
+};
+
 GATES.N01_OWNER_ISOLATION_AND_NO_OWNER_PARAMETER = async run => {
   const a = USERS.A, b = USERS.B, months = await windowMonths(run, b.zone), s = await monthStart(run, b.zone, months[5]);
   const mine = [await addMeal(run, b, plus(s, 9 * HOUR), [{ n: { calories: 77, protein: 7 } }])];
@@ -451,6 +583,21 @@ GATES.S01_STATIC_SCOPE_OF_THE_MIGRATION = async () => {
     && !/retention_(capture|entitlement|acquisition|seal|billing|internal)/i.test(code) && !/\b(score|grade|rating)\b/i.test(code.replace(/'score', null/, ''))
     && !/subscription_entitlements|entitlement_state_at|rolsuper|create role/i.test(code) && /security definer/i.test(code) && /consumer_core_eligible\(\)/.test(code) && /auth\.uid\(\)/.test(code);
   return R(ok, { grants, sha256: sha(fs.readFileSync(path.join(ROOT, 'supabase/migrations', R1A_MIGRATION))) });
+};
+
+// A live interleaving can only expose a second read if a barrier sits between the two reads, so a future two-statement refresh is also refused by shape: the row lock, then one statement that alone reads the details.
+function refreshReadShape(code) {
+  const body = code.slice(code.indexOf('create function consumer_review.refresh_month'), code.indexOf('create function consumer_review.month_json'));
+  const lock = body.indexOf('for update'), head = body.indexOf('  with meals as ('), tail = body.indexOf('  into a;');
+  const statement = head >= 0 && tail > head ? body.slice(head, tail).replace(/'[^']*'/g, "''") : '';
+  const reads = [...body.matchAll(/\bpublic\.meal_record(s|_items)\b/g)].map(m => m[0]).sort();
+  return { lockBeforeRead: lock >= 0 && lock < head, oneStatement: statement.length > 0 && !statement.includes(';'), digestInStatement: statement.includes('src_digest'), reads, ok: lock >= 0 && lock < head && statement.length > 0 && !statement.includes(';') && statement.includes('src_digest') && reads.join() === 'public.meal_record_items,public.meal_records' };
+}
+GATES.S02_REFRESH_READS_THE_DETAILS_IN_ONE_STATEMENT = async () => {
+  const code = fs.readFileSync(path.join(ROOT, 'supabase/migrations', R1A_MIGRATION), 'utf8').split('\n').filter(l => !/^\s*--/.test(l)).join('\n');
+  const lockLine = '  select * into v_row from consumer_review.monthly_nutrition_reviews where user_id = p_user and month_key = p_month_key for update;\n', second = '  select count(*) into v_has from public.meal_records m where m.user_id = p_user;\n';
+  const shapes = { product: refreshReadShape(code), secondReadBefore: refreshReadShape(code.replace('  with meals as (', () => second + '  with meals as (')), secondReadAfter: refreshReadShape(code.replace('  into a;\n', () => '  into a;\n' + second)), lockAfterRead: refreshReadShape(code.replace(lockLine, '').replace('  into a;\n', () => '  into a;\n' + lockLine)) };
+  return R(shapes.product.ok && !shapes.secondReadBefore.ok && !shapes.secondReadAfter.ok && !shapes.lockAfterRead.ok, shapes);
 };
 
 // ---- the exact successor record (no cluster): exact => record and the older chain complete; any tampered/partial/mixed state => invalid ----
