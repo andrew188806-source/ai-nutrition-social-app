@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {entw1FilesState,entw1PredecessorGit,ENTW1_FILES,ENTW1_MIGRATION} from './consumer-retention-entw1-exact-successor.mjs';
+import {r1aFilesState,r1aPredecessorGit,R1A_MIGRATION} from './consumer-monthly-review-exact-successor.mjs';
 import {ph1FilesState,ph1PredecessorGit,PH1_FILES,PH1_MIGRATION} from './s2-ph1-exact-successor.mjs';
 
 import {act2FilesState,act2PredecessorGit,ACT2_FILES,ACT2_MIGRATION} from './s2-act2-exact-successor.mjs';
@@ -279,11 +280,12 @@ export async function baseline(cl,rec,{legacy=false}={}){
   // Exact successor recognition: the original 143-file inventory (the retention migration is file 143), followed by an EXACT ORDERED tail of pinned forward migrations. No tail file is assumed to be last:
   // the accepted tails are [], [capture], [capture, ENT0], [capture, ENT0, origin demo migration] and [capture, ENT0, origin demo migration, ENT1-A]; the demo migration sorts after ENT0 and the ENT1-A migration after the demo
   // migration. Each tail file is pinned by sha256.
-  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256,[PH1_MIGRATION]:PH1_MIGRATION_SHA256,[ENTW1_MIGRATION]:ENTW1_MIGRATION_SHA256};
+  const tailPins={[CAPTURE_SUCCESSOR]:CAPTURE_SUCCESSOR_SHA256,[ENT0_MIGRATION]:ENT0_MIGRATION_SHA256,[DEMO_MIGRATION]:DEMO_MIGRATION_SHA256,[ACQ_MIGRATION]:ACQ_MIGRATION_SHA256,[SEAL_MIGRATION]:SEAL_MIGRATION_SHA256,[BILLING_MIGRATION]:BILLING_MIGRATION_SHA256,...SOCIAL_MIGRATION_SHA256,[ACT2_MIGRATION]:ACT2_MIGRATION_SHA256,[PH1_MIGRATION]:PH1_MIGRATION_SHA256,[ENTW1_MIGRATION]:ENTW1_MIGRATION_SHA256,[R1A_MIGRATION]:R1A_MIGRATION_SHA256};
   const tails=[[],[CAPTURE_SUCCESSOR],[CAPTURE_SUCCESSOR,ENT0_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION],[CAPTURE_SUCCESSOR,ENT0_MIGRATION,DEMO_MIGRATION,ACQ_MIGRATION,...SOCIAL_MIGRATIONS,SEAL_MIGRATION,BILLING_MIGRATION]];
   if(isAct2Migration(ACT2_MIGRATION))tails.push([...tails.at(-1),ACT2_MIGRATION]);
   if(activePH1Inventory())tails.push([...tails.at(-1),PH1_MIGRATION]);
   if(activeEntw1Inventory())tails.push([...tails.at(-1),ENTW1_MIGRATION]);
+  if(activeR1aInventory())tails.push([...tails.at(-1),R1A_MIGRATION]);
   const tail=tails.find(t=>files.length===143+t.length&&files.slice(143).join('|')===t.join('|')&&t.every(n=>sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))===tailPins[n]));
   if(!tail||files[142]!==MIGRATION)throw Error('MIGRATION_INVENTORY');
   const predecessors=files.slice(0,142);rec.write('migration-inventory.json',files.map(n=>({path:n,sha256:sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',n)))})));
@@ -1271,7 +1273,7 @@ function recoverySuccessorStateWithEdge(git){
 }
 
 function withAct2TailBeforeEntw1(tail){const prior=isAct2Migration(ACT2_MIGRATION)?[...tail,ACT2_MIGRATION]:tail;return activePH1Inventory()?[...prior,PH1_MIGRATION]:prior;}
-export function withAct2Tail(tail){const prior=withAct2TailBeforeEntw1(tail);return activeEntw1Inventory()?[...prior,ENTW1_MIGRATION]:prior;}
+export function withAct2Tail(tail){const prior0=withAct2TailBeforeEntw1(tail),prior=activeEntw1Inventory()?[...prior0,ENTW1_MIGRATION]:prior0;return activeR1aInventory()?[...prior,R1A_MIGRATION]:prior;}
 
 
 // Integration: PH1 is the outermost exact overlay on the accepted ENT-F2/E02 layer.
@@ -1310,7 +1312,7 @@ export function isPH1Migration(name){return name===PH1_MIGRATION&&activePH1Inven
 export const ENTW1_MODULE_BLOB='2696d53e70116e29988fe4274943e9fdf94ebb34';
 export const ENTW1_MIGRATION_SHA256='7dacab45b97cadd359e073bfb31c0f6d73e9b2abd001464c2e24ec06f9683c7e';
 export const ENTW1_MODULE_PATH='scripts/consumer-retention-entw1-exact-successor.mjs';
-export function checkedEntw1State(git){
+function checkedEntw1StateRaw(git){
  const staged=git(['ls-files','--stage','--',ENTW1_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,ENTW1_MODULE_PATH));
  if(!present&&!staged)return {state:'base',paths:[],violations:[]};
  if(staged!=='100644 '+ENTW1_MODULE_BLOB+' 0\t'+ENTW1_MODULE_PATH||git(['hash-object','--',ENTW1_MODULE_PATH]).trim()!==ENTW1_MODULE_BLOB)return {state:'invalid',paths:[],violations:['entw1:module-binding']};
@@ -1318,24 +1320,58 @@ export function checkedEntw1State(git){
  if(files.state==='record'&&sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',ENTW1_MIGRATION)))!==ENTW1_MIGRATION_SHA256)return {state:'invalid',paths:[],violations:['entw1:migration-sha256']};
  return files;
 }
-export function checkedPH1State(git){
- const w=checkedEntw1State(git);if(w.state==='invalid')return w;
+function checkedPH1StateWithEntw1(git){
+ const w=checkedEntw1StateRaw(git);if(w.state==='invalid')return w;
  return checkedPH1StateRaw(w.state==='record'?entw1PredecessorGit(git):git);
 }
-export function checkedAct2State(git){
- const w=checkedEntw1State(git);if(w.state==='invalid')return w;
+function checkedAct2StateWithEntw1(git){
+ const w=checkedEntw1StateRaw(git);if(w.state==='invalid')return w;
  if(w.state!=='record')return checkedAct2StateWithPH1(git);
  const view=entw1PredecessorGit(git),prior=checkedAct2StateWithPH1(view),complete=recoverySuccessorStateWithPH1(view);
  if(prior.state!=='record'||!complete.exempt||complete.ph1!=='record'||complete.edge!=='record')return {state:'invalid',paths:[],violations:['entw1:requires-accepted-ph1-entf2-act2',...(complete.violations??[])]};
  return {...prior,paths:[...new Set([...prior.paths,...w.paths,ENTW1_MODULE_PATH])]};
 }
-export function recoverySuccessorState(git){
- const w=checkedEntw1State(git);if(w.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:w.violations};
+function recoverySuccessorStateWithEntw1(git){
+ const w=checkedEntw1StateRaw(git);if(w.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:w.violations};
  const prior=recoverySuccessorStateWithPH1(w.state==='record'?entw1PredecessorGit(git):git);
  if(w.state==='record'&&(!prior.exempt||prior.ph1!=='record'||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['entw1:requires-complete-ph1-predecessor',...(prior.violations??[])]};
  return w.state==='record'?{...prior,entw1:'record',paths:[...new Set([...prior.paths,...w.paths,ENTW1_MODULE_PATH])]}:prior;
 }
 function activeEntw1Inventory(){return recoverySuccessorState(act2RootGit).entw1==='record';}
 export function isEntw1Migration(name){return name===ENTW1_MIGRATION&&activeEntw1Inventory();}
+
+// R1-A (owner-private monthly nutrition review v1): the OUTERMOST exact overlay on the accepted ENT-W1 layer. Hash DAG: root -> R1-A module -> exact leaves (no root or self
+// hash in any leaf). Only when the module binding AND every R1-A leaf are exact is the complete older chain (ENT-W1 -> PH1 -> ENT-F2 -> S2-ACT2 -> ENT-F1 -> ... -> origin) evaluated
+// UNCHANGED on the R1-A predecessor view, and it must then be complete (entw1, ph1, edge, act2 and billing all 'record'); a partial or mismatching R1-A state is 'invalid'.
+// Without the R1-A module everything is exactly as before (the older functions are called on the real index/worktree).
+export const R1A_MODULE_BLOB='8f2a748cb4af1704bdf86dc034023ea691cb30fd';
+export const R1A_MIGRATION_SHA256='ae2d206ab0ff8e3a602d5c37f256f1ca4855d56e5dc9633fc540f49b2960a9ab';
+export const R1A_MODULE_PATH='scripts/consumer-monthly-review-exact-successor.mjs';
+export function checkedR1aState(git){
+ const staged=git(['ls-files','--stage','--',R1A_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,R1A_MODULE_PATH));
+ if(!present&&!staged)return {state:'base',paths:[],violations:[]};
+ if(staged!=='100644 '+R1A_MODULE_BLOB+' 0\t'+R1A_MODULE_PATH||git(['hash-object','--',R1A_MODULE_PATH]).trim()!==R1A_MODULE_BLOB)return {state:'invalid',paths:[],violations:['r1a:module-binding']};
+ const files=r1aFilesState(git,ROOT);
+ if(files.state==='record'&&sha(fs.readFileSync(path.join(ROOT,'supabase/migrations',R1A_MIGRATION)))!==R1A_MIGRATION_SHA256)return {state:'invalid',paths:[],violations:['r1a:migration-sha256']};
+ return files;
+}
+const r1aView=(git,r)=>r.state==='record'?r1aPredecessorGit(git):git;
+export function checkedEntw1State(git){const r=checkedR1aState(git);if(r.state==='invalid')return r;return checkedEntw1StateRaw(r1aView(git,r));}
+export function checkedPH1State(git){const r=checkedR1aState(git);if(r.state==='invalid')return r;return checkedPH1StateWithEntw1(r1aView(git,r));}
+export function checkedAct2State(git){
+ const r=checkedR1aState(git);if(r.state==='invalid')return r;
+ if(r.state!=='record')return checkedAct2StateWithEntw1(git);
+ const view=r1aPredecessorGit(git),prior=checkedAct2StateWithEntw1(view),complete=recoverySuccessorStateWithEntw1(view);
+ if(prior.state!=='record'||!complete.exempt||complete.entw1!=='record'||complete.ph1!=='record'||complete.edge!=='record')return {state:'invalid',paths:[],violations:['r1a:requires-accepted-entw1-ph1-entf2-act2',...(complete.violations??[])]};
+ return {...prior,paths:[...new Set([...prior.paths,...r.paths,R1A_MODULE_PATH])]};
+}
+export function recoverySuccessorState(git){
+ const r=checkedR1aState(git);if(r.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:r.violations};
+ const prior=recoverySuccessorStateWithEntw1(r1aView(git,r));
+ if(r.state==='record'&&(!prior.exempt||prior.entw1!=='record'||prior.ph1!=='record'||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['r1a:requires-complete-entw1-predecessor',...(prior.violations??[])]};
+ return r.state==='record'?{...prior,r1a:'record',paths:[...new Set([...prior.paths,...r.paths,R1A_MODULE_PATH])]}:prior;
+}
+function activeR1aInventory(){return recoverySuccessorState(act2RootGit).r1a==='record';}
+export function isR1aMigration(name){return name===R1A_MIGRATION&&activeR1aInventory();}
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){let code;try{code=await runSmoke(options());}catch(e){console.error(e.stack);code=2;}process.exitCode=code;}
