@@ -21,6 +21,7 @@ import * as EDGE from './consumer-retention-billing-edge-smoke.mjs';
 import * as BS from './consumer-retention-billing-smoke.mjs';
 import { ENTW1_FILES, ENTW1_WIRING, ENTW1_MIGRATION, ENTW1_BASE_COMMIT, entw1PredecessorGit } from './consumer-retention-entw1-exact-successor.mjs';
 import { PH1_MIGRATION } from './s2-ph1-exact-successor.mjs';
+import { R1A_MIGRATION } from './consumer-monthly-review-exact-successor.mjs';
 
 const arg = name => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const ROOT = P.ROOT;
@@ -978,14 +979,17 @@ NEW.A01_START_STATE_HAS_A_BOUNDED_LIFECYCLE = async cl => fresh(cl, 'A01L', asyn
 });
 NEW.F01_ENTW1_EXACT_SUCCESSOR_AND_INVENTORY = async () => {
   const w = P.checkedEntw1State(rootGit), chain = P.recoverySuccessorState(rootGit), act2 = P.checkedAct2State(rootGit);
-  const migrations = fs.readdirSync(path.join(ROOT, 'supabase/migrations')).filter(n => n.endsWith('.sql')).sort();
-  const changed = [...new Set([...rootGit(['diff', '--name-only', ENTW1_BASE_COMMIT]).split('\n').filter(Boolean), ...rootGit(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)])].sort();
+  // R1-A (the outermost exact successor above ENT-W1): only with its complete exact record are its own migration and its non-ENT-W1 paths set aside; the ENT-W1 rows below are unchanged.
+  const r1a = P.checkedR1aState(rootGit), r1aQualified = r1a.state === 'record' && chain.r1a === 'record';
+  const r1aOnly = new Set(r1aQualified ? [...r1a.paths.filter(p => !(p in ENTW1_FILES)), P.R1A_MODULE_PATH] : []);
+  const migrations = fs.readdirSync(path.join(ROOT, 'supabase/migrations')).filter(n => n.endsWith('.sql') && !(r1aQualified && n === R1A_MIGRATION)).sort();
+  const changed = [...new Set([...rootGit(['diff', '--name-only', ENTW1_BASE_COMMIT]).split('\n').filter(Boolean), ...rootGit(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)])].filter(p => !r1aOnly.has(p)).sort();
   const expected = [...Object.keys(ENTW1_FILES), P.ENTW1_MODULE_PATH, 'scripts/consumer-retention-persistence-smoke.mjs'].sort();
   const baseTruth = Object.entries(ENTW1_FILES).filter(([p, f]) => { let at = null; try { at = rootGit(['rev-parse', ENTW1_BASE_COMMIT + ':' + p]).trim(); } catch { at = null; } return at !== f.base; }).map(([p]) => p);
   const migSha = sha256(fs.readFileSync(path.join(ROOT, 'supabase/migrations', ENTW1_MIGRATION)));
   const productDrift = Object.entries(CHECKPOINT_PRODUCT_SHA256).filter(([p, h]) => sha256(fs.readFileSync(path.join(ROOT, p))) !== h).map(([p]) => p);
   const config = { now: rootGit(['hash-object', '--', 'supabase/config.toml']).trim(), base: rootGit(['rev-parse', ENTW1_BASE_COMMIT + ':supabase/config.toml']).trim() };
-  const tail = P.withAct2Tail([]);
+  const tail0 = P.withAct2Tail([]), tail = r1aQualified && tail0.at(-1) === R1A_MIGRATION ? tail0.slice(0, -1) : tail0;
   const rows = {
     entw1Record: w.state === 'record',
     chainComplete: chain.exempt === true && chain.entw1 === 'record' && chain.ph1 === 'record' && chain.edge === 'record' && chain.act2 === 'record' && chain.billing === 'record',
@@ -994,7 +998,7 @@ NEW.F01_ENTW1_EXACT_SUCCESSOR_AND_INVENTORY = async () => {
     migrationPinned: migSha === P.ENTW1_MIGRATION_SHA256, migrationIsNotTheRejectedA01Bytes: migSha !== CHECKPOINT_MIGRATION_SHA256, productIsCheckpointBytes: productDrift.length === 0,
     diffVsMainIsExactlyTheRecord: JSON.stringify(changed) === JSON.stringify(expected), recordedBasesAreTrue: baseTruth.length === 0, configTomlUnchanged: config.now === config.base
   };
-  return R(Object.values(rows).every(Boolean), { rows, changed, expected, baseTruth, productDrift, migSha, tail: tail.slice(-3), chain: { state: chain.state, entw1: chain.entw1, ph1: chain.ph1, edge: chain.edge, act2: chain.act2, billing: chain.billing, violations: chain.violations }, w: { state: w.state, violations: w.violations } });
+  return R(Object.values(rows).every(Boolean), { rows, r1aQualified, changed, expected, baseTruth, productDrift, migSha, tail: tail.slice(-3), chain: { state: chain.state, entw1: chain.entw1, ph1: chain.ph1, edge: chain.edge, act2: chain.act2, billing: chain.billing, violations: chain.violations }, w: { state: w.state, violations: w.violations } });
 };
 // Wrapper over the real git that changes what one path reports (index blob and/or worktree hash): the "tampered / partial / mixed" states, without touching any byte on disk.
 const lyingGit = (git, { stage = {}, hash = {} }) => args => {
@@ -1178,7 +1182,12 @@ NEW.G17_FULL_MIGRATION_CHAIN_APPLIES_AND_ONE_PAID_SWEEP_RECORDS = async () => {
     const id = await anchor(ctx, o, { id: rid(1701), t0Ms: w.now - DAY });
     const r = await sweep(M, nodeDriver(dbUrl(ctx, login), M.E));
     const got = await receipts(ctx);
-    const ok = applied.length === 12 && files.length === 154 && applied.at(-1).n === ENTW1_MIGRATION && applied.at(-1).by === 'supabase_admin' && applied.at(-2).n === PH1_MIGRATION
+    // With the exact R1-A record the chain has one more, ordinary-installer migration after ENT-W1; otherwise exactly as before.
+    const r1aQualified = P.recoverySuccessorState(rootGit).r1a === 'record';
+    const tailOk = r1aQualified
+      ? applied.length === 13 && files.length === 155 && applied.at(-1).n === R1A_MIGRATION && applied.at(-1).by === 'postgres' && applied.at(-2).n === ENTW1_MIGRATION && applied.at(-2).by === 'supabase_admin' && applied.at(-3).n === PH1_MIGRATION
+      : applied.length === 12 && files.length === 154 && applied.at(-1).n === ENTW1_MIGRATION && applied.at(-1).by === 'supabase_admin' && applied.at(-2).n === PH1_MIGRATION;
+    const ok = tailOk
       && post.login === false && post.members === 0 && post.cycle === '0' && post.fns === 4 && post.outside_refs === 0 && r.status === 'ok' && r.recorded === 1 && got.length === 1 && got[0].resource_id === id;
     return R(ok, { files: files.length, applied, post, sweep: r, receipts: got.map(x => x.resource_id) });
   } finally { if (cl) await cl.stop().catch(() => {}); }

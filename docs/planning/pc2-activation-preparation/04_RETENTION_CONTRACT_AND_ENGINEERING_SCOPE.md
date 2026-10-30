@@ -641,3 +641,24 @@ Actual tooling Node v22.23.1、TypeScript 5.9.3；compiler身份與raw hash沿�
 所有precommit gates通過後，依本輪授權stage exact四檔，核對staged bytes／inventory與scope外frozen entries，再只建立一個local corrective commit：`Fix retention timezone version consistency`。不得amend或第二commit；postcommit必重跑focused三項probes／23-case smoke及必要27 mutations、committed hashes／diffcheck／frozen proof，結果由最終報告記錄，不修改committed bytes補結果。
 
 這是corrective execution，不是獨立reacceptance。**R0-A維持BLOCKED，independent reacceptance PENDING**；完成本機commit與postgates後才可回READY_FOR_R0_A_REACCEPTANCE，不表示local acceptance PASS。PC-2 local acceptance維持通過；法律DRAFT / NOT ACTIVE，activation pending。R0-B/R0-C、R1–R5、quota、照片及其他副本期限、OD-15／TD-10/AU19／P-7與qualifiedreview保持原pending/OPEN。沒有push/fetch/deploy／remoteDB/Auth/Storage／外部設定或法律啟用。
+
+## 13. R1-A：月回顧 v1（本人私有月度營養摘要）— authorized local construction record（2026-10-30；**作者自測，不是 acceptance**）
+
+### 13.1 授權與核定內容
+- Owner 於 2026-10-30 採用 Q6 第一階段內容並授權 R1-A 隔離施工：本人私有月度營養摘要，不提供分數、等第或健康評價；顯示有紀錄天數、餐次、熱量／蛋白質／碳水／脂肪／纖維總量與「按有紀錄日」的平均（旁邊顯示紀錄天數）；無紀錄日不補 0；原始營養欄位缺失不當 0，分母與缺漏須揭露；當月標示進行中；明細仍存在時修改後重算並更新版本；不因裝置時區變動重新歸月。評分公式延後；本包**不宣稱完成月評分**。
+- 既有權益（Free 近六個月、Paid 取得之月報永久保留、降級隱藏）維持原核定政策（§2.1 D）。本包只驗證「近六個月」的摘要介面；**不**新增「所有等級僅限六個月」規則，不把 unknown 當 Free 或 Paid，不建立任何 grant（含永久 grant）。權益接線未完成，列於 §13.4。
+
+### 13.2 實作（一個新 migration、預設停用的 App 讀取）
+- `supabase/migrations/20261030120000_consumer_monthly_nutrition_review.sql`：新 schema `consumer_review`（runtime 角色無 USAGE）；只能追加的 `report_timezone_bindings`（v1 取自伺服器端 `consumer_profiles.timezone`，不接受 client 值；不提供變更路徑）；`monthly_nutrition_reviews`（每 owner×月一列，無評分欄位）；唯一 runtime 入口 `public.get_current_user_monthly_nutrition_review()`（SECURITY DEFINER，owner＝`auth.uid()`，先過 PC-2 `consumer_core_eligible()`，per-owner 交易鎖，伺服器時鐘決定當月）；只授予 `authenticated` EXECUTE。一般 consumer migration：不要求 superuser、不讀寫任何 retention schema。
+- 計算：完整伺服器讀取該 owner 未刪除的餐點與項目（無筆數上限），以綁定報表時區歸月；營養＝snapshot 五項 × `consumed_ratio`；每項分為 valid／missing（缺或 JSON null）／invalid（非非負數），只加總 valid，三者件數全部揭露；某營養素整月沒有 valid 值時總量與平均為 null（未知，不是 0）。來源摘要（每餐與每項的 id、updated_at、內容）不變則不寫入、版本不變；改變則整月從頭重算、版本＋1（不做增量累加）。沒有紀錄且沒有列的月份不建立列；既有列只更新、不刪除。
+- App：`apps/mobile/features/consumer-monthly-review/`（旗標 `EXPO_PUBLIC_TASTKIND_CONSUMER_MONTHLY_REVIEW_SOURCE`＋`…_LIVE_READ_OPT_IN`，預設停用）；`me.tsx` 停用時維持原畫面；一旦要求 live，示範的「本月評分／蛋白質達標／月評分卡」不再顯示，改為本人月回顧；來源不可用或設定不完整時顯示「暫時無法取得」，不回退示範值。runtime composition 與 provider 只新增 `monthlyReview` 一個欄位。
+
+### 13.3 將來明細消失後的可信月摘要（設計，**尚未實作**）
+- 現在：明細存在時，月摘要永遠可以從明細完整重算（R1-A 的唯一模式）。
+- 將來（R3 收合前置，未實作）：收合 executor 必須在同一權威交易中先呼叫同一個內部重算，確認該月 source digest 與最新列一致，再把該月標記為「明細已收合、摘要凍結」；之後的重算不得以殘缺明細覆寫凍結的摘要，晚到修正若指向已收合明細須拒絕或另立更正紀錄。本包沒有收合、凍結欄位或 executor，**不宣稱已完成**。
+
+### 13.4 權益未完成矩陣（本包不處理）
+Free 六月份顯示窗與 Paid 永久保存的判定、Paid 取得／升級的月報永久 grant、降級後隱藏與復訂重顯、較早月份的顯示、評分公式（Q6 第二階段）、收合／purge、Hosted 套用與啟用。
+
+### 13.5 驗證（作者自測）
+`scripts/consumer-monthly-review-smoke.mjs`（PG：完整前序鏈＋R1-A；本人隔離、月份／時區邊界、缺資料、重送／重算／併發、晚到修正、權限、核心閘；Node：旗標、嚴格 mapper、service、view model、畫面不顯示示範值、migration 靜態範圍）與 `scripts/consumer-monthly-review-mutations.mjs`（單點缺陷各有預先宣告的 detector）。信任鏈：R1-A 是 ENT-W1 之上新的最外層精確 successor（`scripts/consumer-monthly-review-exact-successor.mjs`，由 persistence smoke 釘住）。結果與 B 比較見 repository 外的交付報告。
