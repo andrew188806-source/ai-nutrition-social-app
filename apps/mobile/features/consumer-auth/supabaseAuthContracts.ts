@@ -49,6 +49,12 @@ export type SupabaseAuthClientLike = {
   exchangeCodeForSession?(code: string): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   getUser?(): Promise<SupabaseAuthResponseLike<{ user: SupabaseAuthUserLike | null }>>;
   updateUser?(attributes: { password: string }): Promise<SupabaseAuthResponseLike<{ user: SupabaseAuthUserLike | null }>>;
+  mfa?: {
+    getAuthenticatorAssuranceLevel(): Promise<SupabaseAuthResponseLike<{ currentLevel: "aal1" | "aal2" | null; nextLevel: "aal1" | "aal2" | null }>>;
+    listFactors(): Promise<SupabaseAuthResponseLike<{ totp: Array<{ id: string; status: string }> }>>;
+    challenge(input: { factorId: string }): Promise<SupabaseAuthResponseLike<{ id: string }>>;
+    verify(input: { factorId: string; challengeId: string; code: string }): Promise<SupabaseAuthResponseLike<unknown>>;
+  };
   signOut(options?: { scope: "local" | "global" | "others" }): Promise<SupabaseAuthResponseLike<Record<string, never>>>;
   refreshSession(): Promise<SupabaseAuthResponseLike<{ session: SupabaseSessionLike | null }>>;
   resetPasswordForEmail(email: string): Promise<SupabaseAuthResponseLike<Record<string, never>>>;

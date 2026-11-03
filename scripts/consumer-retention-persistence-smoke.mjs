@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {entw1FilesState,entw1PredecessorGit,ENTW1_FILES,ENTW1_MIGRATION} from './consumer-retention-entw1-exact-successor.mjs';
 import {r1aFilesState,r1aPredecessorGit,R1A_MIGRATION} from './consumer-monthly-review-exact-successor.mjs';
+import {authFilesState,authPredecessorGit} from './consumer-auth-recovery-exact-successor.mjs';
 import {ph1FilesState,ph1PredecessorGit,PH1_FILES,PH1_MIGRATION} from './s2-ph1-exact-successor.mjs';
 
 import {act2FilesState,act2PredecessorGit,ACT2_FILES,ACT2_MIGRATION} from './s2-act2-exact-successor.mjs';
@@ -1347,7 +1348,7 @@ export function isEntw1Migration(name){return name===ENTW1_MIGRATION&&activeEntw
 export const R1A_MODULE_BLOB='2919437241286e2fdbe260ecf793329d3a7852b2';
 export const R1A_MIGRATION_SHA256='8122a0c3086dc0b7df03da87b52ffc02bb2708ac414b36a7577937056fa1dbc7';
 export const R1A_MODULE_PATH='scripts/consumer-monthly-review-exact-successor.mjs';
-export function checkedR1aState(git){
+function checkedR1aStateBeforeAuth(git){
  const staged=git(['ls-files','--stage','--',R1A_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,R1A_MODULE_PATH));
  if(!present&&!staged)return {state:'base',paths:[],violations:[]};
  if(staged!=='100644 '+R1A_MODULE_BLOB+' 0\t'+R1A_MODULE_PATH||git(['hash-object','--',R1A_MODULE_PATH]).trim()!==R1A_MODULE_BLOB)return {state:'invalid',paths:[],violations:['r1a:module-binding']};
@@ -1356,20 +1357,50 @@ export function checkedR1aState(git){
  return files;
 }
 const r1aView=(git,r)=>r.state==='record'?r1aPredecessorGit(git):git;
-export function checkedEntw1State(git){const r=checkedR1aState(git);if(r.state==='invalid')return r;return checkedEntw1StateRaw(r1aView(git,r));}
-export function checkedPH1State(git){const r=checkedR1aState(git);if(r.state==='invalid')return r;return checkedPH1StateWithEntw1(r1aView(git,r));}
-export function checkedAct2State(git){
- const r=checkedR1aState(git);if(r.state==='invalid')return r;
+function checkedEntw1StateBeforeAuth(git){const r=checkedR1aStateBeforeAuth(git);if(r.state==='invalid')return r;return checkedEntw1StateRaw(r1aView(git,r));}
+function checkedPH1StateBeforeAuth(git){const r=checkedR1aStateBeforeAuth(git);if(r.state==='invalid')return r;return checkedPH1StateWithEntw1(r1aView(git,r));}
+function checkedAct2StateBeforeAuth(git){
+ const r=checkedR1aStateBeforeAuth(git);if(r.state==='invalid')return r;
  if(r.state!=='record')return checkedAct2StateWithEntw1(git);
  const view=r1aPredecessorGit(git),prior=checkedAct2StateWithEntw1(view),complete=recoverySuccessorStateWithEntw1(view);
  if(prior.state!=='record'||!complete.exempt||complete.entw1!=='record'||complete.ph1!=='record'||complete.edge!=='record')return {state:'invalid',paths:[],violations:['r1a:requires-accepted-entw1-ph1-entf2-act2',...(complete.violations??[])]};
  return {...prior,paths:[...new Set([...prior.paths,...r.paths,R1A_MODULE_PATH])]};
 }
-export function recoverySuccessorState(git){
- const r=checkedR1aState(git);if(r.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:r.violations};
+function recoverySuccessorStateBeforeAuth(git){
+ const r=checkedR1aStateBeforeAuth(git);if(r.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:r.violations};
  const prior=recoverySuccessorStateWithEntw1(r1aView(git,r));
  if(r.state==='record'&&(!prior.exempt||prior.entw1!=='record'||prior.ph1!=='record'||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['r1a:requires-complete-entw1-predecessor',...(prior.violations??[])]};
  return r.state==='record'?{...prior,r1a:'record',paths:[...new Set([...prior.paths,...r.paths,R1A_MODULE_PATH])]}:prior;
+}
+
+// AUTH-RECOVERY (consumer password recovery: AAL2/TOTP step-up and admin/staff refusal): the OUTERMOST exact overlay on the R1-A layer. Hash DAG: root -> AUTH module ->
+// exact leaves (no root or self hash in any leaf). Only when the module binding AND every AUTH leaf are exact is the complete older chain (R1-A -> ENT-W1 -> PH1 -> ...) evaluated
+// UNCHANGED on the AUTH predecessor view, and it must then be complete (r1a, entw1, ph1, edge, act2 and billing all 'record'); a partial or mismatching AUTH state is 'invalid'.
+// Without the AUTH module everything is exactly as before (the older functions are called on the real index/worktree).
+export const AUTH_MODULE_BLOB='663bf5789bce33a3c2404dde27e2adb2a6f5605c';
+export const AUTH_MODULE_PATH='scripts/consumer-auth-recovery-exact-successor.mjs';
+export function checkedAuthState(git){
+ const staged=git(['ls-files','--stage','--',AUTH_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,AUTH_MODULE_PATH));
+ if(!present&&!staged)return {state:'base',paths:[],violations:[]};
+ if(staged!=='100644 '+AUTH_MODULE_BLOB+' 0\t'+AUTH_MODULE_PATH||git(['hash-object','--',AUTH_MODULE_PATH]).trim()!==AUTH_MODULE_BLOB)return {state:'invalid',paths:[],violations:['auth:module-binding']};
+ return authFilesState(git,ROOT);
+}
+const authView=(git,a)=>a.state==='record'?authPredecessorGit(git):git;
+export function checkedR1aState(git){const a=checkedAuthState(git);if(a.state==='invalid')return a;return checkedR1aStateBeforeAuth(authView(git,a));}
+export function checkedEntw1State(git){const a=checkedAuthState(git);if(a.state==='invalid')return a;return checkedEntw1StateBeforeAuth(authView(git,a));}
+export function checkedPH1State(git){const a=checkedAuthState(git);if(a.state==='invalid')return a;return checkedPH1StateBeforeAuth(authView(git,a));}
+export function checkedAct2State(git){
+ const a=checkedAuthState(git);if(a.state==='invalid')return a;
+ if(a.state!=='record')return checkedAct2StateBeforeAuth(git);
+ const view=authPredecessorGit(git),prior=checkedAct2StateBeforeAuth(view),complete=recoverySuccessorStateBeforeAuth(view);
+ if(prior.state!=='record'||!complete.exempt||complete.r1a!=='record'||complete.entw1!=='record'||complete.ph1!=='record'||complete.edge!=='record')return {state:'invalid',paths:[],violations:['auth:requires-accepted-r1a-entw1-ph1-entf2-act2',...(complete.violations??[])]};
+ return {...prior,paths:[...new Set([...prior.paths,...a.paths,AUTH_MODULE_PATH])]};
+}
+export function recoverySuccessorState(git){
+ const a=checkedAuthState(git);if(a.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:a.violations};
+ const prior=recoverySuccessorStateBeforeAuth(authView(git,a));
+ if(a.state==='record'&&(!prior.exempt||prior.r1a!=='record'||prior.entw1!=='record'||prior.ph1!=='record'||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['auth:requires-complete-r1a-predecessor',...(prior.violations??[])]};
+ return a.state==='record'?{...prior,auth:'record',paths:[...new Set([...prior.paths,...a.paths,AUTH_MODULE_PATH])]}:prior;
 }
 function activeR1aInventory(){return recoverySuccessorState(act2RootGit).r1a==='record';}
 export function isR1aMigration(name){return name===R1A_MIGRATION&&activeR1aInventory();}

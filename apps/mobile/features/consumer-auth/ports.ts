@@ -25,6 +25,9 @@ export interface ConsumerAuthPort {
   sendEmailCode?(input: { email: string; purpose: "login" | "signup" }): Promise<ConsumerAuthResult<void>>;
   verifyEmailCode?(input: { email: string; token: string }): Promise<ConsumerAuthResult<ConsumerAuthSession>>;
   setOwnPassword?(input: { expectedUserId: string; password: string }): Promise<ConsumerAuthResult<void>>;
+  checkPasswordRecoveryEligibility?(input: { expectedUserId: string }): Promise<ConsumerAuthResult<void>>;
+  getPasswordStepUpState?(): Promise<ConsumerAuthResult<{ totpRequired: boolean }>>;
+  verifyTotpStepUp?(input: { expectedUserId: string; code: string }): Promise<ConsumerAuthResult<void>>;
   signOut(): Promise<ConsumerAuthResult<void>>;
   refreshSession(): Promise<ConsumerAuthResult<ConsumerAuthSession | null>>;
   sendPasswordReset(input: ConsumerPasswordResetInput): Promise<ConsumerAuthResult<void>>;

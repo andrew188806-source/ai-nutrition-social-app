@@ -14,6 +14,7 @@ import {
   createAsyncStorageConsumerAuthStorage,
   createConsumerAuthScaffold,
   createOfficialSupabaseConsumerSdkLoader,
+  createPasswordRecoveryGuard,
   createReactNativeConsumerAppStateSource,
   deriveLiveSupabaseClientFlags,
   getConsumerRuntimeFlags,
@@ -481,7 +482,8 @@ export function createConsumerRuntimeComposition(options: ConsumerRuntimeComposi
             if (value.demoEnabled) return true; // Normal Auth account only; no draft confirmation or legal consent.
           }
           const r = await onboardingClient.rpc("get_consumer_required_documents"); return !r.error && parseRequiredBundle(r.data) !== null;
-        }
+        },
+        passwordRecoveryGuard: createPasswordRecoveryGuard(onboardingClient)
       });
       const scaffold = createConsumerAuthScaffold({
         flags: authFlags,

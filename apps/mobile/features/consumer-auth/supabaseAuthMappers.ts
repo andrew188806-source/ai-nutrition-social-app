@@ -48,6 +48,7 @@ export function mapSupabaseAuthEvent(event: SupabaseAuthEventLike, session: Supa
     case "SIGNED_OUT":
       return { type: "signedOut", session: null };
     case "TOKEN_REFRESHED":
+    case "MFA_CHALLENGE_VERIFIED": // same identity, new (AAL2) tokens: a session replacement, not an unknown event
       return { type: "tokenRefreshed", session: mappedSession };
     case "USER_UPDATED":
       return { type: "userUpdated", session: mappedSession };

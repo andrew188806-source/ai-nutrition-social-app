@@ -15,7 +15,8 @@ import child from 'node:child_process';
 import { createHash, createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { ROOT, recorder, sha, uuid, checkedPH1State, recoverySuccessorState, checkedEntw1State, ENTW1_MODULE_PATH, checkedR1aState, R1A_MODULE_PATH } from './consumer-retention-persistence-smoke.mjs';
+import { ROOT, recorder, sha, uuid, checkedPH1State, recoverySuccessorState, checkedEntw1State, ENTW1_MODULE_PATH, checkedR1aState, R1A_MODULE_PATH, checkedAuthState, AUTH_MODULE_PATH } from './consumer-retention-persistence-smoke.mjs';
+import { authPredecessorGit } from './consumer-auth-recovery-exact-successor.mjs';
 import { entw1PredecessorGit } from './consumer-retention-entw1-exact-successor.mjs';
 import { r1aPredecessorGit } from './consumer-monthly-review-exact-successor.mjs';
 import { options, frozenProof, inventoryProof } from './consumer-retention-capture-smoke.mjs';
@@ -995,12 +996,15 @@ Object.assign(GATES, {
     // R1-A (outermost, on top of ENT-W1): only with its complete exact record are its leaves and its one migration overlaid and the ENT-W1 view taken on the R1-A predecessor view.
     const rawGit=args=>gitRun(args),r1a=checkedR1aState(rawGit),w=checkedEntw1State(rawGit),ph1=checkedPH1State(rawGit),chain=recoverySuccessorState(rawGit);
     const r1aQualified=r1a.state==='record'&&chain.r1a==='record';
-    const base0=r1aQualified?r1aPredecessorGit(rawGit):rawGit;
+    // AUTH-RECOVERY (outermost, on top of R1-A; no migration): only with its complete exact record are its leaves overlaid and the R1-A view taken on the AUTH predecessor view.
+    const auth=checkedAuthState(rawGit),authQualified=auth.state==='record'&&chain.auth==='record';
+    const authView=authQualified?authPredecessorGit(rawGit):rawGit;
+    const base0=r1aQualified?r1aPredecessorGit(authView):authView;
     const entw1Qualified=w.state==='record'&&chain.entw1==='record';
     const view=entw1Qualified?entw1PredecessorGit(base0):base0;
     const qualified=ph1.state==='record'&&chain.ph1==='record'&&chain.edge==='record';
     const projected=qualified?ph1PredecessorGit(view):view;
-    const overlay=new Set([...(qualified?[...ph1.paths,'scripts/s2-ph1-exact-successor.mjs']:[]),...(entw1Qualified?[...w.paths,ENTW1_MODULE_PATH]:[]),...(r1aQualified?[...r1a.paths,R1A_MODULE_PATH]:[])]);
+    const overlay=new Set([...(qualified?[...ph1.paths,'scripts/s2-ph1-exact-successor.mjs']:[]),...(entw1Qualified?[...w.paths,ENTW1_MODULE_PATH]:[]),...(r1aQualified?[...r1a.paths,R1A_MODULE_PATH]:[]),...(authQualified?[...auth.paths,AUTH_MODULE_PATH]:[])]);
     const migrationOffset=(qualified?1:0)+(entw1Qualified?1:0)+(r1aQualified?1:0);
     const changed = new Set(gitRun(['diff', '--name-only', BASE_TREE]).split('\n').filter(p=>p&&!overlay.has(p)));
     for (const p of gitRun(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)) changed.add(p);
@@ -1014,7 +1018,7 @@ Object.assign(GATES, {
     const frozen = frozenProof(), inv = inventoryProof();
     const ok = extra.length === 0 && touchedForbidden.length === 0 && migrations === 152 && configBlob === CONFIG_TOML_BLOB && protectedChanged.length === 0 && presentNew.length === ENT_F2_SOURCE_PATHS.length && sourcesAreNew.length === 0
       && frozen.violations.length === 0 && frozen.recoverySuccessor.state === 'ent0' && frozen.recoverySuccessor.billing === 'record' && frozen.recoverySuccessor.act2 === 'record' && frozen.recoverySuccessor.edge === 'record' && inv.migrationCount-migrationOffset === 152 && inv.changedBaselineMigrations.length === 0;
-    return R(ok, { ph1Qualified:qualified, entw1Qualified, r1aQualified, actualMigrationCount:migrations+migrationOffset, changed: [...changed].sort(), extra, touchedForbidden, migrations, configBlob, protectedChanged, presentNew: presentNew.length, sourcesAreNew, frozen: { violations: frozen.violations, successor: frozen.recoverySuccessor }, inv: { migrationCount: inv.migrationCount, newPaths: inv.newPaths.length, last: inv.last } });
+    return R(ok, { ph1Qualified:qualified, entw1Qualified, r1aQualified, authQualified, actualMigrationCount:migrations+migrationOffset, changed: [...changed].sort(), extra, touchedForbidden, migrations, configBlob, protectedChanged, presentNew: presentNew.length, sourcesAreNew, frozen: { violations: frozen.violations, successor: frozen.recoverySuccessor }, inv: { migrationCount: inv.migrationCount, newPaths: inv.newPaths.length, last: inv.last } });
   },
 
   // F03 drives the REAL judgement chain of THIS package, not helpers imported from ENT-F1:  raw fault -> classifyFault -> stageCall -> StageRefusal / SetupFault -> judgeGate -> runGate -> runSmoke, and -> gateRunner -> runMutations.

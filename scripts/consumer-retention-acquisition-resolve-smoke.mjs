@@ -981,9 +981,12 @@ NEW.F01_ENTW1_EXACT_SUCCESSOR_AND_INVENTORY = async () => {
   const w = P.checkedEntw1State(rootGit), chain = P.recoverySuccessorState(rootGit), act2 = P.checkedAct2State(rootGit);
   // R1-A (the outermost exact successor above ENT-W1): only with its complete exact record are its own migration and its non-ENT-W1 paths set aside; the ENT-W1 rows below are unchanged.
   const r1a = P.checkedR1aState(rootGit), r1aQualified = r1a.state === 'record' && chain.r1a === 'record';
+  // AUTH-RECOVERY (outermost, on top of R1-A; no migration): only with its complete exact record are its own paths set aside; everything below is unchanged.
+  const auth = P.checkedAuthState(rootGit), authQualified = auth.state === 'record' && chain.auth === 'record';
+  const authOnly = new Set(authQualified ? [...auth.paths.filter(p => !(p in ENTW1_FILES)), P.AUTH_MODULE_PATH] : []);
   const r1aOnly = new Set(r1aQualified ? [...r1a.paths.filter(p => !(p in ENTW1_FILES)), P.R1A_MODULE_PATH] : []);
   const migrations = fs.readdirSync(path.join(ROOT, 'supabase/migrations')).filter(n => n.endsWith('.sql') && !(r1aQualified && n === R1A_MIGRATION)).sort();
-  const changed = [...new Set([...rootGit(['diff', '--name-only', ENTW1_BASE_COMMIT]).split('\n').filter(Boolean), ...rootGit(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)])].filter(p => !r1aOnly.has(p)).sort();
+  const changed = [...new Set([...rootGit(['diff', '--name-only', ENTW1_BASE_COMMIT]).split('\n').filter(Boolean), ...rootGit(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)])].filter(p => !r1aOnly.has(p) && !authOnly.has(p)).sort();
   const expected = [...Object.keys(ENTW1_FILES), P.ENTW1_MODULE_PATH, 'scripts/consumer-retention-persistence-smoke.mjs'].sort();
   const baseTruth = Object.entries(ENTW1_FILES).filter(([p, f]) => { let at = null; try { at = rootGit(['rev-parse', ENTW1_BASE_COMMIT + ':' + p]).trim(); } catch { at = null; } return at !== f.base; }).map(([p]) => p);
   const migSha = sha256(fs.readFileSync(path.join(ROOT, 'supabase/migrations', ENTW1_MIGRATION)));
@@ -998,7 +1001,7 @@ NEW.F01_ENTW1_EXACT_SUCCESSOR_AND_INVENTORY = async () => {
     migrationPinned: migSha === P.ENTW1_MIGRATION_SHA256, migrationIsNotTheRejectedA01Bytes: migSha !== CHECKPOINT_MIGRATION_SHA256, productIsCheckpointBytes: productDrift.length === 0,
     diffVsMainIsExactlyTheRecord: JSON.stringify(changed) === JSON.stringify(expected), recordedBasesAreTrue: baseTruth.length === 0, configTomlUnchanged: config.now === config.base
   };
-  return R(Object.values(rows).every(Boolean), { rows, r1aQualified, changed, expected, baseTruth, productDrift, migSha, tail: tail.slice(-3), chain: { state: chain.state, entw1: chain.entw1, ph1: chain.ph1, edge: chain.edge, act2: chain.act2, billing: chain.billing, violations: chain.violations }, w: { state: w.state, violations: w.violations } });
+  return R(Object.values(rows).every(Boolean), { rows, r1aQualified, authQualified, changed, expected, baseTruth, productDrift, migSha, tail: tail.slice(-3), chain: { state: chain.state, entw1: chain.entw1, ph1: chain.ph1, edge: chain.edge, act2: chain.act2, billing: chain.billing, violations: chain.violations }, w: { state: w.state, violations: w.violations } });
 };
 // Wrapper over the real git that changes what one path reports (index blob and/or worktree hash): the "tampered / partial / mixed" states, without touching any byte on disk.
 const lyingGit = (git, { stage = {}, hash = {} }) => args => {
