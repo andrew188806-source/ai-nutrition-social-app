@@ -26,6 +26,22 @@ export type NutritionReminder = {
 
 export type NutritionDataQuality = "complete" | "estimated";
 
+// TI-DEF-1: "recorded" = every number is the canonical sum of recorded item values (Today Intake overview, live or sample data);
+// "estimated" = the legacy heuristics below. A summary without a basis is the legacy shape and keeps the legacy behaviour.
+export type NutritionBasis = "recorded" | "estimated";
+export type RecordedNutrientKey = "calories" | "protein" | "carbs" | "fat" | "fiber";
+// Per nutrient over the day's items: complete = every item has a value, partial = some do, missing = none do, none = no items.
+export type NutrientCoverageStatus = "complete" | "partial" | "missing" | "none";
+export type NutrientCoverage = { status: NutrientCoverageStatus; validItems: number; missingItems: number };
+export type VegetableAssessment = "sufficient" | "insufficient" | "unknown";
+export type RecordedNutritionEvidence = {
+  // Canonical recorded fiber subtotal; null when no item carries a fiber value (never a 0 stand-in).
+  fiber: number | null;
+  coverage: Record<RecordedNutrientKey, NutrientCoverage>;
+  // An auxiliary read (stored summary, planned meals) failed or disagreed. It says nothing about how complete the nutrition is.
+  readWarning: boolean;
+};
+
 export type TodayNutritionSummary = {
   records: SavedMealRecord[];
   mealCount: number;
@@ -38,7 +54,36 @@ export type TodayNutritionSummary = {
   reminders: NutritionReminder[];
   dataQuality: NutritionDataQuality;
   estimatedMealCount: number;
+  nutritionBasis?: NutritionBasis;
+  vegetableAssessment?: VegetableAssessment;
+  recorded?: RecordedNutritionEvidence;
 };
+
+export function isRecordedNutrition(summary: TodayNutritionSummary): summary is TodayNutritionSummary & { nutritionBasis: "recorded"; recorded: RecordedNutritionEvidence } {
+  return summary.nutritionBasis === "recorded" && summary.recorded !== undefined;
+}
+
+// A recorded nutrient is a known value only when every item carries it.
+export function isNutrientKnown(summary: TodayNutritionSummary, key: RecordedNutrientKey): boolean {
+  return !isRecordedNutrition(summary) || summary.recorded.coverage[key].status === "complete";
+}
+
+// TI-DEF-1 copy for recorded nutrition (kept beside its only users instead of the shared zh-TW catalogue, which many unrelated
+// validators pin). Plain, non-judgemental wording; no health claim.
+export const todayNutritionTruthCopy = {
+  vegetableUnknown: "尚無足夠蔬菜紀錄可判斷",
+  readWarningNote: "部分輔助資料（例如已存摘要或預定餐）目前無法取得，以下營養仍依已記錄餐點計算。",
+  partialNote: "部分餐點未提供部分營養資料，以下為已記錄的小計。",
+  remainingUnknown: "熱量資料不完整，暫不計算剩餘熱量。",
+  notProvidedShort: "未提供",
+  subtotalSuffix: "（小計）",
+  reportSubtitleRecorded: "依今日已記錄餐點的營養資料加總，數值僅供生活化參考。",
+  notProvided: "未提供{label}資料",
+  recordedSubtotal: "已記錄小計",
+  partialSuffix: "（部分餐點未提供）",
+  notEnoughData: "資料不足，暫不判斷",
+  estimatedPrefix: "估算"
+} as const;
 
 const vegetableKeywords = ["菜", "瓜", "筍", "菇", "椰", "蔬", "葉", "番茄", "玉米", "豆苗"];
 
@@ -109,7 +154,9 @@ export function calculateTodayNutritionSummary(records: SavedMealRecord[] = getT
     hasVegetable,
     reminders: reminders.slice(0, 2),
     dataQuality,
-    estimatedMealCount
+    estimatedMealCount,
+    nutritionBasis: "estimated",
+    vegetableAssessment: hasVegetable ? "sufficient" : "insufficient"
   };
 }
 
@@ -171,6 +218,7 @@ export function getNutritionDetailItems(summary: TodayNutritionSummary): Nutriti
 const VERDICT_ITEM_KEYS = new Set(["fiber", "vegetables", "proteinFoods", "sodium", "addedSugar", "saturatedFat"]);
 
 function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDetailItem[] {
+  if (isRecordedNutrition(summary)) return buildRecordedNutritionDetailItems(summary);
   const { totals, targets, hasVegetable, mealCount, proteinProgress, fatProgress } = summary;
   const t = zhTW.mobile.todayNutritionSummary.detail;
   const fiberEstimate = hasVegetable ? mealCount * 4 : mealCount * 1;
@@ -210,7 +258,7 @@ function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDet
     {
       key: "fiber",
       label: t.fiber,
-      value: `約 ${fiberEstimate} g`,
+      value: `${todayNutritionTruthCopy.estimatedPrefix}約 ${fiberEstimate} g`,
       status: hasVegetable ? "good" : "low",
       note: t.fiberNote
     },
@@ -268,6 +316,118 @@ function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDet
       label: t.saturatedFat,
       value: satFatWatch ? t.possiblyHigh : t.normal,
       status: satFatWatch ? "watch" : "good",
+      note: t.saturatedFatNote
+    }
+  ];
+}
+
+// TI-DEF-1: recorded values only. A nutrient no item carries reads as not provided (never 0); a partly carried one reads as the
+// recorded subtotal; no adequacy verdict rests on an unknown or partial value, and fiber never implies a vegetable verdict.
+function buildRecordedNutritionDetailItems(summary: TodayNutritionSummary & { recorded: RecordedNutritionEvidence }): NutritionDetailItem[] {
+  const { totals, targets, proteinProgress, fatProgress, recorded } = summary;
+  const t = zhTW.mobile.todayNutritionSummary.detail;
+  const c = todayNutritionTruthCopy;
+  const coverage = recorded.coverage;
+  const known = (key: RecordedNutrientKey) => coverage[key].status === "complete";
+  const amount = (key: RecordedNutrientKey, label: string, value: number, unit: string, target?: number) => {
+    const status = coverage[key].status;
+    if (status === "missing" || status === "none") return c.notProvided.replace("{label}", label);
+    const text = target === undefined ? `${value} ${unit}` : `${value} / ${target} ${unit}`;
+    return status === "partial" ? `${c.recordedSubtotal} ${text}${c.partialSuffix}` : text;
+  };
+  const satFatWatch = fatProgress > 0.85;
+
+  return [
+    {
+      key: "calories",
+      label: t.calories,
+      value: amount("calories", t.calories, totals.calories, "kcal", targets.calories),
+      status: known("calories") ? (totals.calories > targets.calories ? "watch" : "good") : "watch",
+      note: t.caloriesNote
+    },
+    {
+      key: "protein",
+      label: t.protein,
+      value: amount("protein", t.protein, totals.protein, "g", targets.protein),
+      status: known("protein") ? (proteinProgress < 0.55 ? "low" : "good") : "watch",
+      note: t.proteinNote
+    },
+    {
+      key: "carbs",
+      label: t.carbs,
+      value: amount("carbs", t.carbs, totals.carbs, "g", targets.carbs),
+      status: known("carbs") ? "good" : "watch",
+      note: t.carbsNote
+    },
+    {
+      key: "fat",
+      label: t.fat,
+      value: amount("fat", t.fat, totals.fat, "g", targets.fat),
+      status: known("fat") ? (satFatWatch ? "watch" : "good") : "watch",
+      note: t.fatNote
+    },
+    {
+      key: "fiber",
+      label: t.fiber,
+      value: amount("fiber", t.fiber, recorded.fiber ?? 0, "g"),
+      status: known("fiber") ? "good" : "watch",
+      note: t.fiberNote
+    },
+    {
+      key: "vegetables",
+      label: t.vegetables,
+      value: c.vegetableUnknown,
+      status: "watch",
+      note: t.vegetablesNote
+    },
+    {
+      key: "fruits",
+      label: t.fruits,
+      value: t.notRecorded,
+      status: "watch",
+      note: t.fruitsNote
+    },
+    {
+      key: "grains",
+      label: t.grains,
+      value: coverage.carbs.validItems > 0 && totals.carbs > 0 ? t.included : t.notRecorded,
+      status: coverage.carbs.validItems > 0 && totals.carbs > 0 ? "good" : "watch",
+      note: t.grainsNote
+    },
+    {
+      key: "proteinFoods",
+      label: t.proteinFoods,
+      value: known("protein") ? (proteinProgress >= 0.55 ? t.sufficient : t.insufficient) : c.notEnoughData,
+      status: known("protein") ? (proteinProgress >= 0.55 ? "good" : "low") : "watch",
+      note: t.proteinFoodsNote
+    },
+    {
+      key: "dairy",
+      label: t.dairy,
+      value: t.notRecorded,
+      status: "watch",
+      note: t.dairyNote
+    },
+    {
+      key: "sodium",
+      label: t.sodium,
+      // Recorded items carry no sodium or added-sugar value, so neither gets a normal / high verdict here.
+      value: c.notEnoughData,
+      status: "watch",
+      note: t.sodiumNote
+    },
+    {
+      key: "addedSugar",
+      label: t.addedSugar,
+      value: c.notEnoughData,
+      status: "watch",
+      note: t.addedSugarNote
+    },
+    {
+      key: "saturatedFat",
+      label: t.saturatedFat,
+      value: known("fat") ? (satFatWatch ? t.possiblyHigh : t.normal) : c.notEnoughData,
+      status: known("fat") ? (satFatWatch ? "watch" : "good") : "watch",
       note: t.saturatedFatNote
     }
   ];

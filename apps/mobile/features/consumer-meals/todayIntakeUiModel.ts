@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { zhTW } from "../../../../lib/i18n/zh-TW";
+import type { RecordedNutrientKey, RecordedNutritionEvidence, VegetableAssessment } from "../analysis/nutritionSummary";
 import type { PlannedMeal } from "../planned-meal/types";
 import { createConsumerTodayIntakeOverviewService } from "./factories";
 import { getConsumerMealRuntimeFlags } from "./featureFlags";
@@ -59,6 +60,9 @@ export type TodayIntakeUiSummary = {
   reminders: { key: "lowProtein" | "lowVegetable" | "highSodium"; label: string }[];
   dataQuality: "complete" | "estimated";
   estimatedMealCount: number;
+  nutritionBasis: "recorded";
+  vegetableAssessment: VegetableAssessment;
+  recorded: RecordedNutritionEvidence;
 };
 
 export type TodayIntakeUiMealSlot = {
@@ -206,8 +210,12 @@ function mapOverviewToSummary(overview: ConsumerTodayIntakeOverview, mealRecords
   const mealCount = overview.mealCount;
   const proteinProgress = totals.protein / nutritionTargets.protein;
   const fatProgress = totals.fat / nutritionTargets.fat;
-  const hasVegetable = (overview.calculatedNutrition.fiber ?? 0) > 0;
-  const reminders = buildReminders({ mealCount, proteinProgress, hasVegetable });
+  // TI-DEF-1: the overview carries no vegetable portion or ingredient evidence, and fiber > 0 is not a vegetable verdict.
+  const hasVegetable = false;
+  const vegetableAssessment: VegetableAssessment = "unknown";
+  const recorded = mapRecordedNutritionEvidence(overview);
+  const proteinKnown = recorded.coverage.protein.status === "complete";
+  const reminders = buildReminders({ mealCount, proteinProgress, proteinKnown, hasVegetable, vegetableAssessment });
 
   return {
     records: mealRecords,
@@ -219,8 +227,46 @@ function mapOverviewToSummary(overview: ConsumerTodayIntakeOverview, mealRecords
     fatProgress,
     hasVegetable,
     reminders,
-    dataQuality: overview.status === "complete" ? "complete" : "estimated",
-    estimatedMealCount: overview.status === "complete" ? 0 : mealCount
+    // Every value here is a recorded canonical sum, so nothing is estimated. An auxiliary read problem (stored summary or planned
+    // meals) is carried separately in recorded.readWarning, and missing nutrient values in recorded.coverage.
+    dataQuality: "complete",
+    estimatedMealCount: 0,
+    nutritionBasis: "recorded",
+    vegetableAssessment,
+    recorded
+  };
+}
+
+const RECORDED_NUTRIENT_FIELDS = [
+  ["calories", "calories"],
+  ["protein", "protein"],
+  ["carbs", "carbohydrates"],
+  ["fat", "fat"],
+  ["fiber", "fiber"]
+] as const satisfies readonly (readonly [RecordedNutrientKey, keyof ConsumerMealRecordItem["nutrition"]])[];
+
+// Coverage describes which of the items the canonical calculator summed actually carried each value. The totals themselves stay
+// the canonical calculatedNutrition (consumed ratio applied once there); nothing is re-summed or re-weighted here.
+function mapRecordedNutritionEvidence(overview: ConsumerTodayIntakeOverview): RecordedNutritionEvidence {
+  const items = overview.meals.filter((meal) => meal.mealDate === overview.date).flatMap((meal) => meal.items);
+  const coverage = {} as RecordedNutritionEvidence["coverage"];
+  for (const [key, field] of RECORDED_NUTRIENT_FIELDS) {
+    let validItems = 0;
+    let missingItems = 0;
+    for (const item of items) {
+      const value: unknown = item.nutrition[field];
+      if (value === undefined || value === null) missingItems += 1;
+      else if (typeof value === "number" && Number.isFinite(value) && value >= 0) validItems += 1;
+      // The canonical calculator already refuses such a value; reaching here is an error, never a silent 0.
+      else throw new Error("Today Intake nutrition evidence contains an invalid value.");
+    }
+    const status = items.length === 0 ? "none" : validItems === items.length ? "complete" : validItems === 0 ? "missing" : "partial";
+    coverage[key] = { status, validItems, missingItems };
+  }
+  return {
+    fiber: coverage.fiber.validItems > 0 ? overview.calculatedNutrition.fiber ?? null : null,
+    coverage,
+    readWarning: (overview.warnings ?? []).length > 0
   };
 }
 
@@ -300,10 +346,10 @@ function mapMealTypeToPeriod(mealType: ConsumerMealRecord["mealType"]): string {
   return mealSlotOptions[3];
 }
 
-function buildReminders(input: { mealCount: number; proteinProgress: number; hasVegetable: boolean }) {
+function buildReminders(input: { mealCount: number; proteinProgress: number; proteinKnown: boolean; hasVegetable: boolean; vegetableAssessment: VegetableAssessment }) {
   const reminderText = zhTW.mobile.todayNutritionSummary.reminders;
   const reminders: TodayIntakeUiSummary["reminders"] = [];
-  if (input.mealCount > 0 && input.proteinProgress < 0.55) reminders.push({ key: "lowProtein", label: reminderText.lowProtein });
-  if (input.mealCount > 0 && !input.hasVegetable) reminders.push({ key: "lowVegetable", label: reminderText.lowVegetable });
+  if (input.mealCount > 0 && input.proteinProgress < 0.55 && input.proteinKnown) reminders.push({ key: "lowProtein", label: reminderText.lowProtein });
+  if (input.mealCount > 0 && !input.hasVegetable && input.vegetableAssessment !== "unknown") reminders.push({ key: "lowVegetable", label: reminderText.lowVegetable });
   return reminders.slice(0, 2);
 }

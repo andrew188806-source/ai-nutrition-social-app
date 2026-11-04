@@ -2,6 +2,7 @@
 import {entw1FilesState,entw1PredecessorGit,ENTW1_FILES,ENTW1_MIGRATION} from './consumer-retention-entw1-exact-successor.mjs';
 import {r1aFilesState,r1aPredecessorGit,R1A_MIGRATION} from './consumer-monthly-review-exact-successor.mjs';
 import {authFilesState,authPredecessorGit} from './consumer-auth-recovery-exact-successor.mjs';
+import {tiFilesState,tiPredecessorGit} from './consumer-today-intake-ti-def1-exact-successor.mjs';
 import {ph1FilesState,ph1PredecessorGit,PH1_FILES,PH1_MIGRATION} from './s2-ph1-exact-successor.mjs';
 
 import {act2FilesState,act2PredecessorGit,ACT2_FILES,ACT2_MIGRATION} from './s2-act2-exact-successor.mjs';
@@ -1379,28 +1380,59 @@ function recoverySuccessorStateBeforeAuth(git){
 // Without the AUTH module everything is exactly as before (the older functions are called on the real index/worktree).
 export const AUTH_MODULE_BLOB='663bf5789bce33a3c2404dde27e2adb2a6f5605c';
 export const AUTH_MODULE_PATH='scripts/consumer-auth-recovery-exact-successor.mjs';
-export function checkedAuthState(git){
+function checkedAuthStateBeforeTi(git){
  const staged=git(['ls-files','--stage','--',AUTH_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,AUTH_MODULE_PATH));
  if(!present&&!staged)return {state:'base',paths:[],violations:[]};
  if(staged!=='100644 '+AUTH_MODULE_BLOB+' 0\t'+AUTH_MODULE_PATH||git(['hash-object','--',AUTH_MODULE_PATH]).trim()!==AUTH_MODULE_BLOB)return {state:'invalid',paths:[],violations:['auth:module-binding']};
  return authFilesState(git,ROOT);
 }
 const authView=(git,a)=>a.state==='record'?authPredecessorGit(git):git;
-export function checkedR1aState(git){const a=checkedAuthState(git);if(a.state==='invalid')return a;return checkedR1aStateBeforeAuth(authView(git,a));}
-export function checkedEntw1State(git){const a=checkedAuthState(git);if(a.state==='invalid')return a;return checkedEntw1StateBeforeAuth(authView(git,a));}
-export function checkedPH1State(git){const a=checkedAuthState(git);if(a.state==='invalid')return a;return checkedPH1StateBeforeAuth(authView(git,a));}
-export function checkedAct2State(git){
- const a=checkedAuthState(git);if(a.state==='invalid')return a;
+function checkedR1aStateBeforeTi(git){const a=checkedAuthStateBeforeTi(git);if(a.state==='invalid')return a;return checkedR1aStateBeforeAuth(authView(git,a));}
+function checkedEntw1StateBeforeTi(git){const a=checkedAuthStateBeforeTi(git);if(a.state==='invalid')return a;return checkedEntw1StateBeforeAuth(authView(git,a));}
+function checkedPH1StateBeforeTi(git){const a=checkedAuthStateBeforeTi(git);if(a.state==='invalid')return a;return checkedPH1StateBeforeAuth(authView(git,a));}
+function checkedAct2StateBeforeTi(git){
+ const a=checkedAuthStateBeforeTi(git);if(a.state==='invalid')return a;
  if(a.state!=='record')return checkedAct2StateBeforeAuth(git);
  const view=authPredecessorGit(git),prior=checkedAct2StateBeforeAuth(view),complete=recoverySuccessorStateBeforeAuth(view);
  if(prior.state!=='record'||!complete.exempt||complete.r1a!=='record'||complete.entw1!=='record'||complete.ph1!=='record'||complete.edge!=='record')return {state:'invalid',paths:[],violations:['auth:requires-accepted-r1a-entw1-ph1-entf2-act2',...(complete.violations??[])]};
  return {...prior,paths:[...new Set([...prior.paths,...a.paths,AUTH_MODULE_PATH])]};
 }
-export function recoverySuccessorState(git){
- const a=checkedAuthState(git);if(a.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:a.violations};
+function recoverySuccessorStateBeforeTi(git){
+ const a=checkedAuthStateBeforeTi(git);if(a.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:a.violations};
  const prior=recoverySuccessorStateBeforeAuth(authView(git,a));
  if(a.state==='record'&&(!prior.exempt||prior.r1a!=='record'||prior.entw1!=='record'||prior.ph1!=='record'||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['auth:requires-complete-r1a-predecessor',...(prior.violations??[])]};
  return a.state==='record'?{...prior,auth:'record',paths:[...new Set([...prior.paths,...a.paths,AUTH_MODULE_PATH])]}:prior;
+}
+
+// TI-DEF-1 (Today Intake shows recorded nutrition truthfully): the OUTERMOST exact overlay on the AUTH-RECOVERY layer. Hash DAG: root -> TI module -> exact leaves
+// (no root or self hash in any leaf). Only when the module binding AND every TI leaf are exact is the complete older chain (AUTH -> R1-A -> ENT-W1 -> PH1 -> ...) evaluated
+// UNCHANGED on the TI predecessor view, and it must then be complete (auth, r1a, entw1, ph1, edge, act2 and billing all 'record'); a partial or mismatching TI state is 'invalid'.
+// Without the TI module everything is exactly as before (the older functions are called on the real index/worktree).
+export const TI_MODULE_BLOB='d6ca6bf3b9c82ce1aea4524e1ee9cc7777a0203d';
+export const TI_MODULE_PATH='scripts/consumer-today-intake-ti-def1-exact-successor.mjs';
+export function checkedTiState(git){
+ const staged=git(['ls-files','--stage','--',TI_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,TI_MODULE_PATH));
+ if(!present&&!staged)return {state:'base',paths:[],violations:[]};
+ if(staged!=='100644 '+TI_MODULE_BLOB+' 0\t'+TI_MODULE_PATH||git(['hash-object','--',TI_MODULE_PATH]).trim()!==TI_MODULE_BLOB)return {state:'invalid',paths:[],violations:['ti:module-binding']};
+ return tiFilesState(git,ROOT);
+}
+const tiView=(git,t)=>t.state==='record'?tiPredecessorGit(git):git;
+export function checkedAuthState(git){const t=checkedTiState(git);if(t.state==='invalid')return t;return checkedAuthStateBeforeTi(tiView(git,t));}
+export function checkedR1aState(git){const t=checkedTiState(git);if(t.state==='invalid')return t;return checkedR1aStateBeforeTi(tiView(git,t));}
+export function checkedEntw1State(git){const t=checkedTiState(git);if(t.state==='invalid')return t;return checkedEntw1StateBeforeTi(tiView(git,t));}
+export function checkedPH1State(git){const t=checkedTiState(git);if(t.state==='invalid')return t;return checkedPH1StateBeforeTi(tiView(git,t));}
+export function checkedAct2State(git){
+ const t=checkedTiState(git);if(t.state==='invalid')return t;
+ if(t.state!=='record')return checkedAct2StateBeforeTi(git);
+ const view=tiPredecessorGit(git),prior=checkedAct2StateBeforeTi(view),complete=recoverySuccessorStateBeforeTi(view);
+ if(prior.state!=='record'||!complete.exempt||complete.auth!=='record'||complete.r1a!=='record'||complete.entw1!=='record'||complete.ph1!=='record'||complete.edge!=='record')return {state:'invalid',paths:[],violations:['ti:requires-accepted-auth-r1a-entw1-ph1-entf2-act2',...(complete.violations??[])]};
+ return {...prior,paths:[...new Set([...prior.paths,...t.paths,TI_MODULE_PATH])]};
+}
+export function recoverySuccessorState(git){
+ const t=checkedTiState(git);if(t.state==='invalid')return {state:'invalid',exempt:false,paths:[],violations:t.violations};
+ const prior=recoverySuccessorStateBeforeTi(tiView(git,t));
+ if(t.state==='record'&&(!prior.exempt||prior.auth!=='record'||prior.r1a!=='record'||prior.entw1!=='record'||prior.ph1!=='record'||prior.edge!=='record'||prior.act2!=='record'||prior.billing!=='record'))return {state:'invalid',exempt:false,paths:[],violations:['ti:requires-complete-auth-predecessor',...(prior.violations??[])]};
+ return t.state==='record'?{...prior,ti:'record',paths:[...new Set([...prior.paths,...t.paths,TI_MODULE_PATH])]}:prior;
 }
 function activeR1aInventory(){return recoverySuccessorState(act2RootGit).r1a==='record';}
 export function isR1aMigration(name){return name===R1A_MIGRATION&&activeR1aInventory();}

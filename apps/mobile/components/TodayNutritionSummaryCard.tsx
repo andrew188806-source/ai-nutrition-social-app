@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import type { TodayNutritionSummary } from "../features/analysis/nutritionSummary";
+import { isNutrientKnown, isRecordedNutrition, todayNutritionTruthCopy, type RecordedNutrientKey, type TodayNutritionSummary } from "../features/analysis/nutritionSummary";
 import { Card, CompactRow, IconButton, MacroBar, Ring, SectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, radius, snowPalette as colors } from "../theme/tokens";
@@ -15,30 +15,53 @@ export function TodayNutritionSummaryCard({
   onViewDetail?: () => void;
 }) {
   const t = zhTW.mobile.todayNutritionSummary;
+  const copy = todayNutritionTruthCopy;
+  const recorded = isRecordedNutrition(summary) ? summary.recorded : null;
+  const caloriesKnown = isNutrientKnown(summary, "calories");
+  // TI-DEF-1: with recorded data, a nutrient no item carries is shown as not provided (never 0) and a partly carried one as a subtotal.
+  const coverageOf = (key: RecordedNutrientKey) => recorded?.coverage[key].status ?? "complete";
+  const hasAmount = (key: RecordedNutrientKey) => summary.mealCount === 0 || (coverageOf(key) !== "missing" && coverageOf(key) !== "none");
+  const macroLabel = (key: RecordedNutrientKey, label: string) => coverageOf(key) === "partial" ? `${label}${copy.subtotalSuffix}` : label;
+  const macro = (key: RecordedNutrientKey, label: string, value: number, max: number, color: string) => hasAmount(key)
+    ? <MacroBar label={macroLabel(key, label)} value={value} max={max} color={color} />
+    : <View style={styles.macroUnknown}><Text style={styles.macroUnknownLabel}>{label}</Text><Text style={styles.macroUnknownValue}>{copy.notProvidedShort}</Text></View>;
+  const vegetableUnknown = summary.mealCount > 0 && summary.vegetableAssessment === "unknown";
+  const incomplete = recorded !== null && summary.mealCount > 0 && Object.values(recorded.coverage).some((c) => c.status !== "complete");
 
   return (
     <Card>
       <SectionHeader title={t.cardTitle} subtitle={t.cardSubtitle} action={onShare ? <IconButton icon="share" onPress={onShare} /> : undefined} />
       <View style={styles.summaryRow}>
-        <Ring value={summary.totals.calories} max={summary.targets.calories} size={108} strokeWidth={10}>
-          <Text style={styles.ringValue}>{summary.totals.calories}</Text>
+        <Ring value={hasAmount("calories") ? summary.totals.calories : 0} max={summary.targets.calories} size={108} strokeWidth={10}>
+          <Text style={styles.ringValue}>{hasAmount("calories") ? summary.totals.calories : copy.notProvidedShort}</Text>
           <Text style={styles.ringUnit}>/ {summary.targets.calories} 大卡</Text>
         </Ring>
         <View style={styles.macroStack}>
-          <MacroBar label={t.proteinLabel} value={summary.totals.protein} max={summary.targets.protein} color={colors.primary} />
-          <MacroBar label={t.carbsLabel} value={summary.totals.carbs} max={summary.targets.carbs} color={colors.accent} />
-          <MacroBar label={t.fatLabel} value={summary.totals.fat} max={summary.targets.fat} color={colors.amber} />
+          {macro("protein", t.proteinLabel, summary.totals.protein, summary.targets.protein, colors.primary)}
+          {macro("carbs", t.carbsLabel, summary.totals.carbs, summary.targets.carbs, colors.accent)}
+          {macro("fat", t.fatLabel, summary.totals.fat, summary.targets.fat, colors.amber)}
         </View>
       </View>
-      <Text style={styles.remainingText}>
-        {t.remainingPrefix} <Text style={styles.remainingValue}>{summary.remainingCalories}</Text> {t.remainingUnit}
-      </Text>
-      <View style={styles.vegetableRow}>
-        <Icon name="leaf" size={14} color={summary.mealCount === 0 || summary.hasVegetable ? colors.green : colors.amber} />
-        {/* GQA-6R C-2: with no recorded meal there is no evidence of a vegetable gap or of estimated macros. */}
-        <Text style={styles.vegetableText}>{summary.mealCount === 0 ? "今天還沒有飲食紀錄。" : summary.hasVegetable ? t.vegetableGood : t.vegetableLow}</Text>
-      </View>
+      {caloriesKnown || summary.mealCount === 0 ? (
+        <Text style={styles.remainingText}>
+          {t.remainingPrefix} <Text style={styles.remainingValue}>{summary.remainingCalories}</Text> {t.remainingUnit}
+        </Text>
+      ) : <Text style={styles.remainingText}>{copy.remainingUnknown}</Text>}
+      {vegetableUnknown ? (
+        <View style={styles.vegetableRow}>
+          <Icon name="leaf" size={14} color={colors.sub} />
+          <Text style={styles.vegetableText}>{copy.vegetableUnknown}</Text>
+        </View>
+      ) : (
+        <View style={styles.vegetableRow}>
+          <Icon name="leaf" size={14} color={summary.mealCount === 0 || summary.hasVegetable ? colors.green : colors.amber} />
+          {/* GQA-6R C-2: with no recorded meal there is no evidence of a vegetable gap or of estimated macros. */}
+          <Text style={styles.vegetableText}>{summary.mealCount === 0 ? "今天還沒有飲食紀錄。" : summary.hasVegetable ? t.vegetableGood : t.vegetableLow}</Text>
+        </View>
+      )}
       {summary.mealCount > 0 && summary.dataQuality === "estimated" ? <Text style={styles.estimatedNote}>{t.estimatedNote}</Text> : null}
+      {incomplete ? <Text style={styles.estimatedNote}>{copy.partialNote}</Text> : null}
+      {recorded?.readWarning && summary.mealCount > 0 ? <Text style={styles.estimatedNote}>{copy.readWarningNote}</Text> : null}
       {summary.reminders.length > 0 ? (
         <View style={styles.reminderList}>
           {summary.reminders.map((reminder) => (
@@ -68,6 +91,21 @@ const styles = StyleSheet.create({
   macroStack: {
     flex: 1,
     gap: 10
+  },
+  macroUnknown: {
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  macroUnknownLabel: {
+    color: colors.sub,
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    fontWeight: "700"
+  },
+  macroUnknownValue: {
+    color: colors.sub,
+    fontSize: 12,
+    fontFamily: fonts.body
   },
   ringValue: {
     color: colors.ink,

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { getHydrationTip, getNutritionDetailItems, type TodayNutritionSummary } from "../features/analysis/nutritionSummary";
+import { getHydrationTip, getNutritionDetailItems, isRecordedNutrition, todayNutritionTruthCopy, type TodayNutritionSummary } from "../features/analysis/nutritionSummary";
 import { Card, SectionHeader } from "../theme/components";
 import { fonts, hexA, radius, snowPalette as colors } from "../theme/tokens";
 
@@ -8,11 +8,16 @@ export function NutritionDetailReport({ summary }: { summary: TodayNutritionSumm
   const t = zhTW.mobile.todayNutritionSummary.detail;
   const items = getNutritionDetailItems(summary);
   const suggestions = summary.reminders.map((reminder) => reminder.label);
+  // TI-DEF-1: recorded data says so (not "estimated"); missing values and auxiliary read problems get their own notes.
+  const recorded = isRecordedNutrition(summary) ? summary.recorded : null;
+  const incomplete = recorded !== null && summary.mealCount > 0 && Object.values(recorded.coverage).some((c) => c.status !== "complete");
 
   return (
     <Card>
-      <SectionHeader title={t.reportTitle} subtitle={t.reportSubtitle} />
+      <SectionHeader title={t.reportTitle} subtitle={recorded ? todayNutritionTruthCopy.reportSubtitleRecorded : t.reportSubtitle} />
       {summary.mealCount > 0 && summary.dataQuality === "estimated" ? <Text style={styles.estimatedNote}>{zhTW.mobile.todayNutritionSummary.estimatedNote}</Text> : null}
+      {incomplete ? <Text style={styles.estimatedNote}>{todayNutritionTruthCopy.partialNote}</Text> : null}
+      {recorded?.readWarning && summary.mealCount > 0 ? <Text style={styles.estimatedNote}>{todayNutritionTruthCopy.readWarningNote}</Text> : null}
       <View style={styles.grid}>
         {items.map((item) => (
           <View key={item.key} style={[styles.itemCard, item.status !== "good" && styles.itemCardWatch]}>
