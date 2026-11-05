@@ -272,6 +272,63 @@ const rendered = {};
   }
 }
 
+// X4 TI-DEF-2 R3: a summary that declares the recorded basis but has lost its coverage evidence fails closed. All 13 rows read not enough
+// data (a watch item, no number, no verdict) and never fall back to the legacy estimates. Real model output with only `recorded` removed.
+{
+  const unsupported = /目前正常|可能偏高|攝取充足|攝取不足|已包含於今日餐點/, estimateInRows = /估算|約 /;
+  const W1s = (await modelOf({ meals: [W1] })).summary;
+  const cases = {
+    X4_w1_evidenceRemoved: { ...W1s, recorded: undefined },
+    X4_allMissing_evidenceRemoved: { ...(await modelOf({ meals: [meal("x4m", [item("x4m-i", {})])] })).summary, recorded: undefined },
+    X4_twoMeals_evidenceRemoved: { ...(await modelOf({ meals: [W1, W2] })).summary, recorded: undefined }
+  };
+  for (const [name, s] of Object.entries(cases)) {
+    const rows = summaryModule.getNutritionDetailItems(s), d = Object.fromEntries(rows.map((r) => [r.key, r])), report = renderReport(s);
+    rendered[name] = { report };
+    check(`${name}: basis recorded without evidence -> 13 rows, every value is ${copy.notEnoughData}, every status watch, no digit in any value`,
+      s.nutritionBasis === "recorded" && s.recorded === undefined && rows.length === 13 && rows.every((r) => r.value === copy.notEnoughData && r.status === "watch" && !/\d/.test(r.value)), rows.map((r) => [r.key, r.value, r.status]));
+    check(`${name}: the rendered report carries no unsupported verdict and no row carries an estimate`, !unsupported.test(report) && !rows.some((r) => estimateInRows.test(r.value)) && report.includes(`飽和脂肪 | ${copy.notEnoughData}`) && report.includes(`全穀 / 主食 | ${copy.notEnoughData}`) && report.includes(`蛋白質食物 | ${copy.notEnoughData}`), report);
+    check(`${name}: the 13 row keys are the same as the recorded rows (same labels, same order)`,
+      rows.map((r) => `${r.key}|${r.label}`).join() === summaryModule.getNutritionDetailItems(W1s).map((r) => `${r.key}|${r.label}`).join() && d.saturatedFat?.value === copy.notEnoughData, rows.map((r) => r.key));
+  }
+  const zeroNoEvidence = { ...(await modelOf({ meals: [] })).summary, recorded: undefined }, dz = summaryModule.getNutritionDetailItems(zeroNoEvidence);
+  check("X4 zero meals without evidence -> no number and no verdict in any row (the zero-meal rule still reads 今日尚未記錄)", dz.length === 13 && dz.every((r) => r.status === "watch" && (r.value === copy.notEnoughData || r.value === "今日尚未記錄")), dz.map((r) => [r.key, r.value]));
+  const legacyShape = { ...W1s, nutritionBasis: undefined, recorded: undefined }, dl = items(legacyShape);
+  check("X4 control: a summary with no basis at all is still the legacy shape (numbers and legacy verdicts unchanged)", dl.calories.value === "520 / 1800 kcal" && dl.proteinFoods.value === "攝取不足", { calories: dl.calories, proteinFoods: dl.proteinFoods });
+  const estimated = { ...W1s, nutritionBasis: "estimated", recorded: undefined }, de = items(estimated);
+  check("X4 control: an explicit estimated basis keeps the labelled estimate", de.fiber.value.startsWith("估算約 ") && de.calories.value === "520 / 1800 kcal", de.fiber);
+  const withEvidence = items(W1s);
+  check("X4 control: the recorded summary with its evidence is unchanged (fiber 8 g, fat 14 / 55 g, no saturated-fat verdict)", withEvidence.fiber.value === "8 g" && withEvidence.fat.value === "14 / 55 g" && withEvidence.saturatedFat.value === "未提供飽和脂肪資料", withEvidence);
+}
+
+// X5 TI-DEF-2 R1: the share action sends calories, protein, carbohydrates and fat as plain numbers (apps/mobile/app/index.tsx, unchanged),
+// so the card offers it only when all four are real values. A nutrient no item carries (or only some do) shows as not provided on the
+// card but its total is 0, so sharing it would say "0g". Shown = the card markup differs when onShare is passed.
+{
+  const shareShown = (summary) => renderToStaticMarkup(React.createElement(TodayNutritionSummaryCard, { summary, onShare: () => undefined, onViewDetail: () => undefined }))
+    !== renderToStaticMarkup(React.createElement(TodayNutritionSummaryCard, { summary, onViewDetail: () => undefined }));
+  const sum = async (meals) => (await modelOf({ meals })).summary;
+  const caloriesOnly = await sum([meal("x5a", [item("x5a-i", { calories: 300 })])]);
+  const partial = await sum([W1, meal("x5b", [item("x5b-i", { calories: 200 })], "dinner")]);
+  const noCalories = await sum([meal("x5c", [item("x5c-i", { protein: 20, carbohydrates: 30, fat: 10 })])]);
+  const noFat = await sum([meal("x5d", [item("x5d-i", { calories: 300, protein: 20, carbohydrates: 30 })])]);
+  const trueZero = await sum([meal("x5e", [item("x5e-i", { calories: 0, protein: 0, carbohydrates: 0, fat: 0, fiber: 0 })])]);
+  const zeroMeals = await sum([]);
+  const W1s = await sum([W1]);
+  const legacy = summaryModule.calculateTodayNutritionSummary([{ id: "x", mealName: "便當", ingredients: "青菜、雞腿", calories: 600, protein: 30, carbohydrates: 70, fat: 20, mealPeriod: "午餐" }]);
+  check("X5 premise: the old share text would say 蛋白質 0g for calories-only, partial and no-fat days (a missing total is 0 and the card says 未提供)",
+    caloriesOnly.totals.protein === 0 && caloriesOnly.recorded.coverage.protein.status === "missing" && partial.recorded.coverage.protein.status === "partial" && noFat.totals.fat === 0 && noFat.recorded.coverage.fat.status === "missing" && renderCard(caloriesOnly).includes(copy.notProvidedShort),
+    { caloriesOnly: caloriesOnly.totals, partial: partial.recorded.coverage.protein, noFat: noFat.recorded.coverage.fat });
+  check("X5 the share action is hidden when any of calories, protein, carbohydrates or fat is missing or partial",
+    !shareShown(caloriesOnly) && !shareShown(partial) && !shareShown(noCalories) && !shareShown(noFat),
+    { caloriesOnly: shareShown(caloriesOnly), partial: shareShown(partial), noCalories: shareShown(noCalories), noFat: shareShown(noFat) });
+  check("X5 the share action is hidden for a recorded summary whose evidence is missing (completeness unknown)", !shareShown({ ...W1s, recorded: undefined }), shareShown({ ...W1s, recorded: undefined }));
+  check("X5 the share action stays for complete data (W1, W1+W2), a true zero and a day with no meal",
+    shareShown(W1s) && shareShown(await sum([W1, W2])) && trueZero.recorded.coverage.calories.status === "complete" && trueZero.totals.protein === 0 && shareShown(trueZero) && zeroMeals.mealCount === 0 && shareShown(zeroMeals),
+    { W1: shareShown(W1s), trueZero: shareShown(trueZero), zeroMeals: shareShown(zeroMeals) });
+  check("X5 the share action stays for the legacy shape and an explicit estimated basis", shareShown(legacy) && shareShown({ ...W1s, nutritionBasis: "estimated", recorded: undefined }), { legacy: shareShown(legacy) });
+}
+
 // F01 the TI exact successor record and tamper controls (git reads only; the root smoke's own judgement runs, nothing on disk changes).
 {
   const { pathToFileURL } = await import("node:url");

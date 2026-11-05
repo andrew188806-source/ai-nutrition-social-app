@@ -63,6 +63,12 @@ export function isRecordedNutrition(summary: TodayNutritionSummary): summary is 
   return summary.nutritionBasis === "recorded" && summary.recorded !== undefined;
 }
 
+// TI-DEF-2 (R3): a summary that declares the recorded basis but carries no coverage evidence cannot say which numbers are real, so
+// nothing about it may be judged or shown as a value, and it never falls back to the legacy estimates.
+export function isRecordedWithoutEvidence(summary: TodayNutritionSummary): boolean {
+  return summary.nutritionBasis === "recorded" && summary.recorded === undefined;
+}
+
 // A recorded nutrient is a known value only when every item carries it.
 export function isNutrientKnown(summary: TodayNutritionSummary, key: RecordedNutrientKey): boolean {
   return !isRecordedNutrition(summary) || summary.recorded.coverage[key].status === "complete";
@@ -219,6 +225,7 @@ const VERDICT_ITEM_KEYS = new Set(["fiber", "vegetables", "proteinFoods", "sodiu
 
 function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDetailItem[] {
   if (isRecordedNutrition(summary)) return buildRecordedNutritionDetailItems(summary);
+  if (isRecordedWithoutEvidence(summary)) return buildNoEvidenceDetailItems();
   const { totals, targets, hasVegetable, mealCount, proteinProgress, fatProgress } = summary;
   const t = zhTW.mobile.todayNutritionSummary.detail;
   const fiberEstimate = hasVegetable ? mealCount * 4 : mealCount * 1;
@@ -318,6 +325,29 @@ function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDet
       status: satFatWatch ? "watch" : "good",
       note: t.saturatedFatNote
     }
+  ];
+}
+
+// TI-DEF-2 (R3): the fail-closed rows for a recorded summary without evidence: every one of the 13 rows reads not enough data, as a
+// watch item, with no number, no verdict and no read of totals or progress.
+function buildNoEvidenceDetailItems(): NutritionDetailItem[] {
+  const t = zhTW.mobile.todayNutritionSummary.detail;
+  const value = todayNutritionTruthCopy.notEnoughData;
+  const row = (key: string, label: string, note: string): NutritionDetailItem => ({ key, label, value, status: "watch", note });
+  return [
+    row("calories", t.calories, t.caloriesNote),
+    row("protein", t.protein, t.proteinNote),
+    row("carbs", t.carbs, t.carbsNote),
+    row("fat", t.fat, t.fatNote),
+    row("fiber", t.fiber, t.fiberNote),
+    row("vegetables", t.vegetables, t.vegetablesNote),
+    row("fruits", t.fruits, t.fruitsNote),
+    row("grains", t.grains, t.grainsNote),
+    row("proteinFoods", t.proteinFoods, t.proteinFoodsNote),
+    row("dairy", t.dairy, t.dairyNote),
+    row("sodium", t.sodium, t.sodiumNote),
+    row("addedSugar", t.addedSugar, t.addedSugarNote),
+    row("saturatedFat", t.saturatedFat, t.saturatedFatNote)
   ];
 }
 

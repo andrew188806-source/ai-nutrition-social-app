@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { zhTW } from "../../../lib/i18n/zh-TW";
-import { isNutrientKnown, isRecordedNutrition, todayNutritionTruthCopy, type RecordedNutrientKey, type TodayNutritionSummary } from "../features/analysis/nutritionSummary";
+import { isNutrientKnown, isRecordedNutrition, isRecordedWithoutEvidence, todayNutritionTruthCopy, type RecordedNutrientKey, type TodayNutritionSummary } from "../features/analysis/nutritionSummary";
 import { Card, CompactRow, IconButton, MacroBar, Ring, SectionHeader } from "../theme/components";
 import { Icon } from "../theme/icons";
 import { fonts, radius, snowPalette as colors } from "../theme/tokens";
@@ -26,11 +26,14 @@ export function TodayNutritionSummaryCard({
     ? <MacroBar label={macroLabel(key, label)} value={value} max={max} color={color} />
     : <View style={styles.macroUnknown}><Text style={styles.macroUnknownLabel}>{label}</Text><Text style={styles.macroUnknownValue}>{copy.notProvidedShort}</Text></View>;
   const vegetableUnknown = summary.mealCount > 0 && summary.vegetableAssessment === "unknown";
+  // TI-DEF-2 (R1): the share action sends the four headline totals as plain numbers, so it is offered only when each of them is a real
+  // value: complete coverage, a day with no meal, and never a recorded summary whose evidence is missing (completeness unknown).
+  const shareable = summary.mealCount === 0 || (!isRecordedWithoutEvidence(summary) && (["calories", "protein", "carbs", "fat"] as const).every((key) => coverageOf(key) === "complete"));
   const incomplete = recorded !== null && summary.mealCount > 0 && Object.values(recorded.coverage).some((c) => c.status !== "complete");
 
   return (
     <Card>
-      <SectionHeader title={t.cardTitle} subtitle={t.cardSubtitle} action={onShare ? <IconButton icon="share" onPress={onShare} /> : undefined} />
+      <SectionHeader title={t.cardTitle} subtitle={t.cardSubtitle} action={onShare && shareable ? <IconButton icon="share" onPress={onShare} /> : undefined} />
       <View style={styles.summaryRow}>
         <Ring value={hasAmount("calories") ? summary.totals.calories : 0} max={summary.targets.calories} size={108} strokeWidth={10}>
           <Text style={styles.ringValue}>{hasAmount("calories") ? summary.totals.calories : copy.notProvidedShort}</Text>
