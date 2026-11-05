@@ -150,7 +150,7 @@ const rendered = {};
   const dz = items(z), cz = renderCard(z), rz = renderReport(z);
   rendered.T4 = { card: cz, report: rz };
   check("T4 all five missing -> each nutrient reads not provided, none as a number", ["calories", "protein", "carbs", "fat", "fiber"].every((k) => /^未提供.+資料$/.test(dz[k].value)), Object.fromEntries(Object.entries(dz).map(([k, v]) => [k, v.value])));
-  check("T4 all five missing -> no adequacy or normal verdict built on the unknown values", dz.proteinFoods.value === "資料不足，暫不判斷" && dz.saturatedFat.value === "資料不足，暫不判斷" && dz.grains.value === "今日尚未記錄" && !Object.values(dz).some((i) => i.value === "目前正常" || i.value === "攝取充足" || i.value === "攝取不足") && !z.reminders.some((r) => r.key === "lowProtein"), { proteinFoods: dz.proteinFoods, saturatedFat: dz.saturatedFat, reminders: z.reminders });
+  check("T4 all five missing -> no adequacy or normal verdict built on the unknown values", dz.proteinFoods.value === "資料不足，暫不判斷" && dz.saturatedFat.value === "未提供飽和脂肪資料" && dz.grains.value === "資料不足，暫不判斷" && !Object.values(dz).some((i) => /目前正常|可能偏高|攝取充足|攝取不足|已包含於今日餐點/.test(i.value)) && !z.reminders.some((r) => r.key === "lowProtein"), { proteinFoods: dz.proteinFoods, saturatedFat: dz.saturatedFat, grains: dz.grains, reminders: z.reminders });
   check("T4 all five missing -> card shows 未提供 for calories and macros and no remaining-calorie claim", cz.includes(copy.notProvidedShort) && !cz.includes("0g") && cz.includes(copy.remainingUnknown) && !cz.includes(tn.remainingPrefix), cz);
 }
 
@@ -218,7 +218,9 @@ const rendered = {};
 {
   const a = (await modelOf({ meals: [W1, W2] })).summary, b = (await modelOf({ meals: [] })).summary;
   check("T9 actor B after actor A sees only B (no A values, no A coverage)", b.mealCount === 0 && b.totals.calories === 0 && b.recorded?.fiber === null && b.recorded?.coverage?.fiber?.status === "none" && a.totals.calories === 620, { a: a.totals, b: b.totals });
-  const base = process.env.TI_DEF1_BASE_COMMIT ?? execFileSync("git", ["rev-parse", "HEAD^"], { cwd: root, encoding: "utf8" }).trim();
+  // The base is the TI record's own main identity (AUTH-RECOVERY), not HEAD^: a later TI commit must still compare with that base.
+  const { pathToFileURL } = await import("node:url");
+  const base = process.env.TI_DEF1_BASE_COMMIT ?? (await import(pathToFileURL(path.join(root, "scripts/consumer-today-intake-ti-def1-exact-successor.mjs")).href)).TI_BASE_COMMIT;
   const hook = (src) => src.slice(src.indexOf("export function useTodayIntakeUiModel"), src.indexOf("export function getUiMealCalories"));
   const before = hook(execFileSync("git", ["show", `${base}:apps/mobile/features/consumer-meals/todayIntakeUiModel.ts`], { cwd: root, encoding: "utf8" }));
   const now = hook(fs.readFileSync(path.join(root, "apps/mobile/features/consumer-meals/todayIntakeUiModel.ts"), "utf8"));
@@ -243,6 +245,31 @@ const rendered = {};
   check("C2-16c kept: legacy-shaped zero meals -> verdicts read 今日尚未記錄", ["fiber", "vegetables", "proteinFoods", "sodium", "addedSugar", "saturatedFat"].every((k) => legacyZero[k].value === "今日尚未記錄"));
   const one = items({ ...zero, mealCount: 1, totals: { ...zero.totals, calories: 500, protein: 20, carbs: 60 }, proteinProgress: 0.2 });
   check("C2-16d kept: legacy-shaped one meal keeps its evidence-based verdicts", one.proteinFoods.value === "攝取不足" && one.sodium.value === "目前正常");
+}
+
+// X TI-A01 / TI-A02 counterexamples: recorded items carry no saturated fat and no ingredient or food-group data, so neither a fat
+// amount nor a carbohydrate (or protein) amount may become a saturated-fat, grains or protein-food verdict, in the presenter or in
+// either rendered component. The recorded numbers themselves (fat 14 / 100 g, carbohydrates 100 g) must still show.
+{
+  const unsupported = /目前正常|可能偏高|攝取充足|攝取不足|已包含於今日餐點/;
+  const cases = {
+    X1_fat14_noSaturatedFat: { nutrition: { calories: 520, protein: 42, carbohydrates: 48, fat: 14, fiber: 8 }, fatRow: "14 / 55 g" },
+    X2_fat100_noSaturatedFat: { nutrition: { calories: 1200, protein: 40, carbohydrates: 60, fat: 100, fiber: 5 }, fatRow: "100 / 55 g" },
+    X3_carbs100_noFoodGroup: { nutrition: { calories: 450, protein: 5, carbohydrates: 100, fat: 2, fiber: 1 }, carbsRow: "100 / 180 g" }
+  };
+  for (const [name, x] of Object.entries(cases)) {
+    const s = (await modelOf({ meals: [meal(name, [item(`${name}-item`, x.nutrition)])] })).summary;
+    const d = items(s), report = renderReport(s), card = renderCard(s);
+    rendered[name] = { card, report };
+    check(`${name}: saturated fat reads not provided (no normal / high, status not good)`,
+      d.saturatedFat?.value === "未提供飽和脂肪資料" && d.saturatedFat?.status === "watch" && report.includes("飽和脂肪 | 未提供飽和脂肪資料"), d.saturatedFat);
+    check(`${name}: grains and protein foods read not enough data (no inclusion / sufficiency verdict, status not good)`,
+      d.grains?.value === copy.notEnoughData && d.grains?.status === "watch" && d.proteinFoods?.value === copy.notEnoughData && d.proteinFoods?.status === "watch"
+        && report.includes(`全穀 / 主食 | ${copy.notEnoughData}`) && report.includes(`蛋白質食物 | ${copy.notEnoughData}`), { grains: d.grains, proteinFoods: d.proteinFoods });
+    check(`${name}: neither rendered component carries an unsupported verdict`, !unsupported.test(report) && !unsupported.test(card), { report, card });
+    check(`${name}: the recorded amounts still show (fat / carbohydrates rows unchanged)`,
+      (x.fatRow ? d.fat?.value === x.fatRow : true) && (x.carbsRow ? d.carbs?.value === x.carbsRow : true) && d.fiber?.value === `${x.nutrition.fiber} g`, { fat: d.fat, carbs: d.carbs, fiber: d.fiber });
+  }
 }
 
 // F01 the TI exact successor record and tamper controls (git reads only; the root smoke's own judgement runs, nothing on disk changes).

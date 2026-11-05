@@ -323,8 +323,11 @@ function buildNutritionDetailItems(summary: TodayNutritionSummary): NutritionDet
 
 // TI-DEF-1: recorded values only. A nutrient no item carries reads as not provided (never 0); a partly carried one reads as the
 // recorded subtotal; no adequacy verdict rests on an unknown or partial value, and fiber never implies a vegetable verdict.
+// Recorded items carry calories, protein, carbohydrates, fat and fiber only: no saturated fat, sodium or added sugar, and no
+// ingredient or food-group data. So a row about any of those never gets a verdict derived from another number (TI-A01, TI-A02):
+// total fat is not saturated fat, carbohydrate grams are not grains, protein grams are not a protein-food group.
 function buildRecordedNutritionDetailItems(summary: TodayNutritionSummary & { recorded: RecordedNutritionEvidence }): NutritionDetailItem[] {
-  const { totals, targets, proteinProgress, fatProgress, recorded } = summary;
+  const { totals, targets, mealCount, proteinProgress, fatProgress, recorded } = summary;
   const t = zhTW.mobile.todayNutritionSummary.detail;
   const c = todayNutritionTruthCopy;
   const coverage = recorded.coverage;
@@ -335,7 +338,10 @@ function buildRecordedNutritionDetailItems(summary: TodayNutritionSummary & { re
     const text = target === undefined ? `${value} ${unit}` : `${value} / ${target} ${unit}`;
     return status === "partial" ? `${c.recordedSubtotal} ${text}${c.partialSuffix}` : text;
   };
-  const satFatWatch = fatProgress > 0.85;
+  // Total fat against its own daily guide: evidence for the fat row only.
+  const fatAboveGuide = fatProgress > 0.85;
+  // Without a food-group source there is nothing to judge; with no meal yet the row simply has no record.
+  const noFoodGroupEvidence = mealCount > 0 ? c.notEnoughData : t.notRecorded;
 
   return [
     {
@@ -363,7 +369,7 @@ function buildRecordedNutritionDetailItems(summary: TodayNutritionSummary & { re
       key: "fat",
       label: t.fat,
       value: amount("fat", t.fat, totals.fat, "g", targets.fat),
-      status: known("fat") ? (satFatWatch ? "watch" : "good") : "watch",
+      status: known("fat") ? (fatAboveGuide ? "watch" : "good") : "watch",
       note: t.fatNote
     },
     {
@@ -390,15 +396,15 @@ function buildRecordedNutritionDetailItems(summary: TodayNutritionSummary & { re
     {
       key: "grains",
       label: t.grains,
-      value: coverage.carbs.validItems > 0 && totals.carbs > 0 ? t.included : t.notRecorded,
-      status: coverage.carbs.validItems > 0 && totals.carbs > 0 ? "good" : "watch",
+      value: noFoodGroupEvidence,
+      status: "watch",
       note: t.grainsNote
     },
     {
       key: "proteinFoods",
       label: t.proteinFoods,
-      value: known("protein") ? (proteinProgress >= 0.55 ? t.sufficient : t.insufficient) : c.notEnoughData,
-      status: known("protein") ? (proteinProgress >= 0.55 ? "good" : "low") : "watch",
+      value: noFoodGroupEvidence,
+      status: "watch",
       note: t.proteinFoodsNote
     },
     {
@@ -426,8 +432,8 @@ function buildRecordedNutritionDetailItems(summary: TodayNutritionSummary & { re
     {
       key: "saturatedFat",
       label: t.saturatedFat,
-      value: known("fat") ? (satFatWatch ? t.possiblyHigh : t.normal) : c.notEnoughData,
-      status: known("fat") ? (satFatWatch ? "watch" : "good") : "watch",
+      value: c.notProvided.replace("{label}", t.saturatedFat),
+      status: "watch",
       note: t.saturatedFatNote
     }
   ];

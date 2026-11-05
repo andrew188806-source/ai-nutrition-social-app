@@ -1408,7 +1408,7 @@ function recoverySuccessorStateBeforeTi(git){
 // (no root or self hash in any leaf). Only when the module binding AND every TI leaf are exact is the complete older chain (AUTH -> R1-A -> ENT-W1 -> PH1 -> ...) evaluated
 // UNCHANGED on the TI predecessor view, and it must then be complete (auth, r1a, entw1, ph1, edge, act2 and billing all 'record'); a partial or mismatching TI state is 'invalid'.
 // Without the TI module everything is exactly as before (the older functions are called on the real index/worktree).
-export const TI_MODULE_BLOB='d6ca6bf3b9c82ce1aea4524e1ee9cc7777a0203d';
+export const TI_MODULE_BLOB='bc0fde03fcbe9290a162f85b93b9ba3048b504f0';
 export const TI_MODULE_PATH='scripts/consumer-today-intake-ti-def1-exact-successor.mjs';
 export function checkedTiState(git){
  const staged=git(['ls-files','--stage','--',TI_MODULE_PATH]).trim(),present=fs.existsSync(path.join(ROOT,TI_MODULE_PATH));
